@@ -1,5 +1,7 @@
 generator client {
   provider = "prisma-client-js"
+  /** App-local output so the dev server never picks up SDLC/node_modules/.prisma (legacy schema). */
+  output   = "../lib/generated/prisma"
 }
 
 datasource db {
@@ -62,12 +64,15 @@ model Epic {
   assignee     String?
   color        String        @default("#3B82F6")
   initiativeId String
-  initiative   Initiative    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
-  userStories  UserStory[]
-  comments     EpicComment[]
-  history      EpicHistory[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  initiative     Initiative    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  planSprint     Int?
+  planStartMonth Int?
+  planEndMonth   Int?
+  userStories    UserStory[]
+  comments       EpicComment[]
+  history        EpicHistory[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model EpicComment {

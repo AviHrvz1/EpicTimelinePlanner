@@ -1,4 +1,4 @@
-import { InitiativeStatus } from "@prisma/client";
+import { InitiativeStatus } from "@/lib/generated/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 

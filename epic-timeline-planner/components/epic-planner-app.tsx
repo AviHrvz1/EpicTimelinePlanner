@@ -1,7 +1,7 @@
 "use client";
 
 import { DragEndEvent } from "@dnd-kit/core";
-import { InitiativeStatus } from "@prisma/client";
+import { InitiativeStatus } from "@/lib/generated/prisma";
 import { useMemo, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
@@ -12,7 +12,14 @@ import { InitiativeListPanel } from "@/components/initiatives/initiative-list-pa
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
 import { DragContext } from "@/components/timeline/drag-context";
 import { TimelineGrid } from "@/components/timeline/timeline-grid";
-import { isInitiativeDraggableId, parseInitiativeIdFromDraggable } from "@/lib/epic-dnd-ids";
+import {
+  EPICS_UNPLAN_DROP_ID,
+  isEpicPlanDraggableId,
+  isInitiativeDraggableId,
+  parseEpicIdFromPlanDraggable,
+  parseInitiativeIdFromDraggable,
+} from "@/lib/epic-dnd-ids";
+import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +45,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [focusedQuarterLabel, setFocusedQuarterLabel] = useState<string | null>(null);
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
+  const [planReveal, setPlanReveal] = useState<{
+    nonce: number;
+    initiativeId: string;
+    epicId: string;
+  } | null>(null);
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
   const [panelWidth, setPanelWidth] = useState(420);
@@ -192,6 +204,49 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }
 
+  async function patchEpicClearPlan(epicId: string) {
+    const response = await fetch(`/api/epics/${epicId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        planSprint: null,
+        planStartMonth: null,
+        planEndMonth: null,
+      }),
+    });
+    if (!response.ok) {
+      let message = `Could not save (${response.status})`;
+      try {
+        const body = (await response.json()) as { message?: string };
+        if (typeof body?.message === "string") message = body.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+  }
+
+  async function patchEpicQuarterPlan(
+    epicId: string,
+    payload: { planSprint: 1 | 2; planStartMonth: number; planEndMonth: number },
+  ) {
+    const response = await fetch(`/api/epics/${epicId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      let message = `Could not save (${response.status})`;
+      try {
+        const body = (await response.json()) as { message?: string };
+        if (typeof body?.message === "string") message = body.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
+  }
+
   async function createEpicQuick(initiativeId: string, title: string) {
     const response = await fetch(`/api/initiatives/${initiativeId}/epics`, {
       method: "POST",
@@ -261,18 +316,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     await refresh();
   }
 
-  async function updateStoryStatus(storyId: string, status: "todo" | "inProgress" | "done" | "approved") {
-    const response = await fetch(`/api/stories/${storyId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to update story status");
-    }
-    await refresh();
-  }
-
   async function updateStoryDetails(
     storyId: string,
     payload: {
@@ -313,31 +356,131 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : "";
 
-    if (activeId.startsWith("story:") && overId.startsWith("kanban:")) {
-      const storyId = activeId.split(":").pop() ?? "";
-      const status = overId.replace("kanban:", "") as "todo" | "inProgress" | "done" | "approved";
-      if (!storyId) return;
+    if (isEpicPlanDraggableId(activeId)) {
+      const epicId = parseEpicIdFromPlanDraggable(activeId);
+      if (!epicId) return;
 
-      setInitiatives((prev) =>
-        prev.map((initiative) => ({
-          ...initiative,
-          epics: (initiative.epics ?? []).map((epic) => {
-            const stories = epic.userStories ?? [];
-            if (!stories.some((s) => s.id === storyId)) return epic;
+      if (overId === EPICS_UNPLAN_DROP_ID) {
+        const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
+        const epic = initiative?.epics?.find((e) => e.id === epicId);
+        if (!initiative || !epic) return;
+
+        flushSync(() => {
+          setInitiatives((prev) =>
+            prev.map((i) => ({
+              ...i,
+              epics: (i.epics ?? []).map((e) =>
+                e.id === epicId
+                  ? { ...e, planSprint: null, planStartMonth: null, planEndMonth: null }
+                  : e,
+              ),
+            })),
+          );
+        });
+        try {
+          await patchEpicClearPlan(epicId);
+          toast.success("Epic removed from plan");
+        } catch (err) {
+          await refresh();
+          const description = err instanceof Error ? err.message : undefined;
+          toast.error("Failed to remove epic from plan", description ? { description } : undefined);
+        }
+        return;
+      }
+
+      let month: number;
+      let planSprint: 1 | 2;
+      const epicCell = /^epic-plan:(\d+):([12])$/.exec(overId);
+      if (epicCell) {
+        month = Number(epicCell[1]);
+        planSprint = Number(epicCell[2]) as 1 | 2;
+      } else if (overId.startsWith("month:")) {
+        const monthMatch = overId.match(/month:(\d+)/);
+        if (!monthMatch) return;
+        month = Number(monthMatch[1]);
+        planSprint = 1;
+      } else {
+        return;
+      }
+      if (!Number.isFinite(month)) return;
+
+      const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
+      const epic = initiative?.epics?.find((e) => e.id === epicId);
+      if (!initiative || !epic) return;
+
+      const wasUnscheduled =
+        initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null;
+
+      let nextStart: number;
+      let nextEnd: number;
+      if (wasUnscheduled) {
+        nextStart = month;
+        nextEnd = month;
+      } else {
+        const sm = initiative.startMonth!;
+        const em = initiative.endMonth!;
+        nextStart = Math.min(sm, month);
+        nextEnd = Math.max(em, month);
+      }
+
+      const rangeChanged =
+        wasUnscheduled ||
+        nextStart !== initiative.startMonth ||
+        nextEnd !== initiative.endMonth;
+
+      const planMonth = month;
+
+      if (rangeChanged && !wasUnscheduled) {
+        toast.message("Initiative range extended", {
+          description: `Now spans ${MONTHS[nextStart - 1]}–${MONTHS[nextEnd - 1]} so the epic can sit in ${MONTHS[planMonth - 1]}.`,
+        });
+      }
+
+      flushSync(() => {
+        setInitiatives((prev) =>
+          prev.map((i) => {
+            if (i.id !== initiative.id) return i;
             return {
-              ...epic,
-              userStories: stories.map((s) => (s.id === storyId ? { ...s, status } : s)),
+              ...i,
+              status: InitiativeStatus.scheduled,
+              startMonth: nextStart,
+              endMonth: nextEnd,
+              epics: (i.epics ?? []).map((e) =>
+                e.id === epicId
+                  ? {
+                      ...e,
+                      planSprint,
+                      planStartMonth: planMonth,
+                      planEndMonth: planMonth,
+                    }
+                  : e,
+              ),
             };
           }),
-        })),
-      );
+        );
+      });
 
       try {
-        await updateStoryStatus(storyId, status);
-        toast.success("Story moved");
-      } catch {
+        if (wasUnscheduled) {
+          await scheduleInitiative(initiative.id, planMonth);
+        } else if (rangeChanged) {
+          await patchInitiativeScheduleRange(initiative.id, nextStart, nextEnd);
+        }
+        await patchEpicQuarterPlan(epicId, {
+          planSprint,
+          planStartMonth: planMonth,
+          planEndMonth: planMonth,
+        });
+        setPlanReveal((r) => ({
+          nonce: (r?.nonce ?? 0) + 1,
+          initiativeId: initiative.id,
+          epicId,
+        }));
+        toast.success("Epic placed on the plan");
+      } catch (err) {
         await refresh();
-        toast.error("Failed to move story");
+        const description = err instanceof Error ? err.message : undefined;
+        toast.error("Failed to place epic", description ? { description } : undefined);
       }
       return;
     }
@@ -460,7 +603,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               focusedQuarterLabel={focusedQuarterLabel}
               activeMonth={activeTimelineMonth}
               storyDragEnabled={isSprintModeActive}
+              epicPlanDragEnabled={activeTimelineMonth != null}
               isSprintModeActive={isSprintModeActive}
+              planReveal={planReveal}
               onOpenStory={setSelectedStoryId}
               onCreateStory={async (epicId, storyTitle) => {
                 try {
@@ -512,7 +657,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               zoom={1}
               focusedQuarterLabel={focusedQuarterLabel}
               onFocusedQuarterChange={setFocusedQuarterLabel}
-              onOpenStory={setSelectedStoryId}
+              onOpenEpic={(epicId) => {
+                for (const initiative of initiatives) {
+                  const epic = (initiative.epics ?? []).find((e) => e.id === epicId);
+                  if (epic) {
+                    setEditingEpic(epic);
+                    setEditingEpicInitiativeId(initiative.id);
+                    setEpicDialogOpen(true);
+                    return;
+                  }
+                }
+              }}
               onOpenInitiative={(initiativeId) => {
                 const initiative = initiatives.find((i) => i.id === initiativeId);
                 if (!initiative) return;

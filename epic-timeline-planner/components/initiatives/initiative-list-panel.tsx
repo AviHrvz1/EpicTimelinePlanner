@@ -2,19 +2,26 @@
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { initiativeListDraggableId } from "@/lib/epic-dnd-ids";
+import { DragHandleIcon } from "@/components/ui/drag-handle";
+import { EPICS_UNPLAN_DROP_ID, epicListDraggableId, initiativeListDraggableId } from "@/lib/epic-dnd-ids";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
+  if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
+  return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
 
 type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
   focusedQuarterLabel: string | null;
   activeMonth: number | null;
   storyDragEnabled: boolean;
+  epicPlanDragEnabled: boolean;
   isSprintModeActive: boolean;
   onCreateStory: (epicId: string, title: string) => Promise<void>;
   onCreateEpic: (initiativeId: string, title: string) => Promise<void>;
@@ -24,6 +31,8 @@ type InitiativeListPanelProps = {
   onEdit: (initiative: InitiativeItem) => void;
   onDelete: (id: string) => void;
   onDeleteEpic: (epicId: string) => void;
+  /** After an epic is placed on the month plan, expand this initiative and epic in the list. */
+  planReveal?: { nonce: number; initiativeId: string; epicId: string } | null;
 };
 
 function DraggableInitiativeCard({
@@ -43,10 +52,8 @@ function DraggableInitiativeCard({
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
       className={cn(
-        "cursor-grab rounded-lg border bg-background p-3 shadow-sm active:cursor-grabbing",
+        "rounded-lg border bg-background p-3 shadow-sm",
         isDragging && "opacity-60",
       )}
       style={{
@@ -59,20 +66,150 @@ function DraggableInitiativeCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[14px] leading-5 font-semibold text-slate-900">
-            <span className="mr-1 inline-block text-[11px] align-middle">{initIcon}</span>
-            {initiative.title}
-          </p>
+      <div className="flex items-start gap-2.5">
+        <button
+          type="button"
+          className="mt-[3px] shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+          aria-label="Drag initiative"
+          {...attributes}
+          {...listeners}
+        >
+          <DragHandleIcon size="sm" />
+        </button>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center justify-between gap-3">
+            <p className="min-w-0 text-[14px] leading-5 font-semibold text-slate-900">
+              <span className="mr-1">{initIcon}</span>
+              {initiative.title}
+            </p>
+            <div className="flex shrink-0 gap-1">
+              <Button size="icon-xs" variant="ghost" onClick={() => onEdit(initiative)}>
+                <Pencil />
+              </Button>
+              <Button size="icon-xs" variant="ghost" onClick={() => onDelete(initiative.id)}>
+                <Trash2 />
+              </Button>
+            </div>
+          </div>
           {initiative.description ? (
-            <p className="mt-1 line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
+            <p className="line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
           ) : null}
           {initiative.epics.length > 0 ? (
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-500">
               {initiative.epics.length} epic{initiative.epics.length !== 1 ? "s" : ""}
             </p>
           ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OffPlanEpicRow({
+  epic,
+  initiative,
+  epicPlanDragEnabled,
+  onOpenEpic,
+  onDeleteEpic,
+  hideInitiativeLabel = false,
+}: {
+  epic: EpicItem;
+  initiative: InitiativeItem;
+  epicPlanDragEnabled: boolean;
+  onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
+  onDeleteEpic: (epicId: string) => void;
+  hideInitiativeLabel?: boolean;
+}) {
+  const epicIcon = epic.icon || "📁";
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: epicListDraggableId(epic.id),
+    disabled: !epicPlanDragEnabled,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm",
+        isDragging && "opacity-60",
+      )}
+      style={{
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        zIndex: isDragging ? 20 : undefined,
+      }}
+    >
+      <div className="flex items-start gap-2">
+        {epicPlanDragEnabled ? (
+          <button
+            type="button"
+            className="mt-0.5 shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            aria-label="Drag epic to plan"
+            {...listeners}
+            {...attributes}
+          >
+            <DragHandleIcon size="sm" />
+          </button>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] leading-5 font-semibold text-slate-800">
+            <span className="mr-1 inline-block text-[10px] align-middle">{epicIcon}</span>
+            {epic.title}
+          </p>
+          {hideInitiativeLabel ? null : (
+            <p className="text-[11px] text-slate-500">{initiative.title}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-0.5">
+          <Button size="icon-xs" variant="ghost" onClick={() => onOpenEpic(epic, initiative)}>
+            <Pencil />
+          </Button>
+          <Button size="icon-xs" variant="ghost" onClick={() => onDeleteEpic(epic.id)}>
+            <Trash2 />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OffPlanInitiativeBox({
+  initiative,
+  epics,
+  epicPlanDragEnabled,
+  onEdit,
+  onDelete,
+  onOpenEpic,
+  onDeleteEpic,
+}: {
+  initiative: InitiativeItem;
+  epics: EpicItem[];
+  epicPlanDragEnabled: boolean;
+  onEdit: (initiative: InitiativeItem) => void;
+  onDelete: (id: string) => void;
+  onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
+  onDeleteEpic: (epicId: string) => void;
+}) {
+  const initIcon = initiative.icon || "🎯";
+
+  return (
+    <div
+      className="rounded-xl bg-background shadow-md ring-1 ring-black/5"
+      style={{ borderLeftColor: initiative.color, borderLeftWidth: 4 }}
+    >
+      <div className="flex items-start gap-2 p-3">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] leading-5 font-semibold text-slate-900">
+              <span className="mr-1 inline-block text-[11px] align-middle">{initIcon}</span>
+              {initiative.title}
+            </p>
+            {initiative.description ? (
+              <p className="mt-1 line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
+            ) : null}
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              {epics.length} epic{epics.length !== 1 ? "s" : ""} not on this month’s plan
+            </p>
+          </div>
         </div>
         <div className="flex gap-1">
           <Button size="icon-xs" variant="ghost" onClick={() => onEdit(initiative)}>
@@ -83,6 +220,19 @@ function DraggableInitiativeCard({
           </Button>
         </div>
       </div>
+      <div className="space-y-2 px-3 pb-3">
+        {epics.map((epic) => (
+          <OffPlanEpicRow
+            key={epic.id}
+            epic={epic}
+            initiative={initiative}
+            epicPlanDragEnabled={epicPlanDragEnabled}
+            hideInitiativeLabel
+            onOpenEpic={onOpenEpic}
+            onDeleteEpic={onDeleteEpic}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -92,6 +242,7 @@ function EpicAccordion({
   initiative,
   isOpen,
   storyDragEnabled,
+  epicPlanDragEnabled,
   onToggle,
   onOpenEpic,
   onDeleteEpic,
@@ -102,6 +253,7 @@ function EpicAccordion({
   initiative: InitiativeItem;
   isOpen: boolean;
   storyDragEnabled: boolean;
+  epicPlanDragEnabled: boolean;
   onToggle: () => void;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onDeleteEpic: (epicId: string) => void;
@@ -109,6 +261,15 @@ function EpicAccordion({
   onOpenStory: (storyId: string) => void;
 }) {
   const epicIcon = epic.icon || "📁";
+  const {
+    attributes: epicDragAttributes,
+    listeners: epicDragListeners,
+    setNodeRef: setEpicDragRef,
+    isDragging: isEpicPlanDragging,
+  } = useDraggable({
+    id: epicListDraggableId(epic.id),
+    disabled: !epicPlanDragEnabled,
+  });
   const [storyTitle, setStoryTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const stories = epic.userStories ?? [];
@@ -147,11 +308,8 @@ function EpicAccordion({
     return (
       <div
         ref={setNodeRef}
-        {...attributes}
-        {...listeners}
         className={cn(
           "rounded-lg border bg-card px-2.5 py-2 text-xs shadow-sm",
-          storyDragEnabled && "cursor-grab active:cursor-grabbing",
           isDragging && "opacity-60",
         )}
         style={{
@@ -161,41 +319,76 @@ function EpicAccordion({
           zIndex: isDragging ? 20 : undefined,
         }}
       >
-        <p className="text-[13px] leading-5 font-medium text-slate-900">
-          <span className="mr-1">{story.icon === "🧩" ? "📄" : (story.icon || "📄")}</span>
-          {story.title}
-        </p>
-        <div className="mt-1.5 flex items-center justify-between">
-          <span
-            className={cn(
-              "rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
-              statusTone[story.status] ?? "bg-muted text-muted-foreground",
-            )}
-          >
-            {storyStatusLabel[story.status] ?? story.status}
-          </span>
+        <div className="flex items-start gap-2">
           {storyDragEnabled ? (
-            <span className="text-[11px] text-slate-500">Drag to board</span>
+            <button
+              type="button"
+              className="mt-0.5 shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+              aria-label="Drag user story"
+              {...attributes}
+              {...listeners}
+            >
+              <DragHandleIcon size="sm" />
+            </button>
           ) : null}
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onOpenStory(story.id);
-            }}
-          >
-            <Pencil />
-          </Button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] leading-5 font-medium text-slate-900">
+              <span className="mr-1">{story.icon === "🧩" ? "📄" : (story.icon || "📄")}</span>
+              {story.title}
+            </p>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
+                  statusTone[story.status] ?? "bg-muted text-muted-foreground",
+                )}
+              >
+                {storyStatusLabel[story.status] ?? story.status}
+              </span>
+              {storyDragEnabled ? (
+                <span className="text-[11px] text-slate-500">Drag to board</span>
+              ) : epicPlanDragEnabled ? (
+                <span className="text-[11px] text-slate-500">Use grip on epic to plan</span>
+              ) : null}
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenStory(story.id);
+                }}
+              >
+                <Pencil />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div
+      className={cn(
+        "rounded-lg border border-slate-200 bg-white shadow-sm",
+        isEpicPlanDragging && "opacity-70 ring-2 ring-primary/25",
+      )}
+    >
       <div className="flex items-start gap-2 px-2.5 py-2">
+        {epicPlanDragEnabled ? (
+          <button
+            type="button"
+            ref={setEpicDragRef}
+            {...epicDragAttributes}
+            {...epicDragListeners}
+            className="mt-0.5 flex shrink-0 cursor-grab items-center justify-center rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            aria-label="Drag epic to quarter plan"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DragHandleIcon size="sm" />
+          </button>
+        ) : null}
         <button
           type="button"
           className="flex min-w-0 flex-1 items-start justify-between gap-2 text-left"
@@ -279,10 +472,15 @@ function ScheduledInitiativeAccordion({
   onCreateEpic,
   onCreateStory,
   onOpenStory,
+  epicPlanDragEnabled,
+  planDrillMonth,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
   storyDragEnabled: boolean;
+  epicPlanDragEnabled: boolean;
+  /** When set with month plan UI, accordion only lists epics placed on this month (others are under Not on plan). */
+  planDrillMonth: number | null;
   openEpicIds: Record<string, boolean>;
   onToggle: () => void;
   onToggleEpic: (epicId: string) => void;
@@ -297,6 +495,14 @@ function ScheduledInitiativeAccordion({
   const initIcon = initiative.icon || "🎯";
   const [epicTitle, setEpicTitle] = useState("");
   const [isSubmittingEpic, setIsSubmittingEpic] = useState(false);
+
+  const epicsShownInAccordion = useMemo(() => {
+    const all = initiative.epics ?? [];
+    if (planDrillMonth != null && epicPlanDragEnabled) {
+      return all.filter((e) => epicIsOnPlanForMonth(e, planDrillMonth));
+    }
+    return all;
+  }, [initiative.epics, planDrillMonth, epicPlanDragEnabled]);
 
   async function handleCreateEpic() {
     const normalizedTitle = epicTitle.trim();
@@ -337,7 +543,18 @@ function ScheduledInitiativeAccordion({
                 <p className="mt-1 line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
               ) : null}
               <p className="mt-0.5 text-[11px] text-slate-500">
-                {initiative.epics.length} epic{initiative.epics.length !== 1 ? "s" : ""}
+                {planDrillMonth != null && epicPlanDragEnabled ? (
+                  <>
+                    {epicsShownInAccordion.length} on {MONTHS[planDrillMonth - 1]} plan
+                    {initiative.epics.length > epicsShownInAccordion.length
+                      ? ` · ${initiative.epics.length - epicsShownInAccordion.length} in Not on plan`
+                      : ""}
+                  </>
+                ) : (
+                  <>
+                    {initiative.epics.length} epic{initiative.epics.length !== 1 ? "s" : ""}
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -359,14 +576,20 @@ function ScheduledInitiativeAccordion({
               <p className="rounded-md bg-muted/40 p-2 text-[12px] leading-4 text-slate-600">
                 No epics yet. Add one below.
               </p>
+            ) : epicsShownInAccordion.length === 0 ? (
+              <p className="rounded-md bg-muted/40 p-2 text-[12px] leading-4 text-slate-600">
+                No epics on {planDrillMonth != null ? MONTHS[planDrillMonth - 1] : "this month"}’s plan. Off-plan epics
+                are in <span className="font-medium">Not on plan</span> above.
+              </p>
             ) : (
-              initiative.epics.map((epic) => (
+              epicsShownInAccordion.map((epic) => (
                 <EpicAccordion
                   key={epic.id}
                   epic={epic}
                   initiative={initiative}
                   isOpen={Boolean(openEpicIds[epic.id])}
                   storyDragEnabled={storyDragEnabled}
+                  epicPlanDragEnabled={epicPlanDragEnabled}
                   onToggle={() => onToggleEpic(epic.id)}
                   onOpenEpic={onOpenEpic}
                   onDeleteEpic={onDeleteEpic}
@@ -405,6 +628,7 @@ export function InitiativeListPanel({
   focusedQuarterLabel,
   activeMonth,
   storyDragEnabled,
+  epicPlanDragEnabled,
   isSprintModeActive,
   onCreateStory,
   onCreateEpic,
@@ -414,9 +638,13 @@ export function InitiativeListPanel({
   onEdit,
   onDelete,
   onDeleteEpic,
+  planReveal = null,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef, isOver: isBacklogDropOver } = useDroppable({
     id: "initiatives:backlog-drop",
+  });
+  const { setNodeRef: setEpicUnplanDropRef, isOver: isEpicUnplanDropOver } = useDroppable({
+    id: EPICS_UNPLAN_DROP_ID,
   });
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [openEpicIds, setOpenEpicIds] = useState<Record<string, boolean>>({});
@@ -424,20 +652,88 @@ export function InitiativeListPanel({
   const focusedQuarter = QUARTERS.find((quarter) => quarter.label === focusedQuarterLabel);
   const isMonthDrillDown = activeMonth != null;
   const showBacklogChrome = !isSprintModeActive && !isMonthDrillDown;
-  const scheduled = initiatives.filter((initiative) => {
-    if (initiative.status !== "scheduled") return false;
-    if (activeMonth != null) {
+
+  /** Quarter that contains the drilled month (uses focused quarter when set, else inferred from month). */
+  const quarterForMonthDrill = useMemo(() => {
+    if (activeMonth == null) return null;
+    if (focusedQuarter) return focusedQuarter;
+    return QUARTERS.find((q) => q.months.some((m) => m === activeMonth)) ?? null;
+  }, [activeMonth, focusedQuarter]);
+
+  const scheduled = useMemo(() => {
+    return initiatives.filter((initiative) => {
+      if (initiative.status !== "scheduled") return false;
+      if (activeMonth != null) {
+        if (!initiative.startMonth || !initiative.endMonth) return false;
+        return initiative.startMonth <= activeMonth && initiative.endMonth >= activeMonth;
+      }
+      if (!focusedQuarter) return true;
       if (!initiative.startMonth || !initiative.endMonth) return false;
-      return initiative.startMonth <= activeMonth && initiative.endMonth >= activeMonth;
+
+      const quarterStart = focusedQuarter.months[0];
+      const quarterEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+
+      return initiative.endMonth >= quarterStart && initiative.startMonth <= quarterEnd;
+    });
+  }, [initiatives, activeMonth, focusedQuarter]);
+
+  /** Month drill: only show initiatives that have ≥1 epic on this month’s plan (others live under Not on plan). */
+  const scheduledForPlanSection = useMemo(() => {
+    if (activeMonth == null || !epicPlanDragEnabled) return scheduled;
+    return scheduled.filter((i) => (i.epics ?? []).some((e) => epicIsOnPlanForMonth(e, activeMonth)));
+  }, [scheduled, activeMonth, epicPlanDragEnabled]);
+
+  const monthDrillExpandKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeMonth == null || !quarterForMonthDrill) {
+      monthDrillExpandKeyRef.current = null;
+      return;
     }
-    if (!focusedQuarter) return true;
-    if (!initiative.startMonth || !initiative.endMonth) return false;
+    const key = `${quarterForMonthDrill.label}:${activeMonth}`;
+    if (monthDrillExpandKeyRef.current === key) return;
+    monthDrillExpandKeyRef.current = key;
 
-    const quarterStart = focusedQuarter.months[0];
-    const quarterEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+    const spanningDrillMonth = initiatives.filter(
+      (i) =>
+        i.status === "scheduled" &&
+        i.startMonth != null &&
+        i.endMonth != null &&
+        i.startMonth <= activeMonth &&
+        i.endMonth >= activeMonth,
+    );
+    const nextInit: Record<string, boolean> = {};
+    for (const i of spanningDrillMonth) {
+      nextInit[i.id] = true;
+    }
+    setOpenInitiativeIds((prev) => ({ ...prev, ...nextInit }));
+    setOpenEpicIds({});
+  }, [activeMonth, quarterForMonthDrill, initiatives]);
 
-    return initiative.endMonth >= quarterStart && initiative.startMonth <= quarterEnd;
-  });
+  useEffect(() => {
+    if (!planReveal) return;
+    setOpenInitiativeIds((prev) => ({ ...prev, [planReveal.initiativeId]: true }));
+    setOpenEpicIds((prev) => ({ ...prev, [planReveal.epicId]: true }));
+  }, [planReveal]);
+
+  const offPlanByInitiative = useMemo(() => {
+    if (activeMonth == null || !epicPlanDragEnabled) return [];
+    const groups: Array<{ initiative: InitiativeItem; epics: EpicItem[] }> = [];
+    for (const initiative of scheduled) {
+      const epics = (initiative.epics ?? [])
+        .filter((e) => !epicIsOnPlanForMonth(e, activeMonth))
+        .sort((a, b) => a.title.localeCompare(b.title));
+      if (epics.length > 0) {
+        groups.push({ initiative, epics });
+      }
+    }
+    groups.sort((a, b) => a.initiative.title.localeCompare(b.initiative.title));
+    return groups;
+  }, [scheduled, activeMonth, epicPlanDragEnabled]);
+
+  const offPlanEpicCount = useMemo(
+    () => offPlanByInitiative.reduce((n, g) => n + g.epics.length, 0),
+    [offPlanByInitiative],
+  );
 
   return (
     <aside className="h-[72vh] overflow-y-auto rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
@@ -447,9 +743,11 @@ export function InitiativeListPanel({
           <p className="text-[12px] leading-4 text-slate-600">
             {isSprintModeActive
               ? "Sprint mode: drag stories to Kanban columns"
-              : isMonthDrillDown
-                ? `Showing initiatives scheduled for ${MONTHS[activeMonth! - 1]}`
-                : "Create, edit, and drag to schedule"}
+              : isMonthDrillDown && quarterForMonthDrill
+                ? `Scheduled initiatives for ${quarterForMonthDrill.label} (all overlapping ${MONTHS[activeMonth! - 1]}) — drag epics by the grip onto sprint cells`
+                : isMonthDrillDown
+                  ? `Showing initiatives for ${MONTHS[activeMonth! - 1]} — drag epics from the grip handle onto the sprint plan`
+                  : "Create, edit, and drag to schedule"}
           </p>
         </div>
         {!isSprintModeActive ? (
@@ -486,19 +784,68 @@ export function InitiativeListPanel({
         </div>
       ) : null}
 
+      {isMonthDrillDown && epicPlanDragEnabled && !isSprintModeActive ? (
+        <div className="mb-4">
+          <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
+            Not on plan · {MONTHS[activeMonth! - 1]} ({offPlanEpicCount})
+          </h3>
+          <div
+            ref={setEpicUnplanDropRef}
+            className={cn(
+              "rounded-lg border border-dashed border-amber-200/90 bg-amber-50/60 p-3 text-amber-900/90 transition",
+              isEpicUnplanDropOver && "border-amber-400 bg-amber-100",
+            )}
+          >
+            <p className="text-[11px] font-medium leading-4">
+              Drop an epic on this area to remove it from {MONTHS[activeMonth! - 1]}’s sprint plan. Epics below are not
+              assigned to this month; drag them onto the timeline to plan.
+            </p>
+            {offPlanByInitiative.length === 0 ? (
+              <p className="mt-2 text-[11px] leading-4 text-amber-900/70">No epics off plan for this month.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {offPlanByInitiative.map(({ initiative, epics }) => (
+                  <OffPlanInitiativeBox
+                    key={initiative.id}
+                    initiative={initiative}
+                    epics={epics}
+                    epicPlanDragEnabled={epicPlanDragEnabled}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onOpenEpic={onOpenEpic}
+                    onDeleteEpic={onDeleteEpic}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       <div className={cn("pt-4", showBacklogChrome && "mt-4")}>
         <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
-          {isMonthDrillDown
-            ? `Scheduled · ${MONTHS[activeMonth! - 1]} (${scheduled.length})`
-            : `Scheduled${focusedQuarter ? ` ${focusedQuarter.label}` : ""} (${scheduled.length})`}
+          {isMonthDrillDown && quarterForMonthDrill
+            ? `Scheduled · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
+            : isMonthDrillDown
+              ? `Scheduled · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
+              : `Scheduled${focusedQuarter ? ` ${focusedQuarter.label}` : ""} (${scheduledForPlanSection.length})`}
         </h3>
         <div className="space-y-2">
-          {scheduled.map((initiative) => (
+          {isMonthDrillDown && epicPlanDragEnabled && scheduledForPlanSection.length === 0 ? (
+            <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
+              No epics on {MONTHS[activeMonth! - 1]}’s plan yet. Drag epics from{" "}
+              <span className="font-medium">Not on plan</span> onto the sprint cells, or add epics under an initiative
+              there.
+            </p>
+          ) : null}
+          {scheduledForPlanSection.map((initiative) => (
             <ScheduledInitiativeAccordion
               key={initiative.id}
               initiative={initiative}
               isOpen={Boolean(openInitiativeIds[initiative.id])}
               storyDragEnabled={storyDragEnabled}
+              epicPlanDragEnabled={epicPlanDragEnabled}
+              planDrillMonth={isMonthDrillDown && epicPlanDragEnabled ? activeMonth : null}
               openEpicIds={openEpicIds}
               onToggle={() =>
                 setOpenInitiativeIds((current) => ({

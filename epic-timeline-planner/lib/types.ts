@@ -1,4 +1,4 @@
-import { InitiativeStatus, StoryStatus } from "@prisma/client";
+import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
 
 export type StoryCommentItem = {
   id: string;
@@ -70,6 +70,9 @@ export type EpicItem = {
   assignee: string | null;
   color: string;
   initiativeId: string;
+  planSprint: number | null;
+  planStartMonth: number | null;
+  planEndMonth: number | null;
   userStories: UserStoryItem[];
   comments: EpicCommentItem[];
   history: EpicHistoryItem[];

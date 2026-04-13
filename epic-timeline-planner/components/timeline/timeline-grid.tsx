@@ -1,14 +1,13 @@
 "use client";
 
-import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { StoryStatus } from "@prisma/client";
-import { BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, Flag, LoaderCircle } from "lucide-react";
+import { useDroppable } from "@dnd-kit/core";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
-import { Button } from "@/components/ui/button";
+import { EpicPlanBar } from "@/components/timeline/epic-plan-bar";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
-import { InitiativeItem } from "@/lib/types";
+import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type TimelineGridProps = {
@@ -17,7 +16,7 @@ type TimelineGridProps = {
   focusedQuarterLabel: string | null;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null) => void;
-  onOpenStory: (storyId: string) => void;
+  onOpenEpic: (epicId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
   onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
 };
@@ -78,128 +77,6 @@ function QuarterYearProgressIcon({
   );
 }
 
-function SprintKanbanColumn({
-  label,
-  status,
-  stories,
-  onOpenStory,
-}: {
-  label: string;
-  status: StoryStatus;
-  stories: Array<{ id: string; icon: string; title: string; epicTitle: string }>;
-  onOpenStory: (storyId: string) => void;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: `kanban:${status}` });
-  const statusTone: Record<StoryStatus, { column: string; chip: string; title: string }> = {
-    [StoryStatus.todo]: {
-      column: "bg-slate-50/80",
-      chip: "bg-slate-100 text-slate-700",
-      title: "text-slate-700",
-    },
-    [StoryStatus.inProgress]: {
-      column: "bg-blue-50/75",
-      chip: "bg-blue-100 text-blue-700",
-      title: "text-blue-700",
-    },
-    [StoryStatus.done]: {
-      column: "bg-emerald-50/75",
-      chip: "bg-emerald-100 text-emerald-700",
-      title: "text-emerald-700",
-    },
-    [StoryStatus.approved]: {
-      column: "bg-violet-50/75",
-      chip: "bg-violet-100 text-violet-700",
-      title: "text-violet-700",
-    },
-  };
-  const statusIcon: Record<StoryStatus, React.ComponentType<{ className?: string }>> = {
-    [StoryStatus.todo]: CircleDashed,
-    [StoryStatus.inProgress]: LoaderCircle,
-    [StoryStatus.done]: CheckCircle2,
-    [StoryStatus.approved]: BadgeCheck,
-  };
-  const StatusIcon = statusIcon[status];
-
-  function DraggableKanbanStoryCard({
-    story,
-  }: {
-    story: { id: string; icon: string; title: string; epicTitle: string };
-  }) {
-    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-      id: `story:kanban:${story.id}`,
-    });
-
-    return (
-      <div
-        ref={setNodeRef}
-        {...attributes}
-        {...listeners}
-        className={cn(
-          "cursor-grab rounded-md bg-white px-3 py-2 active:cursor-grabbing",
-          isDragging && "opacity-60",
-        )}
-        style={{
-          transform: transform
-            ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-            : undefined,
-          zIndex: isDragging ? 20 : undefined,
-        }}
-      >
-        <p className="text-xs font-medium">
-          <span className="mr-1">{story.icon === "🧩" ? "📄" : (story.icon || "📄")}</span>
-          {story.title}
-        </p>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="text-[10px] text-muted-foreground">{story.epicTitle}</p>
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onOpenStory(story.id);
-            }}
-          >
-            Edit
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex h-full min-h-[320px] flex-col rounded-xl p-3 transition",
-        statusTone[status].column,
-        isOver && "bg-white/80 shadow-sm",
-      )}
-    >
-      <div className="mb-3 flex items-center justify-between">
-        <p className={cn("inline-flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.01em]", statusTone[status].title)}>
-          <StatusIcon className="size-3.5" />
-          {label}
-        </p>
-        <span
-          className={cn(
-            "rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm",
-            statusTone[status].chip,
-          )}
-        >
-          {stories.length}
-        </span>
-      </div>
-      <div className="flex-1 space-y-2 rounded-lg bg-white/70 p-2">
-        {stories.length === 0 ? (
-          <p className="p-1 text-xs text-muted-foreground">Drop story here</p>
-        ) : (
-          stories.map((story) => <DraggableKanbanStoryCard key={story.id} story={story} />)
-        )}
-      </div>
-    </div>
-  );
-}
 
 function MonthDropCell({ month, idSuffix }: { month: number; idSuffix?: string }) {
   const droppableId = idSuffix ? `month:${month}:${idSuffix}` : `month:${month}`;
@@ -216,18 +93,55 @@ function MonthDropCell({ month, idSuffix }: { month: number; idSuffix?: string }
   );
 }
 
+function EpicPlanDropCell({ month, sprint }: { month: number; sprint: 1 | 2 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `epic-plan:${month}:${sprint}` });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex min-h-[4.5rem] items-center justify-center rounded-md border border-dashed border-border bg-muted/25 px-1 py-2 text-center text-[10px] font-medium text-slate-500 transition",
+        isOver && "border-primary bg-primary/10 text-primary",
+      )}
+    >
+      Drop epic
+    </div>
+  );
+}
+
+/** Epics planned for a single calendar month in a given sprint lane (month drill-down view). */
+function collectPlannedEpicsForMonth(
+  initiatives: InitiativeItem[],
+  sprintLane: 1 | 2,
+  month: number,
+): Array<{ epic: EpicItem; initiative: InitiativeItem }> {
+  const out: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+  for (const initiative of initiatives) {
+    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) {
+      continue;
+    }
+    if (initiative.endMonth < month || initiative.startMonth > month) continue;
+    for (const epic of initiative.epics ?? []) {
+      if (epic.planSprint !== sprintLane) continue;
+      if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+      if (epic.planEndMonth < month || epic.planStartMonth > month) continue;
+      out.push({ epic, initiative });
+    }
+  }
+  return out;
+}
+
 export function TimelineGrid({
   initiatives,
   zoom,
   focusedQuarterLabel,
   onFocusedQuarterChange,
   onSprintModeChange,
-  onOpenStory,
+  onOpenEpic,
   onOpenInitiative,
   onResizeInitiativeRange,
 }: TimelineGridProps) {
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
-  const [focusedSprint, setFocusedSprint] = useState<number | null>(null);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const [resizePreview, setResizePreview] = useState<{
     initiativeId: string;
@@ -317,19 +231,13 @@ export function TimelineGrid({
     : Array.from({ length: 12 }, (_, index) => index + 1);
   const visibleQuarterHeaders = focusedQuarter ? [focusedQuarter] : QUARTERS;
   const monthWidth = Math.round(90 * zoom);
-  const sprintLabels = ["Sprint 1 (Weeks 1-2)", "Sprint 2 (Weeks 3-4)"];
-  const visibleSprints = focusedSprint
-    ? [{ label: sprintLabels[focusedSprint - 1], sprint: focusedSprint }]
-    : sprintLabels.map((label, index) => ({ label, sprint: index + 1 }));
-  const sprintKanbanColumns: Array<{ label: string; status: StoryStatus }> = [
-    { label: "To Do", status: StoryStatus.todo },
-    { label: "In Progress", status: StoryStatus.inProgress },
-    { label: "Done", status: StoryStatus.done },
-    { label: "Approved", status: StoryStatus.approved },
+  const sprintLaneLabels: [string, string] = [
+    "Sprint 1 (first half)",
+    "Sprint 2 (second half)",
   ];
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
-  const activeSprintLabel = focusedSprint ? sprintLabels[focusedSprint - 1] : null;
+
   const quarterLabelByMonth = new Map<number, string>(
     QUARTERS.flatMap((quarter) => quarter.months.map((month) => [month, quarter.label] as const)),
   );
@@ -365,39 +273,15 @@ export function TimelineGrid({
     Q3: "bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
     Q4: "bg-violet-50 text-violet-800 hover:bg-violet-100",
   };
-  const monthViewStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(${visibleSprints.length}, minmax(0, 1fr))`,
-  };
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: activeMonth
-      ? `repeat(1, minmax(0, 1fr))`
-      : focusedQuarter
+    gridTemplateColumns: focusedQuarter
       ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
       : `repeat(12, minmax(${monthWidth}px, 1fr))`,
   };
 
-  const viewStartMonth = focusedQuarter?.months[0] ?? activeMonth ?? 1;
-  const viewEndMonth =
-    focusedQuarter?.months[focusedQuarter.months.length - 1] ?? activeMonth ?? 12;
-  const sprintStories = initiatives
-    .filter((initiative) => {
-      if (initiative.status !== "scheduled") return false;
-      if (!initiative.startMonth || !initiative.endMonth) return false;
-      return initiative.endMonth >= viewStartMonth && initiative.startMonth <= viewEndMonth;
-    })
-    .flatMap((initiative) =>
-      (initiative.epics ?? []).flatMap((epic) =>
-        (epic.userStories ?? []).map((story) => ({
-          ...story,
-          epicTitle: epic.title,
-        })),
-      ),
-    );
-  const visibleKanbanSprints = focusedSprint ? [focusedSprint] : [1, 2];
-
   useEffect(() => {
-    onSprintModeChange(Boolean(focusedSprint), activeMonth);
-  }, [focusedSprint, activeMonth, onSprintModeChange]);
+    onSprintModeChange(false, activeMonth);
+  }, [activeMonth, onSprintModeChange]);
 
   const breadcrumbItems: Array<{
     label: string;
@@ -409,7 +293,6 @@ export function TimelineGrid({
       label: focusedQuarter.label,
       onClick: () => {
         setFocusedMonth(null);
-        setFocusedSprint(null);
       },
     });
   } else if (activeMonth) {
@@ -417,7 +300,6 @@ export function TimelineGrid({
       label: "All Quarters",
       onClick: () => {
         setFocusedMonth(null);
-        setFocusedSprint(null);
       },
     });
   } else {
@@ -427,20 +309,10 @@ export function TimelineGrid({
   if (activeMonth) {
     breadcrumbItems.push({
       label: MONTHS[activeMonth - 1],
-      onClick: () => {
-        setFocusedSprint(null);
-      },
-    });
-  }
-
-  if (activeSprintLabel) {
-    breadcrumbItems.push({
-      label: activeSprintLabel,
       onClick: null,
     });
-  } else if (activeMonth) {
     breadcrumbItems.push({
-      label: "All Sprints",
+      label: "Month · 2 sprints",
       onClick: null,
     });
   }
@@ -471,15 +343,11 @@ export function TimelineGrid({
           ))}
         </div>
         <div className="flex items-center gap-2">
-          {(focusedQuarter || focusedMonth || focusedSprint) ? (
+          {focusedQuarter || focusedMonth ? (
             <button
               type="button"
               className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-black/5"
               onClick={() => {
-                if (focusedSprint) {
-                  setFocusedSprint(null);
-                  return;
-                }
                 if (focusedMonth) {
                   setFocusedMonth(null);
                   return;
@@ -497,26 +365,10 @@ export function TimelineGrid({
               className="rounded-md bg-white px-2 py-1 text-[12px] font-medium shadow-sm ring-1 ring-black/5"
               onClick={() => {
                 setFocusedMonth(null);
-                setFocusedSprint(null);
                 onFocusedQuarterChange(null);
               }}
             >
               ⌂ Roadmap
-            </button>
-          ) : null}
-          {(focusedMonth || focusedSprint) ? (
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-black/5"
-              onClick={() => {
-                if (focusedMonth && !focusedSprint) {
-                  setFocusedSprint(1);
-                }
-              }}
-              aria-label="Go forward"
-              disabled={Boolean(focusedSprint)}
-            >
-              <ChevronRight className="size-4" />
             </button>
           ) : null}
         </div>
@@ -529,7 +381,6 @@ export function TimelineGrid({
               type="button"
               onClick={() => {
                 setFocusedMonth(null);
-                setFocusedSprint(null);
                 onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
               }}
               className={cn(
@@ -547,51 +398,46 @@ export function TimelineGrid({
         </div>
       ) : null}
       {activeMonth ? (
-        <div className="mb-4 space-y-3 rounded-xl bg-slate-50/70 p-3">
-          <div className="grid gap-2" style={monthViewStyle}>
-            {visibleSprints.map(({ label, sprint }) => (
-              <div key={label} className="space-y-2 rounded-lg bg-white p-2.5 shadow-sm">
-                <button
-                  type="button"
-                  className={cn(
-                    "w-full rounded-lg border py-1.5 text-center text-[12px] font-semibold tracking-[0.01em] transition",
-                    focusedSprint === sprint
-                      ? sprint === 1
-                        ? "border-blue-300 bg-blue-100 text-blue-800 ring-1 ring-blue-200"
-                        : "border-violet-300 bg-violet-100 text-violet-800 ring-1 ring-violet-200"
-                      : sprint === 1
-                        ? "border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100"
-                        : "border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-300 hover:bg-violet-100",
-                  )}
-                  onClick={() => setFocusedSprint((current) => (current === sprint ? null : sprint))}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Flag className="size-3.5" />
-                    {label}
-                  </span>
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-3 rounded-xl bg-slate-50/70 p-3.5 shadow-sm">
-            <div className={cn("grid gap-4", focusedSprint ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-2")}>
-              {visibleKanbanSprints.map((sprintNumber) => (
-                <div key={`kanban-sprint-${sprintNumber}`} className="space-y-2 rounded-lg bg-white p-3 shadow-sm">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    {sprintKanbanColumns.map((column) => (
-                      <SprintKanbanColumn
-                        key={`${sprintNumber}-${column.status}`}
-                        label={column.label}
-                        status={column.status}
-                        stories={sprintStories.filter(
-                          (story) => story.sprint === sprintNumber && story.status === column.status,
-                        )}
-                        onOpenStory={onOpenStory}
-                      />
-                    ))}
+        <div className="mb-4 space-y-4 rounded-xl bg-slate-50/70 p-4">
+          <p className="text-[12px] leading-5 text-slate-600">
+            Two sprint columns for {MONTHS[activeMonth - 1]} only. Drag epics onto a dashed cell to choose the sprint.
+            From the roadmap month row you can also drop on that month (defaults to Sprint 1). The parent initiative
+            must be scheduled for {MONTHS[activeMonth - 1]}.
+          </p>
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-black/5">
+            <div className="mb-3 rounded-md bg-slate-100 py-2 text-center">
+              <span className="text-[13px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
+              <span className="text-[11px] font-medium text-slate-500"> · sprint plan</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {([1, 2] as const).map((sprint) => {
+                const planned = collectPlannedEpicsForMonth(initiatives, sprint, activeMonth);
+                return (
+                  <div
+                    key={`sprint-col-${sprint}`}
+                    className="flex flex-col rounded-lg border border-slate-200/90 bg-slate-50/40 p-2.5"
+                  >
+                    <p className="mb-2 text-center text-[11px] font-semibold tracking-wide text-slate-700 uppercase">
+                      {sprintLaneLabels[sprint - 1]}
+                    </p>
+                    <EpicPlanDropCell month={activeMonth} sprint={sprint} />
+                    <div className="mt-2 space-y-1.5">
+                      {planned.length === 0 ? (
+                        <p className="text-[11px] text-slate-500">No epics yet.</p>
+                      ) : null}
+                      {planned.map(({ epic }) => (
+                        <EpicPlanBar
+                          key={epic.id}
+                          id={epic.id}
+                          title={epic.title}
+                          color={epic.color}
+                          onClick={() => onOpenEpic(epic.id)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -615,7 +461,6 @@ export function TimelineGrid({
                         "bg-slate-100 text-slate-700 hover:bg-slate-200",
                 )}
                 onClick={() => {
-                  setFocusedSprint(null);
                   setFocusedMonth(month);
                 }}
               >

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { StoryStatus } from "@prisma/client";
+import { StoryStatus } from "@/lib/generated/prisma";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
