@@ -216,7 +216,9 @@ function OffPlanInitiativeBox({
               <p className="mt-1 line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
             ) : null}
             <p className="mt-0.5 text-[11px] text-slate-500">
-              {epics.length} epic{epics.length !== 1 ? "s" : ""} not on this month’s plan
+              {epics.length === 0
+                ? "No epics yet — add one under this initiative in Scheduled below."
+                : `${epics.length} epic${epics.length !== 1 ? "s" : ""} not on this month’s plan`}
             </p>
           </div>
         </div>
@@ -230,17 +232,19 @@ function OffPlanInitiativeBox({
         </div>
       </div>
       <div className="space-y-2 px-3 pb-3">
-        {epics.map((epic) => (
-          <OffPlanEpicRow
-            key={epic.id}
-            epic={epic}
-            initiative={initiative}
-            epicPlanDragEnabled={epicPlanDragEnabled}
-            hideInitiativeLabel
-            onOpenEpic={onOpenEpic}
-            onDeleteEpic={onDeleteEpic}
-          />
-        ))}
+        {epics.length === 0 ? null : (
+          epics.map((epic) => (
+            <OffPlanEpicRow
+              key={epic.id}
+              epic={epic}
+              initiative={initiative}
+              epicPlanDragEnabled={epicPlanDragEnabled}
+              hideInitiativeLabel
+              onOpenEpic={onOpenEpic}
+              onDeleteEpic={onDeleteEpic}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -794,49 +798,37 @@ export function InitiativeListPanel({
     setOpenEpicIds({});
   }, [activeMonth, quarterForMonthDrill, initiatives]);
 
+  /** Sprint Kanban: all epics collapsed when entering a sprint board (runs before planReveal so reveals still apply). */
+  const sprintViewKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeMonth == null || activeSprintLane == null || !isSprintModeActive) {
+      sprintViewKeyRef.current = null;
+      return;
+    }
+    const key = `${activeMonth}:${activeSprintLane}`;
+    if (sprintViewKeyRef.current === key) return;
+    sprintViewKeyRef.current = key;
+    setOpenEpicIds({});
+  }, [activeMonth, activeSprintLane, isSprintModeActive]);
+
   useEffect(() => {
     if (!planReveal) return;
     setOpenInitiativeIds((prev) => ({ ...prev, [planReveal.initiativeId]: true }));
     setOpenEpicIds((prev) => ({ ...prev, [planReveal.epicId]: true }));
   }, [planReveal]);
 
-  const sprintDrillExpandKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (activeMonth == null || activeSprintLane == null || !isSprintModeActive) {
-      sprintDrillExpandKeyRef.current = null;
-      return;
-    }
-    const key = `${activeMonth}:${activeSprintLane}`;
-    if (sprintDrillExpandKeyRef.current === key) return;
-    sprintDrillExpandKeyRef.current = key;
-
-    const nextInit: Record<string, boolean> = {};
-    const nextEpic: Record<string, boolean> = {};
-    for (const initiative of initiatives) {
-      if (initiative.status !== "scheduled") continue;
-      if (initiative.startMonth == null || initiative.endMonth == null) continue;
-      if (initiative.startMonth > activeMonth || initiative.endMonth < activeMonth) continue;
-      const matching = (initiative.epics ?? []).filter((e) =>
-        epicIsPlannedForMonthAndSprint(e, activeMonth, activeSprintLane),
-      );
-      if (matching.length > 0) {
-        nextInit[initiative.id] = true;
-        for (const e of matching) nextEpic[e.id] = true;
-      }
-    }
-    setOpenInitiativeIds((prev) => ({ ...prev, ...nextInit }));
-    setOpenEpicIds((prev) => ({ ...prev, ...nextEpic }));
-  }, [activeMonth, activeSprintLane, isSprintModeActive, initiatives]);
-
   const offPlanByInitiative = useMemo(() => {
     if (activeMonth == null || !epicPlanDragEnabled) return [];
     const groups: Array<{ initiative: InitiativeItem; epics: EpicItem[] }> = [];
     for (const initiative of scheduled) {
-      const epics = (initiative.epics ?? [])
+      const allEpics = initiative.epics ?? [];
+      const epics = allEpics
         .filter((e) => !epicIsOnPlanForMonth(e, activeMonth))
         .sort((a, b) => a.title.localeCompare(b.title));
       if (epics.length > 0) {
         groups.push({ initiative, epics });
+      } else if (allEpics.length === 0) {
+        groups.push({ initiative, epics: [] });
       }
     }
     groups.sort((a, b) => a.initiative.title.localeCompare(b.initiative.title));
@@ -875,17 +867,16 @@ export function InitiativeListPanel({
 
       {isSprintModeActive && storyDragEnabled ? (
         <div className="mb-4">
-          <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">Unscheduled</h3>
           <div
             ref={setStoryUnscheduleDropRef}
             className={cn(
-              "rounded-lg border border-dashed border-sky-200/90 bg-sky-50/70 p-3 text-sky-900/90 transition",
-              isStoryUnscheduleDropOver && "border-sky-400 bg-sky-100",
+              "min-h-[5.5rem] rounded-lg border-2 border-dashed border-sky-200/90 bg-sky-50/70 p-3 text-sky-900/90 transition",
+              isStoryUnscheduleDropOver && "border-sky-500 bg-sky-100 ring-2 ring-sky-300/50",
             )}
           >
+            <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">Unscheduled</h3>
             <p className="text-[11px] font-medium leading-4">
-              Drop a user story here to clear its sprint (same idea as moving an epic off the plan). The story stays on
-              the epic and shows under the epic bar as unscheduled on the sprint plan.
+              Drop a user story here (from the board or this list) to clear its sprint. The story stays on the epic.
             </p>
           </div>
         </div>

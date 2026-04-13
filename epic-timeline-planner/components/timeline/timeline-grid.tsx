@@ -17,6 +17,9 @@ type TimelineGridProps = {
   zoom: number;
   focusedQuarterLabel: string | null;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
+  /** After dropping an initiative on a month, parent bumps token so we focus that month (left panel month drill). */
+  scheduleDrill?: { month: number; token: number } | null;
+  onScheduleDrillApplied?: () => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeSprint: 1 | 2 | null) => void;
   onOpenEpic: (epicId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
@@ -117,6 +120,8 @@ export function TimelineGrid({
   zoom,
   focusedQuarterLabel,
   onFocusedQuarterChange,
+  scheduleDrill = null,
+  onScheduleDrillApplied,
   onSprintModeChange,
   onOpenEpic,
   onOpenInitiative,
@@ -261,6 +266,12 @@ export function TimelineGrid({
       ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
       : `repeat(12, minmax(${monthWidth}px, 1fr))`,
   };
+
+  useEffect(() => {
+    if (!scheduleDrill || !onScheduleDrillApplied) return;
+    setFocusedMonth(scheduleDrill.month);
+    onScheduleDrillApplied();
+  }, [scheduleDrill, onScheduleDrillApplied]);
 
   const prevActiveMonthRef = useRef<number | null>(null);
   useEffect(() => {

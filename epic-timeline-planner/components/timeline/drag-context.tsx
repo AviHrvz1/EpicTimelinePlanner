@@ -5,6 +5,7 @@ import {
   DndContext,
   DragOverlay,
   DragEndEvent,
+  MeasuringStrategy,
   PointerSensor,
   TouchSensor,
   pointerWithin,
@@ -47,12 +48,21 @@ const epicPlanCollision: CollisionDetection = (args) => {
 };
 
 const storyKanbanCollision: CollisionDetection = (args) => {
-  const isDropTarget = (id: string) => id.startsWith("kanban:") || id === STORIES_UNSCHEDULE_DROP_ID;
-  const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
+  const unscheduleId = STORIES_UNSCHEDULE_DROP_ID;
+  /** Prefer left-panel unschedule so drops aren’t stolen by Kanban columns when crossing the layout. */
+  const unschedulePointer = pointerWithin(args).filter((c) => String(c.id) === unscheduleId);
+  if (unschedulePointer.length > 0) return unschedulePointer;
+  const unscheduleRect = rectIntersection(args).filter((c) => String(c.id) === unscheduleId);
+  if (unscheduleRect.length > 0) return unscheduleRect;
+
+  const isKanban = (id: string) => id.startsWith("kanban:");
+  const pointerHits = pointerWithin(args).filter((c) => isKanban(String(c.id)));
   if (pointerHits.length > 0) return pointerHits;
-  const rectHits = rectIntersection(args).filter((c) => isDropTarget(String(c.id)));
+  const rectHits = rectIntersection(args).filter((c) => isKanban(String(c.id)));
   if (rectHits.length > 0) return rectHits;
-  return closestCenter(args).filter((c) => isDropTarget(String(c.id)));
+  return closestCenter(args).filter(
+    (c) => isKanban(String(c.id)) || String(c.id) === unscheduleId,
+  );
 };
 
 const collisionDetection: CollisionDetection = (args) => {
@@ -80,6 +90,9 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
       id="epic-planner-dnd"
       sensors={sensors}
       collisionDetection={collisionDetection}
+      measuring={{
+        droppable: { strategy: MeasuringStrategy.Always },
+      }}
       onDragStart={(event) => {
         setActiveDragId(String(event.active.id));
       }}
