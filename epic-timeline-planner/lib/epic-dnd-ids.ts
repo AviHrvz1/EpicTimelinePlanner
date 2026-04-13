@@ -7,6 +7,9 @@ const EPIC_TIMELINE_PREFIX = "timeline-epic:";
 /** Left panel: drop epic here to clear sprint plan (month drill). */
 export const EPICS_UNPLAN_DROP_ID = "epics:unplan-drop";
 
+/** Left panel (sprint Kanban): drop story here to clear sprint assignment (unscheduled). */
+export const STORIES_UNSCHEDULE_DROP_ID = "stories:unschedule-drop";
+
 export function initiativeListDraggableId(initiativeId: string): string {
   return `${LIST_PREFIX}${initiativeId}`;
 }

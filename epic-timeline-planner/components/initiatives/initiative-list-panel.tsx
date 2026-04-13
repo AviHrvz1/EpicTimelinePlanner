@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import {
   EPICS_UNPLAN_DROP_ID,
+  STORIES_UNSCHEDULE_DROP_ID,
   epicListDraggableId,
   initiativeListDraggableId,
   storyListDraggableId,
@@ -256,6 +257,7 @@ function EpicAccordion({
   onDeleteEpic,
   onCreateStory,
   onOpenStory,
+  initiativeAccentColor,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -267,6 +269,8 @@ function EpicAccordion({
   onDeleteEpic: (epicId: string) => void;
   onCreateStory: (epicId: string, title: string) => Promise<void>;
   onOpenStory: (storyId: string) => void;
+  /** Sprint Kanban flat list: color bar from parent initiative (no initiative row). */
+  initiativeAccentColor?: string;
 }) {
   const epicIcon = epic.icon || "📁";
   const {
@@ -380,8 +384,14 @@ function EpicAccordion({
     <div
       className={cn(
         "rounded-lg border border-slate-200 bg-white shadow-sm",
+        initiativeAccentColor != null && "border-l-[3px]",
         isEpicPlanDragging && "opacity-70 ring-2 ring-primary/25",
       )}
+      style={
+        initiativeAccentColor != null
+          ? { borderLeftColor: initiativeAccentColor }
+          : undefined
+      }
     >
       <div className="flex items-start gap-2 px-2.5 py-2">
         {epicPlanDragEnabled ? (
@@ -683,6 +693,9 @@ export function InitiativeListPanel({
   const { setNodeRef: setEpicUnplanDropRef, isOver: isEpicUnplanDropOver } = useDroppable({
     id: EPICS_UNPLAN_DROP_ID,
   });
+  const { setNodeRef: setStoryUnscheduleDropRef, isOver: isStoryUnscheduleDropOver } = useDroppable({
+    id: STORIES_UNSCHEDULE_DROP_ID,
+  });
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [openEpicIds, setOpenEpicIds] = useState<Record<string, boolean>>({});
   const backlog = initiatives.filter((i) => i.status === "backlog");
@@ -724,6 +737,36 @@ export function InitiativeListPanel({
     }
     return scheduled.filter((i) => (i.epics ?? []).some((e) => epicIsOnPlanForMonth(e, activeMonth)));
   }, [scheduled, activeMonth, epicPlanDragEnabled, isSprintModeActive, activeSprintLane]);
+
+  /** Sprint Kanban: flat epic → stories (no initiative accordion). */
+  const sprintEpicFlatList = useMemo(() => {
+    if (!isSprintModeActive || activeMonth == null || activeSprintLane == null || !epicPlanDragEnabled) {
+      return null;
+    }
+    const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+    for (const initiative of scheduledForPlanSection) {
+      for (const epic of initiative.epics ?? []) {
+        if (epicIsPlannedForMonthAndSprint(epic, activeMonth, activeSprintLane)) {
+          rows.push({ epic, initiative });
+        }
+      }
+    }
+    rows.sort((a, b) => {
+      const byInit = a.initiative.title.localeCompare(b.initiative.title);
+      if (byInit !== 0) return byInit;
+      return a.epic.title.localeCompare(b.epic.title);
+    });
+    return rows;
+  }, [
+    isSprintModeActive,
+    activeMonth,
+    activeSprintLane,
+    epicPlanDragEnabled,
+    scheduledForPlanSection,
+  ]);
+
+  const scheduledHeadingCount =
+    sprintEpicFlatList != null ? sprintEpicFlatList.length : scheduledForPlanSection.length;
 
   const monthDrillExpandKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -812,7 +855,7 @@ export function InitiativeListPanel({
           <h2 className="text-[16px] leading-6 font-semibold tracking-tight text-slate-900">Initiatives</h2>
           <p className="text-[12px] leading-4 text-slate-600">
             {isSprintModeActive && activeMonth != null && activeSprintLane != null
-              ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]}: epics on this sprint only — all user stories per epic (drag to the board).`
+              ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]}: each epic expands to its user stories (no initiative level). Drag stories to the board or drop on Unscheduled to clear sprint.`
               : isSprintModeActive
                 ? "Sprint mode: drag stories to Kanban columns"
                 : isMonthDrillDown && quarterForMonthDrill
@@ -829,6 +872,24 @@ export function InitiativeListPanel({
           </Button>
         ) : null}
       </div>
+
+      {isSprintModeActive && storyDragEnabled ? (
+        <div className="mb-4">
+          <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">Unscheduled</h3>
+          <div
+            ref={setStoryUnscheduleDropRef}
+            className={cn(
+              "rounded-lg border border-dashed border-sky-200/90 bg-sky-50/70 p-3 text-sky-900/90 transition",
+              isStoryUnscheduleDropOver && "border-sky-400 bg-sky-100",
+            )}
+          >
+            <p className="text-[11px] font-medium leading-4">
+              Drop a user story here to clear its sprint (same idea as moving an epic off the plan). The story stays on
+              the epic and shows under the epic bar as unscheduled on the sprint plan.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {showBacklogChrome ? (
         <div
@@ -897,15 +958,15 @@ export function InitiativeListPanel({
       <div className={cn("pt-4", showBacklogChrome && "mt-4")}>
         <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
           {isMonthDrillDown && isSprintModeActive && activeSprintLane != null && quarterForMonthDrill
-            ? `Scheduled · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} · Sprint ${activeSprintLane} (${scheduledForPlanSection.length})`
+            ? `Epics · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} · Sprint ${activeSprintLane} (${scheduledHeadingCount})`
             : isMonthDrillDown && quarterForMonthDrill
-              ? `Scheduled · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
+              ? `Scheduled · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} (${scheduledHeadingCount})`
               : isMonthDrillDown
-                ? `Scheduled · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
-                : `Scheduled${focusedQuarter ? ` ${focusedQuarter.label}` : ""} (${scheduledForPlanSection.length})`}
+                ? `Scheduled · ${MONTHS[activeMonth! - 1]} (${scheduledHeadingCount})`
+                : `Scheduled${focusedQuarter ? ` ${focusedQuarter.label}` : ""} (${scheduledHeadingCount})`}
         </h3>
         <div className="space-y-2">
-          {isMonthDrillDown && epicPlanDragEnabled && scheduledForPlanSection.length === 0 ? (
+          {isMonthDrillDown && epicPlanDragEnabled && scheduledHeadingCount === 0 ? (
             <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
               {isSprintModeActive && activeSprintLane != null ? (
                 <>
@@ -921,37 +982,59 @@ export function InitiativeListPanel({
               )}
             </p>
           ) : null}
-          {scheduledForPlanSection.map((initiative) => (
-            <ScheduledInitiativeAccordion
-              key={initiative.id}
-              initiative={initiative}
-              isOpen={Boolean(openInitiativeIds[initiative.id])}
-              storyDragEnabled={storyDragEnabled}
-              epicPlanDragEnabled={epicPlanDragEnabled}
-              planDrillMonth={isMonthDrillDown && epicPlanDragEnabled ? activeMonth : null}
-              planDrillSprintLane={isSprintModeActive ? activeSprintLane : null}
-              openEpicIds={openEpicIds}
-              onToggle={() =>
-                setOpenInitiativeIds((current) => ({
-                  ...current,
-                  [initiative.id]: !current[initiative.id],
-                }))
-              }
-              onToggleEpic={(epicId) =>
-                setOpenEpicIds((current) => ({
-                  ...current,
-                  [epicId]: !current[epicId],
-                }))
-              }
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onOpenEpic={onOpenEpic}
-              onDeleteEpic={onDeleteEpic}
-              onCreateEpic={onCreateEpic}
-              onCreateStory={onCreateStory}
-              onOpenStory={onOpenStory}
-            />
-          ))}
+          {sprintEpicFlatList != null
+            ? sprintEpicFlatList.map(({ epic, initiative }) => (
+                <EpicAccordion
+                  key={epic.id}
+                  epic={epic}
+                  initiative={initiative}
+                  isOpen={Boolean(openEpicIds[epic.id])}
+                  storyDragEnabled={storyDragEnabled}
+                  epicPlanDragEnabled={epicPlanDragEnabled}
+                  initiativeAccentColor={initiative.color}
+                  onToggle={() =>
+                    setOpenEpicIds((current) => ({
+                      ...current,
+                      [epic.id]: !current[epic.id],
+                    }))
+                  }
+                  onOpenEpic={onOpenEpic}
+                  onDeleteEpic={onDeleteEpic}
+                  onCreateStory={onCreateStory}
+                  onOpenStory={onOpenStory}
+                />
+              ))
+            : scheduledForPlanSection.map((initiative) => (
+                <ScheduledInitiativeAccordion
+                  key={initiative.id}
+                  initiative={initiative}
+                  isOpen={Boolean(openInitiativeIds[initiative.id])}
+                  storyDragEnabled={storyDragEnabled}
+                  epicPlanDragEnabled={epicPlanDragEnabled}
+                  planDrillMonth={isMonthDrillDown && epicPlanDragEnabled ? activeMonth : null}
+                  planDrillSprintLane={isSprintModeActive ? activeSprintLane : null}
+                  openEpicIds={openEpicIds}
+                  onToggle={() =>
+                    setOpenInitiativeIds((current) => ({
+                      ...current,
+                      [initiative.id]: !current[initiative.id],
+                    }))
+                  }
+                  onToggleEpic={(epicId) =>
+                    setOpenEpicIds((current) => ({
+                      ...current,
+                      [epicId]: !current[epicId],
+                    }))
+                  }
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onOpenEpic={onOpenEpic}
+                  onDeleteEpic={onDeleteEpic}
+                  onCreateEpic={onCreateEpic}
+                  onCreateStory={onCreateStory}
+                  onOpenStory={onOpenStory}
+                />
+              ))}
         </div>
       </div>
     </aside>

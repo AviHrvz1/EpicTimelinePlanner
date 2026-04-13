@@ -17,6 +17,7 @@ import { useState } from "react";
 
 import {
   EPICS_UNPLAN_DROP_ID,
+  STORIES_UNSCHEDULE_DROP_ID,
   isEpicPlanDraggableId,
   isInitiativeDraggableId,
   isStoryDraggableId,
@@ -46,9 +47,11 @@ const epicPlanCollision: CollisionDetection = (args) => {
 };
 
 const storyKanbanCollision: CollisionDetection = (args) => {
-  const isDropTarget = (id: string) => id.startsWith("kanban:");
+  const isDropTarget = (id: string) => id.startsWith("kanban:") || id === STORIES_UNSCHEDULE_DROP_ID;
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
   if (pointerHits.length > 0) return pointerHits;
+  const rectHits = rectIntersection(args).filter((c) => isDropTarget(String(c.id)));
+  if (rectHits.length > 0) return rectHits;
   return closestCenter(args).filter((c) => isDropTarget(String(c.id)));
 };
 

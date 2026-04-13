@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import type { LucideIcon } from "lucide-react";
+import { BadgeCheck, CheckCircle2, ListTodo, PlayCircle } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
@@ -10,11 +12,11 @@ import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 
-const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string }[] = [
-  { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80" },
-  { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60" },
-  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60" },
-  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60" },
+const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: LucideIcon }[] = [
+  { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", Icon: ListTodo },
+  { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60", Icon: PlayCircle },
+  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", Icon: CheckCircle2 },
+  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60", Icon: BadgeCheck },
 ];
 
 function KanbanColumn({
@@ -23,6 +25,7 @@ function KanbanColumn({
   status,
   label,
   tone,
+  Icon,
   children,
 }: {
   month: number;
@@ -30,6 +33,7 @@ function KanbanColumn({
   status: StoryStatus;
   label: string;
   tone: string;
+  Icon: LucideIcon;
   children: ReactNode;
 }) {
   const dropId = sprintKanbanDropId(month, sprintLane, status);
@@ -44,9 +48,10 @@ function KanbanColumn({
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
     >
-      <p className="mb-2 border-b border-black/5 pb-2 text-center text-[11px] font-bold uppercase tracking-wide text-slate-600">
-        {label}
-      </p>
+      <div className="mb-2 flex items-center justify-center gap-1.5 border-b border-black/5 pb-2 text-slate-600">
+        <Icon className="size-3.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+        <p className="text-center text-[11px] font-bold uppercase tracking-wide">{label}</p>
+      </div>
       <div className="flex flex-1 flex-col gap-2">{children}</div>
     </div>
   );
@@ -131,8 +136,16 @@ export function SprintKanbanBoard({ initiatives, month, sprintLane, onOpenStory 
         stories from the left panel onto a column.
       </p>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {KANBAN_COLUMNS.map(({ status, label, tone }) => (
-          <KanbanColumn key={status} month={month} sprintLane={sprintLane} status={status} label={label} tone={tone}>
+        {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
+          <KanbanColumn
+            key={status}
+            month={month}
+            sprintLane={sprintLane}
+            status={status}
+            label={label}
+            tone={tone}
+            Icon={Icon}
+          >
             {(byStatus.get(status) ?? []).map((row) => (
               <KanbanStoryCard key={row.story.id} row={row} onOpenStory={onOpenStory} />
             ))}

@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
-import { EpicPlanBar } from "@/components/timeline/epic-plan-bar";
+import { EpicPlanBlock } from "@/components/timeline/epic-plan-block";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
@@ -448,12 +448,11 @@ export function TimelineGrid({
                             <p className="text-[11px] text-slate-500">No epics yet.</p>
                           ) : null}
                           {planned.map(({ epic }) => (
-                            <EpicPlanBar
+                            <EpicPlanBlock
                               key={epic.id}
-                              id={epic.id}
-                              title={epic.title}
-                              color={epic.color}
-                              onClick={() => onOpenEpic(epic.id)}
+                              epic={epic}
+                              onOpenEpic={() => onOpenEpic(epic.id)}
+                              onOpenStory={onOpenStory}
                             />
                           ))}
                         </div>

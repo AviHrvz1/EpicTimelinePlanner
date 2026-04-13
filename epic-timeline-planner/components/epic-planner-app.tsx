@@ -14,6 +14,7 @@ import { DragContext } from "@/components/timeline/drag-context";
 import { TimelineGrid } from "@/components/timeline/timeline-grid";
 import {
   EPICS_UNPLAN_DROP_ID,
+  STORIES_UNSCHEDULE_DROP_ID,
   isEpicPlanDraggableId,
   isInitiativeDraggableId,
   parseEpicIdFromPlanDraggable,
@@ -362,6 +363,36 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (isStoryDraggableId(activeId)) {
       const storyId = parseStoryIdFromDraggable(activeId);
       if (!storyId) return;
+
+      if (overId === STORIES_UNSCHEDULE_DROP_ID) {
+        flushSync(() => {
+          setInitiatives((prev) =>
+            prev.map((init) => ({
+              ...init,
+              epics: (init.epics ?? []).map((epic) => ({
+                ...epic,
+                userStories: (epic.userStories ?? []).map((s) =>
+                  s.id === storyId ? { ...s, sprint: null } : s,
+                ),
+              })),
+            })),
+          );
+        });
+        try {
+          const response = await fetch(`/api/stories/${storyId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sprint: null }),
+          });
+          if (!response.ok) throw new Error("Failed to update story");
+          toast.success("Story moved to unscheduled");
+        } catch {
+          await refresh();
+          toast.error("Failed to clear sprint on story");
+        }
+        return;
+      }
+
       const kanbanMatch = /^kanban:(\d+):([12]):(todo|inProgress|done|approved)$/.exec(overId);
       if (!kanbanMatch) return;
       const sprint = Number(kanbanMatch[2]) as 1 | 2;
