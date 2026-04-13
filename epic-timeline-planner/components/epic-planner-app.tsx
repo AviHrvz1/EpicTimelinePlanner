@@ -1,7 +1,7 @@
 "use client";
 
 import { DragEndEvent } from "@dnd-kit/core";
-import { InitiativeStatus } from "@/lib/generated/prisma";
+import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
 import { useMemo, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
@@ -18,6 +18,8 @@ import {
   isInitiativeDraggableId,
   parseEpicIdFromPlanDraggable,
   parseInitiativeIdFromDraggable,
+  isStoryDraggableId,
+  parseStoryIdFromDraggable,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
@@ -45,6 +47,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [focusedQuarterLabel, setFocusedQuarterLabel] = useState<string | null>(null);
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
+  const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
   const [planReveal, setPlanReveal] = useState<{
     nonce: number;
     initiativeId: string;
@@ -356,6 +359,42 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : "";
 
+    if (isStoryDraggableId(activeId)) {
+      const storyId = parseStoryIdFromDraggable(activeId);
+      if (!storyId) return;
+      const kanbanMatch = /^kanban:(\d+):([12]):(todo|inProgress|done|approved)$/.exec(overId);
+      if (!kanbanMatch) return;
+      const sprint = Number(kanbanMatch[2]) as 1 | 2;
+      const status = kanbanMatch[3] as StoryStatus;
+
+      flushSync(() => {
+        setInitiatives((prev) =>
+          prev.map((init) => ({
+            ...init,
+            epics: (init.epics ?? []).map((epic) => ({
+              ...epic,
+              userStories: (epic.userStories ?? []).map((s) =>
+                s.id === storyId ? { ...s, status, sprint } : s,
+              ),
+            })),
+          })),
+        );
+      });
+      try {
+        const response = await fetch(`/api/stories/${storyId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, sprint }),
+        });
+        if (!response.ok) throw new Error("Failed to update story");
+        toast.success("Story updated");
+      } catch {
+        await refresh();
+        toast.error("Failed to move story");
+      }
+      return;
+    }
+
     if (isEpicPlanDraggableId(activeId)) {
       const epicId = parseEpicIdFromPlanDraggable(activeId);
       if (!epicId) return;
@@ -598,10 +637,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             className={cn("grid items-stretch gap-3", isResizingPanel && "select-none")}
             style={{ gridTemplateColumns: `${panelWidth}px 14px minmax(0, 1fr)` }}
           >
-            <InitiativeListPanel
+                       <InitiativeListPanel
               initiatives={initiatives}
               focusedQuarterLabel={focusedQuarterLabel}
               activeMonth={activeTimelineMonth}
+              activeSprintLane={activeSprintLane}
               storyDragEnabled={isSprintModeActive}
               epicPlanDragEnabled={activeTimelineMonth != null}
               isSprintModeActive={isSprintModeActive}
@@ -689,9 +729,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   toast.error("Failed to resize initiative");
                 }
               }}
-              onSprintModeChange={(active, month) => {
+              onOpenStory={(storyId) => {
+                setSelectedStoryId(storyId);
+              }}
+              onSprintModeChange={(active, month, sprintLane) => {
                 setIsSprintModeActive(active);
                 setActiveTimelineMonth(month);
+                setActiveSprintLane(sprintLane ?? null);
               }}
             />
           </div>

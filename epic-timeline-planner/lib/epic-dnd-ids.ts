@@ -42,3 +42,29 @@ export function parseEpicIdFromPlanDraggable(activeId: string): string | null {
   if (activeId.startsWith(EPIC_TIMELINE_PREFIX)) return activeId.slice(EPIC_TIMELINE_PREFIX.length);
   return null;
 }
+
+const STORY_LIST_PREFIX = "story:list:";
+const STORY_BOARD_PREFIX = "story:board:";
+
+export function storyListDraggableId(storyId: string): string {
+  return `${STORY_LIST_PREFIX}${storyId}`;
+}
+
+export function storyBoardDraggableId(storyId: string): string {
+  return `${STORY_BOARD_PREFIX}${storyId}`;
+}
+
+export function isStoryDraggableId(activeId: string): boolean {
+  return activeId.startsWith(STORY_LIST_PREFIX) || activeId.startsWith(STORY_BOARD_PREFIX);
+}
+
+export function parseStoryIdFromDraggable(activeId: string): string | null {
+  if (activeId.startsWith(STORY_LIST_PREFIX)) return activeId.slice(STORY_LIST_PREFIX.length);
+  if (activeId.startsWith(STORY_BOARD_PREFIX)) return activeId.slice(STORY_BOARD_PREFIX.length);
+  return null;
+}
+
+/** Droppable id for sprint kanban columns: month, sprint lane (1|2), StoryStatus. */
+export function sprintKanbanDropId(month: number, sprint: 1 | 2, status: string): string {
+  return `kanban:${month}:${sprint}:${status}`;
+}

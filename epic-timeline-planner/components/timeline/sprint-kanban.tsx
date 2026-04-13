@@ -1,0 +1,144 @@
+"use client";
+
+import type { ReactNode } from "react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { StoryStatus } from "@/lib/generated/prisma";
+import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
+import { MONTHS } from "@/lib/timeline";
+import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
+import { InitiativeItem } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { DragHandleIcon } from "@/components/ui/drag-handle";
+
+const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string }[] = [
+  { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80" },
+  { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60" },
+  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60" },
+  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60" },
+];
+
+function KanbanColumn({
+  month,
+  sprintLane,
+  status,
+  label,
+  tone,
+  children,
+}: {
+  month: number;
+  sprintLane: 1 | 2;
+  status: StoryStatus;
+  label: string;
+  tone: string;
+  children: ReactNode;
+}) {
+  const dropId = sprintKanbanDropId(month, sprintLane, status);
+  const { setNodeRef, isOver } = useDroppable({ id: dropId });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex min-h-[14rem] flex-col rounded-xl border-2 border-dashed p-2 transition",
+        tone,
+        isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
+      )}
+    >
+      <p className="mb-2 border-b border-black/5 pb-2 text-center text-[11px] font-bold uppercase tracking-wide text-slate-600">
+        {label}
+      </p>
+      <div className="flex flex-1 flex-col gap-2">{children}</div>
+    </div>
+  );
+}
+
+function KanbanStoryCard({
+  row,
+  onOpenStory,
+}: {
+  row: BoardStoryRow;
+  onOpenStory: (storyId: string) => void;
+}) {
+  const { story, epic } = row;
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: storyBoardDraggableId(story.id),
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "rounded-lg border border-slate-200/90 bg-white px-2 py-2 shadow-sm",
+        isDragging && "opacity-60",
+      )}
+      style={{
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        zIndex: isDragging ? 20 : undefined,
+      }}
+    >
+      <div className="flex items-start gap-1.5">
+        <button
+          type="button"
+          className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+          aria-label="Drag story"
+          {...attributes}
+          {...listeners}
+        >
+          <DragHandleIcon size="sm" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-medium leading-snug text-slate-900">
+            {story.icon ? <span className="mr-0.5">{story.icon}</span> : null}
+            {story.title}
+          </p>
+          <p className="mt-1 truncate text-[10px] text-slate-500">{epic.title}</p>
+          <button
+            type="button"
+            onClick={() => onOpenStory(story.id)}
+            className="mt-1.5 text-[10px] font-medium text-sky-700 hover:underline"
+          >
+            Open details
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type SprintKanbanProps = {
+  initiatives: InitiativeItem[];
+  month: number;
+  sprintLane: 1 | 2;
+  onOpenStory: (storyId: string) => void;
+};
+
+export function SprintKanbanBoard({ initiatives, month, sprintLane, onOpenStory }: SprintKanbanProps) {
+  const rows = collectStoriesForSprintBoard(initiatives, sprintLane, month);
+  const byStatus = new Map<StoryStatus, BoardStoryRow[]>();
+  for (const col of KANBAN_COLUMNS) {
+    byStatus.set(col.status, []);
+  }
+  for (const row of rows) {
+    const list = byStatus.get(row.story.status);
+    if (list) list.push(row);
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[12px] leading-5 text-slate-600">
+        User stories from epics planned for <span className="font-medium">{MONTHS[month - 1]}</span>,{" "}
+        <span className="font-medium">Sprint {sprintLane}</span>. Drag cards between columns to update status, or drag
+        stories from the left panel onto a column.
+      </p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {KANBAN_COLUMNS.map(({ status, label, tone }) => (
+          <KanbanColumn key={status} month={month} sprintLane={sprintLane} status={status} label={label} tone={tone}>
+            {(byStatus.get(status) ?? []).map((row) => (
+              <KanbanStoryCard key={row.story.id} row={row} onOpenStory={onOpenStory} />
+            ))}
+          </KanbanColumn>
+        ))}
+      </div>
+    </div>
+  );
+}

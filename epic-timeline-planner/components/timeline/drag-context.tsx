@@ -15,7 +15,12 @@ import {
 } from "@dnd-kit/core";
 import { useState } from "react";
 
-import { EPICS_UNPLAN_DROP_ID, isEpicPlanDraggableId, isInitiativeDraggableId } from "@/lib/epic-dnd-ids";
+import {
+  EPICS_UNPLAN_DROP_ID,
+  isEpicPlanDraggableId,
+  isInitiativeDraggableId,
+  isStoryDraggableId,
+} from "@/lib/epic-dnd-ids";
 
 type DragContextProps = {
   onDragEnd: (event: DragEndEvent) => void;
@@ -40,12 +45,22 @@ const epicPlanCollision: CollisionDetection = (args) => {
   return closestCenter(args).filter((c) => isDropTarget(String(c.id)));
 };
 
+const storyKanbanCollision: CollisionDetection = (args) => {
+  const isDropTarget = (id: string) => id.startsWith("kanban:");
+  const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
+  if (pointerHits.length > 0) return pointerHits;
+  return closestCenter(args).filter((c) => isDropTarget(String(c.id)));
+};
+
 const collisionDetection: CollisionDetection = (args) => {
   if (isEpicPlanDraggableId(String(args.active.id))) {
     return epicPlanCollision(args);
   }
   if (isInitiativeDraggableId(String(args.active.id))) {
     return initiativeCollision(args);
+  }
+  if (isStoryDraggableId(String(args.active.id))) {
+    return storyKanbanCollision(args);
   }
   return closestCenter(args);
 };
@@ -81,7 +96,9 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
               ? "Place epic"
               : isInitiativeDraggableId(activeDragId)
                 ? "Move initiative"
-                : "Move"}
+                : isStoryDraggableId(activeDragId)
+                  ? "Move story"
+                  : "Move"}
           </div>
         ) : null}
       </DragOverlay>

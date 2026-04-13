@@ -6,7 +6,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
-import { EPICS_UNPLAN_DROP_ID, epicListDraggableId, initiativeListDraggableId } from "@/lib/epic-dnd-ids";
+import {
+  EPICS_UNPLAN_DROP_ID,
+  epicListDraggableId,
+  initiativeListDraggableId,
+  storyListDraggableId,
+} from "@/lib/epic-dnd-ids";
+import { epicIsPlannedForMonthAndSprint } from "@/lib/sprint-plan";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -20,6 +26,8 @@ type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
   focusedQuarterLabel: string | null;
   activeMonth: number | null;
+  /** Set when Kanban is open for a sprint lane (month drill). Filters the scheduled list to that sprint’s epics. */
+  activeSprintLane: 1 | 2 | null;
   storyDragEnabled: boolean;
   epicPlanDragEnabled: boolean;
   isSprintModeActive: boolean;
@@ -301,7 +309,7 @@ function EpicAccordion({
 
   function DraggableUserStoryRow({ story }: { story: EpicItem["userStories"][number] }) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-      id: `story:accordion:${story.id}`,
+      id: storyListDraggableId(story.id),
       disabled: !storyDragEnabled,
     });
 
@@ -474,6 +482,7 @@ function ScheduledInitiativeAccordion({
   onOpenStory,
   epicPlanDragEnabled,
   planDrillMonth,
+  planDrillSprintLane,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -481,6 +490,8 @@ function ScheduledInitiativeAccordion({
   epicPlanDragEnabled: boolean;
   /** When set with month plan UI, accordion only lists epics placed on this month (others are under Not on plan). */
   planDrillMonth: number | null;
+  /** When Kanban sprint is open, only epics planned for this month + sprint lane appear (all stories under each epic). */
+  planDrillSprintLane: 1 | 2 | null;
   openEpicIds: Record<string, boolean>;
   onToggle: () => void;
   onToggleEpic: (epicId: string) => void;
@@ -499,10 +510,14 @@ function ScheduledInitiativeAccordion({
   const epicsShownInAccordion = useMemo(() => {
     const all = initiative.epics ?? [];
     if (planDrillMonth != null && epicPlanDragEnabled) {
-      return all.filter((e) => epicIsOnPlanForMonth(e, planDrillMonth));
+      let list = all.filter((e) => epicIsOnPlanForMonth(e, planDrillMonth));
+      if (planDrillSprintLane != null) {
+        list = list.filter((e) => epicIsPlannedForMonthAndSprint(e, planDrillMonth, planDrillSprintLane));
+      }
+      return list;
     }
     return all;
-  }, [initiative.epics, planDrillMonth, epicPlanDragEnabled]);
+  }, [initiative.epics, planDrillMonth, epicPlanDragEnabled, planDrillSprintLane]);
 
   async function handleCreateEpic() {
     const normalizedTitle = epicTitle.trim();
@@ -544,12 +559,24 @@ function ScheduledInitiativeAccordion({
               ) : null}
               <p className="mt-0.5 text-[11px] text-slate-500">
                 {planDrillMonth != null && epicPlanDragEnabled ? (
-                  <>
-                    {epicsShownInAccordion.length} on {MONTHS[planDrillMonth - 1]} plan
-                    {initiative.epics.length > epicsShownInAccordion.length
-                      ? ` · ${initiative.epics.length - epicsShownInAccordion.length} in Not on plan`
-                      : ""}
-                  </>
+                  planDrillSprintLane != null ? (
+                    <>
+                      {epicsShownInAccordion.length} epic{epicsShownInAccordion.length !== 1 ? "s" : ""} in Sprint{" "}
+                      {planDrillSprintLane} ({MONTHS[planDrillMonth - 1]})
+                      {initiative.epics.length > epicsShownInAccordion.length
+                        ? ` · ${initiative.epics.length - epicsShownInAccordion.length} other epic${
+                            initiative.epics.length - epicsShownInAccordion.length !== 1 ? "s" : ""
+                          } hidden`
+                        : ""}
+                    </>
+                  ) : (
+                    <>
+                      {epicsShownInAccordion.length} on {MONTHS[planDrillMonth - 1]} plan
+                      {initiative.epics.length > epicsShownInAccordion.length
+                        ? ` · ${initiative.epics.length - epicsShownInAccordion.length} in Not on plan`
+                        : ""}
+                    </>
+                  )
                 ) : (
                   <>
                     {initiative.epics.length} epic{initiative.epics.length !== 1 ? "s" : ""}
@@ -578,8 +605,17 @@ function ScheduledInitiativeAccordion({
               </p>
             ) : epicsShownInAccordion.length === 0 ? (
               <p className="rounded-md bg-muted/40 p-2 text-[12px] leading-4 text-slate-600">
-                No epics on {planDrillMonth != null ? MONTHS[planDrillMonth - 1] : "this month"}’s plan. Off-plan epics
-                are in <span className="font-medium">Not on plan</span> above.
+                {planDrillSprintLane != null && planDrillMonth != null ? (
+                  <>
+                    No epics on Sprint {planDrillSprintLane} for {MONTHS[planDrillMonth - 1]}. Return to{" "}
+                    <span className="font-medium">Sprint plan</span> to assign epics.
+                  </>
+                ) : (
+                  <>
+                    No epics on {planDrillMonth != null ? MONTHS[planDrillMonth - 1] : "this month"}’s plan. Off-plan
+                    epics are in <span className="font-medium">Not on plan</span> above.
+                  </>
+                )}
               </p>
             ) : (
               epicsShownInAccordion.map((epic) => (
@@ -627,6 +663,7 @@ export function InitiativeListPanel({
   initiatives,
   focusedQuarterLabel,
   activeMonth,
+  activeSprintLane,
   storyDragEnabled,
   epicPlanDragEnabled,
   isSprintModeActive,
@@ -677,11 +714,16 @@ export function InitiativeListPanel({
     });
   }, [initiatives, activeMonth, focusedQuarter]);
 
-  /** Month drill: only show initiatives that have ≥1 epic on this month’s plan (others live under Not on plan). */
+  /** Month drill: epics on month plan; sprint Kanban: only initiatives with an epic in that month + sprint lane. */
   const scheduledForPlanSection = useMemo(() => {
     if (activeMonth == null || !epicPlanDragEnabled) return scheduled;
+    if (isSprintModeActive && activeSprintLane != null) {
+      return scheduled.filter((i) =>
+        (i.epics ?? []).some((e) => epicIsPlannedForMonthAndSprint(e, activeMonth, activeSprintLane)),
+      );
+    }
     return scheduled.filter((i) => (i.epics ?? []).some((e) => epicIsOnPlanForMonth(e, activeMonth)));
-  }, [scheduled, activeMonth, epicPlanDragEnabled]);
+  }, [scheduled, activeMonth, epicPlanDragEnabled, isSprintModeActive, activeSprintLane]);
 
   const monthDrillExpandKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -715,6 +757,34 @@ export function InitiativeListPanel({
     setOpenEpicIds((prev) => ({ ...prev, [planReveal.epicId]: true }));
   }, [planReveal]);
 
+  const sprintDrillExpandKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeMonth == null || activeSprintLane == null || !isSprintModeActive) {
+      sprintDrillExpandKeyRef.current = null;
+      return;
+    }
+    const key = `${activeMonth}:${activeSprintLane}`;
+    if (sprintDrillExpandKeyRef.current === key) return;
+    sprintDrillExpandKeyRef.current = key;
+
+    const nextInit: Record<string, boolean> = {};
+    const nextEpic: Record<string, boolean> = {};
+    for (const initiative of initiatives) {
+      if (initiative.status !== "scheduled") continue;
+      if (initiative.startMonth == null || initiative.endMonth == null) continue;
+      if (initiative.startMonth > activeMonth || initiative.endMonth < activeMonth) continue;
+      const matching = (initiative.epics ?? []).filter((e) =>
+        epicIsPlannedForMonthAndSprint(e, activeMonth, activeSprintLane),
+      );
+      if (matching.length > 0) {
+        nextInit[initiative.id] = true;
+        for (const e of matching) nextEpic[e.id] = true;
+      }
+    }
+    setOpenInitiativeIds((prev) => ({ ...prev, ...nextInit }));
+    setOpenEpicIds((prev) => ({ ...prev, ...nextEpic }));
+  }, [activeMonth, activeSprintLane, isSprintModeActive, initiatives]);
+
   const offPlanByInitiative = useMemo(() => {
     if (activeMonth == null || !epicPlanDragEnabled) return [];
     const groups: Array<{ initiative: InitiativeItem; epics: EpicItem[] }> = [];
@@ -741,13 +811,15 @@ export function InitiativeListPanel({
         <div>
           <h2 className="text-[16px] leading-6 font-semibold tracking-tight text-slate-900">Initiatives</h2>
           <p className="text-[12px] leading-4 text-slate-600">
-            {isSprintModeActive
-              ? "Sprint mode: drag stories to Kanban columns"
-              : isMonthDrillDown && quarterForMonthDrill
-                ? `Scheduled initiatives for ${quarterForMonthDrill.label} (all overlapping ${MONTHS[activeMonth! - 1]}) — drag epics by the grip onto sprint cells`
-                : isMonthDrillDown
-                  ? `Showing initiatives for ${MONTHS[activeMonth! - 1]} — drag epics from the grip handle onto the sprint plan`
-                  : "Create, edit, and drag to schedule"}
+            {isSprintModeActive && activeMonth != null && activeSprintLane != null
+              ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]}: epics on this sprint only — all user stories per epic (drag to the board).`
+              : isSprintModeActive
+                ? "Sprint mode: drag stories to Kanban columns"
+                : isMonthDrillDown && quarterForMonthDrill
+                  ? `Scheduled initiatives for ${quarterForMonthDrill.label} (all overlapping ${MONTHS[activeMonth! - 1]}) — drag epics by the grip onto sprint cells`
+                  : isMonthDrillDown
+                    ? `Showing initiatives for ${MONTHS[activeMonth! - 1]} — drag epics from the grip handle onto the sprint plan`
+                    : "Create, edit, and drag to schedule"}
           </p>
         </div>
         {!isSprintModeActive ? (
@@ -824,18 +896,29 @@ export function InitiativeListPanel({
 
       <div className={cn("pt-4", showBacklogChrome && "mt-4")}>
         <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
-          {isMonthDrillDown && quarterForMonthDrill
-            ? `Scheduled · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
-            : isMonthDrillDown
-              ? `Scheduled · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
-              : `Scheduled${focusedQuarter ? ` ${focusedQuarter.label}` : ""} (${scheduledForPlanSection.length})`}
+          {isMonthDrillDown && isSprintModeActive && activeSprintLane != null && quarterForMonthDrill
+            ? `Scheduled · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} · Sprint ${activeSprintLane} (${scheduledForPlanSection.length})`
+            : isMonthDrillDown && quarterForMonthDrill
+              ? `Scheduled · ${quarterForMonthDrill.label} · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
+              : isMonthDrillDown
+                ? `Scheduled · ${MONTHS[activeMonth! - 1]} (${scheduledForPlanSection.length})`
+                : `Scheduled${focusedQuarter ? ` ${focusedQuarter.label}` : ""} (${scheduledForPlanSection.length})`}
         </h3>
         <div className="space-y-2">
           {isMonthDrillDown && epicPlanDragEnabled && scheduledForPlanSection.length === 0 ? (
             <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
-              No epics on {MONTHS[activeMonth! - 1]}’s plan yet. Drag epics from{" "}
-              <span className="font-medium">Not on plan</span> onto the sprint cells, or add epics under an initiative
-              there.
+              {isSprintModeActive && activeSprintLane != null ? (
+                <>
+                  No epics on Sprint {activeSprintLane} for {MONTHS[activeMonth! - 1]}. Use{" "}
+                  <span className="font-medium">← Sprint plan</span> on the timeline to assign epics to this sprint.
+                </>
+              ) : (
+                <>
+                  No epics on {MONTHS[activeMonth! - 1]}’s plan yet. Drag epics from{" "}
+                  <span className="font-medium">Not on plan</span> onto the sprint cells, or add epics under an initiative
+                  there.
+                </>
+              )}
             </p>
           ) : null}
           {scheduledForPlanSection.map((initiative) => (
@@ -846,6 +929,7 @@ export function InitiativeListPanel({
               storyDragEnabled={storyDragEnabled}
               epicPlanDragEnabled={epicPlanDragEnabled}
               planDrillMonth={isMonthDrillDown && epicPlanDragEnabled ? activeMonth : null}
+              planDrillSprintLane={isSprintModeActive ? activeSprintLane : null}
               openEpicIds={openEpicIds}
               onToggle={() =>
                 setOpenInitiativeIds((current) => ({

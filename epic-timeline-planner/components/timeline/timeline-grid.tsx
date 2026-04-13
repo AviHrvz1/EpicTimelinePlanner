@@ -6,8 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { EpicPlanBar } from "@/components/timeline/epic-plan-bar";
+import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
+import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
-import { EpicItem, InitiativeItem } from "@/lib/types";
+import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type TimelineGridProps = {
@@ -15,9 +17,10 @@ type TimelineGridProps = {
   zoom: number;
   focusedQuarterLabel: string | null;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
-  onSprintModeChange: (active: boolean, activeMonth: number | null) => void;
+  onSprintModeChange: (active: boolean, activeMonth: number | null, activeSprint: 1 | 2 | null) => void;
   onOpenEpic: (epicId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
+  onOpenStory?: (storyId: string) => void;
   onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
 };
 
@@ -109,28 +112,6 @@ function EpicPlanDropCell({ month, sprint }: { month: number; sprint: 1 | 2 }) {
   );
 }
 
-/** Epics planned for a single calendar month in a given sprint lane (month drill-down view). */
-function collectPlannedEpicsForMonth(
-  initiatives: InitiativeItem[],
-  sprintLane: 1 | 2,
-  month: number,
-): Array<{ epic: EpicItem; initiative: InitiativeItem }> {
-  const out: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
-  for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) {
-      continue;
-    }
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
-    for (const epic of initiative.epics ?? []) {
-      if (epic.planSprint !== sprintLane) continue;
-      if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
-      if (epic.planEndMonth < month || epic.planStartMonth > month) continue;
-      out.push({ epic, initiative });
-    }
-  }
-  return out;
-}
-
 export function TimelineGrid({
   initiatives,
   zoom,
@@ -139,9 +120,11 @@ export function TimelineGrid({
   onSprintModeChange,
   onOpenEpic,
   onOpenInitiative,
+  onOpenStory,
   onResizeInitiativeRange,
 }: TimelineGridProps) {
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
+  const [activeSprint, setActiveSprint] = useState<1 | 2 | null>(null);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const [resizePreview, setResizePreview] = useState<{
     initiativeId: string;
@@ -279,9 +262,25 @@ export function TimelineGrid({
       : `repeat(12, minmax(${monthWidth}px, 1fr))`,
   };
 
+  const prevActiveMonthRef = useRef<number | null>(null);
   useEffect(() => {
-    onSprintModeChange(false, activeMonth);
-  }, [activeMonth, onSprintModeChange]);
+    if (prevActiveMonthRef.current !== activeMonth) {
+      prevActiveMonthRef.current = activeMonth;
+      setActiveSprint(null);
+    }
+  }, [activeMonth]);
+
+  useEffect(() => {
+    if (activeMonth == null) {
+      onSprintModeChange(false, null, null);
+      return;
+    }
+    if (activeSprint != null) {
+      onSprintModeChange(true, activeMonth, activeSprint);
+    } else {
+      onSprintModeChange(false, activeMonth, null);
+    }
+  }, [activeMonth, activeSprint, onSprintModeChange]);
 
   const breadcrumbItems: Array<{
     label: string;
@@ -309,10 +308,10 @@ export function TimelineGrid({
   if (activeMonth) {
     breadcrumbItems.push({
       label: MONTHS[activeMonth - 1],
-      onClick: null,
+      onClick: activeSprint != null ? () => setActiveSprint(null) : null,
     });
     breadcrumbItems.push({
-      label: "Month · 2 sprints",
+      label: activeSprint != null ? `Sprint ${activeSprint} · Kanban` : "Month · 2 sprints",
       onClick: null,
     });
   }
@@ -348,6 +347,10 @@ export function TimelineGrid({
               type="button"
               className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-black/5"
               onClick={() => {
+                if (activeSprint != null) {
+                  setActiveSprint(null);
+                  return;
+                }
                 if (focusedMonth) {
                   setFocusedMonth(null);
                   return;
@@ -399,47 +402,68 @@ export function TimelineGrid({
       ) : null}
       {activeMonth ? (
         <div className="mb-4 space-y-4 rounded-xl bg-slate-50/70 p-4">
-          <p className="text-[12px] leading-5 text-slate-600">
-            Two sprint columns for {MONTHS[activeMonth - 1]} only. Drag epics onto a dashed cell to choose the sprint.
-            From the roadmap month row you can also drop on that month (defaults to Sprint 1). The parent initiative
-            must be scheduled for {MONTHS[activeMonth - 1]}.
-          </p>
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-black/5">
-            <div className="mb-3 rounded-md bg-slate-100 py-2 text-center">
-              <span className="text-[13px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
-              <span className="text-[11px] font-medium text-slate-500"> · sprint plan</span>
+          {activeSprint != null ? (
+            <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
+              <div className="mb-4 rounded-lg bg-slate-100 py-2 text-center ring-1 ring-black/5">
+                <span className="text-[13px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
+                <span className="text-[11px] font-medium text-slate-500"> · Sprint {activeSprint} · Kanban</span>
+              </div>
+              <SprintKanbanBoard
+                initiatives={initiatives}
+                month={activeMonth}
+                sprintLane={activeSprint}
+                onOpenStory={onOpenStory ?? (() => {})}
+              />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              {([1, 2] as const).map((sprint) => {
-                const planned = collectPlannedEpicsForMonth(initiatives, sprint, activeMonth);
-                return (
-                  <div
-                    key={`sprint-col-${sprint}`}
-                    className="flex flex-col rounded-lg border border-slate-200/90 bg-slate-50/40 p-2.5"
-                  >
-                    <p className="mb-2 text-center text-[11px] font-semibold tracking-wide text-slate-700 uppercase">
-                      {sprintLaneLabels[sprint - 1]}
-                    </p>
-                    <EpicPlanDropCell month={activeMonth} sprint={sprint} />
-                    <div className="mt-2 space-y-1.5">
-                      {planned.length === 0 ? (
-                        <p className="text-[11px] text-slate-500">No epics yet.</p>
-                      ) : null}
-                      {planned.map(({ epic }) => (
-                        <EpicPlanBar
-                          key={epic.id}
-                          id={epic.id}
-                          title={epic.title}
-                          color={epic.color}
-                          onClick={() => onOpenEpic(epic.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          ) : (
+            <>
+              <p className="text-[12px] leading-5 text-slate-600">
+                Two sprint columns for {MONTHS[activeMonth - 1]} only. Tap a sprint header to open its Kanban; drag epics
+                onto a dashed cell to choose the sprint. From the roadmap month row you can also drop on that month
+                (defaults to Sprint 1). The parent initiative must be scheduled for {MONTHS[activeMonth - 1]}.
+              </p>
+              <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-black/5">
+                <div className="mb-3 rounded-md bg-slate-100 py-2 text-center">
+                  <span className="text-[13px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
+                  <span className="text-[11px] font-medium text-slate-500"> · sprint plan</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {([1, 2] as const).map((sprint) => {
+                    const planned = collectPlannedEpicsForMonth(initiatives, sprint, activeMonth);
+                    return (
+                      <div
+                        key={`sprint-col-${sprint}`}
+                        className="flex flex-col rounded-lg border border-slate-200/90 bg-slate-50/40 p-2.5"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setActiveSprint(sprint)}
+                          className="mb-2 w-full rounded-lg bg-slate-100 py-2 text-center text-[12px] font-semibold text-slate-800 shadow-sm ring-1 ring-black/5 transition hover:bg-slate-200"
+                        >
+                          {sprintLaneLabels[sprint - 1]}
+                        </button>
+                        <EpicPlanDropCell month={activeMonth} sprint={sprint} />
+                        <div className="mt-2 space-y-1.5">
+                          {planned.length === 0 ? (
+                            <p className="text-[11px] text-slate-500">No epics yet.</p>
+                          ) : null}
+                          {planned.map(({ epic }) => (
+                            <EpicPlanBar
+                              key={epic.id}
+                              id={epic.id}
+                              title={epic.title}
+                              color={epic.color}
+                              onClick={() => onOpenEpic(epic.id)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className={cn("mb-4 grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
