@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum InitiativeStatus {
+  backlog
+  scheduled
+}
+
+enum StoryStatus {
+  todo
+  inProgress
+  done
+  approved
+}
+
+model Initiative {
+  id          String              @id @default(uuid())
+  title       String
+  icon        String              @default("🎯")
+  description String?
+  assignee    String?
+  color       String              @default("#3B82F6")
+  status      InitiativeStatus    @default(backlog)
+  startMonth  Int?
+  endMonth    Int?
+  year        Int
+  epics       Epic[]
+  comments    InitiativeComment[]
+  history     InitiativeHistory[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model InitiativeComment {
+  id           String     @id @default(uuid())
+  body         String
+  author       String?
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+}
+
+model InitiativeHistory {
+  id           String     @id @default(uuid())
+  entry        String
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+}
+
+model Epic {
+  id           String        @id @default(uuid())
+  title        String
+  icon         String        @default("📁")
+  description  String?
+  assignee     String?
+  color        String        @default("#3B82F6")
+  initiativeId String
+  initiative   Initiative    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  userStories  UserStory[]
+  comments     EpicComment[]
+  history      EpicHistory[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model EpicComment {
+  id        String   @id @default(uuid())
+  body      String
+  author    String?
+  epicId    String
+  epic      Epic     @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model EpicHistory {
+  id        String   @id @default(uuid())
+  entry     String
+  epicId    String
+  epic      Epic     @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model UserStory {
+  id            String         @id @default(uuid())
+  title         String
+  icon          String         @default("📄")
+  description   String?
+  assignee      String?
+  sprint        Int?
+  estimatedDays Int?
+  daysLeft      Int?
+  status        StoryStatus    @default(todo)
+  epicId        String
+  epic          Epic           @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  comments      StoryComment[]
+  history       StoryHistory[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model StoryComment {
+  id        String    @id @default(uuid())
+  body      String
+  author    String?
+  storyId   String
+  story     UserStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+}
+
+model StoryHistory {
+  id        String    @id @default(uuid())
+  entry     String
+  storyId   String
+  story     UserStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+}

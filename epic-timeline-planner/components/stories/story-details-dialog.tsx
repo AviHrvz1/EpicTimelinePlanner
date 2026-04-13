@@ -1,0 +1,344 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { History, MessageSquare, Plus, Save, X, XCircle } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { InitiativeItem, UserStoryItem } from "@/lib/types";
+
+type StoryWithEpic = UserStoryItem & { epicTitle: string };
+
+type StoryDetailsDialogProps = {
+  open: boolean;
+  story: StoryWithEpic | null;
+  initiatives: InitiativeItem[];
+  lockParentEpicId?: string | null;
+  onClose: () => void;
+  onCreate: (payload: {
+    title: string;
+    icon: string;
+    description: string | null;
+    assignee: string | null;
+    sprint: number | null;
+    estimatedDays: number | null;
+    daysLeft: number | null;
+    epicId: string;
+  }) => Promise<void>;
+  onSave: (
+    storyId: string,
+    payload: {
+      title: string;
+      icon: string;
+      description: string | null;
+      assignee: string | null;
+      sprint: number | null;
+      estimatedDays: number | null;
+      daysLeft: number | null;
+      epicId: string;
+    },
+  ) => Promise<void>;
+  onAddComment: (storyId: string, body: string) => Promise<void>;
+};
+
+export function StoryDetailsDialog({
+  open,
+  story,
+  initiatives,
+  lockParentEpicId,
+  onClose,
+  onCreate,
+  onSave,
+  onAddComment,
+}: StoryDetailsDialogProps) {
+  const [title, setTitle] = useState("");
+  const [icon, setIcon] = useState("📄");
+  const [description, setDescription] = useState("");
+  const [assignee, setAssignee] = useState("");
+  const [sprint, setSprint] = useState("");
+  const [estimatedDays, setEstimatedDays] = useState("");
+  const [daysLeft, setDaysLeft] = useState("");
+  const [epicId, setEpicId] = useState("");
+  const [commentBody, setCommentBody] = useState("");
+  const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
+  const [saving, setSaving] = useState(false);
+  const [commenting, setCommenting] = useState(false);
+
+  const allEpics = useMemo(
+    () =>
+      initiatives.flatMap((initiative) =>
+        (initiative.epics ?? []).map((epic) => ({
+          id: epic.id,
+          title: epic.title,
+          initiativeTitle: initiative.title,
+        })),
+      ),
+    [initiatives],
+  );
+
+  const firstEpicId = allEpics[0]?.id ?? "";
+
+  useEffect(() => {
+    if (story) {
+      setTitle(story.title ?? "");
+      setIcon(story.icon === "🧩" ? "📄" : (story.icon ?? "📄"));
+      setDescription(story.description ?? "");
+      setAssignee(story.assignee ?? "");
+      setSprint(story.sprint == null ? "" : String(story.sprint));
+      setEstimatedDays(story.estimatedDays == null ? "" : String(story.estimatedDays));
+      setDaysLeft(story.daysLeft == null ? "" : String(story.daysLeft));
+      setEpicId(story.epicId);
+    } else {
+      setTitle("");
+      setIcon("📄");
+      setDescription("");
+      setAssignee("");
+      setSprint("");
+      setEstimatedDays("");
+      setDaysLeft("");
+      setEpicId(lockParentEpicId ?? firstEpicId);
+    }
+    setCommentBody("");
+    setActivityTab("comments");
+  }, [story, initiatives, lockParentEpicId, firstEpicId]);
+
+  if (!open) return null;
+
+  const isCreateMode = !story;
+
+  async function handleSave() {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle || !epicId) return;
+
+    setSaving(true);
+    try {
+      const payload = {
+        title: normalizedTitle,
+        icon: icon.trim() || "📄",
+        description: description.trim() ? description.trim() : null,
+        assignee: assignee.trim() ? assignee.trim() : null,
+        sprint: sprint.trim() === "" ? null : Number(sprint),
+        estimatedDays: estimatedDays.trim() === "" ? null : Number(estimatedDays),
+        daysLeft: daysLeft.trim() === "" ? null : Number(daysLeft),
+        epicId,
+      };
+      if (isCreateMode) {
+        await onCreate(payload);
+      } else {
+        await onSave(story.id, payload);
+      }
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCommentAdd() {
+    const normalizedComment = commentBody.trim();
+    if (!normalizedComment) return;
+
+    setCommenting(true);
+    try {
+      if (!story) return;
+      await onAddComment(story.id, normalizedComment);
+      setCommentBody("");
+    } finally {
+      setCommenting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+      <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border bg-card p-5 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {isCreateMode ? "Create user story" : "User story details"}
+          </h2>
+          <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close story details">
+            <X />
+          </Button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="space-y-1 md:col-span-2">
+            <p className="text-xs font-medium text-slate-600">Title</p>
+            <div className="flex gap-2">
+              <input
+                value={icon}
+                onChange={(event) => setIcon(event.target.value)}
+                maxLength={2}
+                className="w-16 rounded-md border bg-background px-2 py-2 text-center text-lg"
+              />
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </div>
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <p className="text-xs font-medium text-slate-600">Description</p>
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              className="h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="space-y-1">
+            <p className="text-xs font-medium text-slate-600">Assignee</p>
+            <input
+              value={assignee}
+              onChange={(event) => setAssignee(event.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              placeholder="e.g. Avi"
+            />
+          </label>
+          <label className="space-y-1">
+            <p className="text-xs font-medium text-slate-600">Parent epic</p>
+            <select
+              value={epicId}
+              onChange={(event) => setEpicId(event.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm disabled:bg-muted/40"
+              disabled={Boolean(lockParentEpicId)}
+            >
+              <option value="">Select epic</option>
+              {initiatives.map((initiative) => (
+                <optgroup key={initiative.id} label={initiative.title}>
+                  {(initiative.epics ?? []).map((epic) => (
+                    <option key={epic.id} value={epic.id}>
+                      {epic.title}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <p className="text-xs font-medium text-slate-600">Sprint</p>
+            <select
+              value={sprint}
+              onChange={(event) => setSprint(event.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Not set</option>
+              <option value="1">Sprint 1</option>
+              <option value="2">Sprint 2</option>
+            </select>
+          </label>
+          <label className="space-y-1">
+            <p className="text-xs font-medium text-slate-600">Estimated days</p>
+            <input
+              type="number"
+              min={0}
+              value={estimatedDays}
+              onChange={(event) => setEstimatedDays(event.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="space-y-1">
+            <p className="text-xs font-medium text-slate-600">Days left</p>
+            <input
+              type="number"
+              min={0}
+              value={daysLeft}
+              onChange={(event) => setDaysLeft(event.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          </label>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            <XCircle />
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            <Save />
+            {isCreateMode ? "Create story" : "Save story"}
+          </Button>
+        </div>
+
+        <div className="mt-6">
+          <section className="space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">Activity</h3>
+              <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-slate-200">
+                <button
+                  type="button"
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                    activityTab === "comments"
+                      ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                  onClick={() => setActivityTab("comments")}
+                >
+                  <MessageSquare className="mr-1 inline size-3.5" />
+                  Comments
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                    activityTab === "history"
+                      ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                  onClick={() => setActivityTab("history")}
+                >
+                  <History className="mr-1 inline size-3.5" />
+                  History
+                </button>
+              </div>
+            </div>
+
+            {isCreateMode ? (
+              <p className="text-xs text-slate-500">Create the story first to add comments and history.</p>
+            ) : activityTab === "comments" ? (
+              <>
+                <div className="max-h-56 space-y-2 overflow-y-auto">
+                  {story.comments.length === 0 ? (
+                    <p className="text-xs text-slate-500">No comments yet.</p>
+                  ) : (
+                    story.comments.map((comment) => (
+                      <div key={comment.id} className="rounded-md bg-white p-2 text-xs ring-1 ring-slate-200">
+                        <p className="text-[11px] text-slate-500">
+                          {comment.author ?? "Team"} - {new Date(comment.createdAt).toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-slate-800">{comment.body}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={commentBody}
+                    onChange={(event) => setCommentBody(event.target.value)}
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                    placeholder="Write a comment..."
+                  />
+                  <Button size="sm" variant="outline" onClick={handleCommentAdd} disabled={commenting}>
+                    <Plus />
+                    Add
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {story.history.length === 0 ? (
+                  <p className="text-xs text-slate-500">No history yet.</p>
+                ) : (
+                  story.history.map((entry) => (
+                    <div key={entry.id} className="rounded-md bg-white p-2 text-xs ring-1 ring-slate-200">
+                      <p className="text-slate-800">{entry.entry}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        {new Date(entry.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
