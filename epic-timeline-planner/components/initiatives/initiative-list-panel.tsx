@@ -378,9 +378,14 @@ function InitiativeTreeCard({
                     }
                   }}
                   placeholder="Add epic"
-                  className="h-8 w-full rounded-md bg-white px-2 text-[12px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                  className="h-8 w-full rounded-md bg-white px-2 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                 />
-                <Button size="icon-sm" variant="outline" disabled={isAddingEpic} onClick={() => void handleAddEpic()}>
+                <Button
+                  size="icon-sm"
+                  variant="outline"
+                  disabled={isAddingEpic || epicTitle.trim().length === 0}
+                  onClick={() => void handleAddEpic()}
+                >
                   <Plus />
                 </Button>
               </div>
@@ -553,12 +558,12 @@ function SprintEpicCard({
                 }
               }}
               placeholder="Add user story"
-              className="h-7 w-full rounded-md bg-white px-2 text-[11px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              className="h-7 w-full rounded-md bg-white px-2 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
             />
             <Button
               size="icon-xs"
               variant="outline"
-              disabled={isAddingStory}
+              disabled={isAddingStory || storyTitle.trim().length === 0}
               onClick={() => void handleAddStory()}
             >
               <Plus />
@@ -728,9 +733,13 @@ export function InitiativeListPanel({
           ) : null}
         </div>
         {showNewButton ? (
-          <Button size="sm" onClick={inMonthView ? onCreateEpic : onCreateInitiative}>
-            <Plus />
-            New
+          <Button
+            size="sm"
+            className="h-8 px-3 text-[13px] font-semibold"
+            onClick={inMonthView ? onCreateEpic : onCreateInitiative}
+          >
+            <Plus className="size-3.5" />
+            {inMonthView ? "Epic" : "Initiative"}
           </Button>
         ) : null}
       </div>
