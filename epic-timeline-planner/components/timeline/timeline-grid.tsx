@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -560,8 +560,8 @@ export function TimelineGrid({
               }
             }
 
-            const chevronClass =
-              "z-30 flex size-6 shrink-0 cursor-ew-resize touch-none items-center justify-center rounded-md border border-slate-200/90 bg-white/95 text-slate-600 shadow-sm select-none hover:bg-white hover:text-slate-900";
+            const resizeEdgeClass =
+              "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
 
             return (
               <div
@@ -578,21 +578,6 @@ export function TimelineGrid({
                       />
                     ))
                   : null}
-                {onResizeInitiativeRange ? (
-                  <div
-                    className={chevronClass}
-                    style={{
-                      gridColumn: previewColumnStart,
-                      gridRow: 1,
-                      justifySelf: "start",
-                      alignSelf: "center",
-                      transform: "translateX(calc(-100% - 4px))",
-                    }}
-                    onPointerDown={(e) => handleResizePointerDown(initiative.id, "left", e)}
-                  >
-                    <ChevronLeft className="pointer-events-none size-3.5" strokeWidth={2.5} />
-                  </div>
-                ) : null}
                 <div
                   ref={(node) => {
                     if (node) barElsRef.current.set(initiative.id, node);
@@ -608,22 +593,31 @@ export function TimelineGrid({
                     isResizing={Boolean(rz)}
                     onClick={() => onOpenInitiative(initiative.id)}
                   />
+                  {onResizeInitiativeRange ? (
+                    <>
+                      <div
+                        role="slider"
+                        aria-label="Resize initiative start month"
+                        title="Drag to change start month"
+                        className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          handleResizePointerDown(initiative.id, "left", e);
+                        }}
+                      />
+                      <div
+                        role="slider"
+                        aria-label="Resize initiative end month"
+                        title="Drag to change end month"
+                        className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          handleResizePointerDown(initiative.id, "right", e);
+                        }}
+                      />
+                    </>
+                  ) : null}
                 </div>
-                {onResizeInitiativeRange ? (
-                  <div
-                    className={chevronClass}
-                    style={{
-                      gridColumn: previewColumnStart + previewSpan - 1,
-                      gridRow: 1,
-                      justifySelf: "end",
-                      alignSelf: "center",
-                      transform: "translateX(calc(100% + 4px))",
-                    }}
-                    onPointerDown={(e) => handleResizePointerDown(initiative.id, "right", e)}
-                  >
-                    <ChevronRight className="pointer-events-none size-3.5" strokeWidth={2.5} />
-                  </div>
-                ) : null}
               </div>
             );
           })

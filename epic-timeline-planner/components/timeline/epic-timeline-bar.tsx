@@ -30,6 +30,7 @@ export function InitiativeTimelineBar({
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      title={`${title} — drag to move on timeline`}
       onClick={() => {
         if (isDragging || isResizing) return;
         onClick?.();
