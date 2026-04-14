@@ -118,6 +118,7 @@ function InitiativeTreeCard({
   onDeleteEpic,
   onCreateEpicQuick,
   onCreateStoryQuick,
+  backlogDropIndex,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -129,9 +130,14 @@ function InitiativeTreeCard({
   onDeleteEpic: (epicId: string) => void;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
+  backlogDropIndex?: number;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: initiativeListDraggableId(initiative.id),
+  });
+  const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
+    id: backlogDropIndex != null ? backlogSlotDropId(backlogDropIndex) : `initiative-card:${initiative.id}`,
+    disabled: backlogDropIndex == null,
   });
   const epics = [...(initiative.epics ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const [epicTitle, setEpicTitle] = useState("");
@@ -165,10 +171,14 @@ function InitiativeTreeCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setDragRef(node);
+        setDropRef(node);
+      }}
       className={cn(
         "rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5",
         isDragging && "opacity-60",
+        isBacklogDropOver && "ring-2 ring-slate-300",
       )}
       style={{
         borderLeftColor: initiative.color,
@@ -573,7 +583,7 @@ export function InitiativeListPanel({
     () =>
       initiatives
         .filter((i) => i.status === "backlog")
-        .sort((a, b) => a.title.localeCompare(b.title)),
+        .sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title)),
     [initiatives],
   );
   const filteredInitiatives = useMemo(() => {
@@ -724,6 +734,7 @@ export function InitiativeListPanel({
                   <InitiativeTreeCard
                     initiative={initiative}
                     isOpen={openInitiativeIds[initiative.id] ?? false}
+                    backlogDropIndex={idx}
                     onToggle={() =>
                       setOpenInitiativeIds((prev) => ({
                         ...prev,
