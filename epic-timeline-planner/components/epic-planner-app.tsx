@@ -908,29 +908,29 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   return (
     <DragContext onDragEnd={onDragEnd}>
-      <main className="min-h-screen bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-6">
+      <main className="min-h-screen bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8">
         <div className="mx-auto w-full max-w-[2550px] space-y-5">
-          <div className="rounded-2xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+          <div className="rounded-2xl bg-card p-6 shadow-lg ring-1 ring-black/5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-[22px] leading-7 font-semibold tracking-tight text-slate-900">{title}</h1>
-                <p className="text-[14px] leading-5 font-normal text-slate-600">
+                <h1 className="text-[26px] leading-8 font-semibold tracking-tight text-slate-900">{title}</h1>
+                <p className="text-[15px] leading-6 font-normal text-slate-600">
                   Initiative planning with quarter-based timeline scheduling.
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-slate-700">
+                <div className="mt-4 flex flex-wrap gap-2.5">
+                  <div className="rounded-full bg-slate-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-slate-700">
                     {roadmapSummary.totalInitiatives} initiatives
                   </div>
-                  <div className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-emerald-800">
+                  <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-emerald-800">
                     {roadmapSummary.scheduledInitiatives} scheduled
                   </div>
-                  <div className="rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-slate-800">
+                  <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-slate-800">
                     {roadmapSummary.backlogInitiatives} backlog
                   </div>
-                  <div className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-amber-800">
+                  <div className="rounded-full bg-amber-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-amber-800">
                     {roadmapSummary.totalEpics} epics
                   </div>
-                  <div className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-medium tracking-[0.02em] text-blue-800">
+                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-blue-800">
                     {roadmapSummary.totalStories} user stories
                   </div>
                 </div>

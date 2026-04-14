@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Folder, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,16 @@ import {
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+function InitiativeMarker({ color }: { color: string }) {
+  return (
+    <span
+      className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
+      style={{ backgroundColor: color }}
+      aria-hidden
+    />
+  );
+}
 
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
   if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
@@ -50,7 +60,6 @@ function DraggableInitiativeCard({
   onEdit: (initiative: InitiativeItem) => void;
   onDelete: (id: string) => void;
 }) {
-  const initIcon = initiative.icon || String.fromCodePoint(0x1f3af);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: initiativeListDraggableId(initiative.id),
   });
@@ -59,7 +68,7 @@ function DraggableInitiativeCard({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-lg border bg-background p-3 shadow-sm",
+        "rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5",
         isDragging && "opacity-60",
       )}
       style={{
@@ -72,10 +81,10 @@ function DraggableInitiativeCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-center gap-2.5">
         <button
           type="button"
-          className="mt-[3px] shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+          className="shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
           aria-label="Drag initiative"
           {...attributes}
           {...listeners}
@@ -84,8 +93,10 @@ function DraggableInitiativeCard({
         </button>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
-            <p className="min-w-0 text-[14px] leading-5 font-semibold text-slate-900">
-              <span className="mr-1">{initIcon}</span>
+            <p className="min-w-0 text-[15px] leading-5 font-semibold text-slate-900">
+              <span className="mr-2 inline-flex h-5 w-3.5 items-center justify-center align-middle">
+                <InitiativeMarker color={initiative.color} />
+              </span>
               {initiative.title}
             </p>
             <div className="flex shrink-0 gap-1">
@@ -134,7 +145,6 @@ function InitiativeTreeCard({
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
 }) {
-  const initIcon = initiative.icon || String.fromCodePoint(0x1f3af);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: initiativeListDraggableId(initiative.id),
   });
@@ -172,7 +182,7 @@ function InitiativeTreeCard({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-lg border bg-background p-3 shadow-sm",
+        "rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5",
         isDragging && "opacity-60",
       )}
       style={{
@@ -185,10 +195,10 @@ function InitiativeTreeCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-3">
         <button
           type="button"
-          className="mt-[3px] shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+          className="mt-0.5 shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
           aria-label="Drag initiative"
           {...attributes}
           {...listeners}
@@ -197,16 +207,18 @@ function InitiativeTreeCard({
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2 text-left">
+            <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
               <ChevronRight
                 className={cn(
-                  "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
+                  "size-4 shrink-0 text-slate-500 transition-transform",
                   isOpen && "rotate-90",
                 )}
               />
               <div className="min-w-0">
-                <p className="min-w-0 text-[14px] leading-5 font-semibold text-slate-900">
-                  <span className="mr-1">{initIcon}</span>
+                <p className="min-w-0 text-[16px] leading-6 font-semibold text-slate-900">
+                  <span className="mr-2 inline-flex h-5 w-3.5 items-center justify-center align-middle">
+                    <InitiativeMarker color={initiative.color} />
+                  </span>
                   {initiative.title}
                 </p>
                 {initiative.description ? (
@@ -228,15 +240,14 @@ function InitiativeTreeCard({
           </div>
 
           {isOpen ? (
-            <div className="mt-2 ml-5 space-y-2 border-l border-slate-200 pl-3">
+            <div className="mt-2 ml-5 space-y-2 border-l border-slate-300 pl-3">
               {epics.length === 0 ? (
                 <p className="rounded-md bg-muted/40 p-2 text-[12px] leading-4 text-slate-600">No epics yet.</p>
               ) : (
                 epics.map((epic) => {
                   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
-                  const epicIcon = epic.icon || String.fromCodePoint(0x1f4c1);
                   return (
-                    <div key={epic.id} className="rounded-md border border-slate-200/80 bg-slate-50/30 p-2">
+                    <div key={epic.id} className="rounded-md border border-slate-200 bg-slate-50/70 p-2">
                       <div className="flex items-start justify-between gap-2">
                         <button
                           type="button"
@@ -244,7 +255,9 @@ function InitiativeTreeCard({
                           className="min-w-0 flex-1 text-left"
                         >
                           <p className="text-[13px] font-semibold text-slate-800">
-                            <span className="mr-1">{epicIcon}</span>
+                            <span className="mr-1 inline-flex h-4 w-4 items-center justify-center align-middle text-slate-600">
+                              <Folder className="size-3.5" />
+                            </span>
                             {epic.title}
                           </p>
                         </button>
@@ -266,7 +279,7 @@ function InitiativeTreeCard({
                               key={story.id}
                               type="button"
                               onClick={() => onOpenStory(story.id)}
-                              className="block w-full truncate rounded-sm px-1 py-0.5 text-left text-[11px] text-slate-700 hover:bg-slate-100"
+                            className="block w-full truncate rounded-sm px-1 py-0.5 text-left text-[11px] text-slate-700 hover:bg-slate-200/70"
                             >
                               {story.title}
                             </button>
@@ -339,7 +352,6 @@ function SprintEpicCard({
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onDeleteEpic: (epicId: string) => void;
 }) {
-  const epicIcon = epic.icon || String.fromCodePoint(0x1f4c1);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
     disabled: !epicPlanDragEnabled,
@@ -360,11 +372,11 @@ function SprintEpicCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-center gap-2">
         {epicPlanDragEnabled ? (
           <button
             type="button"
-            className="mt-0.5 shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
@@ -373,8 +385,10 @@ function SprintEpicCard({
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold text-slate-900">
-            <span className="mr-1 text-[11px]">{epicIcon}</span>
+          <p className="text-[14px] font-semibold text-slate-900">
+            <span className="mr-1 inline-flex h-5 w-5 items-center justify-center align-middle text-slate-600">
+              <Folder className="size-4" />
+            </span>
             {epic.title}
           </p>
           <p className="text-[11px] text-slate-500">{initiative.title}</p>
@@ -519,20 +533,20 @@ export function InitiativeListPanel({
   const showNewButton = inMonthView || !isSprintModeActive;
 
   return (
-    <aside className="h-[72vh] overflow-y-auto rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
-      <div className="mb-4 flex items-center justify-between">
+    <aside className="h-[72vh] overflow-y-auto rounded-xl bg-slate-50 p-4 shadow-lg ring-1 ring-black/5">
+      <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 pb-3">
         <div>
-          <h2 className="text-[16px] leading-6 font-semibold tracking-tight text-slate-900">
+          <h2 className="text-[16px] leading-6 font-semibold tracking-tight text-slate-950">
             {inMonthView ? "Epics" : "Initiatives"}
           </h2>
           {isSprintModeActive ? (
-            <p className="text-[12px] leading-4 text-slate-600">
+            <p className="text-[12px] leading-4 text-slate-700">
               {activeMonth != null && activeSprintLane != null
                 ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]}: drop a story below to clear its sprint. List shows all epics assigned to ${MONTHS[activeMonth - 1]}.`
                 : "Sprint mode: use Unscheduled below to clear story sprints."}
             </p>
           ) : inMonthView ? (
-            <p className="text-[12px] leading-4 text-slate-600">
+            <p className="text-[12px] leading-4 text-slate-700">
               {`${MONTHS[activeMonth - 1]} — all epics assigned to this month.`}
             </p>
           ) : null}
@@ -550,7 +564,7 @@ export function InitiativeListPanel({
           <div
             ref={setStoryUnscheduleDropRef}
             className={cn(
-              "min-h-[5.5rem] rounded-lg border-2 border-dashed border-sky-200/90 bg-sky-50/70 p-3 text-sky-900/90 transition",
+              "min-h-[5.5rem] rounded-lg border-2 border-dashed border-sky-300/90 bg-sky-50 p-3 text-sky-900 transition",
               isStoryUnscheduleDropOver && "border-sky-500 bg-sky-100 ring-2 ring-sky-300/50",
             )}
           >
@@ -583,17 +597,17 @@ export function InitiativeListPanel({
             />
             <datalist id="month-epic-search-suggestions">
               {monthBacklogEpics.map(({ epic }) => (
-                <option key={epic.id} value={epic.title} />
+                <option key={`${epic.id}-${epic.title}`} value={epic.title} />
               ))}
             </datalist>
           </div>
-          <h3 className="mt-4 mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
+          <h3 className="mt-4 mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-900">
             Epic backlog ({filteredMonthBacklogEpics.length})
           </h3>
           <div
             ref={setEpicUnplanDropRef}
             className={cn(
-              "rounded-md border border-dashed border-amber-200/90 bg-amber-50/50 p-2 transition",
+              "rounded-md border border-dashed border-amber-300/90 bg-amber-50/70 p-2 transition",
               isEpicUnplanDropOver && "border-amber-400 bg-amber-100",
             )}
           >
@@ -637,7 +651,7 @@ export function InitiativeListPanel({
               ))}
             </datalist>
           </div>
-          <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
+          <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-900">
             Backlog ({filteredInitiatives.length})
           </h3>
           {filteredInitiatives.length === 0 ? (

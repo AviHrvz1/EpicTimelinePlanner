@@ -426,21 +426,21 @@ export function TimelineGrid({
   }
 
   return (
-    <div className="h-[72vh] w-full overflow-auto rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
-      <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3 py-2">
-        <div className="flex items-center gap-1.5 text-[12px] font-medium tracking-[0.01em] text-slate-700">
+    <div className="h-[72vh] w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3.5 py-2.5">
+        <div className="flex items-center gap-1.5 text-[13px] font-medium tracking-[0.01em] text-slate-700">
           {breadcrumbItems.map((item, index) => (
             <div key={`${item.label}-${index}`} className="flex items-center gap-1.5">
               {item.onClick ? (
                 <button
                   type="button"
                   onClick={item.onClick}
-                  className="cursor-pointer rounded-md bg-white px-2 py-0.5 text-sky-700 shadow-sm ring-1 ring-sky-200 transition hover:bg-sky-50 hover:text-sky-800 hover:ring-sky-300 active:scale-[0.98]"
+                  className="cursor-pointer rounded-md bg-white px-2.5 py-1 text-sky-700 shadow-sm ring-1 ring-sky-200 transition hover:bg-sky-50 hover:text-sky-800 hover:ring-sky-300 active:scale-[0.98]"
                 >
                   {item.label}
                 </button>
               ) : (
-                <span className="rounded-md bg-white px-2 py-0.5 text-slate-700 shadow-sm ring-1 ring-black/5">
+                <span className="rounded-md bg-white px-2.5 py-1 text-slate-700 shadow-sm ring-1 ring-black/5">
                   {item.label}
                 </span>
               )}
@@ -496,7 +496,7 @@ export function TimelineGrid({
                 onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
               }}
               className={cn(
-                "flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-center text-[12px] font-semibold tracking-[0.02em] transition duration-200",
+                "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[13px] font-semibold tracking-[0.02em] transition duration-200",
                 focusedQuarterLabel === quarter.label
                   ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
                   : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
@@ -514,8 +514,8 @@ export function TimelineGrid({
           {activeSprint != null ? (
             <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
               <div className="mb-4 rounded-lg bg-slate-100 py-2 text-center ring-1 ring-black/5">
-                <span className="text-[13px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
-                <span className="text-[11px] font-medium text-slate-500"> · Sprint {activeSprint} · Kanban</span>
+                <span className="text-[14px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
+                <span className="text-[12px] font-medium text-slate-500"> · Sprint {activeSprint} · Kanban</span>
               </div>
               <SprintKanbanBoard
                 initiatives={initiatives}
@@ -526,15 +526,15 @@ export function TimelineGrid({
             </div>
           ) : (
             <>
-              <p className="text-[12px] leading-5 text-slate-600">
+              <p className="text-[13px] leading-6 text-slate-600">
                 Two sprint columns for {MONTHS[activeMonth - 1]} only. Tap a sprint header to open its Kanban; drag epics
                 onto a dashed cell to choose the sprint. From the roadmap month row you can also drop on that month
                 (defaults to Sprint 1). The parent initiative must be scheduled for {MONTHS[activeMonth - 1]}.
               </p>
               <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-black/5">
                 <div className="mb-3 rounded-md bg-slate-100 py-2 text-center">
-                  <span className="text-[13px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
-                  <span className="text-[11px] font-medium text-slate-500"> · sprint plan</span>
+                  <span className="text-[14px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
+                  <span className="text-[12px] font-medium text-slate-500"> · sprint plan</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {([1, 2] as const).map((sprint) => {
@@ -547,7 +547,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           onClick={() => setActiveSprint(sprint)}
-                          className="mb-2 w-full rounded-lg bg-slate-100 py-2 text-center text-[12px] font-semibold text-slate-800 shadow-sm ring-1 ring-black/5 transition hover:bg-slate-200"
+                          className="mb-2 w-full rounded-lg bg-slate-100 py-2.5 text-center text-[13px] font-semibold text-slate-800 shadow-sm ring-1 ring-black/5 transition hover:bg-slate-200"
                         >
                           {sprintLaneLabels[sprint - 1]}
                         </button>
@@ -586,7 +586,7 @@ export function TimelineGrid({
               <button
                 type="button"
                 className={cn(
-                  "w-full rounded-lg py-1.5 text-center text-[12px] font-medium transition",
+                  "w-full rounded-lg py-2 text-center text-[13px] font-medium transition",
                   activeMonth === month
                     ? "bg-blue-100 text-blue-800 shadow-sm ring-1 ring-blue-200"
                     : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
@@ -607,7 +607,7 @@ export function TimelineGrid({
 
       <div className="space-y-2">
         {activeMonth ? null : visibleScheduledLanes.length === 0 ? (
-          <p className="rounded-md bg-muted/40 p-3 text-[13px] leading-5 text-slate-600">
+          <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
             Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
             along the timeline.
           </p>
