@@ -19,6 +19,7 @@ import { useState } from "react";
 import {
   EPICS_UNPLAN_DROP_ID,
   STORIES_UNSCHEDULE_DROP_ID,
+  parseBacklogSlotDropId,
   isEpicPlanDraggableId,
   isInitiativeDraggableId,
   isStoryDraggableId,
@@ -41,7 +42,8 @@ type DragContextProps = {
 };
 
 const initiativeCollision: CollisionDetection = (args) => {
-  const isDropTarget = (id: string) => id.startsWith("month:") || id === "initiatives:backlog-drop";
+  const isDropTarget = (id: string) =>
+    id.startsWith("month:") || id === "initiatives:backlog-drop" || parseBacklogSlotDropId(id) != null;
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
   if (pointerHits.length > 0) return pointerHits;
   return closestCenter(args).filter((c) => isDropTarget(String(c.id)));

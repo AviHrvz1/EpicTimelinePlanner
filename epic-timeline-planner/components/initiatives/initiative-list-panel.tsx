@@ -6,7 +6,12 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
-import { STORIES_UNSCHEDULE_DROP_ID, epicListDraggableId, initiativeListDraggableId } from "@/lib/epic-dnd-ids";
+import {
+  STORIES_UNSCHEDULE_DROP_ID,
+  backlogSlotDropId,
+  epicListDraggableId,
+  initiativeListDraggableId,
+} from "@/lib/epic-dnd-ids";
 import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
@@ -380,6 +385,23 @@ function SprintEpicCard({
   );
 }
 
+function BacklogDropSlot({ index }: { index: number }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: backlogSlotDropId(index),
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "my-1 h-1 w-full rounded bg-transparent transition",
+        isOver && "h-2 bg-primary/35",
+      )}
+      aria-hidden
+    />
+  );
+}
+
 export function InitiativeListPanel({
   initiatives,
   activeMonth,
@@ -553,26 +575,31 @@ export function InitiativeListPanel({
                 : "No initiatives match your search."}
             </p>
           ) : (
-            filteredInitiatives.map((initiative) => (
-              <InitiativeTreeCard
-                key={initiative.id}
-                initiative={initiative}
-                isOpen={openInitiativeIds[initiative.id] ?? false}
-                onToggle={() =>
-                  setOpenInitiativeIds((prev) => ({
-                    ...prev,
-                    [initiative.id]: !(prev[initiative.id] ?? false),
-                  }))
-                }
-                onEditInitiative={onEditInitiative}
-                onDeleteInitiative={onDeleteInitiative}
-                onOpenEpic={onOpenEpic}
-                onOpenStory={onOpenStory}
-                onDeleteEpic={onDeleteEpic}
-                onCreateEpicQuick={onCreateEpicQuick}
-                onCreateStoryQuick={onCreateStoryQuick}
-              />
-            ))
+            <>
+              <BacklogDropSlot index={0} />
+              {filteredInitiatives.map((initiative, idx) => (
+                <div key={initiative.id}>
+                  <InitiativeTreeCard
+                    initiative={initiative}
+                    isOpen={openInitiativeIds[initiative.id] ?? false}
+                    onToggle={() =>
+                      setOpenInitiativeIds((prev) => ({
+                        ...prev,
+                        [initiative.id]: !(prev[initiative.id] ?? false),
+                      }))
+                    }
+                    onEditInitiative={onEditInitiative}
+                    onDeleteInitiative={onDeleteInitiative}
+                    onOpenEpic={onOpenEpic}
+                    onOpenStory={onOpenStory}
+                    onDeleteEpic={onDeleteEpic}
+                    onCreateEpicQuick={onCreateEpicQuick}
+                    onCreateStoryQuick={onCreateStoryQuick}
+                  />
+                  <BacklogDropSlot index={idx + 1} />
+                </div>
+              ))}
+            </>
           )}
         </div>
       )}

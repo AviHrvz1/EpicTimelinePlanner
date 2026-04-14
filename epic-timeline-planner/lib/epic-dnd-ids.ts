@@ -3,6 +3,7 @@ const TIMELINE_PREFIX = "timeline-initiative:";
 
 const EPIC_LIST_PREFIX = "list-epic:";
 const EPIC_TIMELINE_PREFIX = "timeline-epic:";
+const BACKLOG_SLOT_PREFIX = "backlog-slot:";
 
 /** Left panel: drop epic here to clear sprint plan (month drill). */
 export const EPICS_UNPLAN_DROP_ID = "epics:unplan-drop";
@@ -71,6 +72,18 @@ export function parseEpicIdFromPlanDraggable(activeId: string): string | null {
   if (activeId.startsWith(EPIC_LIST_PREFIX)) return activeId.slice(EPIC_LIST_PREFIX.length);
   if (activeId.startsWith(EPIC_TIMELINE_PREFIX)) return activeId.slice(EPIC_TIMELINE_PREFIX.length);
   return null;
+}
+
+/** Droppable id for placing an initiative at a backlog list index. */
+export function backlogSlotDropId(index: number): string {
+  return `${BACKLOG_SLOT_PREFIX}${index}`;
+}
+
+export function parseBacklogSlotDropId(overId: string): number | null {
+  if (!overId.startsWith(BACKLOG_SLOT_PREFIX)) return null;
+  const idx = Number(overId.slice(BACKLOG_SLOT_PREFIX.length));
+  if (!Number.isFinite(idx) || idx < 0) return null;
+  return idx;
 }
 
 const STORY_LIST_PREFIX = "story:list:";

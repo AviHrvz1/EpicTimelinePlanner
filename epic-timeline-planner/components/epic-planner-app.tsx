@@ -18,6 +18,7 @@ import {
   isEpicPlanDraggableId,
   isInitiativeDraggableId,
   parseEpicIdFromPlanDraggable,
+  parseBacklogSlotDropId,
   parseMonthDropTarget,
   parseInitiativeIdFromDraggable,
   isStoryDraggableId,
@@ -296,6 +297,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           body: JSON.stringify({ timelineRow: idx }),
         }).then((res) => {
           if (!res.ok) throw new Error("Failed to save timeline row");
+        }),
+      ),
+    );
+  }
+
+  async function persistBacklogOrder(orderedIds: string[]) {
+    await Promise.all(
+      orderedIds.map((id, idx) =>
+        fetch(`/api/initiatives/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timelineRow: idx }),
+        }).then((res) => {
+          if (!res.ok) throw new Error("Failed to save backlog order");
         }),
       ),
     );
@@ -711,22 +726,48 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const initiativeId = parseInitiativeIdFromDraggable(activeId);
     if (!initiativeId) return;
 
-    if (overId === "initiatives:backlog-drop") {
+    const backlogSlot = parseBacklogSlotDropId(overId);
+    if (overId === "initiatives:backlog-drop" || backlogSlot != null) {
+      const wasScheduled = initiatives.some(
+        (i) => i.id === initiativeId && i.status === InitiativeStatus.scheduled,
+      );
+      const backlogOrdered = initiatives
+        .filter((i) => i.status === InitiativeStatus.backlog && i.id !== initiativeId)
+        .sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
+      const insertAt = Math.max(
+        0,
+        Math.min(backlogSlot ?? backlogOrdered.length, backlogOrdered.length),
+      );
+      const orderedIds = [
+        ...backlogOrdered.slice(0, insertAt).map((i) => i.id),
+        initiativeId,
+        ...backlogOrdered.slice(insertAt).map((i) => i.id),
+      ];
+      const rowById = new Map(orderedIds.map((id, idx) => [id, idx]));
       flushSync(() => {
         setInitiatives((prev) =>
           prev.map((i) =>
-            i.id === initiativeId
-              ? { ...i, status: InitiativeStatus.backlog, startMonth: null, endMonth: null, timelineRow: 0 }
+            rowById.has(i.id)
+              ? {
+                  ...i,
+                  status: InitiativeStatus.backlog,
+                  startMonth: null,
+                  endMonth: null,
+                  timelineRow: rowById.get(i.id)!,
+                }
               : i,
           ),
         );
       });
       try {
-        await unscheduleInitiative(initiativeId);
-        toast.success("Initiative moved back to backlog");
+        if (wasScheduled) {
+          await unscheduleInitiative(initiativeId);
+        }
+        await persistBacklogOrder(orderedIds);
+        toast.success("Initiative placed in backlog");
       } catch {
         await refresh();
-        toast.error("Failed to move initiative back");
+        toast.error("Failed to update backlog placement");
       }
       return;
     }
