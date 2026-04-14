@@ -428,16 +428,18 @@ export function InitiativeListPanel({
     return sortRows([...byId.values()]);
   }, [initiatives, activeMonth, activeSprintLane]);
 
-  const backlog = initiatives.filter((i) => i.status === "backlog");
-  const allInitiatives = useMemo(
-    () => [...initiatives].sort((a, b) => a.title.localeCompare(b.title)),
+  const backlog = useMemo(
+    () =>
+      initiatives
+        .filter((i) => i.status === "backlog")
+        .sort((a, b) => a.title.localeCompare(b.title)),
     [initiatives],
   );
   const filteredInitiatives = useMemo(() => {
     const q = initiativeSearch.trim().toLowerCase();
-    if (!q) return allInitiatives;
-    return allInitiatives.filter((initiative) => initiative.title.toLowerCase().includes(q));
-  }, [allInitiatives, initiativeSearch]);
+    if (!q) return backlog;
+    return backlog.filter((initiative) => initiative.title.toLowerCase().includes(q));
+  }, [backlog, initiativeSearch]);
   const showInitiativeBacklogDrop = !inMonthView && !isSprintModeActive;
 
   const showNewButton = inMonthView || !isSprintModeActive;
@@ -536,17 +538,17 @@ export function InitiativeListPanel({
               aria-label="Search initiatives"
             />
             <datalist id="initiative-search-suggestions">
-              {allInitiatives.map((initiative) => (
+              {backlog.map((initiative) => (
                 <option key={initiative.id} value={initiative.title} />
               ))}
             </datalist>
           </div>
           <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
-            All initiatives ({filteredInitiatives.length})
+            Backlog ({filteredInitiatives.length})
           </h3>
           {filteredInitiatives.length === 0 ? (
             <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
-              {allInitiatives.length === 0
+              {backlog.length === 0
                 ? "No initiatives yet. Add one to begin planning."
                 : "No initiatives match your search."}
             </p>
