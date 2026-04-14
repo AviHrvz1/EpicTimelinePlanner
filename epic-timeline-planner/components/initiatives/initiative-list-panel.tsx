@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ChevronRight, Folder, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, FileText, Folder, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -265,14 +265,21 @@ function InitiativeTreeCard({
                           <p className="text-[11px] text-slate-500">No user stories.</p>
                         ) : (
                           stories.map((story) => (
-                            <button
+                            <div
                               key={story.id}
-                              type="button"
-                              onClick={() => onOpenStory(story.id)}
-                            className="block w-full truncate rounded-sm px-1 py-0.5 text-left text-[11px] text-slate-700 hover:bg-slate-200/70"
+                              className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
                             >
-                              {story.title}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => onOpenStory(story.id)}
+                                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[12px] text-slate-700"
+                              >
+                                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
+                                  <FileText className="size-3" />
+                                </span>
+                                <span className="truncate">{story.title}</span>
+                              </button>
+                            </div>
                           ))
                         )}
                         <div className="mt-1 flex items-center gap-1">
@@ -414,7 +421,6 @@ function SprintEpicCard({
             <ChevronRight className={cn("size-4 shrink-0 text-slate-500 transition-transform", isOpen && "rotate-90")} />
             <p className="truncate text-[14px] font-semibold text-slate-900">{epic.title}</p>
           </button>
-          <p className="text-[11px] text-slate-500">{initiative.title}</p>
         </div>
         <div className="flex shrink-0 gap-0.5">
           <Button size="icon-xs" variant="ghost" onClick={() => onOpenEpic(epic, initiative)}>
@@ -431,14 +437,21 @@ function SprintEpicCard({
             <p className="text-[11px] text-slate-500">No user stories.</p>
           ) : (
             stories.map((story) => (
-              <button
+              <div
                 key={story.id}
-                type="button"
-                onClick={() => onOpenStory(story.id)}
-                className="block w-full truncate rounded-sm px-1 py-0.5 text-left text-[11px] text-slate-700 hover:bg-slate-200/70"
+                className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
               >
-                {story.title}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenStory(story.id)}
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[12px] text-slate-700"
+                >
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
+                    <FileText className="size-3" />
+                  </span>
+                  <span className="truncate">{story.title}</span>
+                </button>
+              </div>
             ))
           )}
           <div className="mt-1 flex items-center gap-1">

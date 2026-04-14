@@ -422,7 +422,22 @@ export function TimelineGrid({
     onClick: (() => void) | null;
   }> = [];
 
-  if (focusedQuarter) {
+  if (activeMonth) {
+    breadcrumbItems.push({
+      label: "Roadmap",
+      onClick: () => {
+        setActiveSprint(null);
+        setFocusedMonth(null);
+        onFocusedQuarterChange(null);
+      },
+    });
+    breadcrumbItems.push({
+      label: MONTHS[activeMonth - 1],
+      onClick: () => {
+        setActiveSprint(null);
+      },
+    });
+  } else if (focusedQuarter) {
     breadcrumbItems.push({
       label: focusedQuarter.label,
       onClick: () => {
@@ -440,17 +455,6 @@ export function TimelineGrid({
     breadcrumbItems.push({ label: "All Quarters", onClick: null });
   }
 
-  if (activeMonth) {
-    breadcrumbItems.push({
-      label: MONTHS[activeMonth - 1],
-      onClick: activeSprint != null ? () => setActiveSprint(null) : null,
-    });
-    breadcrumbItems.push({
-      label: activeSprint != null ? `Sprint ${activeSprint} · Kanban` : "Month · 2 sprints",
-      onClick: null,
-    });
-  }
-
   return (
     <div className="h-[72vh] w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3.5 py-2.5">
@@ -461,17 +465,17 @@ export function TimelineGrid({
                 <button
                   type="button"
                   onClick={item.onClick}
-                  className="cursor-pointer rounded-md bg-white px-2.5 py-1 text-sky-700 shadow-sm ring-1 ring-sky-200 transition hover:bg-sky-50 hover:text-sky-800 hover:ring-sky-300 active:scale-[0.98]"
+                  className="cursor-pointer rounded-md bg-white px-2.5 py-1 text-slate-800 shadow-sm ring-1 ring-slate-300 transition hover:bg-slate-50 hover:ring-slate-400 active:scale-[0.98]"
                 >
                   {item.label}
                 </button>
               ) : (
-                <span className="rounded-md bg-white px-2.5 py-1 text-slate-700 shadow-sm ring-1 ring-black/5">
+                <span className="rounded-md bg-white px-2.5 py-1 text-slate-700 shadow-sm ring-1 ring-slate-300">
                   {item.label}
                 </span>
               )}
               {index < breadcrumbItems.length - 1 ? (
-                <span className="text-slate-400">/</span>
+                <span className="text-slate-500">{">"}</span>
               ) : null}
             </div>
           ))}
