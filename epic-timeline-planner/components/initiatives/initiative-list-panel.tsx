@@ -214,9 +214,6 @@ function InitiativeTreeCard({
                 {initiative.description ? (
                   <p className="line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
                 ) : null}
-                <p className="text-[11px] text-slate-500">
-                  {epics.length} epic{epics.length !== 1 ? "s" : ""}
-                </p>
               </div>
             </button>
             <div className="flex shrink-0 gap-1">
@@ -412,7 +409,7 @@ function SprintEpicCard({
         setDropRef(node);
       }}
       className={cn(
-        "rounded-lg border border-slate-200 bg-white p-3 shadow-sm",
+        "bg-white p-2.5",
         isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
@@ -719,8 +716,8 @@ export function InitiativeListPanel({
           <div
             ref={setEpicUnplanDropRef}
             className={cn(
-              "rounded-md border border-dashed border-slate-300 bg-slate-50 p-2 transition",
-              isEpicUnplanDropOver && "border-slate-400 bg-slate-100",
+              "bg-transparent p-0 transition",
+              isEpicUnplanDropOver && "bg-transparent",
             )}
           >
             {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={0} /> : null}

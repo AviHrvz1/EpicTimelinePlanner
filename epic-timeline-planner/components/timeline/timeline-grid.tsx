@@ -57,15 +57,6 @@ function GanttLaneRow({
       data-gantt-lane-index={ganttLaneSortIndex}
     >
       <div className={cn("relative grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
-          {!focusedQuarter
-            ? [4, 7, 10].map((monthStart) => (
-                <div
-                  key={`quarter-separator-${initiative.id}-${monthStart}`}
-                  className="pointer-events-none border-l-2 border-slate-300/70"
-                  style={{ gridColumn: `${monthStart} / span 1`, gridRow: 1 }}
-                />
-              ))
-            : null}
           <div
             ref={(node) => {
               if (node) barElsRef.current.set(initiative.id, node);
@@ -391,6 +382,12 @@ export function TimelineGrid({
     Q3: "bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
     Q4: "bg-violet-50 text-violet-800 hover:bg-violet-100",
   };
+  const quarterPanelTone: Record<string, string> = {
+    Q1: "bg-blue-50/45 ring-blue-100",
+    Q2: "bg-cyan-50/45 ring-cyan-100",
+    Q3: "bg-emerald-50/45 ring-emerald-100",
+    Q4: "bg-violet-50/45 ring-violet-100",
+  };
   const gridStyle: CSSProperties = {
     gridTemplateColumns: focusedQuarter
       ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
@@ -585,35 +582,63 @@ export function TimelineGrid({
           )}
         </div>
       ) : (
-        <div className={cn("mb-4 grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
-          {visibleMonths.map((month) => (
-            <div
-              key={month}
-              className={cn(
-                "space-y-2",
-                !focusedQuarter && [4, 7, 10].includes(month) && "border-l-2 border-slate-300/80 pl-2",
-              )}
-            >
-              <button
-                type="button"
-                className={cn(
-                  "w-full rounded-lg py-2 text-center text-[13px] font-medium transition",
-                  activeMonth === month
-                    ? "bg-blue-100 text-blue-800 shadow-sm ring-1 ring-blue-200"
-                    : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
-                        "bg-slate-100 text-slate-700 hover:bg-slate-200",
-                )}
-                onClick={() => {
-                  if (isPostDragClickSuppressed()) return;
-                  setFocusedMonth(month);
-                }}
-              >
-                {MONTHS[month - 1]}
-              </button>
-              <MonthDropCell month={month} />
+        <>
+          {focusedQuarter ? (
+            <div className={cn("mb-4 grid gap-2", "min-w-max")} style={gridStyle}>
+              {visibleMonths.map((month) => (
+                <div key={month} className="space-y-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "w-full rounded-lg py-2 text-center text-[13px] font-medium transition",
+                      activeMonth === month
+                        ? "bg-blue-100 text-blue-800 shadow-sm ring-1 ring-blue-200"
+                        : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
+                            "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                    )}
+                    onClick={() => {
+                      if (isPostDragClickSuppressed()) return;
+                      setFocusedMonth(month);
+                    }}
+                  >
+                    {MONTHS[month - 1]}
+                  </button>
+                  <MonthDropCell month={month} />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="mb-4 grid min-w-max grid-cols-4 gap-2">
+              {QUARTERS.map((quarter) => (
+                <section
+                  key={quarter.label}
+                  className={cn("rounded-lg p-2 ring-1", quarterPanelTone[quarter.label] ?? "bg-slate-50 ring-slate-200")}
+                >
+                  <div className="grid grid-cols-3 gap-2">
+                    {quarter.months.map((month) => (
+                      <div key={month} className="space-y-2">
+                        <button
+                          type="button"
+                          className={cn(
+                            "w-full rounded-lg py-2 text-center text-[13px] font-medium shadow-sm ring-1 ring-black/5 transition hover:-translate-y-px hover:shadow-md",
+                            monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                          )}
+                          onClick={() => {
+                            if (isPostDragClickSuppressed()) return;
+                            setFocusedMonth(month);
+                          }}
+                        >
+                          {MONTHS[month - 1]}
+                        </button>
+                        <MonthDropCell month={month} />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <div className="space-y-2">
