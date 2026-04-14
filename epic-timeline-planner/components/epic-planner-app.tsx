@@ -573,6 +573,57 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
       console.log("[gantt-drop] epic branch", { epicId, overId });
 
+      const epicKanbanTodoMatch = /^kanban:(\d+):([12]):todo$/.exec(overId);
+      if (epicKanbanTodoMatch) {
+        const sprint = Number(epicKanbanTodoMatch[2]) as 1 | 2;
+        const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
+        const epic = initiative?.epics?.find((e) => e.id === epicId);
+        if (!initiative || !epic) return;
+        const storyIds = (epic.userStories ?? []).map((s) => s.id);
+        if (storyIds.length === 0) {
+          toast.message("Epic has no stories to move");
+          return;
+        }
+
+        flushSync(() => {
+          setInitiatives((prev) =>
+            prev.map((i) => ({
+              ...i,
+              epics: (i.epics ?? []).map((e) =>
+                e.id === epicId
+                  ? {
+                      ...e,
+                      userStories: (e.userStories ?? []).map((s) => ({
+                        ...s,
+                        sprint,
+                        status: StoryStatus.todo,
+                      })),
+                    }
+                  : e,
+              ),
+            })),
+          );
+        });
+
+        try {
+          await Promise.all(
+            storyIds.map(async (storyId) => {
+              const response = await fetch(`/api/stories/${storyId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sprint, status: StoryStatus.todo }),
+              });
+              if (!response.ok) throw new Error("Failed to update story");
+            }),
+          );
+          toast.success("All epic stories moved to To do");
+        } catch {
+          await refresh();
+          toast.error("Failed to move epic stories");
+        }
+        return;
+      }
+
       let epicBacklogSlot = parseEpicBacklogSlotDropId(overId);
       if (epicBacklogSlot == null) {
         const overEpicId = parseEpicIdFromPlanDraggable(overId);

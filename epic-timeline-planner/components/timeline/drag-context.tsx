@@ -52,11 +52,13 @@ const initiativeCollision: CollisionDetection = (args) => {
 
 const epicPlanCollision: CollisionDetection = (args) => {
   /** Roadmap month cells use `month:` — same targets as initiatives so epics can land on quarter months. */
+  const isKanbanTodoDrop = (id: string) => /^kanban:\d+:[12]:todo$/.test(id);
   const isDropTarget = (id: string) =>
     id.startsWith("epic-plan:") ||
     id.startsWith("month:") ||
     id === EPICS_UNPLAN_DROP_ID ||
-    parseEpicBacklogSlotDropId(id) != null;
+    parseEpicBacklogSlotDropId(id) != null ||
+    isKanbanTodoDrop(id);
   const isEpicBacklogSlot = (id: string) => parseEpicBacklogSlotDropId(id) != null;
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
   const pointerSlotHits = pointerHits.filter((c) => isEpicBacklogSlot(String(c.id)));
