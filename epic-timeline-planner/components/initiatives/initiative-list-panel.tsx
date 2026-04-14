@@ -7,14 +7,21 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import {
+  EPICS_UNPLAN_DROP_ID,
   STORIES_UNSCHEDULE_DROP_ID,
   backlogSlotDropId,
+  epicBacklogSlotDropId,
   epicListDraggableId,
   initiativeListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
+  if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
+  return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
 
 type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
@@ -31,6 +38,7 @@ type InitiativeListPanelProps = {
   onDeleteInitiative: (id: string) => void;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
+  epicBacklogOrderByMonth: Record<number, string[]>;
 };
 
 function DraggableInitiativeCard({
@@ -401,6 +409,23 @@ function BacklogDropSlot({ index }: { index: number }) {
   );
 }
 
+function EpicBacklogDropSlot({ month, index }: { month: number; index: number }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: epicBacklogSlotDropId(month, index),
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "my-1 h-1 w-full rounded bg-transparent transition",
+        isOver && "h-2 bg-amber-300/80",
+      )}
+      aria-hidden
+    />
+  );
+}
+
 export function InitiativeListPanel({
   initiatives,
   activeMonth,
@@ -416,9 +441,13 @@ export function InitiativeListPanel({
   onDeleteInitiative,
   onCreateEpicQuick,
   onCreateStoryQuick,
+  epicBacklogOrderByMonth,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef } = useDroppable({
     id: "initiatives:backlog-drop",
+  });
+  const { setNodeRef: setEpicUnplanDropRef, isOver: isEpicUnplanDropOver } = useDroppable({
+    id: EPICS_UNPLAN_DROP_ID,
   });
   const { setNodeRef: setStoryUnscheduleDropRef, isOver: isStoryUnscheduleDropOver } = useDroppable({
     id: STORIES_UNSCHEDULE_DROP_ID,
@@ -430,7 +459,7 @@ export function InitiativeListPanel({
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [epicSearch, setEpicSearch] = useState("");
 
-  const monthEpics = useMemo(() => {
+  const monthAssignedEpics = useMemo(() => {
     if (activeMonth == null) return [];
     const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     for (const initiative of initiatives) {
@@ -447,14 +476,31 @@ export function InitiativeListPanel({
       return a.epic.title.localeCompare(b.epic.title);
     });
   }, [initiatives, activeMonth]);
-  const filteredMonthEpics = useMemo(() => {
+  const monthBacklogEpics = useMemo(() => {
+    if (activeMonth == null) return [];
+    const base = monthAssignedEpics.filter(({ epic }) => !epicIsOnPlanForMonth(epic, activeMonth));
+    const order = epicBacklogOrderByMonth[activeMonth] ?? [];
+    if (order.length === 0) return base;
+    const byId = new Map(base.map((row) => [row.epic.id, row]));
+    const ordered: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+    for (const id of order) {
+      const row = byId.get(id);
+      if (row) {
+        ordered.push(row);
+        byId.delete(id);
+      }
+    }
+    const rest = [...byId.values()].sort((a, b) => a.epic.title.localeCompare(b.epic.title));
+    return [...ordered, ...rest];
+  }, [monthAssignedEpics, activeMonth, epicBacklogOrderByMonth]);
+  const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
-    if (!q) return monthEpics;
-    return monthEpics.filter(
+    if (!q) return monthBacklogEpics;
+    return monthBacklogEpics.filter(
       ({ epic, initiative }) =>
         epic.title.toLowerCase().includes(q) || initiative.title.toLowerCase().includes(q),
     );
-  }, [monthEpics, epicSearch]);
+  }, [monthBacklogEpics, epicSearch]);
 
   const backlog = useMemo(
     () =>
@@ -536,32 +582,43 @@ export function InitiativeListPanel({
               aria-label="Search epics in selected month"
             />
             <datalist id="month-epic-search-suggestions">
-              {monthEpics.map(({ epic }) => (
+              {monthBacklogEpics.map(({ epic }) => (
                 <option key={epic.id} value={epic.title} />
               ))}
             </datalist>
           </div>
-          <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
-            {activeMonth != null ? `This month (${filteredMonthEpics.length})` : "Epics"}
+          <h3 className="mt-4 mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
+            Epic backlog ({filteredMonthBacklogEpics.length})
           </h3>
-          {filteredMonthEpics.length === 0 ? (
-            <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
-              {monthEpics.length === 0
-                ? `No epics on the plan for ${MONTHS[activeMonth - 1]} yet. Add one with New or drag epics onto the sprint plan.`
-                : "No epics match your search."}
-            </p>
-          ) : (
-            filteredMonthEpics.map(({ epic, initiative }) => (
-              <SprintEpicCard
-                key={epic.id}
-                epic={epic}
-                initiative={initiative}
-                epicPlanDragEnabled={epicPlanDragEnabled}
-                onOpenEpic={onOpenEpic}
-                onDeleteEpic={onDeleteEpic}
-              />
-            ))
-          )}
+          <div
+            ref={setEpicUnplanDropRef}
+            className={cn(
+              "rounded-md border border-dashed border-amber-200/90 bg-amber-50/50 p-2 transition",
+              isEpicUnplanDropOver && "border-amber-400 bg-amber-100",
+            )}
+          >
+            {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={0} /> : null}
+            {filteredMonthBacklogEpics.length === 0 ? (
+              <p className="text-[11px] text-amber-900/90">
+                {monthBacklogEpics.length === 0
+                  ? "Drag epics from the month timeline here to move them into epic backlog."
+                  : "No epics match your search."}
+              </p>
+            ) : (
+              filteredMonthBacklogEpics.map(({ epic, initiative }, idx) => (
+                <div key={`backlog-${epic.id}`}>
+                  <SprintEpicCard
+                    epic={epic}
+                    initiative={initiative}
+                    epicPlanDragEnabled={epicPlanDragEnabled}
+                    onOpenEpic={onOpenEpic}
+                    onDeleteEpic={onDeleteEpic}
+                  />
+                  {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={idx + 1} /> : null}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-2">

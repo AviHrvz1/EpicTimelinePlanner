@@ -20,6 +20,7 @@ import {
   EPICS_UNPLAN_DROP_ID,
   STORIES_UNSCHEDULE_DROP_ID,
   parseBacklogSlotDropId,
+  parseEpicBacklogSlotDropId,
   isEpicPlanDraggableId,
   isInitiativeDraggableId,
   isStoryDraggableId,
@@ -52,7 +53,10 @@ const initiativeCollision: CollisionDetection = (args) => {
 const epicPlanCollision: CollisionDetection = (args) => {
   /** Roadmap month cells use `month:` — same targets as initiatives so epics can land on quarter months. */
   const isDropTarget = (id: string) =>
-    id.startsWith("epic-plan:") || id.startsWith("month:") || id === EPICS_UNPLAN_DROP_ID;
+    id.startsWith("epic-plan:") ||
+    id.startsWith("month:") ||
+    id === EPICS_UNPLAN_DROP_ID ||
+    parseEpicBacklogSlotDropId(id) != null;
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
   if (pointerHits.length > 0) return pointerHits;
   const rectHits = rectIntersection(args).filter((c) => isDropTarget(String(c.id)));

@@ -4,6 +4,7 @@ const TIMELINE_PREFIX = "timeline-initiative:";
 const EPIC_LIST_PREFIX = "list-epic:";
 const EPIC_TIMELINE_PREFIX = "timeline-epic:";
 const BACKLOG_SLOT_PREFIX = "backlog-slot:";
+const EPIC_BACKLOG_SLOT_PREFIX = "epic-backlog-slot:";
 
 /** Left panel: drop epic here to clear sprint plan (month drill). */
 export const EPICS_UNPLAN_DROP_ID = "epics:unplan-drop";
@@ -84,6 +85,22 @@ export function parseBacklogSlotDropId(overId: string): number | null {
   const idx = Number(overId.slice(BACKLOG_SLOT_PREFIX.length));
   if (!Number.isFinite(idx) || idx < 0) return null;
   return idx;
+}
+
+/** Droppable id for placing an epic at an index in month epic backlog. */
+export function epicBacklogSlotDropId(month: number, index: number): string {
+  return `${EPIC_BACKLOG_SLOT_PREFIX}${month}:${index}`;
+}
+
+export function parseEpicBacklogSlotDropId(overId: string): { month: number; index: number } | null {
+  if (!overId.startsWith(EPIC_BACKLOG_SLOT_PREFIX)) return null;
+  const rest = overId.slice(EPIC_BACKLOG_SLOT_PREFIX.length);
+  const [monthRaw, indexRaw] = rest.split(":");
+  const month = Number(monthRaw);
+  const index = Number(indexRaw);
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null;
+  if (!Number.isFinite(index) || index < 0) return null;
+  return { month, index };
 }
 
 const STORY_LIST_PREFIX = "story:list:";

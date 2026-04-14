@@ -19,6 +19,7 @@ import {
   isInitiativeDraggableId,
   parseEpicIdFromPlanDraggable,
   parseBacklogSlotDropId,
+  parseEpicBacklogSlotDropId,
   parseMonthDropTarget,
   parseInitiativeIdFromDraggable,
   isStoryDraggableId,
@@ -122,6 +123,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
+  const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
   const [panelWidth, setPanelWidth] = useState(520);
@@ -541,10 +543,21 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
       console.log("[gantt-drop] epic branch", { epicId, overId });
 
-      if (overId === EPICS_UNPLAN_DROP_ID) {
+      const epicBacklogSlot = parseEpicBacklogSlotDropId(overId);
+      if (overId === EPICS_UNPLAN_DROP_ID || epicBacklogSlot != null) {
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
         const epic = initiative?.epics?.find((e) => e.id === epicId);
         if (!initiative || !epic) return;
+        if (epicBacklogSlot != null) {
+          setEpicBacklogOrderByMonth((prev) => {
+            const month = epicBacklogSlot.month;
+            const current = prev[month] ?? [];
+            const without = current.filter((id) => id !== epicId);
+            const insertAt = Math.max(0, Math.min(epicBacklogSlot.index, without.length));
+            const next = [...without.slice(0, insertAt), epicId, ...without.slice(insertAt)];
+            return { ...prev, [month]: next };
+          });
+        }
 
         flushSync(() => {
           setInitiatives((prev) =>
@@ -560,11 +573,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         });
         try {
           await patchEpicClearPlan(epicId);
-          toast.success("Epic removed from plan");
+          toast.success("Epic moved to backlog");
         } catch (err) {
           await refresh();
           const description = err instanceof Error ? err.message : undefined;
-          toast.error("Failed to remove epic from plan", description ? { description } : undefined);
+          toast.error("Failed to update epic placement", description ? { description } : undefined);
         }
         return;
       }
@@ -987,6 +1000,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   toast.error("Failed to add user story");
                 }
               }}
+              epicBacklogOrderByMonth={epicBacklogOrderByMonth}
             />
             <div
               className="group relative flex cursor-col-resize items-stretch justify-center"
