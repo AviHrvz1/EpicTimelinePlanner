@@ -123,7 +123,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
-  const [panelWidth, setPanelWidth] = useState(420);
+  const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
 
@@ -239,6 +239,30 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   async function handleDeleteEpic(epicId: string) {
     await fetch(`/api/epics/${epicId}`, { method: "DELETE" });
+    await refresh();
+  }
+
+  async function createEpicQuick(initiativeId: string, title: string) {
+    const response = await fetch(`/api/initiatives/${initiativeId}/epics`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to create epic");
+    }
+    await refresh();
+  }
+
+  async function createStoryQuick(epicId: string, title: string) {
+    const response = await fetch(`/api/epics/${epicId}/stories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to create user story");
+    }
     await refresh();
   }
 
@@ -901,8 +925,27 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 setEditingEpicInitiativeId(initiative.id);
                 setEpicDialogOpen(true);
               }}
+              onOpenStory={(storyId) => {
+                setSelectedStoryId(storyId);
+              }}
               onDeleteEpic={handleDeleteEpic}
               onDeleteInitiative={handleDeleteInitiative}
+              onCreateEpicQuick={async (initiativeId, title) => {
+                try {
+                  await createEpicQuick(initiativeId, title);
+                  toast.success("Epic added");
+                } catch {
+                  toast.error("Failed to add epic");
+                }
+              }}
+              onCreateStoryQuick={async (epicId, title) => {
+                try {
+                  await createStoryQuick(epicId, title);
+                  toast.success("User story added");
+                } catch {
+                  toast.error("Failed to add user story");
+                }
+              }}
             />
             <div
               className="group relative flex cursor-col-resize items-stretch justify-center"
