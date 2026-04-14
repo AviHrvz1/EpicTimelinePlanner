@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { ChevronLeft } from "lucide-react";
+import { CalendarDays, ChevronLeft, Flag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -130,6 +130,21 @@ const QUARTER_YEAR_FRACTION: Record<string, number> = {
   Q4: 1,
 };
 
+const FULL_MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
 function quarterWedgePath(frac: number): string | null {
   if (frac >= 1 - 1e-6) return null;
   const cx = 12;
@@ -199,12 +214,11 @@ function EpicPlanDropCell({ month, sprint }: { month: number; sprint: 1 | 2 }) {
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[4.5rem] items-center justify-center rounded-md border border-dashed border-border bg-muted/25 px-1 py-2 text-center text-[10px] font-medium text-slate-500 transition",
-        isOver && "border-primary bg-primary/10 text-primary",
+        "min-h-[4.5rem] rounded-md bg-slate-100/80 transition",
+        isOver && "bg-slate-200/90 ring-1 ring-slate-300",
       )}
-    >
-      Drop epic
-    </div>
+      aria-label={`Drop epic in sprint ${sprint}`}
+    />
   );
 }
 
@@ -327,6 +341,18 @@ export function TimelineGrid({
     "Sprint 1 (first half)",
     "Sprint 2 (second half)",
   ];
+  const sprintTheme: Record<1 | 2, { col: string; header: string; icon: string }> = {
+    1: {
+      col: "bg-blue-50/40",
+      header: "bg-blue-100 text-blue-900 ring-1 ring-blue-200",
+      icon: "text-blue-600",
+    },
+    2: {
+      col: "bg-violet-50/40",
+      header: "bg-violet-100 text-violet-900 ring-1 ring-violet-200",
+      icon: "text-violet-600",
+    },
+  };
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
 
@@ -510,11 +536,14 @@ export function TimelineGrid({
         </div>
       ) : null}
       {activeMonth ? (
-        <div className="mb-4 space-y-4 rounded-xl bg-slate-50/70 p-4">
+        <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
           {activeSprint != null ? (
             <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
               <div className="mb-4 rounded-lg bg-slate-100 py-2 text-center ring-1 ring-black/5">
-                <span className="text-[14px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
+                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
+                  <CalendarDays className="size-3.5 text-slate-600" />
+                  {FULL_MONTH_NAMES[activeMonth - 1]}
+                </span>
                 <span className="text-[12px] font-medium text-slate-500"> · Sprint {activeSprint} · Kanban</span>
               </div>
               <SprintKanbanBoard
@@ -526,33 +555,34 @@ export function TimelineGrid({
             </div>
           ) : (
             <>
-              <p className="text-[13px] leading-6 text-slate-600">
-                Two sprint columns for {MONTHS[activeMonth - 1]} only. Tap a sprint header to open its Kanban; drag epics
-                onto a dashed cell to choose the sprint. From the roadmap month row you can also drop on that month
-                (defaults to Sprint 1). The parent initiative must be scheduled for {MONTHS[activeMonth - 1]}.
-              </p>
-              <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-black/5">
-                <div className="mb-3 rounded-md bg-slate-100 py-2 text-center">
-                  <span className="text-[14px] font-semibold text-slate-900">{MONTHS[activeMonth - 1]}</span>
-                  <span className="text-[12px] font-medium text-slate-500"> · sprint plan</span>
+              <div className="flex min-h-[50rem] flex-col rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-black/5">
+                <div className="mb-2 rounded-md bg-slate-100 py-2 text-center">
+                  <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
+                    <CalendarDays className="size-3.5 text-slate-600" />
+                    {FULL_MONTH_NAMES[activeMonth - 1]}
+                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid flex-1 grid-cols-2 gap-2.5">
                   {([1, 2] as const).map((sprint) => {
                     const planned = collectPlannedEpicsForMonth(initiatives, sprint, activeMonth);
                     return (
                       <div
                         key={`sprint-col-${sprint}`}
-                        className="flex flex-col rounded-lg border border-slate-200/90 bg-slate-50/40 p-2.5"
+                        className={cn("flex h-full flex-col rounded-lg p-2", sprintTheme[sprint].col)}
                       >
                         <button
                           type="button"
                           onClick={() => setActiveSprint(sprint)}
-                          className="mb-2 w-full rounded-lg bg-slate-100 py-2.5 text-center text-[13px] font-semibold text-slate-800 shadow-sm ring-1 ring-black/5 transition hover:bg-slate-200"
+                          className={cn(
+                            "mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-center text-[13px] font-semibold shadow-sm transition",
+                            sprintTheme[sprint].header,
+                          )}
                         >
+                          <Flag className={cn("size-3.5", sprintTheme[sprint].icon)} />
                           {sprintLaneLabels[sprint - 1]}
                         </button>
                         <EpicPlanDropCell month={activeMonth} sprint={sprint} />
-                        <div className="mt-2 space-y-1.5">
+                        <div className="mt-2 flex-1 space-y-1.5">
                           {planned.length === 0 ? (
                             <p className="text-[11px] text-slate-500">No epics yet.</p>
                           ) : null}
