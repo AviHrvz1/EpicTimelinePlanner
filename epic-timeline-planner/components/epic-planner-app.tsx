@@ -179,6 +179,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
+  const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
@@ -255,6 +256,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       setActiveSprintLane(Number(sprintRaw) as 1 | 2);
       setIsSprintModeActive(true);
     }
+    const sprintViewRaw = params.get("sprintView");
+    if (sprintViewRaw === "kanban" || sprintViewRaw === "status") {
+      setActiveSprintTab(sprintViewRaw);
+    }
     const epicId = params.get("epic");
     if (epicId) {
       for (const initiative of initialInitiatives) {
@@ -282,6 +287,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
     if (activeTimelineMonth != null) params.set("month", String(activeTimelineMonth));
     if (activeSprintLane != null) params.set("sprint", String(activeSprintLane));
+    if (activeSprintLane != null) params.set("sprintView", activeSprintTab);
     if (epicDialogOpen && editingEpic?.id) params.set("epic", editingEpic.id);
     if (selectedStoryId) params.set("story", storyRefMaps.byId[selectedStoryId] ?? selectedStoryId);
     const next = params.toString();
@@ -295,6 +301,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     focusedQuarterLabel,
     activeTimelineMonth,
     activeSprintLane,
+    activeSprintTab,
     epicDialogOpen,
     editingEpic?.id,
     selectedStoryId,
@@ -308,6 +315,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       setIsSprintModeActive(active);
       setActiveTimelineMonth(month);
       setActiveSprintLane(sprintLane ?? null);
+      if (sprintLane == null) {
+        setActiveSprintTab("kanban");
+      }
     },
     [],
   );
@@ -1232,7 +1242,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               focusedQuarterLabel={focusedQuarterLabel}
               focusedMonthExternal={activeTimelineMonth}
               activeSprintExternal={activeSprintLane}
+              activeSprintTabExternal={activeSprintTab}
               onFocusedQuarterChange={setFocusedQuarterLabel}
+              onSprintTabChange={setActiveSprintTab}
               onOpenEpic={(epicId) => {
                 for (const initiative of initiatives) {
                   const epic = (initiative.epics ?? []).find((e) => e.id === epicId);

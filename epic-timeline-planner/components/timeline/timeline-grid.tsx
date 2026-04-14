@@ -109,8 +109,10 @@ type TimelineGridProps = {
   focusedQuarterLabel: string | null;
   focusedMonthExternal?: number | null;
   activeSprintExternal?: 1 | 2 | null;
+  activeSprintTabExternal?: "kanban" | "status";
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeSprint: 1 | 2 | null) => void;
+  onSprintTabChange?: (tab: "kanban" | "status") => void;
   onOpenEpic: (epicId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
@@ -222,8 +224,10 @@ export function TimelineGrid({
   focusedQuarterLabel,
   focusedMonthExternal,
   activeSprintExternal,
+  activeSprintTabExternal,
   onFocusedQuarterChange,
   onSprintModeChange,
+  onSprintTabChange,
   onOpenEpic,
   onOpenInitiative,
   onOpenStory,
@@ -412,10 +416,18 @@ export function TimelineGrid({
   }, [activeSprintExternal]);
 
   useEffect(() => {
+    if (activeSprintTabExternal === undefined) return;
+    setActiveSprintTab(activeSprintTabExternal);
+  }, [activeSprintTabExternal]);
+
+  useEffect(() => {
     if (prevActiveMonthRef.current !== activeMonth) {
+      const hadPreviousMonth = prevActiveMonthRef.current != null;
       prevActiveMonthRef.current = activeMonth;
-      setActiveSprint(null);
-      setActiveSprintTab("kanban");
+      if (hadPreviousMonth) {
+        setActiveSprint(null);
+        setActiveSprintTab("kanban");
+      }
     }
   }, [activeMonth]);
 
@@ -424,6 +436,10 @@ export function TimelineGrid({
       setActiveSprintTab("kanban");
     }
   }, [activeSprint]);
+
+  useEffect(() => {
+    onSprintTabChange?.(activeSprintTab);
+  }, [activeSprintTab, onSprintTabChange]);
 
   useEffect(() => {
     if (activeMonth == null) {
