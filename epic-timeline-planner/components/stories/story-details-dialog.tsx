@@ -39,6 +39,7 @@ type StoryDetailsDialogProps = {
   ) => Promise<void>;
   onDelete?: (storyId: string) => Promise<void>;
   onAddComment: (storyId: string, body: string) => Promise<void>;
+  storyRef?: string;
 };
 
 export function StoryDetailsDialog({
@@ -51,6 +52,7 @@ export function StoryDetailsDialog({
   onSave,
   onDelete,
   onAddComment,
+  storyRef,
 }: StoryDetailsDialogProps) {
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState("📄");
@@ -304,6 +306,14 @@ export function StoryDetailsDialog({
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
             />
           </label>
+          {!isCreateMode ? (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-slate-600">Story reference</p>
+              <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                {storyRef ?? "--"}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">

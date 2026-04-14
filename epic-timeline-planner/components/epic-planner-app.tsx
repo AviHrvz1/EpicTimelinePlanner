@@ -2,7 +2,8 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
@@ -140,7 +141,34 @@ function monthBacklogEpicIds(
   return [...ordered, ...rest];
 }
 
+function buildStoryRefMaps(initiatives: InitiativeItem[]): {
+  byId: Record<string, string>;
+  idByRef: Record<string, string>;
+} {
+  const rows = initiatives
+    .flatMap((initiative) =>
+      (initiative.epics ?? []).flatMap((epic) =>
+        (epic.userStories ?? []).map((story) => ({
+          id: story.id,
+          createdAt: new Date(story.createdAt).getTime(),
+          title: story.title,
+        })),
+      ),
+    )
+    .sort((a, b) => a.createdAt - b.createdAt || a.title.localeCompare(b.title));
+  const byId: Record<string, string> = {};
+  const idByRef: Record<string, string> = {};
+  rows.forEach((row, idx) => {
+    const ref = String(idx + 1).padStart(2, "0");
+    byId[row.id] = ref;
+    idByRef[ref] = row.id;
+  });
+  return { byId, idByRef };
+}
+
 export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [initiatives, setInitiatives] = useState(initialInitiatives);
   const [initiativeDialogOpen, setInitiativeDialogOpen] = useState(false);
   const [editingInitiative, setEditingInitiative] = useState<InitiativeItem | undefined>(undefined);
@@ -157,6 +185,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
+  const [isUrlHydrated, setIsUrlHydrated] = useState(false);
+  const hasHydratedFromUrlRef = useRef(false);
 
   const title = useMemo(() => `Roadmap ${year}`, [year]);
   const roadmapSummary = useMemo(() => {
@@ -189,6 +219,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
     return null;
   })();
+  const storyRefMaps = useMemo(() => buildStoryRefMaps(initiatives), [initiatives]);
 
   const currentEditingInitiative = useMemo(() => {
     if (!editingInitiative) return undefined;
@@ -203,6 +234,83 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
     return editingEpic;
   }, [initiatives, editingEpic]);
+
+  useEffect(() => {
+    if (hasHydratedFromUrlRef.current) return;
+    hasHydratedFromUrlRef.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("quarter");
+    if (q && QUARTERS.some((item) => item.label === q)) {
+      setFocusedQuarterLabel(q);
+    }
+    const monthRaw = params.get("month");
+    if (monthRaw) {
+      const month = Number(monthRaw);
+      if (Number.isFinite(month) && month >= 1 && month <= 12) {
+        setActiveTimelineMonth(month);
+      }
+    }
+    const sprintRaw = params.get("sprint");
+    if (sprintRaw === "1" || sprintRaw === "2") {
+      setActiveSprintLane(Number(sprintRaw) as 1 | 2);
+      setIsSprintModeActive(true);
+    }
+    const epicId = params.get("epic");
+    if (epicId) {
+      for (const initiative of initialInitiatives) {
+        const epic = (initiative.epics ?? []).find((e) => e.id === epicId);
+        if (epic) {
+          setEditingEpic(epic);
+          setEditingEpicInitiativeId(initiative.id);
+          setEpicDialogOpen(true);
+          break;
+        }
+      }
+    }
+    const storyRef = params.get("story");
+    if (storyRef) {
+      const initialMaps = buildStoryRefMaps(initialInitiatives);
+      const resolvedStoryId = initialMaps.idByRef[storyRef] ?? storyRef;
+      setSelectedStoryId(resolvedStoryId);
+    }
+    setIsUrlHydrated(true);
+  }, [initialInitiatives]);
+
+  useEffect(() => {
+    if (!isUrlHydrated) return;
+    const params = new URLSearchParams();
+    if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
+    if (activeTimelineMonth != null) params.set("month", String(activeTimelineMonth));
+    if (activeSprintLane != null) params.set("sprint", String(activeSprintLane));
+    if (epicDialogOpen && editingEpic?.id) params.set("epic", editingEpic.id);
+    if (selectedStoryId) params.set("story", storyRefMaps.byId[selectedStoryId] ?? selectedStoryId);
+    const next = params.toString();
+    const target = next ? `${pathname}?${next}` : pathname;
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (current !== target) {
+      router.replace(target, { scroll: false });
+    }
+  }, [
+    isUrlHydrated,
+    focusedQuarterLabel,
+    activeTimelineMonth,
+    activeSprintLane,
+    epicDialogOpen,
+    editingEpic?.id,
+    selectedStoryId,
+    storyRefMaps.byId,
+    router,
+    pathname,
+  ]);
+
+  const handleSprintModeChange = useCallback(
+    (active: boolean, month: number | null, sprintLane: 1 | 2 | null) => {
+      setIsSprintModeActive(active);
+      setActiveTimelineMonth(month);
+      setActiveSprintLane(sprintLane ?? null);
+    },
+    [],
+  );
 
   async function refresh() {
     const data = await parseJson<InitiativeItem[]>(
@@ -1122,6 +1230,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               initiatives={initiatives}
               zoom={1}
               focusedQuarterLabel={focusedQuarterLabel}
+              focusedMonthExternal={activeTimelineMonth}
+              activeSprintExternal={activeSprintLane}
               onFocusedQuarterChange={setFocusedQuarterLabel}
               onOpenEpic={(epicId) => {
                 for (const initiative of initiatives) {
@@ -1158,11 +1268,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               onOpenStory={(storyId) => {
                 setSelectedStoryId(storyId);
               }}
-              onSprintModeChange={(active, month, sprintLane) => {
-                setIsSprintModeActive(active);
-                setActiveTimelineMonth(month);
-                setActiveSprintLane(sprintLane ?? null);
-              }}
+              onSprintModeChange={handleSprintModeChange}
             />
           </div>
         </div>
@@ -1229,6 +1335,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           setEditingEpicInitiativeId(null);
         }}
         onSubmit={handleUpsertEpic}
+        storyRefById={storyRefMaps.byId}
         onDelete={async (epicId) => {
           try {
             await handleDeleteEpic(epicId);
@@ -1279,6 +1386,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             toast.error("Failed to delete user story");
           }
         }}
+        storyRef={selectedStoryId ? storyRefMaps.byId[selectedStoryId] : undefined}
       />
     </DragContext>
   );

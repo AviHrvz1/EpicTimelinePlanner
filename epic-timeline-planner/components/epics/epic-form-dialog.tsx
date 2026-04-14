@@ -22,6 +22,7 @@ type EpicFormDialogProps = {
     initiativeId: string;
   }) => Promise<void> | void;
   onDelete?: (epicId: string) => Promise<void> | void;
+  storyRefById?: Record<string, string>;
   onRequestCreateStory?: (epicId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onAddComment?: (epicId: string, body: string) => Promise<void>;
@@ -35,6 +36,7 @@ export function EpicFormDialog({
   onClose,
   onSubmit,
   onDelete,
+  storyRefById,
   onRequestCreateStory,
   onOpenStory,
   onAddComment,
@@ -310,6 +312,9 @@ export function EpicFormDialog({
                           <tr key={story.id} className="border-t border-slate-100 align-middle">
                             <td className="px-3 py-2">
                               <p className="max-w-[280px] truncate text-sm font-medium text-slate-900">
+                                <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                                  {storyRefById?.[story.id] ?? "--"}
+                                </span>
                                 {story.icon === "🧩" ? "📄" : (story.icon || "📄")} {story.title}
                               </p>
                               {story.sprint ? (

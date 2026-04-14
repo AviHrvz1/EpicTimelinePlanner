@@ -106,6 +106,8 @@ type TimelineGridProps = {
   initiatives: InitiativeItem[];
   zoom: number;
   focusedQuarterLabel: string | null;
+  focusedMonthExternal?: number | null;
+  activeSprintExternal?: 1 | 2 | null;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeSprint: 1 | 2 | null) => void;
   onOpenEpic: (epicId: string) => void;
@@ -217,6 +219,8 @@ export function TimelineGrid({
   initiatives,
   zoom,
   focusedQuarterLabel,
+  focusedMonthExternal,
+  activeSprintExternal,
   onFocusedQuarterChange,
   onSprintModeChange,
   onOpenEpic,
@@ -396,6 +400,16 @@ export function TimelineGrid({
 
   const prevActiveMonthRef = useRef<number | null>(null);
   useEffect(() => {
+    if (focusedMonthExternal === undefined) return;
+    setFocusedMonth(focusedMonthExternal);
+  }, [focusedMonthExternal]);
+
+  useEffect(() => {
+    if (activeSprintExternal === undefined) return;
+    setActiveSprint(activeSprintExternal);
+  }, [activeSprintExternal]);
+
+  useEffect(() => {
     if (prevActiveMonthRef.current !== activeMonth) {
       prevActiveMonthRef.current = activeMonth;
       setActiveSprint(null);
@@ -483,20 +497,7 @@ export function TimelineGrid({
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          {focusedQuarter ? (
-            <button
-              type="button"
-              className="rounded-md bg-white px-2 py-1 text-[12px] font-medium shadow-sm ring-1 ring-black/5"
-              onClick={() => {
-                setFocusedMonth(null);
-                onFocusedQuarterChange(null);
-              }}
-            >
-              ⌂ Roadmap
-            </button>
-          ) : null}
-        </div>
+        <div className="flex items-center gap-2" />
       </div>
       {!activeMonth ? (
         <div className={cn("mb-4 grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
