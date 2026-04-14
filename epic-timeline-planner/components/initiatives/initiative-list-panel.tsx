@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -186,10 +186,10 @@ function InitiativeTreeCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2 text-left">
-              <ChevronDown
+              <ChevronRight
                 className={cn(
                   "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
-                  isOpen && "rotate-180",
+                  isOpen && "rotate-90",
                 )}
               />
               <div className="min-w-0">
@@ -406,6 +406,7 @@ export function InitiativeListPanel({
   const inMonthView = activeMonth != null;
   const epicPlanDragEnabled = inMonthView;
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
+  const [initiativeSearch, setInitiativeSearch] = useState("");
 
   const sprintEpics = useMemo(() => {
     if (activeMonth == null) return [];
@@ -432,6 +433,11 @@ export function InitiativeListPanel({
     () => [...initiatives].sort((a, b) => a.title.localeCompare(b.title)),
     [initiatives],
   );
+  const filteredInitiatives = useMemo(() => {
+    const q = initiativeSearch.trim().toLowerCase();
+    if (!q) return allInitiatives;
+    return allInitiatives.filter((initiative) => initiative.title.toLowerCase().includes(q));
+  }, [allInitiatives, initiativeSearch]);
   const showInitiativeBacklogDrop = !inMonthView && !isSprintModeActive;
 
   const showNewButton = inMonthView || !isSprintModeActive;
@@ -520,23 +526,40 @@ export function InitiativeListPanel({
         </div>
       ) : (
         <div className="space-y-2">
+          <div className="mb-2">
+            <input
+              value={initiativeSearch}
+              onChange={(event) => setInitiativeSearch(event.target.value)}
+              list="initiative-search-suggestions"
+              placeholder="Search initiative..."
+              className="h-8 w-full rounded-md bg-white px-2 text-[12px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Search initiatives"
+            />
+            <datalist id="initiative-search-suggestions">
+              {allInitiatives.map((initiative) => (
+                <option key={initiative.id} value={initiative.title} />
+              ))}
+            </datalist>
+          </div>
           <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
-            All initiatives ({allInitiatives.length})
+            All initiatives ({filteredInitiatives.length})
           </h3>
-          {allInitiatives.length === 0 ? (
+          {filteredInitiatives.length === 0 ? (
             <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
-              No initiatives yet. Add one to begin planning.
+              {allInitiatives.length === 0
+                ? "No initiatives yet. Add one to begin planning."
+                : "No initiatives match your search."}
             </p>
           ) : (
-            allInitiatives.map((initiative) => (
+            filteredInitiatives.map((initiative) => (
               <InitiativeTreeCard
                 key={initiative.id}
                 initiative={initiative}
-                isOpen={openInitiativeIds[initiative.id] ?? true}
+                isOpen={openInitiativeIds[initiative.id] ?? false}
                 onToggle={() =>
                   setOpenInitiativeIds((prev) => ({
                     ...prev,
-                    [initiative.id]: !(prev[initiative.id] ?? true),
+                    [initiative.id]: !(prev[initiative.id] ?? false),
                   }))
                 }
                 onEditInitiative={onEditInitiative}
