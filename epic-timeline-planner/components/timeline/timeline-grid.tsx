@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { CalendarDays, ChevronLeft, Flag } from "lucide-react";
+import { CalendarDays, Flag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -481,26 +481,6 @@ export function TimelineGrid({
           ))}
         </div>
         <div className="flex items-center gap-2">
-          {focusedQuarter || focusedMonth ? (
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-700 shadow-sm ring-1 ring-black/5"
-              onClick={() => {
-                if (activeSprint != null) {
-                  setActiveSprint(null);
-                  return;
-                }
-                if (focusedMonth) {
-                  setFocusedMonth(null);
-                  return;
-                }
-                onFocusedQuarterChange(null);
-              }}
-              aria-label="Go back"
-            >
-              <ChevronLeft className="size-4" />
-            </button>
-          ) : null}
           {focusedQuarter ? (
             <button
               type="button"
