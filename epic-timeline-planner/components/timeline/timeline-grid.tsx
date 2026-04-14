@@ -434,6 +434,12 @@ export function TimelineGrid({
         setActiveSprint(null);
       },
     });
+    if (activeSprint != null) {
+      breadcrumbItems.push({
+        label: sprintLaneLabels[activeSprint - 1],
+        onClick: null,
+      });
+    }
   } else if (focusedQuarter) {
     breadcrumbItems.push({
       label: focusedQuarter.label,
@@ -522,10 +528,9 @@ export function TimelineGrid({
             <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
               <div className="mb-4 rounded-lg bg-slate-100 py-2 text-center ring-1 ring-black/5">
                 <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
-                  <CalendarDays className="size-3.5 text-slate-600" />
-                  {FULL_MONTH_NAMES[activeMonth - 1]}
+                  <Flag className={cn("size-3.5", sprintTheme[activeSprint].icon)} />
+                  {sprintLaneLabels[activeSprint - 1]}
                 </span>
-                <span className="text-[12px] font-medium text-slate-500"> · Sprint {activeSprint} · Kanban</span>
               </div>
               <SprintKanbanBoard
                 initiatives={initiatives}
