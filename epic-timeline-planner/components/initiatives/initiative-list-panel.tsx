@@ -712,7 +712,7 @@ export function InitiativeListPanel({
   const showNewButton = inMonthView || !isSprintModeActive;
 
   return (
-    <aside className="h-[72vh] overflow-x-hidden overflow-y-auto rounded-xl bg-slate-50 p-4 shadow-lg ring-1 ring-black/5">
+    <aside className="h-full min-h-0 overflow-x-hidden overflow-y-auto rounded-xl bg-slate-50 p-4 shadow-lg ring-1 ring-black/5">
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 pb-3">
         <div>
           <h2 className="inline-flex items-center gap-1.5 text-[16px] leading-6 font-semibold tracking-tight text-slate-950">

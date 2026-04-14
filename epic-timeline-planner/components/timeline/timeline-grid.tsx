@@ -489,7 +489,7 @@ export function TimelineGrid({
   }
 
   return (
-    <div className="h-[72vh] w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+    <div className="h-full min-h-0 w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3.5 py-2.5">
         <div className="flex items-center gap-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700">
           {breadcrumbItems.map((item, index) => (
@@ -542,7 +542,7 @@ export function TimelineGrid({
       {activeMonth ? (
         <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
           {activeSprint != null ? (
-            <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
+            <div className="flex min-h-[56rem] flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
               <div className="mb-4 rounded-lg bg-slate-100 py-2 text-center ring-1 ring-black/5">
                 <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
                   <Flag className={cn("size-3.5", sprintTheme[activeSprint].icon)} />
@@ -576,12 +576,14 @@ export function TimelineGrid({
                 </button>
               </div>
               {activeSprintTab === "kanban" ? (
-                <SprintKanbanBoard
-                  initiatives={initiatives}
-                  month={activeMonth}
-                  sprintLane={activeSprint}
-                  onOpenStory={onOpenStory ?? (() => {})}
-                />
+                <div className="flex-1">
+                  <SprintKanbanBoard
+                    initiatives={initiatives}
+                    month={activeMonth}
+                    sprintLane={activeSprint}
+                    onOpenStory={onOpenStory ?? (() => {})}
+                  />
+                </div>
               ) : (
                 <SprintAnalytics initiatives={initiatives} month={activeMonth} sprintLane={activeSprint} />
               )}

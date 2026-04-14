@@ -42,7 +42,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[14rem] flex-col rounded-xl border-2 border-dashed p-2 transition",
+        "flex h-full min-h-[36rem] flex-col rounded-xl border p-2 transition",
         tone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
@@ -137,8 +137,8 @@ export function SprintKanbanBoard({ initiatives, month, sprintLane, onOpenStory 
   }
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="flex h-full flex-col space-y-3">
+      <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
           <KanbanColumn
             key={status}

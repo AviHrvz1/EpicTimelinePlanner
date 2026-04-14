@@ -1129,8 +1129,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   return (
     <DragContext onDragEnd={onDragEnd}>
-      <main className="min-h-screen bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8">
-        <div className="mx-auto w-full max-w-[2550px] space-y-5">
+      <main className="h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8">
+        <div className="mx-auto flex h-full w-full max-w-[2550px] flex-col gap-5 overflow-hidden">
           <div className="rounded-2xl bg-card p-6 shadow-lg ring-1 ring-black/5">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1161,7 +1161,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
           <div
             ref={layoutRef}
-            className={cn("grid items-stretch gap-3", isResizingPanel && "select-none")}
+            className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
             style={{ gridTemplateColumns: `${panelWidth}px 14px minmax(0, 1fr)` }}
           >
             <InitiativeListPanel
