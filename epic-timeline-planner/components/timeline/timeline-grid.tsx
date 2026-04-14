@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { EpicPlanBlock } from "@/components/timeline/epic-plan-block";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
+import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
@@ -230,6 +231,7 @@ export function TimelineGrid({
 }: TimelineGridProps) {
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<1 | 2 | null>(null);
+  const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const [resizePreview, setResizePreview] = useState<{
     initiativeId: string;
@@ -413,8 +415,15 @@ export function TimelineGrid({
     if (prevActiveMonthRef.current !== activeMonth) {
       prevActiveMonthRef.current = activeMonth;
       setActiveSprint(null);
+      setActiveSprintTab("kanban");
     }
   }, [activeMonth]);
+
+  useEffect(() => {
+    if (activeSprint == null) {
+      setActiveSprintTab("kanban");
+    }
+  }, [activeSprint]);
 
   useEffect(() => {
     if (activeMonth == null) {
@@ -533,12 +542,42 @@ export function TimelineGrid({
                   {sprintLaneLabels[activeSprint - 1]}
                 </span>
               </div>
-              <SprintKanbanBoard
-                initiatives={initiatives}
-                month={activeMonth}
-                sprintLane={activeSprint}
-                onOpenStory={onOpenStory ?? (() => {})}
-              />
+              <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveSprintTab("kanban")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                    activeSprintTab === "kanban"
+                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                      : "text-slate-600 hover:text-slate-800",
+                  )}
+                >
+                  Kanban
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSprintTab("status")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                    activeSprintTab === "status"
+                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                      : "text-slate-600 hover:text-slate-800",
+                  )}
+                >
+                  Sprint status
+                </button>
+              </div>
+              {activeSprintTab === "kanban" ? (
+                <SprintKanbanBoard
+                  initiatives={initiatives}
+                  month={activeMonth}
+                  sprintLane={activeSprint}
+                  onOpenStory={onOpenStory ?? (() => {})}
+                />
+              ) : (
+                <SprintAnalytics initiatives={initiatives} month={activeMonth} sprintLane={activeSprint} />
+              )}
             </div>
           ) : (
             <>
