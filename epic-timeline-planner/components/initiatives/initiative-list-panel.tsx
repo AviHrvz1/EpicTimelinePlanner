@@ -18,16 +18,6 @@ import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-function InitiativeMarker({ color }: { color: string }) {
-  return (
-    <span
-      className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
-      style={{ backgroundColor: color }}
-      aria-hidden
-    />
-  );
-}
-
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
   if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
@@ -93,12 +83,7 @@ function DraggableInitiativeCard({
         </button>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
-            <p className="min-w-0 text-[15px] leading-5 font-semibold text-slate-900">
-              <span className="mr-2 inline-flex h-5 w-3.5 items-center justify-center align-middle">
-                <InitiativeMarker color={initiative.color} />
-              </span>
-              {initiative.title}
-            </p>
+            <p className="min-w-0 text-[15px] leading-5 font-semibold text-slate-900">{initiative.title}</p>
             <div className="flex shrink-0 gap-1">
               <Button size="icon-xs" variant="ghost" onClick={() => onEdit(initiative)}>
                 <Pencil />
@@ -207,20 +192,15 @@ function InitiativeTreeCard({
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+            <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2 text-left">
               <ChevronRight
                 className={cn(
-                  "size-4 shrink-0 text-slate-500 transition-transform",
+                  "mt-1 size-4 shrink-0 text-slate-500 transition-transform",
                   isOpen && "rotate-90",
                 )}
               />
               <div className="min-w-0">
-                <p className="min-w-0 text-[16px] leading-6 font-semibold text-slate-900">
-                  <span className="mr-2 inline-flex h-5 w-3.5 items-center justify-center align-middle">
-                    <InitiativeMarker color={initiative.color} />
-                  </span>
-                  {initiative.title}
-                </p>
+                <p className="min-w-0 text-[16px] leading-6 font-semibold text-slate-900">{initiative.title}</p>
                 {initiative.description ? (
                   <p className="line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
                 ) : null}
