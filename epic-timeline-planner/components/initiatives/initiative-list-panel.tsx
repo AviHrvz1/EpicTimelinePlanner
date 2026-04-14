@@ -12,7 +12,6 @@ import {
   epicListDraggableId,
   initiativeListDraggableId,
 } from "@/lib/epic-dnd-ids";
-import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -429,26 +428,33 @@ export function InitiativeListPanel({
   const epicPlanDragEnabled = inMonthView;
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
+  const [epicSearch, setEpicSearch] = useState("");
 
-  const sprintEpics = useMemo(() => {
+  const monthEpics = useMemo(() => {
     if (activeMonth == null) return [];
-    const sortRows = (rows: Array<{ epic: EpicItem; initiative: InitiativeItem }>) =>
-      [...rows].sort((a, b) => {
-        const byInit = a.initiative.title.localeCompare(b.initiative.title);
-        if (byInit !== 0) return byInit;
-        return a.epic.title.localeCompare(b.epic.title);
-      });
-    if (activeSprintLane != null) {
-      return sortRows(collectPlannedEpicsForMonth(initiatives, activeSprintLane, activeMonth));
+    const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+    for (const initiative of initiatives) {
+      if (initiative.status !== "scheduled") continue;
+      if (initiative.startMonth == null || initiative.endMonth == null) continue;
+      if (initiative.endMonth < activeMonth || initiative.startMonth > activeMonth) continue;
+      for (const epic of initiative.epics ?? []) {
+        rows.push({ epic, initiative });
+      }
     }
-    const s1 = collectPlannedEpicsForMonth(initiatives, 1, activeMonth);
-    const s2 = collectPlannedEpicsForMonth(initiatives, 2, activeMonth);
-    const byId = new Map<string, { epic: EpicItem; initiative: InitiativeItem }>();
-    for (const row of [...s1, ...s2]) {
-      byId.set(row.epic.id, row);
-    }
-    return sortRows([...byId.values()]);
-  }, [initiatives, activeMonth, activeSprintLane]);
+    return [...rows].sort((a, b) => {
+      const byInit = a.initiative.title.localeCompare(b.initiative.title);
+      if (byInit !== 0) return byInit;
+      return a.epic.title.localeCompare(b.epic.title);
+    });
+  }, [initiatives, activeMonth]);
+  const filteredMonthEpics = useMemo(() => {
+    const q = epicSearch.trim().toLowerCase();
+    if (!q) return monthEpics;
+    return monthEpics.filter(
+      ({ epic, initiative }) =>
+        epic.title.toLowerCase().includes(q) || initiative.title.toLowerCase().includes(q),
+    );
+  }, [monthEpics, epicSearch]);
 
   const backlog = useMemo(
     () =>
@@ -476,14 +482,12 @@ export function InitiativeListPanel({
           {isSprintModeActive ? (
             <p className="text-[12px] leading-4 text-slate-600">
               {activeMonth != null && activeSprintLane != null
-                ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]}: drop a story below to clear its sprint. Epics listed are on this sprint only.`
+                ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]}: drop a story below to clear its sprint. List shows all epics assigned to ${MONTHS[activeMonth - 1]}.`
                 : "Sprint mode: use Unscheduled below to clear story sprints."}
             </p>
           ) : inMonthView ? (
             <p className="text-[12px] leading-4 text-slate-600">
-              {activeSprintLane != null
-                ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]} — epics on this sprint only.`
-                : `${MONTHS[activeMonth - 1]} — epics on Sprint 1 or Sprint 2 for this month.`}
+              {`${MONTHS[activeMonth - 1]} — all epics assigned to this month.`}
             </p>
           ) : null}
         </div>
@@ -522,21 +526,32 @@ export function InitiativeListPanel({
 
       {inMonthView ? (
         <div className="space-y-2">
+          <div className="mb-2">
+            <input
+              value={epicSearch}
+              onChange={(event) => setEpicSearch(event.target.value)}
+              list="month-epic-search-suggestions"
+              placeholder="Search epic..."
+              className="h-8 w-full rounded-md bg-white px-2 text-[12px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Search epics in selected month"
+            />
+            <datalist id="month-epic-search-suggestions">
+              {monthEpics.map(({ epic }) => (
+                <option key={epic.id} value={epic.title} />
+              ))}
+            </datalist>
+          </div>
           <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">
-            {activeSprintLane != null && activeMonth != null
-              ? `Sprint ${activeSprintLane} (${sprintEpics.length})`
-              : activeMonth != null
-                ? `This month (${sprintEpics.length})`
-                : "Epics"}
+            {activeMonth != null ? `This month (${filteredMonthEpics.length})` : "Epics"}
           </h3>
-          {sprintEpics.length === 0 ? (
+          {filteredMonthEpics.length === 0 ? (
             <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
-              {activeSprintLane != null
-                ? `No epics on Sprint ${activeSprintLane} for ${MONTHS[activeMonth - 1]}. Add one with New or assign epics on the sprint plan.`
-                : `No epics on the plan for ${MONTHS[activeMonth - 1]} yet. Add one with New or drag epics onto the sprint plan.`}
+              {monthEpics.length === 0
+                ? `No epics on the plan for ${MONTHS[activeMonth - 1]} yet. Add one with New or drag epics onto the sprint plan.`
+                : "No epics match your search."}
             </p>
           ) : (
-            sprintEpics.map(({ epic, initiative }) => (
+            filteredMonthEpics.map(({ epic, initiative }) => (
               <SprintEpicCard
                 key={epic.id}
                 epic={epic}
