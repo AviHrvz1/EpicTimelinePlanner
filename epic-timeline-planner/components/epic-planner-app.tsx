@@ -1139,19 +1139,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   Initiative planning with quarter-based timeline scheduling.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2.5">
-                  <div className="rounded-full bg-slate-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-slate-700">
+                  <div className="rounded-full bg-slate-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-slate-700">
                     {roadmapSummary.totalInitiatives} initiatives
                   </div>
-                  <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-emerald-800">
+                  <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-emerald-800">
                     {roadmapSummary.scheduledInitiatives} scheduled
                   </div>
-                  <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-slate-800">
+                  <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-slate-800">
                     {roadmapSummary.backlogInitiatives} backlog
                   </div>
-                  <div className="rounded-full bg-amber-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-amber-800">
+                  <div className="rounded-full bg-amber-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-amber-800">
                     {roadmapSummary.totalEpics} epics
                   </div>
-                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[12px] font-medium tracking-[0.02em] text-blue-800">
+                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-blue-800">
                     {roadmapSummary.totalStories} user stories
                   </div>
                 </div>

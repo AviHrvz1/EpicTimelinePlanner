@@ -187,6 +187,7 @@ function InitiativeTreeCard({
   const epics = [...(initiative.epics ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const [epicTitle, setEpicTitle] = useState("");
   const [isAddingEpic, setIsAddingEpic] = useState(false);
+  const [openEpicIds, setOpenEpicIds] = useState<Record<string, boolean>>({});
 
   async function handleAddEpic() {
     const title = epicTitle.trim();
@@ -278,14 +279,24 @@ function InitiativeTreeCard({
               ) : (
                 epics.map((epic) => {
                   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+                  const isEpicOpen = openEpicIds[epic.id] ?? false;
                   return (
                     <div key={epic.id} className="rounded-lg bg-slate-50/70 p-2.5 ring-1 ring-slate-200/80">
                       <div className="flex items-start justify-between gap-2">
                         <button
                           type="button"
-                          onClick={() => onOpenEpic(epic, initiative)}
-                          className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left hover:bg-slate-100"
+                          onClick={() =>
+                            setOpenEpicIds((prev) => ({
+                              ...prev,
+                              [epic.id]: !(prev[epic.id] ?? false),
+                            }))
+                          }
+                          className="flex min-w-0 flex-1 items-start gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-slate-100"
+                          aria-expanded={isEpicOpen}
                         >
+                          <ChevronRight
+                            className={cn("mt-0.5 size-4 shrink-0 text-slate-500 transition-transform", isEpicOpen && "rotate-90")}
+                          />
                           <p className="text-[13px] font-semibold text-slate-800">
                             <span className="mr-1 inline-flex h-4 w-4 items-center justify-center align-middle text-slate-600">
                               <Folder className="size-3.5" />
@@ -302,42 +313,44 @@ function InitiativeTreeCard({
                           </Button>
                         </div>
                       </div>
+                      {isEpicOpen ? (
                         <div className="mt-2 space-y-1">
-                        {stories.length === 0 ? null : (
-                          stories.map((story) => (
-                            (() => {
-                              const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story);
-                              return (
-                            <div
-                              key={story.id}
-                              className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => onOpenStory(story.id)}
-                                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
-                              >
-                                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
-                                  <FileText className="size-3.5" />
-                                </span>
-                                <span className="truncate">{story.title}</span>
-                              </button>
-                              <div className="flex shrink-0 items-center gap-1">
-                                {sprintLabel ? (
-                                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                                    {sprintLabel}
-                                  </span>
-                                ) : null}
-                                <span className={cn("rounded px-2 py-0.5 text-[11px] font-medium", statusClassName)}>
-                                  {statusLabel}
-                                </span>
-                              </div>
-                            </div>
-                              );
-                            })()
-                          ))
-                        )}
-                      </div>
+                          {stories.length === 0 ? null : (
+                            stories.map((story) => (
+                              (() => {
+                                const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story);
+                                return (
+                                  <div
+                                    key={story.id}
+                                    className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenStory(story.id)}
+                                      className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
+                                    >
+                                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
+                                        <FileText className="size-3.5" />
+                                      </span>
+                                      <span className="truncate">{story.title}</span>
+                                    </button>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                      {sprintLabel ? (
+                                        <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                                          {sprintLabel}
+                                        </span>
+                                      ) : null}
+                                      <span className={cn("rounded px-2 py-0.5 text-[11px] font-medium", statusClassName)}>
+                                        {statusLabel}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })()
+                            ))
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })

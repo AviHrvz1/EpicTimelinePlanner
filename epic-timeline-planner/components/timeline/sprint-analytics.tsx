@@ -49,11 +49,11 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
   }: {
     payload?: ReadonlyArray<{ color?: string; value?: string }>;
   }) => (
-    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[12px] text-slate-700">
+    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[14px] text-slate-700">
       {(payload ?? []).map((entry) => (
         <span key={`${entry.value}-${entry.color}`} className="inline-flex items-center gap-1.5">
           <span
-            className="inline-block h-2.5 w-2.5 rounded-[2px]"
+            className="inline-block h-3 w-3 rounded-[2px]"
             style={{ backgroundColor: entry.color ?? "#94a3b8" }}
           />
           {entry.value}
@@ -70,8 +70,8 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
   return (
     <section className="mb-4 grid gap-3 lg:grid-cols-3">
       <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
-        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-800">
-          <PieChartIcon className="size-3.5 text-slate-600" />
+        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+          <PieChartIcon className="size-4 text-slate-600" />
           User stories status
         </h3>
         <div className="h-56">
@@ -91,15 +91,15 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
 
       <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-2">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-800">
-            <Activity className="size-3.5 text-slate-600" />
+          <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+            <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
           <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
             <button
               type="button"
               onClick={() => setMetric("daysLeft")}
-              className={`rounded-md px-2 py-1 text-[11px] ${
+              className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
                 metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
               }`}
             >
@@ -108,7 +108,7 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
             <button
               type="button"
               onClick={() => setMetric("storyCount")}
-              className={`rounded-md px-2 py-1 text-[11px] ${
+              className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
                 metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
               }`}
             >
@@ -132,8 +132,8 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
       </article>
 
       <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-3">
-        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-800">
-          <ChartNoAxesCombined className="size-3.5 text-slate-600" />
+        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+          <ChartNoAxesCombined className="size-4 text-slate-600" />
           Assignee progress
         </h3>
         <div className="h-60">
