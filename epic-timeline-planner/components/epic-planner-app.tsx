@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
@@ -121,19 +121,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
-  /** After scheduling an initiative onto a month, drill the timeline so the left panel enters month mode. */
-  const [scheduleDrill, setScheduleDrill] = useState<{ month: number; token: number } | null>(null);
-  const clearScheduleDrill = useCallback(() => setScheduleDrill(null), []);
-
-  function queueTimelineDrillToMonth(month: number) {
-    setFocusedQuarterLabel((prev) => {
-      if (prev == null) return null;
-      const q = QUARTERS.find((quarter) => quarter.label === prev);
-      if (q && q.months.some((m) => m === month)) return prev;
-      return null;
-    });
-    setScheduleDrill({ month, token: Date.now() });
-  }
   const [planReveal, setPlanReveal] = useState<{
     nonce: number;
     initiativeId: string;
@@ -823,8 +810,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             const targetQ = QUARTERS.find((quarter) => quarter.months.some((m) => m === month));
             return targetQ?.label ?? prev;
           });
-        } else {
-          queueTimelineDrillToMonth(month);
         }
       } else {
         console.log("[gantt-drop] initiative reschedule → patch range + persist rows", {
@@ -974,8 +959,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               zoom={1}
               focusedQuarterLabel={focusedQuarterLabel}
               onFocusedQuarterChange={setFocusedQuarterLabel}
-              scheduleDrill={scheduleDrill}
-              onScheduleDrillApplied={clearScheduleDrill}
               onOpenEpic={(epicId) => {
                 for (const initiative of initiatives) {
                   const epic = (initiative.epics ?? []).find((e) => e.id === epicId);
