@@ -36,7 +36,7 @@ export function InitiativeTimelineBar({
         onClick?.();
       }}
       className={cn(
-        "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-xs font-semibold text-white shadow-lg ring-1 ring-black/15 active:cursor-grabbing",
+        "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-lg ring-1 ring-black/15 active:cursor-grabbing",
         isDragging && "z-50 opacity-60",
         isResizing && "cursor-ew-resize",
       )}

@@ -339,8 +339,8 @@ export function TimelineGrid({
   const visibleQuarterHeaders = focusedQuarter ? [focusedQuarter] : QUARTERS;
   const monthWidth = Math.round(90 * zoom);
   const sprintLaneLabels: [string, string] = [
-    "Sprint 1 (first half)",
-    "Sprint 2 (second half)",
+    "Sprint 1",
+    "Sprint 2",
   ];
   const sprintTheme: Record<1 | 2, { col: string; header: string; icon: string }> = {
     1: {
@@ -486,21 +486,12 @@ export function TimelineGrid({
         setFocusedMonth(null);
       },
     });
-  } else if (activeMonth) {
-    breadcrumbItems.push({
-      label: "All Quarters",
-      onClick: () => {
-        setFocusedMonth(null);
-      },
-    });
-  } else {
-    breadcrumbItems.push({ label: "All Quarters", onClick: null });
   }
 
   return (
     <div className="h-[72vh] w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3.5 py-2.5">
-        <div className="flex items-center gap-1.5 text-[13px] font-medium tracking-[0.01em] text-slate-700">
+        <div className="flex items-center gap-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700">
           {breadcrumbItems.map((item, index) => (
             <div key={`${item.label}-${index}`} className="flex items-center gap-1.5">
               {item.onClick ? (
@@ -535,7 +526,7 @@ export function TimelineGrid({
                 onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
               }}
               className={cn(
-                "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[13px] font-semibold tracking-[0.02em] transition duration-200",
+                "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
                 focusedQuarterLabel === quarter.label
                   ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
                   : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
@@ -563,7 +554,7 @@ export function TimelineGrid({
                   type="button"
                   onClick={() => setActiveSprintTab("kanban")}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
                     activeSprintTab === "kanban"
                       ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
                       : "text-slate-600 hover:text-slate-800",
@@ -575,7 +566,7 @@ export function TimelineGrid({
                   type="button"
                   onClick={() => setActiveSprintTab("status")}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-[12px] font-medium transition",
+                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
                     activeSprintTab === "status"
                       ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
                       : "text-slate-600 hover:text-slate-800",
@@ -616,7 +607,7 @@ export function TimelineGrid({
                           type="button"
                           onClick={() => setActiveSprint(sprint)}
                           className={cn(
-                            "mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-center text-[13px] font-semibold shadow-sm transition",
+                            "mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-center text-[14px] font-semibold shadow-sm transition",
                             sprintTheme[sprint].header,
                           )}
                         >
@@ -681,7 +672,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           className={cn(
-                            "w-full rounded-lg py-2 text-center text-[13px] font-medium shadow-sm ring-1 ring-black/5 transition hover:-translate-y-px hover:shadow-md",
+                            "w-full rounded-lg py-2 text-center text-[14px] font-semibold shadow-sm ring-1 ring-black/5 transition hover:-translate-y-px hover:shadow-md",
                             monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
                           )}
                           onClick={() => {

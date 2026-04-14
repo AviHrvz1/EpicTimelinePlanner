@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { History, MessageSquare, Plus, Save, Trash2, X, XCircle } from "lucide-react";
+import { History, MessageSquare, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -212,7 +212,7 @@ export function StoryDetailsDialog({
           className="mb-4 flex cursor-move items-center justify-between border-b border-slate-100 pb-3"
           onPointerDown={beginDialogDrag}
         >
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+          <h2 className="text-xl font-semibold tracking-tight text-slate-900">
             {isCreateMode ? "Create user story" : "User story details"}
           </h2>
           <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close story details">
@@ -222,44 +222,44 @@ export function StoryDetailsDialog({
 
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1 md:col-span-2">
-            <p className="text-xs font-medium text-slate-600">Title</p>
+            <p className="text-sm font-medium text-slate-600">Title</p>
             <div className="flex gap-2">
               <input
                 value={icon}
                 onChange={(event) => setIcon(event.target.value)}
                 maxLength={2}
-                className="w-16 rounded-md border bg-background px-2 py-2 text-center text-lg"
+                className="w-16 rounded-md border bg-background px-2 py-2 text-center text-xl"
               />
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border bg-background px-3 py-2 text-base"
               />
             </div>
           </label>
           <label className="space-y-1 md:col-span-2">
-            <p className="text-xs font-medium text-slate-600">Description</p>
+            <p className="text-sm font-medium text-slate-600">Description</p>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              className="h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="h-28 w-full rounded-md border bg-background px-3 py-2 text-base"
             />
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Assignee</p>
+            <p className="text-sm font-medium text-slate-600">Assignee</p>
             <input
               value={assignee}
               onChange={(event) => setAssignee(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base"
               placeholder="e.g. Avi"
             />
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Parent epic</p>
+            <p className="text-sm font-medium text-slate-600">Parent epic</p>
             <select
               value={epicId}
               onChange={(event) => setEpicId(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm disabled:bg-muted/40"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base disabled:bg-muted/40"
               disabled={Boolean(lockParentEpicId)}
             >
               <option value="">Select epic</option>
@@ -275,11 +275,11 @@ export function StoryDetailsDialog({
             </select>
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Sprint</p>
+            <p className="text-sm font-medium text-slate-600">Sprint</p>
             <select
               value={sprint}
               onChange={(event) => setSprint(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base"
             >
               <option value="">Not set</option>
               <option value="1">Sprint 1</option>
@@ -287,29 +287,29 @@ export function StoryDetailsDialog({
             </select>
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Estimated days</p>
+            <p className="text-sm font-medium text-slate-600">Estimated days</p>
             <input
               type="number"
               min={0}
               value={estimatedDays}
               onChange={(event) => setEstimatedDays(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base"
             />
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Days left</p>
+            <p className="text-sm font-medium text-slate-600">Days left</p>
             <input
               type="number"
               min={0}
               value={daysLeft}
               onChange={(event) => setDaysLeft(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base"
             />
           </label>
           {!isCreateMode ? (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-slate-600">Story reference</p>
-              <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+              <p className="text-sm font-medium text-slate-600">Story reference</p>
+              <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-base text-slate-700">
                 {storyRef ?? "--"}
               </div>
             </div>
@@ -318,17 +318,14 @@ export function StoryDetailsDialog({
 
         <div className="mt-5 flex justify-end gap-2">
           {!isCreateMode ? (
-            <Button variant="destructive" onClick={() => void handleDelete()}>
-              <Trash2 />
+            <Button className="px-4 text-sm font-medium" variant="destructive" onClick={() => void handleDelete()}>
               Delete
             </Button>
           ) : null}
-          <Button variant="outline" onClick={onClose}>
-            <XCircle />
+          <Button className="px-4 text-sm font-medium" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            <Save />
+          <Button className="px-4 text-sm font-medium" onClick={handleSave} disabled={saving}>
             {isCreateMode ? "Create story" : "Save story"}
           </Button>
         </div>
@@ -336,11 +333,11 @@ export function StoryDetailsDialog({
         <div className="mt-6">
           <section className="space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-800">Activity</h3>
+              <h3 className="text-base font-semibold text-slate-800">Activity</h3>
               <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-slate-200">
                 <button
                   type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                  className={`rounded-md px-2.5 py-1 text-sm font-medium transition ${
                     activityTab === "comments"
                       ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
                       : "text-slate-600 hover:bg-slate-100"
@@ -352,7 +349,7 @@ export function StoryDetailsDialog({
                 </button>
                 <button
                   type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                  className={`rounded-md px-2.5 py-1 text-sm font-medium transition ${
                     activityTab === "history"
                       ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
                       : "text-slate-600 hover:bg-slate-100"
@@ -366,16 +363,16 @@ export function StoryDetailsDialog({
             </div>
 
             {isCreateMode ? (
-              <p className="text-xs text-slate-500">Create the story first to add comments and history.</p>
+              <p className="text-sm text-slate-500">Create the story first to add comments and history.</p>
             ) : activityTab === "comments" ? (
               <>
                 <div className="max-h-56 space-y-2 overflow-y-auto">
                   {story.comments.length === 0 ? (
-                    <p className="text-xs text-slate-500">No comments yet.</p>
+                    <p className="text-sm text-slate-500">No comments yet.</p>
                   ) : (
                     story.comments.map((comment) => (
-                      <div key={comment.id} className="rounded-md bg-white p-2 text-xs ring-1 ring-slate-200">
-                        <p className="text-[11px] text-slate-500">
+                      <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                        <p className="text-[12px] text-slate-500">
                           {comment.author ?? "Team"} - {new Date(comment.createdAt).toLocaleString()}
                         </p>
                         <p className="mt-1 text-slate-800">{comment.body}</p>
@@ -387,7 +384,7 @@ export function StoryDetailsDialog({
                   <input
                     value={commentBody}
                     onChange={(event) => setCommentBody(event.target.value)}
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                     placeholder="Write a comment..."
                   />
                   <Button size="sm" variant="outline" onClick={handleCommentAdd} disabled={commenting}>
@@ -399,12 +396,12 @@ export function StoryDetailsDialog({
             ) : (
               <div className="max-h-64 space-y-2 overflow-y-auto">
                 {story.history.length === 0 ? (
-                  <p className="text-xs text-slate-500">No history yet.</p>
+                  <p className="text-sm text-slate-500">No history yet.</p>
                 ) : (
                   story.history.map((entry) => (
-                    <div key={entry.id} className="rounded-md bg-white p-2 text-xs ring-1 ring-slate-200">
+                    <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
                       <p className="text-slate-800">{entry.entry}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">
+                      <p className="mt-1 text-[12px] text-slate-500">
                         {new Date(entry.createdAt).toLocaleString()}
                       </p>
                     </div>

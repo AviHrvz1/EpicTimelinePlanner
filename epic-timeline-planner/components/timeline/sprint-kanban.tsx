@@ -96,19 +96,19 @@ function KanbanStoryCard({
           className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left transition hover:bg-slate-50"
           aria-label="Open user story details"
         >
-          <p className="min-w-0 text-[13px] font-semibold leading-snug text-slate-900">
+          <p className="min-w-0 text-[14px] font-semibold leading-snug text-slate-900">
             {story.icon ? <span className="mr-0.5">{story.icon}</span> : null}
             {story.title}
           </p>
-          <p className="mt-1 truncate text-[11px] text-slate-500">{epic.title}</p>
+          <p className="mt-1 truncate text-[12px] text-slate-500">{epic.title}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[12px] font-medium text-slate-700">
               {story.assignee?.trim() || "Unassigned"}
             </span>
-            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700">
+            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[12px] font-medium text-blue-700">
               Est: {story.estimatedDays ?? 0}d
             </span>
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[12px] font-medium text-amber-700">
               Left: {story.daysLeft ?? 0}d
             </span>
           </div>

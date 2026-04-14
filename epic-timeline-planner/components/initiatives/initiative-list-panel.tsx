@@ -244,10 +244,10 @@ function InitiativeTreeCard({
                 <p className="min-w-0 text-[16px] leading-6 font-semibold text-slate-900">{initiative.title}</p>
                 {initiative.status === "scheduled" && initiative.startMonth != null ? (
                   <div className="mt-1 flex items-center gap-1">
-                    <span className="rounded bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                    <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">
                       Quarter {quarterFromMonth(initiative.startMonth)}
                     </span>
-                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
                       {initiative.endMonth != null && initiative.endMonth !== initiative.startMonth
                         ? `${MONTHS[initiative.startMonth - 1]}-${MONTHS[initiative.endMonth - 1]}`
                         : MONTHS[initiative.startMonth - 1]}
@@ -315,20 +315,20 @@ function InitiativeTreeCard({
                               <button
                                 type="button"
                                 onClick={() => onOpenStory(story.id)}
-                                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[12px] text-slate-700"
+                                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
                               >
-                                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
-                                  <FileText className="size-3" />
+                                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
+                                  <FileText className="size-3.5" />
                                 </span>
                                 <span className="truncate">{story.title}</span>
                               </button>
                               <div className="flex shrink-0 items-center gap-1">
                                 {sprintLabel ? (
-                                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                                     {sprintLabel}
                                   </span>
                                 ) : null}
-                                <span className={cn("rounded px-2 py-0.5 text-[10px] font-medium", statusClassName)}>
+                                <span className={cn("rounded px-2 py-0.5 text-[11px] font-medium", statusClassName)}>
                                   {statusLabel}
                                 </span>
                               </div>
@@ -464,7 +464,10 @@ function SprintEpicCard({
             aria-expanded={isOpen}
           >
             <ChevronRight className={cn("size-4 shrink-0 text-slate-500 transition-transform", isOpen && "rotate-90")} />
-            <p className="truncate text-[14px] font-semibold text-slate-900">{epic.title}</p>
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-semibold text-slate-900">{epic.title}</p>
+              <p className="truncate text-[11px] text-slate-500">{initiative.title}</p>
+            </div>
           </button>
         </div>
         <div className="flex shrink-0 gap-0.5">
@@ -493,20 +496,20 @@ function SprintEpicCard({
                 <button
                   type="button"
                   onClick={() => onOpenStory(story.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[12px] text-slate-700"
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
                 >
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
-                    <FileText className="size-3" />
+                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
+                    <FileText className="size-3.5" />
                   </span>
                   <span className="truncate">{story.title}</span>
                 </button>
                 <div className="flex shrink-0 items-center gap-1">
                   {sprintLabel ? (
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                       {sprintLabel}
                     </span>
                   ) : null}
-                  <span className={cn("rounded px-2 py-0.5 text-[10px] font-medium", statusClassName)}>
+                  <span className={cn("rounded px-2 py-0.5 text-[11px] font-medium", statusClassName)}>
                     {statusLabel}
                   </span>
                 </div>
@@ -661,7 +664,7 @@ export function InitiativeListPanel({
       return plannedForSprint || hasStoryInSprint;
     });
   }, [monthAssignedEpics, activeMonth, activeSprintLane]);
-  const monthPanelEpics = isSprintModeActive ? sprintEpics : monthBacklogEpics;
+  const monthPanelEpics = isSprintModeActive ? sprintEpics : monthAssignedEpics;
   const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
     if (!q) return monthPanelEpics;
@@ -744,10 +747,10 @@ export function InitiativeListPanel({
               ))}
             </datalist>
           </div>
-          <h3 className="mt-4 mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-900">
+          <h3 className="mt-4 mb-2 text-[14px] font-semibold tracking-[0.01em] text-slate-900">
             {isSprintModeActive && activeSprintLane != null
               ? `Sprint ${activeSprintLane} epics (${filteredMonthBacklogEpics.length})`
-              : `Epic backlog (${filteredMonthBacklogEpics.length})`}
+              : `Month epics (${filteredMonthBacklogEpics.length})`}
           </h3>
           <div
             ref={setEpicUnplanDropRef}
@@ -762,7 +765,7 @@ export function InitiativeListPanel({
                 {monthPanelEpics.length === 0
                   ? isSprintModeActive && activeSprintLane != null
                     ? `No epics or stories are assigned to Sprint ${activeSprintLane} for this month yet.`
-                    : "Drag epics from the month timeline here to move them into epic backlog."
+                    : "No epics are assigned to this month yet."
                   : "No epics match your search."}
               </p>
             ) : (
@@ -802,7 +805,7 @@ export function InitiativeListPanel({
               ))}
             </datalist>
           </div>
-          <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-900">
+          <h3 className="mb-2 text-[14px] font-semibold tracking-[0.01em] text-slate-900">
             Initiatives ({filteredInitiatives.length})
           </h3>
           {filteredInitiatives.length === 0 ? (

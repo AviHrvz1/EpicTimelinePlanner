@@ -29,7 +29,7 @@ export function EpicPlanBlock({
         showChips && "pb-2",
       )}
     >
-      <EpicPlanBar id={epic.id} title={epic.title} color={epic.color} onClick={onOpenEpic} />
+      <EpicPlanBar id={epic.id} title={epic.title} icon={epic.icon} color={epic.color} onClick={onOpenEpic} />
       {showChips ? (
         <div className="mt-1.5 border-t border-dashed border-slate-200/90 pt-1.5">
           <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-slate-500">Unscheduled</p>

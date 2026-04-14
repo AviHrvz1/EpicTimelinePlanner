@@ -1,6 +1,6 @@
 "use client";
 
-import { History, MessageSquare, Plus, Save, Trash2, X, XCircle } from "lucide-react";
+import { History, MessageSquare, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -181,7 +181,7 @@ export function EpicFormDialog({
           className="mb-4 flex cursor-move items-center justify-between border-b border-slate-100 pb-3"
           onPointerDown={beginDialogDrag}
         >
-          <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
+          <h2 className="text-xl font-semibold text-slate-900 tracking-tight">
             {epic ? "Epic details" : "Create epic"}
           </h2>
           <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close">
@@ -191,16 +191,16 @@ export function EpicFormDialog({
 
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1 md:col-span-2">
-            <p className="text-xs font-medium text-slate-600">Title</p>
+            <p className="text-sm font-medium text-slate-600">Title</p>
             <div className="flex gap-2">
               <input
-                className="w-16 rounded-md border bg-background px-2 py-2 text-center text-sm"
+                className="w-16 rounded-md border bg-background px-2 py-2 text-center text-base"
                 maxLength={2}
                 value={icon}
                 onChange={(event) => setIcon(event.target.value)}
               />
               <input
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border bg-background px-3 py-2 text-base"
                 placeholder="Epic title"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
@@ -208,27 +208,27 @@ export function EpicFormDialog({
             </div>
           </label>
           <label className="space-y-1 md:col-span-2">
-            <p className="text-xs font-medium text-slate-600">Description</p>
+            <p className="text-sm font-medium text-slate-600">Description</p>
             <textarea
-              className="h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="h-28 w-full rounded-md border bg-background px-3 py-2 text-base"
               placeholder="Description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Assignee</p>
+            <p className="text-sm font-medium text-slate-600">Assignee</p>
             <input
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base"
               placeholder="e.g. Avi"
               value={assignee}
               onChange={(event) => setAssignee(event.target.value)}
             />
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Parent initiative</p>
+            <p className="text-sm font-medium text-slate-600">Parent initiative</p>
             <select
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm disabled:bg-muted/40"
+              className="w-full rounded-md border bg-background px-3 py-2 text-base disabled:bg-muted/40"
               value={initiativeId}
               onChange={(event) => setInitiativeId(event.target.value)}
               disabled={Boolean(lockInitiativeId)}
@@ -242,7 +242,7 @@ export function EpicFormDialog({
             </select>
           </label>
           <label className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Color</p>
+            <p className="text-sm font-medium text-slate-600">Color</p>
             <input
               type="color"
               className="h-10 w-full rounded-md border bg-background px-2"
@@ -251,8 +251,8 @@ export function EpicFormDialog({
             />
           </label>
           <div className="space-y-1">
-            <p className="text-xs font-medium text-slate-600">Epic ID</p>
-            <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-600">
+            <p className="text-sm font-medium text-slate-600">Epic ID</p>
+            <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-base text-slate-600">
               {epic?.id ?? "Will be created on save"}
             </div>
           </div>
@@ -260,43 +260,40 @@ export function EpicFormDialog({
 
         <div className="mt-5 flex justify-end gap-2">
           {epic ? (
-            <Button variant="destructive" onClick={() => void handleDelete()}>
-              <Trash2 />
+            <Button className="px-4 text-sm font-medium" variant="destructive" onClick={() => void handleDelete()}>
               Delete
             </Button>
           ) : null}
-          <Button variant="outline" onClick={onClose}>
-            <XCircle />
+          <Button className="px-4 text-sm font-medium" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
-            <Save />
+          <Button className="px-4 text-sm font-medium" onClick={handleSave} disabled={isSaving}>
             Save
           </Button>
         </div>
 
         <section className="mt-6 space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-800">User stories in this epic</h3>
-            <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-600 ring-1 ring-slate-200">
+            <h3 className="text-base font-semibold text-slate-800">User stories in this epic</h3>
+            <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">
               {epic?.userStories?.length ?? 0}
             </span>
           </div>
 
           {!epic ? (
-            <p className="rounded-md bg-white p-2 text-xs text-slate-600 ring-1 ring-slate-200">
+            <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
               Save this epic first, then add and manage user stories here.
             </p>
           ) : (
             <>
               <div className="max-h-56 space-y-2 overflow-y-auto">
                 {(epic.userStories ?? []).length === 0 ? (
-                  <p className="rounded-md bg-white p-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                  <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
                     No user stories yet.
                   </p>
                 ) : (
                   <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
-                    <table className="w-full min-w-[760px] text-left text-xs">
+                    <table className="w-full min-w-[760px] text-left text-sm">
                       <thead className="bg-slate-50 text-slate-600">
                         <tr>
                           <th className="px-3 py-2 font-semibold">User story</th>
@@ -312,19 +309,19 @@ export function EpicFormDialog({
                           <tr key={story.id} className="border-t border-slate-100 align-middle">
                             <td className="px-3 py-2">
                               <p className="max-w-[280px] truncate text-sm font-medium text-slate-900">
-                                <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
+                                <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
                                   {storyRefById?.[story.id] ?? "--"}
                                 </span>
                                 {story.icon === "🧩" ? "📄" : (story.icon || "📄")} {story.title}
                               </p>
                               {story.sprint ? (
-                                <p className="mt-0.5 text-[10px] text-slate-500">Sprint {story.sprint}</p>
+                                <p className="mt-0.5 text-[11px] text-slate-500">Sprint {story.sprint}</p>
                               ) : null}
                             </td>
                             <td className="px-3 py-2">
                               <span
                                 className={cn(
-                                  "rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em]",
+                                  "rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
                                   statusTone[story.status] ?? "bg-muted text-muted-foreground",
                                 )}
                               >
@@ -374,12 +371,12 @@ export function EpicFormDialog({
 
         <section className="mt-4 space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-800">Activity</h3>
+            <h3 className="text-base font-semibold text-slate-800">Activity</h3>
             <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-slate-200">
               <button
                 type="button"
                 className={cn(
-                  "rounded-md px-2.5 py-1 text-xs font-medium transition",
+                  "rounded-md px-2.5 py-1 text-sm font-medium transition",
                   activityTab === "comments"
                     ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
                     : "text-slate-600 hover:bg-slate-100",
@@ -392,7 +389,7 @@ export function EpicFormDialog({
               <button
                 type="button"
                 className={cn(
-                  "rounded-md px-2.5 py-1 text-xs font-medium transition",
+                  "rounded-md px-2.5 py-1 text-sm font-medium transition",
                   activityTab === "history"
                     ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
                     : "text-slate-600 hover:bg-slate-100",
@@ -406,20 +403,20 @@ export function EpicFormDialog({
           </div>
 
           {!epic ? (
-            <p className="rounded-md bg-white p-2 text-xs text-slate-600 ring-1 ring-slate-200">
+            <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
               Save this epic first to add comments and history.
             </p>
           ) : activityTab === "comments" ? (
             <>
               <div className="max-h-56 space-y-2 overflow-y-auto">
                 {(epic.comments ?? []).length === 0 ? (
-                  <p className="rounded-md bg-white p-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                  <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
                     No comments yet.
                   </p>
                 ) : (
                   epic.comments.map((comment) => (
-                    <div key={comment.id} className="rounded-md bg-white p-2 text-xs ring-1 ring-slate-200">
-                      <p className="text-[11px] text-slate-500">
+                    <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                      <p className="text-[12px] text-slate-500">
                         {comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}
                       </p>
                       <p className="mt-1 text-slate-800">{comment.body}</p>
@@ -431,7 +428,7 @@ export function EpicFormDialog({
                 <input
                   value={commentBody}
                   onChange={(event) => setCommentBody(event.target.value)}
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                   placeholder="Write a comment..."
                 />
                 <Button size="sm" variant="outline" onClick={handleAddComment} disabled={isAddingComment}>
@@ -443,14 +440,14 @@ export function EpicFormDialog({
           ) : (
             <div className="max-h-64 space-y-2 overflow-y-auto">
               {(epic.history ?? []).length === 0 ? (
-                <p className="rounded-md bg-white p-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
                   No history yet.
                 </p>
               ) : (
                 epic.history.map((entry) => (
-                  <div key={entry.id} className="rounded-md bg-white p-2 text-xs ring-1 ring-slate-200">
+                  <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
                     <p className="text-slate-800">{entry.entry}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">
+                    <p className="mt-1 text-[12px] text-slate-500">
                       {new Date(entry.createdAt).toLocaleString()}
                     </p>
                   </div>
