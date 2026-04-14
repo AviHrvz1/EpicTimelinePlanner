@@ -324,18 +324,37 @@ function SprintEpicCard({
   initiative,
   epicPlanDragEnabled,
   onOpenEpic,
+  onOpenStory,
   onDeleteEpic,
+  onCreateStoryQuick,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
   epicPlanDragEnabled: boolean;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
+  onOpenStory: (storyId: string) => void;
   onDeleteEpic: (epicId: string) => void;
+  onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
     disabled: !epicPlanDragEnabled,
   });
+  const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+  const [storyTitle, setStoryTitle] = useState("");
+  const [isAddingStory, setIsAddingStory] = useState(false);
+
+  async function handleAddStory() {
+    const title = storyTitle.trim();
+    if (!title) return;
+    setIsAddingStory(true);
+    try {
+      await onCreateStoryQuick(epic.id, title);
+      setStoryTitle("");
+    } finally {
+      setIsAddingStory(false);
+    }
+  }
 
   return (
     <div
@@ -382,6 +401,44 @@ function SprintEpicCard({
           </Button>
         </div>
       </div>
+      <div className="mt-2 ml-8 space-y-1">
+        {stories.length === 0 ? (
+          <p className="text-[11px] text-slate-500">No user stories.</p>
+        ) : (
+          stories.map((story) => (
+            <button
+              key={story.id}
+              type="button"
+              onClick={() => onOpenStory(story.id)}
+              className="block w-full truncate rounded-sm px-1 py-0.5 text-left text-[11px] text-slate-700 hover:bg-slate-200/70"
+            >
+              {story.title}
+            </button>
+          ))
+        )}
+        <div className="mt-1 flex items-center gap-1">
+          <input
+            value={storyTitle}
+            onChange={(event) => setStoryTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void handleAddStory();
+              }
+            }}
+            placeholder="Add user story"
+            className="h-7 w-full rounded-md bg-white px-2 text-[11px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+          />
+          <Button
+            size="icon-xs"
+            variant="outline"
+            disabled={isAddingStory}
+            onClick={() => void handleAddStory()}
+          >
+            <Plus />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -413,7 +470,7 @@ function EpicBacklogDropSlot({ month, index }: { month: number; index: number })
       ref={setNodeRef}
       className={cn(
         "my-1 h-1 w-full rounded bg-transparent transition",
-        isOver && "h-2 bg-amber-300/80",
+        isOver && "h-2 bg-slate-300/90",
       )}
       aria-hidden
     />
@@ -587,13 +644,13 @@ export function InitiativeListPanel({
           <div
             ref={setEpicUnplanDropRef}
             className={cn(
-              "rounded-md border border-dashed border-amber-300/90 bg-amber-50/70 p-2 transition",
-              isEpicUnplanDropOver && "border-amber-400 bg-amber-100",
+              "rounded-md border border-dashed border-slate-300 bg-slate-50 p-2 transition",
+              isEpicUnplanDropOver && "border-slate-400 bg-slate-100",
             )}
           >
             {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={0} /> : null}
             {filteredMonthBacklogEpics.length === 0 ? (
-              <p className="text-[11px] text-amber-900/90">
+              <p className="text-[11px] text-slate-700">
                 {monthBacklogEpics.length === 0
                   ? "Drag epics from the month timeline here to move them into epic backlog."
                   : "No epics match your search."}
@@ -606,7 +663,9 @@ export function InitiativeListPanel({
                     initiative={initiative}
                     epicPlanDragEnabled={epicPlanDragEnabled}
                     onOpenEpic={onOpenEpic}
+                    onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
+                    onCreateStoryQuick={onCreateStoryQuick}
                   />
                   {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={idx + 1} /> : null}
                 </div>
