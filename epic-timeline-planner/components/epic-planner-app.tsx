@@ -121,11 +121,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
-  const [planReveal, setPlanReveal] = useState<{
-    nonce: number;
-    initiativeId: string;
-    epicId: string;
-  } | null>(null);
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
   const [panelWidth, setPanelWidth] = useState(420);
@@ -345,30 +340,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
       throw new Error(message);
     }
-  }
-
-  async function createEpicQuick(initiativeId: string, title: string) {
-    const response = await fetch(`/api/initiatives/${initiativeId}/epics`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to create epic");
-    }
-    await refresh();
-  }
-
-  async function createStory(epicId: string, title: string) {
-    const response = await fetch(`/api/epics/${epicId}/stories`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to create user story");
-    }
-    await refresh();
   }
 
   async function createStoryWithDetails(payload: {
@@ -699,11 +670,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           planStartMonth: planMonth,
           planEndMonth: planMonth,
         });
-        setPlanReveal((r) => ({
-          nonce: (r?.nonce ?? 0) + 1,
-          initiativeId: initiative.id,
-          epicId,
-        }));
         toast.success("Epic placed on the plan");
       } catch (err) {
         await refresh();
@@ -899,47 +865,44 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             className={cn("grid items-stretch gap-3", isResizingPanel && "select-none")}
             style={{ gridTemplateColumns: `${panelWidth}px 14px minmax(0, 1fr)` }}
           >
-                       <InitiativeListPanel
+            <InitiativeListPanel
               initiatives={initiatives}
-              focusedQuarterLabel={focusedQuarterLabel}
               activeMonth={activeTimelineMonth}
               activeSprintLane={activeSprintLane}
               storyDragEnabled={isSprintModeActive}
-              epicPlanDragEnabled={activeTimelineMonth != null}
               isSprintModeActive={isSprintModeActive}
-              planReveal={planReveal}
-              onOpenStory={setSelectedStoryId}
-              onCreateStory={async (epicId, storyTitle) => {
-                try {
-                  await createStory(epicId, storyTitle);
-                  toast.success("User story added");
-                } catch {
-                  toast.error("Failed to add user story");
-                }
+              onCreateInitiative={() => {
+                setEditingInitiative(undefined);
+                setInitiativeDialogOpen(true);
               }}
-              onCreateEpic={async (initiativeId, epicTitle) => {
-                try {
-                  await createEpicQuick(initiativeId, epicTitle);
-                  toast.success("Epic added");
-                } catch {
-                  toast.error("Failed to add epic");
-                }
+              onCreateEpic={() => {
+                setEditingEpic(undefined);
+                const m = activeTimelineMonth;
+                const firstForMonth =
+                  m == null
+                    ? undefined
+                    : initiatives.find(
+                        (i) =>
+                          i.status === InitiativeStatus.scheduled &&
+                          i.startMonth != null &&
+                          i.endMonth != null &&
+                          i.startMonth <= m &&
+                          i.endMonth >= m,
+                      );
+                setEditingEpicInitiativeId(firstForMonth?.id ?? null);
+                setEpicDialogOpen(true);
+              }}
+              onEditInitiative={(initiative) => {
+                setEditingInitiative(initiative);
+                setInitiativeDialogOpen(true);
               }}
               onOpenEpic={(epic, initiative) => {
                 setEditingEpic(epic);
                 setEditingEpicInitiativeId(initiative.id);
                 setEpicDialogOpen(true);
               }}
-              onCreate={() => {
-                setEditingInitiative(undefined);
-                setInitiativeDialogOpen(true);
-              }}
-              onEdit={(initiative) => {
-                setEditingInitiative(initiative);
-                setInitiativeDialogOpen(true);
-              }}
-              onDelete={handleDeleteInitiative}
               onDeleteEpic={handleDeleteEpic}
+              onDeleteInitiative={handleDeleteInitiative}
             />
             <div
               className="group relative flex cursor-col-resize items-stretch justify-center"
