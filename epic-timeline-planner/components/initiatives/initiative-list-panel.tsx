@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ChevronRight, FileText, Folder, Pencil, Plus, Trash2 } from "lucide-react";
+import { Briefcase, ChevronRight, FileText, Folder, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,13 @@ import { cn } from "@/lib/utils";
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
   if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
+
+function quarterFromMonth(month: number): string {
+  if (month <= 3) return "Q1";
+  if (month <= 6) return "Q2";
+  if (month <= 9) return "Q3";
+  return "Q4";
 }
 
 function storyStatusMeta(story: { sprint: number | null; status: string }): {
@@ -157,7 +164,6 @@ function InitiativeTreeCard({
   onOpenStory,
   onDeleteEpic,
   onCreateEpicQuick,
-  onCreateStoryQuick,
   backlogDropIndex,
 }: {
   initiative: InitiativeItem;
@@ -169,7 +175,6 @@ function InitiativeTreeCard({
   onOpenStory: (storyId: string) => void;
   onDeleteEpic: (epicId: string) => void;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
-  onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   backlogDropIndex?: number;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
@@ -182,8 +187,6 @@ function InitiativeTreeCard({
   const epics = [...(initiative.epics ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const [epicTitle, setEpicTitle] = useState("");
   const [isAddingEpic, setIsAddingEpic] = useState(false);
-  const [storyDraftByEpic, setStoryDraftByEpic] = useState<Record<string, string>>({});
-  const [addingStoryEpicId, setAddingStoryEpicId] = useState<string | null>(null);
 
   async function handleAddEpic() {
     const title = epicTitle.trim();
@@ -194,18 +197,6 @@ function InitiativeTreeCard({
       setEpicTitle("");
     } finally {
       setIsAddingEpic(false);
-    }
-  }
-
-  async function handleAddStory(epicId: string) {
-    const title = (storyDraftByEpic[epicId] ?? "").trim();
-    if (!title) return;
-    setAddingStoryEpicId(epicId);
-    try {
-      await onCreateStoryQuick(epicId, title);
-      setStoryDraftByEpic((prev) => ({ ...prev, [epicId]: "" }));
-    } finally {
-      setAddingStoryEpicId(null);
     }
   }
 
@@ -251,6 +242,18 @@ function InitiativeTreeCard({
               />
               <div className="min-w-0">
                 <p className="min-w-0 text-[16px] leading-6 font-semibold text-slate-900">{initiative.title}</p>
+                {initiative.status === "scheduled" && initiative.startMonth != null ? (
+                  <div className="mt-1 flex items-center gap-1">
+                    <span className="rounded bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                      Quarter {quarterFromMonth(initiative.startMonth)}
+                    </span>
+                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                      {initiative.endMonth != null && initiative.endMonth !== initiative.startMonth
+                        ? `${MONTHS[initiative.startMonth - 1]}-${MONTHS[initiative.endMonth - 1]}`
+                        : MONTHS[initiative.startMonth - 1]}
+                    </span>
+                  </div>
+                ) : null}
                 {initiative.description ? (
                   <p className="line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
                 ) : null}
@@ -300,9 +303,7 @@ function InitiativeTreeCard({
                         </div>
                       </div>
                         <div className="mt-2 space-y-1">
-                        {stories.length === 0 ? (
-                          <p className="text-[11px] text-slate-500">No user stories.</p>
-                        ) : (
+                        {stories.length === 0 ? null : (
                           stories.map((story) => (
                             (() => {
                               const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story);
@@ -336,41 +337,6 @@ function InitiativeTreeCard({
                             })()
                           ))
                         )}
-                          <div className="mt-2 flex items-center gap-1">
-                          <input
-                            type="text"
-                            name={`quick-story-${epic.id}`}
-                            autoComplete="off"
-                            autoCorrect="off"
-                            autoCapitalize="off"
-                            spellCheck={false}
-                            data-lpignore="true"
-                            data-1p-ignore="true"
-                            data-bwignore="true"
-                            data-form-type="other"
-                            data-protonpass-ignore="true"
-                            value={storyDraftByEpic[epic.id] ?? ""}
-                            onChange={(event) =>
-                              setStoryDraftByEpic((prev) => ({ ...prev, [epic.id]: event.target.value }))
-                            }
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void handleAddStory(epic.id);
-                              }
-                            }}
-                            placeholder="Add user story"
-                            className="h-8 w-full rounded-md bg-white px-2 text-[11px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                          />
-                          <Button
-                            size="icon-xs"
-                            variant="outline"
-                            disabled={addingStoryEpicId === epic.id}
-                            onClick={() => void handleAddStory(epic.id)}
-                          >
-                            <Plus />
-                          </Button>
-                        </div>
                       </div>
                     </div>
                   );
@@ -695,18 +661,21 @@ export function InitiativeListPanel({
     );
   }, [monthBacklogEpics, epicSearch]);
 
-  const backlog = useMemo(
+  const initiativeList = useMemo(
     () =>
       initiatives
-        .filter((i) => i.status === "backlog")
-        .sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title)),
+        .slice()
+        .sort((a, b) => {
+          if (a.status !== b.status) return a.status === "backlog" ? -1 : 1;
+          return a.timelineRow - b.timelineRow || a.title.localeCompare(b.title);
+        }),
     [initiatives],
   );
   const filteredInitiatives = useMemo(() => {
     const q = initiativeSearch.trim().toLowerCase();
-    if (!q) return backlog;
-    return backlog.filter((initiative) => initiative.title.toLowerCase().includes(q));
-  }, [backlog, initiativeSearch]);
+    if (!q) return initiativeList;
+    return initiativeList.filter((initiative) => initiative.title.toLowerCase().includes(q));
+  }, [initiativeList, initiativeSearch]);
   const showInitiativeBacklogDrop = !inMonthView && !isSprintModeActive;
 
   const showNewButton = inMonthView || !isSprintModeActive;
@@ -715,13 +684,21 @@ export function InitiativeListPanel({
     <aside className="h-[72vh] overflow-x-hidden overflow-y-auto rounded-xl bg-slate-50 p-4 shadow-lg ring-1 ring-black/5">
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 pb-3">
         <div>
-          <h2 className="text-[16px] leading-6 font-semibold tracking-tight text-slate-950">
-            {inMonthView ? "Epics" : "Initiatives"}
+          <h2 className="inline-flex items-center gap-1.5 text-[16px] leading-6 font-semibold tracking-tight text-slate-950">
+            {inMonthView ? (
+              <>
+                <Target className="size-4 text-slate-600" />
+                Epics
+              </>
+            ) : (
+              <>
+                <Briefcase className="size-4 text-slate-600" />
+                Initiatives
+              </>
+            )}
           </h2>
           {isSprintModeActive ? null : inMonthView ? (
-            <p className="text-[12px] leading-4 text-slate-700">
-              {`${MONTHS[activeMonth - 1]} — all epics assigned to this month.`}
-            </p>
+            null
           ) : null}
         </div>
         {showNewButton ? (
@@ -806,17 +783,17 @@ export function InitiativeListPanel({
               aria-label="Search initiatives"
             />
             <datalist id="initiative-search-suggestions">
-              {backlog.map((initiative) => (
+              {initiativeList.map((initiative) => (
                 <option key={initiative.id} value={initiative.title} />
               ))}
             </datalist>
           </div>
           <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-900">
-            Backlog ({filteredInitiatives.length})
+            Initiatives ({filteredInitiatives.length})
           </h3>
           {filteredInitiatives.length === 0 ? (
             <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
-              {backlog.length === 0
+              {initiativeList.length === 0
                 ? "No initiatives yet. Add one to begin planning."
                 : "No initiatives match your search."}
             </p>
@@ -841,7 +818,6 @@ export function InitiativeListPanel({
                     onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
                     onCreateEpicQuick={onCreateEpicQuick}
-                    onCreateStoryQuick={onCreateStoryQuick}
                   />
                   <BacklogDropSlot index={idx + 1} />
                 </div>
