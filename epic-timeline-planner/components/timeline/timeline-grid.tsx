@@ -214,8 +214,8 @@ function EpicPlanDropCell({ month, sprint }: { month: number; sprint: 1 | 2 }) {
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-[4.5rem] rounded-md bg-slate-100/80 transition",
-        isOver && "bg-slate-200/90 ring-1 ring-slate-300",
+        "min-h-[4.5rem] rounded-md bg-slate-50/40 transition",
+        isOver && "ring-1 ring-slate-300",
       )}
       aria-label={`Drop epic in sprint ${sprint}`}
     />
@@ -583,9 +583,6 @@ export function TimelineGrid({
                         </button>
                         <EpicPlanDropCell month={activeMonth} sprint={sprint} />
                         <div className="mt-2 flex-1 space-y-1.5">
-                          {planned.length === 0 ? (
-                            <p className="text-[11px] text-slate-500">No epics yet.</p>
-                          ) : null}
                           {planned.map(({ epic }) => (
                             <EpicPlanBlock
                               key={epic.id}

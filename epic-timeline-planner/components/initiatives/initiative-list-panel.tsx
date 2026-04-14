@@ -341,6 +341,7 @@ function SprintEpicCard({
     disabled: !epicPlanDragEnabled,
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+  const [isOpen, setIsOpen] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
 
@@ -371,7 +372,7 @@ function SprintEpicCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         {epicPlanDragEnabled ? (
           <button
             type="button"
@@ -384,12 +385,15 @@ function SprintEpicCard({
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-semibold text-slate-900">
-            <span className="mr-1 inline-flex h-5 w-5 items-center justify-center align-middle text-slate-600">
-              <Folder className="size-4" />
-            </span>
-            {epic.title}
-          </p>
+          <button
+            type="button"
+            onClick={() => setIsOpen((prev) => !prev)}
+            className="flex min-w-0 items-center gap-1.5 text-left"
+            aria-expanded={isOpen}
+          >
+            <ChevronRight className={cn("size-4 shrink-0 text-slate-500 transition-transform", isOpen && "rotate-90")} />
+            <p className="truncate text-[14px] font-semibold text-slate-900">{epic.title}</p>
+          </button>
           <p className="text-[11px] text-slate-500">{initiative.title}</p>
         </div>
         <div className="flex shrink-0 gap-0.5">
@@ -401,44 +405,46 @@ function SprintEpicCard({
           </Button>
         </div>
       </div>
-      <div className="mt-2 ml-8 space-y-1">
-        {stories.length === 0 ? (
-          <p className="text-[11px] text-slate-500">No user stories.</p>
-        ) : (
-          stories.map((story) => (
-            <button
-              key={story.id}
-              type="button"
-              onClick={() => onOpenStory(story.id)}
-              className="block w-full truncate rounded-sm px-1 py-0.5 text-left text-[11px] text-slate-700 hover:bg-slate-200/70"
+      {isOpen ? (
+        <div className="mt-2 ml-8 space-y-1">
+          {stories.length === 0 ? (
+            <p className="text-[11px] text-slate-500">No user stories.</p>
+          ) : (
+            stories.map((story) => (
+              <button
+                key={story.id}
+                type="button"
+                onClick={() => onOpenStory(story.id)}
+                className="block w-full truncate rounded-sm px-1 py-0.5 text-left text-[11px] text-slate-700 hover:bg-slate-200/70"
+              >
+                {story.title}
+              </button>
+            ))
+          )}
+          <div className="mt-1 flex items-center gap-1">
+            <input
+              value={storyTitle}
+              onChange={(event) => setStoryTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleAddStory();
+                }
+              }}
+              placeholder="Add user story"
+              className="h-7 w-full rounded-md bg-white px-2 text-[11px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+            />
+            <Button
+              size="icon-xs"
+              variant="outline"
+              disabled={isAddingStory}
+              onClick={() => void handleAddStory()}
             >
-              {story.title}
-            </button>
-          ))
-        )}
-        <div className="mt-1 flex items-center gap-1">
-          <input
-            value={storyTitle}
-            onChange={(event) => setStoryTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void handleAddStory();
-              }
-            }}
-            placeholder="Add user story"
-            className="h-7 w-full rounded-md bg-white px-2 text-[11px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-          />
-          <Button
-            size="icon-xs"
-            variant="outline"
-            disabled={isAddingStory}
-            onClick={() => void handleAddStory()}
-          >
-            <Plus />
-          </Button>
+              <Plus />
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
