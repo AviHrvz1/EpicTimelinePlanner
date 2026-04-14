@@ -48,8 +48,8 @@ function KanbanColumn({
       )}
     >
       <div className="mb-2 flex items-center justify-center gap-1.5 border-b border-black/5 pb-2 text-slate-600">
-        <Icon className="size-3.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
-        <p className="text-center text-[11px] font-bold uppercase tracking-wide">{label}</p>
+        <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+        <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
       </div>
       <div className="flex flex-1 flex-col gap-2">{children}</div>
     </div>
@@ -90,20 +90,29 @@ function KanbanStoryCard({
         >
           <DragHandleIcon size="sm" />
         </button>
-        <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium leading-snug text-slate-900">
+        <button
+          type="button"
+          onClick={() => onOpenStory(story.id)}
+          className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left transition hover:bg-slate-50"
+          aria-label="Open user story details"
+        >
+          <p className="min-w-0 text-[13px] font-semibold leading-snug text-slate-900">
             {story.icon ? <span className="mr-0.5">{story.icon}</span> : null}
             {story.title}
           </p>
-          <p className="mt-1 truncate text-[10px] text-slate-500">{epic.title}</p>
-          <button
-            type="button"
-            onClick={() => onOpenStory(story.id)}
-            className="mt-1.5 text-[10px] font-medium text-sky-700 hover:underline"
-          >
-            Open details
-          </button>
-        </div>
+          <p className="mt-1 truncate text-[11px] text-slate-500">{epic.title}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
+              {story.assignee?.trim() || "Unassigned"}
+            </span>
+            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700">
+              Est: {story.estimatedDays ?? 0}d
+            </span>
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+              Left: {story.daysLeft ?? 0}d
+            </span>
+          </div>
+        </button>
       </div>
     </div>
   );
