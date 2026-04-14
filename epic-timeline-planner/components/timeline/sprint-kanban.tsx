@@ -6,7 +6,6 @@ import type { LucideIcon } from "lucide-react";
 import { BadgeCheck, CheckCircle2, ListTodo, PlayCircle } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
-import { MONTHS } from "@/lib/timeline";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -130,11 +129,6 @@ export function SprintKanbanBoard({ initiatives, month, sprintLane, onOpenStory 
 
   return (
     <div className="space-y-3">
-      <p className="text-[12px] leading-5 text-slate-600">
-        User stories from epics planned for <span className="font-medium">{MONTHS[month - 1]}</span>,{" "}
-        <span className="font-medium">Sprint {sprintLane}</span>. Drag cards between columns to update status, or drag
-        stories from the left panel onto a column.
-      </p>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
           <KanbanColumn

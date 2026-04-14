@@ -500,6 +500,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (isStoryDraggableId(activeId)) {
       const storyId = parseStoryIdFromDraggable(activeId);
       if (!storyId) return;
+      const isFromLeftPanel = activeId.startsWith("story:list:");
 
       if (overId === STORIES_UNSCHEDULE_DROP_ID) {
         flushSync(() => {
@@ -534,6 +535,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       if (!kanbanMatch) return;
       const sprint = Number(kanbanMatch[2]) as 1 | 2;
       const status = kanbanMatch[3] as StoryStatus;
+      const nextStatus = isFromLeftPanel ? StoryStatus.todo : status;
 
       flushSync(() => {
         setInitiatives((prev) =>
@@ -542,7 +544,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             epics: (init.epics ?? []).map((epic) => ({
               ...epic,
               userStories: (epic.userStories ?? []).map((s) =>
-                s.id === storyId ? { ...s, status, sprint } : s,
+                s.id === storyId ? { ...s, status: nextStatus, sprint } : s,
               ),
             })),
           })),
@@ -552,7 +554,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         const response = await fetch(`/api/stories/${storyId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status, sprint }),
+          body: JSON.stringify({ status: nextStatus, sprint }),
         });
         if (!response.ok) throw new Error("Failed to update story");
         toast.success("Story updated");

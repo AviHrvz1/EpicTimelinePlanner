@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import {
   EPICS_UNPLAN_DROP_ID,
-  STORIES_UNSCHEDULE_DROP_ID,
   backlogSlotDropId,
   epicBacklogSlotDropId,
   epicListDraggableId,
   initiativeListDraggableId,
+  storyListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
@@ -21,6 +21,46 @@ import { cn } from "@/lib/utils";
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
   if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
+
+function storyStatusMeta(story: { sprint: number | null; status: string }): {
+  sprintLabel: string | null;
+  statusLabel: string;
+  statusClassName: string;
+} {
+  if (story.sprint == null) {
+    return {
+      sprintLabel: null,
+      statusLabel: "Unscheduled",
+      statusClassName: "bg-slate-100 text-slate-600",
+    };
+  }
+  if (story.status === "inProgress") {
+    return {
+      sprintLabel: `Sprint ${story.sprint}`,
+      statusLabel: "In progress",
+      statusClassName: "bg-blue-100 text-blue-700",
+    };
+  }
+  if (story.status === "done") {
+    return {
+      sprintLabel: `Sprint ${story.sprint}`,
+      statusLabel: "Done",
+      statusClassName: "bg-emerald-100 text-emerald-700",
+    };
+  }
+  if (story.status === "approved") {
+    return {
+      sprintLabel: `Sprint ${story.sprint}`,
+      statusLabel: "Approved",
+      statusClassName: "bg-violet-100 text-violet-700",
+    };
+  }
+  return {
+    sprintLabel: `Sprint ${story.sprint}`,
+    statusLabel: "To do",
+    statusClassName: "bg-amber-100 text-amber-700",
+  };
 }
 
 type InitiativeListPanelProps = {
@@ -264,6 +304,9 @@ function InitiativeTreeCard({
                           <p className="text-[11px] text-slate-500">No user stories.</p>
                         ) : (
                           stories.map((story) => (
+                            (() => {
+                              const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story);
+                              return (
                             <div
                               key={story.id}
                               className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
@@ -278,7 +321,19 @@ function InitiativeTreeCard({
                                 </span>
                                 <span className="truncate">{story.title}</span>
                               </button>
+                              <div className="flex shrink-0 items-center gap-1">
+                                {sprintLabel ? (
+                                  <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                    {sprintLabel}
+                                  </span>
+                                ) : null}
+                                <span className={cn("rounded px-2 py-0.5 text-[10px] font-medium", statusClassName)}>
+                                  {statusLabel}
+                                </span>
+                              </div>
                             </div>
+                              );
+                            })()
                           ))
                         )}
                           <div className="mt-2 flex items-center gap-1">
@@ -362,6 +417,7 @@ function SprintEpicCard({
   epic,
   initiative,
   epicPlanDragEnabled,
+  storyDragEnabled,
   onOpenEpic,
   onOpenStory,
   onDeleteEpic,
@@ -371,6 +427,7 @@ function SprintEpicCard({
   epic: EpicItem;
   initiative: InitiativeItem;
   epicPlanDragEnabled: boolean;
+  storyDragEnabled: boolean;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onOpenStory: (storyId: string) => void;
   onDeleteEpic: (epicId: string) => void;
@@ -459,10 +516,14 @@ function SprintEpicCard({
             <p className="text-[11px] text-slate-500">No user stories.</p>
           ) : (
             stories.map((story) => (
+              (() => {
+                const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story);
+                return (
               <div
                 key={story.id}
                 className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
               >
+                {storyDragEnabled ? <StoryDragHandle storyId={story.id} /> : null}
                 <button
                   type="button"
                   onClick={() => onOpenStory(story.id)}
@@ -473,7 +534,19 @@ function SprintEpicCard({
                   </span>
                   <span className="truncate">{story.title}</span>
                 </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {sprintLabel ? (
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                      {sprintLabel}
+                    </span>
+                  ) : null}
+                  <span className={cn("rounded px-2 py-0.5 text-[10px] font-medium", statusClassName)}>
+                    {statusLabel}
+                  </span>
+                </div>
               </div>
+                );
+              })()
             ))
           )}
           <div className="mt-1 flex items-center gap-1">
@@ -572,9 +645,6 @@ export function InitiativeListPanel({
   const { setNodeRef: setEpicUnplanDropRef, isOver: isEpicUnplanDropOver } = useDroppable({
     id: EPICS_UNPLAN_DROP_ID,
   });
-  const { setNodeRef: setStoryUnscheduleDropRef, isOver: isStoryUnscheduleDropOver } = useDroppable({
-    id: STORIES_UNSCHEDULE_DROP_ID,
-  });
 
   const inMonthView = activeMonth != null;
   const epicPlanDragEnabled = inMonthView;
@@ -648,13 +718,7 @@ export function InitiativeListPanel({
           <h2 className="text-[16px] leading-6 font-semibold tracking-tight text-slate-950">
             {inMonthView ? "Epics" : "Initiatives"}
           </h2>
-          {isSprintModeActive ? (
-            <p className="text-[12px] leading-4 text-slate-700">
-              {activeMonth != null && activeSprintLane != null
-                ? `Sprint ${activeSprintLane} · ${MONTHS[activeMonth - 1]}: drop a story below to clear its sprint. List shows all epics assigned to ${MONTHS[activeMonth - 1]}.`
-                : "Sprint mode: use Unscheduled below to clear story sprints."}
-            </p>
-          ) : inMonthView ? (
+          {isSprintModeActive ? null : inMonthView ? (
             <p className="text-[12px] leading-4 text-slate-700">
               {`${MONTHS[activeMonth - 1]} — all epics assigned to this month.`}
             </p>
@@ -667,23 +731,6 @@ export function InitiativeListPanel({
           </Button>
         ) : null}
       </div>
-
-      {isSprintModeActive && storyDragEnabled ? (
-        <div className="mb-4">
-          <div
-            ref={setStoryUnscheduleDropRef}
-            className={cn(
-              "min-h-[5.5rem] rounded-lg border-2 border-dashed border-sky-300/90 bg-sky-50 p-3 text-sky-900 transition",
-              isStoryUnscheduleDropOver && "border-sky-500 bg-sky-100 ring-2 ring-sky-300/50",
-            )}
-          >
-            <h3 className="mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-700">Unscheduled</h3>
-            <p className="text-[11px] font-medium leading-4">
-              Drop a user story here (from the board) to clear its sprint. The story stays on the epic.
-            </p>
-          </div>
-        </div>
-      ) : null}
 
       {showInitiativeBacklogDrop ? (
         <div
@@ -734,6 +781,7 @@ export function InitiativeListPanel({
                     epic={epic}
                     initiative={initiative}
                     epicPlanDragEnabled={epicPlanDragEnabled}
+                    storyDragEnabled={isSprintModeActive && storyDragEnabled}
                     onOpenEpic={onOpenEpic}
                     onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
@@ -803,5 +851,27 @@ export function InitiativeListPanel({
         </div>
       )}
     </aside>
+  );
+}
+
+function StoryDragHandle({ storyId }: { storyId: string }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: storyListDraggableId(storyId),
+  });
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      className={cn(
+        "shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing",
+        isDragging && "opacity-60",
+      )}
+      aria-label="Drag user story"
+      {...attributes}
+      {...listeners}
+    >
+      <DragHandleIcon size="sm" />
+    </button>
   );
 }

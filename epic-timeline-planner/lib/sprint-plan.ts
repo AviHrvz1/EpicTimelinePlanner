@@ -30,18 +30,21 @@ export function collectPlannedEpicsForMonth(
 
 export type BoardStoryRow = { story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem };
 
-/** Stories that belong on this sprint board (epic in plan; story unassigned sprint or matching lane). */
+/** Stories shown on this sprint board (initiative scheduled in month; story assigned to this sprint lane). */
 export function collectStoriesForSprintBoard(
   initiatives: InitiativeItem[],
   sprintLane: 1 | 2,
   month: number,
 ): BoardStoryRow[] {
-  const epics = collectPlannedEpicsForMonth(initiatives, sprintLane, month);
   const out: BoardStoryRow[] = [];
-  for (const { epic, initiative } of epics) {
-    for (const story of epic.userStories ?? []) {
-      if (story.sprint != null && story.sprint !== sprintLane) continue;
-      out.push({ story, epic, initiative });
+  for (const initiative of initiatives) {
+    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
+    if (initiative.endMonth < month || initiative.startMonth > month) continue;
+    for (const epic of initiative.epics ?? []) {
+      for (const story of epic.userStories ?? []) {
+        if (story.sprint !== sprintLane) continue;
+        out.push({ story, epic, initiative });
+      }
     }
   }
   return out;
