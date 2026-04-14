@@ -599,6 +599,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const month = monthMatch ? Number(monthMatch[1]) : Number.NaN;
     if (!Number.isFinite(month)) return;
 
+    const initiativeBefore = initiatives.find((i) => i.id === initiativeId);
+    if (!initiativeBefore) return;
+    const isFirstSchedule = initiativeBefore.status === InitiativeStatus.backlog;
+
     flushSync(() => {
       setInitiatives((prev) =>
         prev.map((i) =>
@@ -609,9 +613,33 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       );
     });
     try {
-      await scheduleInitiative(initiativeId, month);
-      toast.success("Initiative scheduled");
-      queueTimelineDrillToMonth(month);
+      if (isFirstSchedule) {
+        await scheduleInitiative(initiativeId, month);
+        toast.success("Initiative scheduled");
+        if (focusedQuarterLabel != null) {
+          setFocusedQuarterLabel((prev) => {
+            if (prev == null) return null;
+            const q = QUARTERS.find((quarter) => quarter.label === prev);
+            if (q?.months.some((m) => m === month)) return prev;
+            const targetQ = QUARTERS.find((quarter) => quarter.months.some((m) => m === month));
+            return targetQ?.label ?? prev;
+          });
+        } else {
+          queueTimelineDrillToMonth(month);
+        }
+      } else {
+        await patchInitiativeScheduleRange(initiativeId, month, month);
+        toast.success("Initiative moved");
+        if (focusedQuarterLabel != null) {
+          setFocusedQuarterLabel((prev) => {
+            if (prev == null) return null;
+            const q = QUARTERS.find((quarter) => quarter.label === prev);
+            if (q?.months.some((m) => m === month)) return prev;
+            const targetQ = QUARTERS.find((quarter) => quarter.months.some((m) => m === month));
+            return targetQ?.label ?? prev;
+          });
+        }
+      }
     } catch {
       await refresh();
       toast.error("Failed to schedule initiative");

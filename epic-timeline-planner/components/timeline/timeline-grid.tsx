@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { EpicPlanBlock } from "@/components/timeline/epic-plan-block";
+import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
@@ -495,6 +496,7 @@ export function TimelineGrid({
                         "bg-slate-100 text-slate-700 hover:bg-slate-200",
                 )}
                 onClick={() => {
+                  if (isPostDragClickSuppressed()) return;
                   setFocusedMonth(month);
                 }}
               >

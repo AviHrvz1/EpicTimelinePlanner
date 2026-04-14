@@ -24,6 +24,17 @@ import {
   isStoryDraggableId,
 } from "@/lib/epic-dnd-ids";
 
+/** After drag end, browsers often synthesize a click on the element under the cursor (e.g. month drill header). */
+let postDragClickShieldUntilMs = 0;
+
+export function suppressPostDragClicksFor(ms = 500) {
+  postDragClickShieldUntilMs = Date.now() + ms;
+}
+
+export function isPostDragClickSuppressed() {
+  return Date.now() < postDragClickShieldUntilMs;
+}
+
 type DragContextProps = {
   onDragEnd: (event: DragEndEvent) => void;
   children: React.ReactNode;
@@ -98,10 +109,12 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
       }}
       onDragEnd={(event) => {
         setActiveDragId(null);
+        suppressPostDragClicksFor();
         onDragEnd(event);
       }}
       onDragCancel={() => {
         setActiveDragId(null);
+        suppressPostDragClicksFor();
       }}
     >
       {children}
