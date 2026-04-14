@@ -57,11 +57,21 @@ const epicPlanCollision: CollisionDetection = (args) => {
     id.startsWith("month:") ||
     id === EPICS_UNPLAN_DROP_ID ||
     parseEpicBacklogSlotDropId(id) != null;
+  const isEpicBacklogSlot = (id: string) => parseEpicBacklogSlotDropId(id) != null;
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
+  const pointerSlotHits = pointerHits.filter((c) => isEpicBacklogSlot(String(c.id)));
+  if (pointerSlotHits.length > 0) return pointerSlotHits;
   if (pointerHits.length > 0) return pointerHits;
+
   const rectHits = rectIntersection(args).filter((c) => isDropTarget(String(c.id)));
+  const rectSlotHits = rectHits.filter((c) => isEpicBacklogSlot(String(c.id)));
+  if (rectSlotHits.length > 0) return rectSlotHits;
   if (rectHits.length > 0) return rectHits;
-  return closestCenter(args).filter((c) => isDropTarget(String(c.id)));
+
+  const centerHits = closestCenter(args).filter((c) => isDropTarget(String(c.id)));
+  const centerSlotHits = centerHits.filter((c) => isEpicBacklogSlot(String(c.id)));
+  if (centerSlotHits.length > 0) return centerSlotHits;
+  return centerHits;
 };
 
 const storyKanbanCollision: CollisionDetection = (args) => {

@@ -327,6 +327,7 @@ function SprintEpicCard({
   onOpenStory,
   onDeleteEpic,
   onCreateStoryQuick,
+  backlogDropSlot,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -335,10 +336,15 @@ function SprintEpicCard({
   onOpenStory: (storyId: string) => void;
   onDeleteEpic: (epicId: string) => void;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
+  backlogDropSlot?: { month: number; index: number };
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
     disabled: !epicPlanDragEnabled,
+  });
+  const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
+    id: backlogDropSlot ? epicBacklogSlotDropId(backlogDropSlot.month, backlogDropSlot.index) : `epic-card:${epic.id}`,
+    disabled: !backlogDropSlot,
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const [isOpen, setIsOpen] = useState(false);
@@ -359,10 +365,14 @@ function SprintEpicCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setDragRef(node);
+        setDropRef(node);
+      }}
       className={cn(
         "rounded-lg border border-slate-200 bg-white p-3 shadow-sm",
         isDragging && "opacity-60",
+        isBacklogDropOver && "ring-2 ring-slate-300",
       )}
       style={{
         borderLeftColor: initiative.color,
@@ -672,6 +682,7 @@ export function InitiativeListPanel({
                     onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
                     onCreateStoryQuick={onCreateStoryQuick}
+                    backlogDropSlot={activeMonth != null ? { month: activeMonth, index: idx } : undefined}
                   />
                   {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={idx + 1} /> : null}
                 </div>

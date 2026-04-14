@@ -112,6 +112,34 @@ function computeInitiativeMonthLanePlacement(
   return { next, orderedScheduledIds };
 }
 
+function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
+  if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
+  return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
+
+function monthBacklogEpicIds(
+  initiatives: InitiativeItem[],
+  month: number,
+  epicBacklogOrderByMonth: Record<number, string[]>,
+): string[] {
+  const base = initiatives
+    .filter((initiative) => {
+      if (initiative.status !== InitiativeStatus.scheduled) return false;
+      if (initiative.startMonth == null || initiative.endMonth == null) return false;
+      return !(initiative.endMonth < month || initiative.startMonth > month);
+    })
+    .flatMap((initiative) => (initiative.epics ?? []).filter((epic) => !epicIsOnPlanForMonth(epic, month)))
+    .map((epic) => epic.id);
+
+  const order = epicBacklogOrderByMonth[month] ?? [];
+  if (order.length === 0) return base;
+  const baseSet = new Set(base);
+  const ordered = order.filter((id) => baseSet.has(id));
+  const orderedSet = new Set(ordered);
+  const rest = base.filter((id) => !orderedSet.has(id));
+  return [...ordered, ...rest];
+}
+
 export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [initiatives, setInitiatives] = useState(initialInitiatives);
   const [initiativeDialogOpen, setInitiativeDialogOpen] = useState(false);
@@ -543,7 +571,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
       console.log("[gantt-drop] epic branch", { epicId, overId });
 
-      const epicBacklogSlot = parseEpicBacklogSlotDropId(overId);
+      let epicBacklogSlot = parseEpicBacklogSlotDropId(overId);
+      if (epicBacklogSlot == null) {
+        const overEpicId = parseEpicIdFromPlanDraggable(overId);
+        if (overEpicId && activeTimelineMonth != null) {
+          const backlogIds = monthBacklogEpicIds(initiatives, activeTimelineMonth, epicBacklogOrderByMonth);
+          const overIdx = backlogIds.findIndex((id) => id === overEpicId);
+          if (overIdx >= 0) {
+            epicBacklogSlot = { month: activeTimelineMonth, index: overIdx };
+          }
+        }
+      }
       if (overId === EPICS_UNPLAN_DROP_ID || epicBacklogSlot != null) {
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
         const epic = initiative?.epics?.find((e) => e.id === epicId);
@@ -558,6 +596,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             return { ...prev, [month]: next };
           });
         }
+
+        const isAlreadyBacklog =
+          epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
+        if (isAlreadyBacklog) return;
 
         flushSync(() => {
           setInitiatives((prev) =>
