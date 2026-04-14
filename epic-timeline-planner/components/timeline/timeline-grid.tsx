@@ -8,10 +8,108 @@ import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { EpicPlanBlock } from "@/components/timeline/epic-plan-block";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
+import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+type QuarterDef = (typeof QUARTERS)[number];
+
+type GanttLaneRowProps = {
+  initiative: InitiativeItem;
+  focusedQuarter: QuarterDef | null;
+  gridStyle: CSSProperties;
+  previewColumnStart: number;
+  previewSpan: number;
+  rz: { initiativeId: string; side: "left" | "right"; deltaMonths: number } | null;
+  handleResizePointerDown: (
+    initiativeId: string,
+    side: "left" | "right",
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => void;
+  onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
+  onOpenInitiative: (initiativeId: string) => void;
+  barElsRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
+  /** Sort index among scheduled initiatives (for pointer-based lane drop). */
+  ganttLaneSortIndex: number;
+};
+
+function GanttLaneRow({
+  initiative,
+  focusedQuarter,
+  gridStyle,
+  previewColumnStart,
+  previewSpan,
+  rz,
+  handleResizePointerDown,
+  onResizeInitiativeRange,
+  onOpenInitiative,
+  barElsRef,
+  ganttLaneSortIndex,
+}: GanttLaneRowProps) {
+  const resizeEdgeClass =
+    "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+
+  return (
+    <div
+      className={cn("relative", !focusedQuarter && "min-w-max")}
+      data-gantt-lane-index={ganttLaneSortIndex}
+    >
+      <div className={cn("relative grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
+          {!focusedQuarter
+            ? [4, 7, 10].map((monthStart) => (
+                <div
+                  key={`quarter-separator-${initiative.id}-${monthStart}`}
+                  className="pointer-events-none border-l-2 border-slate-300/70"
+                  style={{ gridColumn: `${monthStart} / span 1`, gridRow: 1 }}
+                />
+              ))
+            : null}
+          <div
+            ref={(node) => {
+              if (node) barElsRef.current.set(initiative.id, node);
+              else barElsRef.current.delete(initiative.id);
+            }}
+            className="relative min-w-0 py-0.5"
+            style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
+          >
+            <InitiativeTimelineBar
+              id={initiative.id}
+              title={initiative.title}
+              color={initiative.color}
+              isResizing={Boolean(rz)}
+              onClick={() => onOpenInitiative(initiative.id)}
+            />
+            {onResizeInitiativeRange ? (
+              <>
+                <div
+                  role="slider"
+                  aria-label="Resize initiative start month"
+                  title="Drag to change start month"
+                  className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleResizePointerDown(initiative.id, "left", e);
+                  }}
+                />
+                <div
+                  role="slider"
+                  aria-label="Resize initiative end month"
+                  title="Drag to change end month"
+                  className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    handleResizePointerDown(initiative.id, "right", e);
+                  }}
+                />
+              </>
+            ) : null}
+          </div>
+        </div>
+    </div>
+  );
+}
 
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
@@ -85,17 +183,14 @@ function QuarterYearProgressIcon({
 }
 
 
-function MonthDropCell({ month, idSuffix }: { month: number; idSuffix?: string }) {
-  const droppableId = idSuffix ? `month:${month}:${idSuffix}` : `month:${month}`;
-  const { setNodeRef, isOver } = useDroppable({ id: droppableId });
-
+/** Minimal hit target under each month label; no dashed lane stack. */
+function MonthDropCell({ month }: { month: number }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `month:${month}` });
   return (
     <div
       ref={setNodeRef}
-      className={cn(
-        "h-12 rounded-md border border-dashed border-border bg-muted/30 transition",
-        isOver && "border-primary bg-primary/10",
-      )}
+      className={cn("h-2 w-full shrink-0 rounded-sm transition", isOver && "bg-primary/25")}
+      aria-hidden
     />
   );
 }
@@ -208,13 +303,26 @@ export function TimelineGrid({
     [initiatives, onResizeInitiativeRange],
   );
 
-  const scheduledInitiatives = initiatives.filter(
-    (i) => i.status === "scheduled" && i.startMonth && i.endMonth,
-  );
   const focusedQuarter = useMemo(
     () => QUARTERS.find((quarter) => quarter.label === focusedQuarterLabel) ?? null,
     [focusedQuarterLabel],
   );
+  const scheduledInitiatives = useMemo(() => {
+    const list = initiatives.filter(
+      (i) => i.status === "scheduled" && i.startMonth != null && i.endMonth != null,
+    );
+    return [...list].sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
+  }, [initiatives]);
+  const visibleScheduledLanes = useMemo(() => {
+    if (!focusedQuarter) return scheduledInitiatives;
+    const qs = focusedQuarter.months[0];
+    const qe = focusedQuarter.months[focusedQuarter.months.length - 1];
+    return scheduledInitiatives.filter((i) => {
+      const start = i.startMonth ?? 1;
+      const end = i.endMonth ?? start;
+      return !(end < qs || start > qe);
+    });
+  }, [scheduledInitiatives, focusedQuarter]);
   const visibleMonths = focusedQuarter
     ? [...focusedQuarter.months]
     : Array.from({ length: 12 }, (_, index) => index + 1);
@@ -509,118 +617,102 @@ export function TimelineGrid({
       )}
 
       <div className="space-y-2">
-        {activeMonth ? null : scheduledInitiatives.length === 0 ? (
+        {activeMonth ? null : visibleScheduledLanes.length === 0 ? (
           <p className="rounded-md bg-muted/40 p-3 text-[13px] leading-5 text-slate-600">
-            Drag initiatives from the left panel to any month to schedule them.
+            Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
+            along the timeline.
           </p>
-        ) : (
-          scheduledInitiatives.map((initiative) => {
-            const start = initiative.startMonth ?? 1;
-            const end = initiative.endMonth ?? start;
-            const quarterStart = focusedQuarter?.months[0] ?? 1;
-            const quarterEnd = focusedQuarter?.months[focusedQuarter.months.length - 1] ?? 12;
-
-            if (focusedQuarter && (end < quarterStart || start > quarterEnd)) {
-              return null;
-            }
-
-            const visibleStart = Math.max(start, quarterStart);
-            const visibleEnd = Math.min(end, quarterEnd);
-            const span = Math.max(visibleEnd - visibleStart + 1, 1);
-            const columnStart = focusedQuarter ? visibleStart - quarterStart + 1 : visibleStart;
-
-            const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
-
-            let previewColumnStart = columnStart;
-            let previewSpan = span;
-            if (rz) {
-              if (rz.side === "right") {
-                const newEnd = Math.min(12, Math.max(start, end + rz.deltaMonths));
-                previewSpan = Math.max(newEnd - start + 1, 1);
-                if (focusedQuarter) {
+        ) : focusedQuarter ? (
+          <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
+            {visibleScheduledLanes.map((initiative) => {
+              const start = initiative.startMonth ?? 1;
+              const end = initiative.endMonth ?? start;
+              const quarterStart = focusedQuarter.months[0];
+              const quarterEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+              const visibleStart = Math.max(start, quarterStart);
+              const visibleEnd = Math.min(end, quarterEnd);
+              const span = Math.max(visibleEnd - visibleStart + 1, 1);
+              const columnStart = visibleStart - quarterStart + 1;
+              const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
+              let previewColumnStart = columnStart;
+              let previewSpan = span;
+              if (rz) {
+                if (rz.side === "right") {
+                  const newEnd = Math.min(12, Math.max(start, end + rz.deltaMonths));
                   const qStart = focusedQuarter.months[0];
                   const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
                   const visEnd = Math.min(newEnd, qEnd);
                   const visStart = Math.max(start, qStart);
                   previewSpan = Math.max(visEnd - visStart + 1, 1);
-                }
-              } else {
-                const newStart = Math.max(1, Math.min(end, start + rz.deltaMonths));
-                if (focusedQuarter) {
+                } else {
+                  const newStart = Math.max(1, Math.min(end, start + rz.deltaMonths));
                   const qStart = focusedQuarter.months[0];
                   const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
                   const visStart = Math.max(newStart, qStart);
                   const visEnd = Math.min(end, qEnd);
                   previewColumnStart = visStart - qStart + 1;
                   previewSpan = Math.max(visEnd - visStart + 1, 1);
+                }
+              }
+              return (
+                <GanttLaneRow
+                  key={initiative.id}
+                  initiative={initiative}
+                  focusedQuarter={focusedQuarter}
+                  gridStyle={gridStyle}
+                  previewColumnStart={previewColumnStart}
+                  previewSpan={previewSpan}
+                  rz={rz}
+                  handleResizePointerDown={handleResizePointerDown}
+                  onResizeInitiativeRange={onResizeInitiativeRange}
+                  onOpenInitiative={onOpenInitiative}
+                  barElsRef={barElsRef}
+                  ganttLaneSortIndex={Math.max(
+                    0,
+                    scheduledInitiatives.findIndex((x) => x.id === initiative.id),
+                  )}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
+            {scheduledInitiatives.map((initiative, rowIndex) => {
+              const start = initiative.startMonth ?? 1;
+              const end = initiative.endMonth ?? start;
+              const span = Math.max(end - start + 1, 1);
+              const columnStart = start;
+              const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
+              let previewColumnStart = columnStart;
+              let previewSpan = span;
+              if (rz) {
+                if (rz.side === "right") {
+                  const newEnd = Math.min(12, Math.max(start, end + rz.deltaMonths));
+                  previewSpan = Math.max(newEnd - start + 1, 1);
                 } else {
+                  const newStart = Math.max(1, Math.min(end, start + rz.deltaMonths));
                   previewColumnStart = newStart;
                   previewSpan = Math.max(end - newStart + 1, 1);
                 }
               }
-            }
-
-            const resizeEdgeClass =
-              "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
-
-            return (
-              <div
-                key={initiative.id}
-                className={cn("relative grid gap-2", !focusedQuarter && "min-w-max")}
-                style={gridStyle}
-              >
-                {!focusedQuarter
-                  ? [4, 7, 10].map((monthStart) => (
-                      <div
-                        key={`quarter-separator-${initiative.id}-${monthStart}`}
-                        className="pointer-events-none border-l-2 border-slate-300/70"
-                        style={{ gridColumn: `${monthStart} / span 1`, gridRow: 1 }}
-                      />
-                    ))
-                  : null}
-                <div
-                  ref={(node) => {
-                    if (node) barElsRef.current.set(initiative.id, node);
-                    else barElsRef.current.delete(initiative.id);
-                  }}
-                  className="relative min-w-0 py-0.5"
-                  style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
-                >
-                  <InitiativeTimelineBar
-                    id={initiative.id}
-                    title={initiative.title}
-                    color={initiative.color}
-                    isResizing={Boolean(rz)}
-                    onClick={() => onOpenInitiative(initiative.id)}
-                  />
-                  {onResizeInitiativeRange ? (
-                    <>
-                      <div
-                        role="slider"
-                        aria-label="Resize initiative start month"
-                        title="Drag to change start month"
-                        className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          handleResizePointerDown(initiative.id, "left", e);
-                        }}
-                      />
-                      <div
-                        role="slider"
-                        aria-label="Resize initiative end month"
-                        title="Drag to change end month"
-                        className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                          handleResizePointerDown(initiative.id, "right", e);
-                        }}
-                      />
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })
+              return (
+                <GanttLaneRow
+                  key={initiative.id}
+                  initiative={initiative}
+                  focusedQuarter={null}
+                  gridStyle={gridStyle}
+                  previewColumnStart={previewColumnStart}
+                  previewSpan={previewSpan}
+                  rz={rz}
+                  handleResizePointerDown={handleResizePointerDown}
+                  onResizeInitiativeRange={onResizeInitiativeRange}
+                  onOpenInitiative={onOpenInitiative}
+                  barElsRef={barElsRef}
+                  ganttLaneSortIndex={rowIndex}
+                />
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

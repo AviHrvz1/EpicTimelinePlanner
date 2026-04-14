@@ -11,6 +11,7 @@ const updateInitiativeSchema = z.object({
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
   startMonth: z.number().int().min(1).max(12).optional().nullable(),
   endMonth: z.number().int().min(1).max(12).optional().nullable(),
+  timelineRow: z.number().int().min(0).max(999).optional(),
 });
 
 export async function PATCH(
@@ -38,6 +39,7 @@ export async function PATCH(
       color: true,
       startMonth: true,
       endMonth: true,
+      timelineRow: true,
     },
   });
   if (!existing) {
@@ -55,6 +57,8 @@ export async function PATCH(
   if (patch.startMonth !== undefined && patch.startMonth !== existing.startMonth)
     changes.push("Assigned month updated");
   if (patch.endMonth !== undefined && patch.endMonth !== existing.endMonth) changes.push("End month updated");
+  if (patch.timelineRow !== undefined && patch.timelineRow !== existing.timelineRow)
+    changes.push("Gantt row order updated");
 
   const initiative = await db.initiative.update({
     where: { id },
@@ -66,6 +70,7 @@ export async function PATCH(
       ...(patch.color !== undefined ? { color: patch.color } : {}),
       ...(patch.startMonth !== undefined ? { startMonth: patch.startMonth } : {}),
       ...(patch.endMonth !== undefined ? { endMonth: patch.endMonth } : {}),
+      ...(patch.timelineRow !== undefined ? { timelineRow: patch.timelineRow } : {}),
       ...(changes.length > 0
         ? { history: { create: changes.map((entry) => ({ entry })) } }
         : {}),

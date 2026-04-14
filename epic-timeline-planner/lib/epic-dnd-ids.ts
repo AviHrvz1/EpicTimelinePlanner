@@ -28,6 +28,33 @@ export function parseInitiativeIdFromDraggable(activeId: string): string | null 
   return null;
 }
 
+/** `month:3` or `month:3:lane:0` (lane = Gantt row index, 0-based). */
+export function parseMonthDropTarget(overId: string): { month: number; laneIndex?: number } | null {
+  const m = /^month:(\d+)(?::lane:(\d+))?$/.exec(overId);
+  if (!m) {
+    console.log("[gantt-drop] parseMonthDropTarget: no match", { overId });
+    return null;
+  }
+  const month = Number(m[1]);
+  if (!Number.isFinite(month)) {
+    console.log("[gantt-drop] parseMonthDropTarget: bad month", { overId, month });
+    return null;
+  }
+  if (m[2] !== undefined) {
+    const laneIndex = Number(m[2]);
+    if (!Number.isFinite(laneIndex)) {
+      console.log("[gantt-drop] parseMonthDropTarget: bad lane", { overId, laneIndex });
+      return null;
+    }
+    const result = { month, laneIndex };
+    console.log("[gantt-drop] parseMonthDropTarget", { overId, ...result });
+    return result;
+  }
+  const result = { month };
+  console.log("[gantt-drop] parseMonthDropTarget (month only, no lane)", { overId, month });
+  return result;
+}
+
 export function epicListDraggableId(epicId: string): string {
   return `${EPIC_LIST_PREFIX}${epicId}`;
 }

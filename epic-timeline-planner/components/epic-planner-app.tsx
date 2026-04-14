@@ -18,10 +18,15 @@ import {
   isEpicPlanDraggableId,
   isInitiativeDraggableId,
   parseEpicIdFromPlanDraggable,
+  parseMonthDropTarget,
   parseInitiativeIdFromDraggable,
   isStoryDraggableId,
   parseStoryIdFromDraggable,
 } from "@/lib/epic-dnd-ids";
+import {
+  clientYCenterFromDragEnd,
+  inferGanttLaneInsertIndexFromClientY,
+} from "@/lib/gantt-lane-from-pointer";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -36,6 +41,73 @@ async function parseJson<T>(response: Response): Promise<T> {
     throw new Error("Request failed");
   }
   return (await response.json()) as T;
+}
+
+/** Insert / move one initiative at a lane index; renumber all scheduled rows0..n-1. */
+function computeInitiativeMonthLanePlacement(
+  prev: InitiativeItem[],
+  initiativeId: string,
+  month: number,
+  laneIndex: number | undefined,
+  isFirstSchedule: boolean,
+): { next: InitiativeItem[]; orderedScheduledIds: string[] } {
+  const others = prev
+    .filter(
+      (i) =>
+        i.status === InitiativeStatus.scheduled &&
+        i.startMonth != null &&
+        i.endMonth != null &&
+        i.id !== initiativeId,
+    )
+    .sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
+
+  const current = prev.find((i) => i.id === initiativeId);
+  if (!current) return { next: prev, orderedScheduledIds: [] };
+
+  const placedBase: InitiativeItem = {
+    ...current,
+    status: InitiativeStatus.scheduled,
+    startMonth: month,
+    endMonth: month,
+  };
+
+  let insertAt: number;
+  if (laneIndex !== undefined) {
+    insertAt = Math.max(0, Math.min(laneIndex, others.length));
+  } else if (isFirstSchedule) {
+    insertAt = others.length;
+  } else {
+    const scheduledAll = prev
+      .filter(
+        (i) =>
+          i.status === InitiativeStatus.scheduled &&
+          i.startMonth != null &&
+          i.endMonth != null,
+      )
+      .sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
+    const prevIdx = scheduledAll.findIndex((i) => i.id === initiativeId);
+    insertAt =
+      prevIdx >= 0
+        ? Math.max(0, Math.min(prevIdx, others.length))
+        : Math.max(0, Math.min(current.timelineRow, others.length));
+  }
+
+  const newOrder = [...others.slice(0, insertAt), placedBase, ...others.slice(insertAt)];
+  const orderedScheduledIds = newOrder.map((i) => i.id);
+  const rowById = new Map(newOrder.map((i, idx) => [i.id, idx]));
+
+  const next = prev.map((i) => {
+    if (rowById.has(i.id)) {
+      const r = rowById.get(i.id)!;
+      if (i.id === initiativeId) {
+        return { ...i, status: InitiativeStatus.scheduled, startMonth: month, endMonth: month, timelineRow: r };
+      }
+      return { ...i, timelineRow: r };
+    }
+    return i;
+  });
+
+  return { next, orderedScheduledIds };
 }
 
 export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
@@ -188,15 +260,39 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     await refresh();
   }
 
-  async function scheduleInitiative(initiativeId: string, month: number) {
+  async function scheduleInitiative(initiativeId: string, month: number, timelineRow?: number) {
+    const payload: { year: number; startMonth: number; endMonth: number; timelineRow?: number } = {
+      year,
+      startMonth: month,
+      endMonth: month,
+    };
+    if (timelineRow !== undefined) payload.timelineRow = timelineRow;
+    console.log("[gantt-drop] fetch PATCH schedule", { initiativeId, payload });
     const response = await fetch(`/api/initiatives/${initiativeId}/schedule`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, startMonth: month, endMonth: month }),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      console.log("[gantt-drop] schedule PATCH failed", { status: response.status, errText });
       throw new Error("Failed to schedule initiative");
     }
+    console.log("[gantt-drop] schedule PATCH ok", { initiativeId });
+  }
+
+  async function persistOrderedTimelineRows(orderedIds: string[]) {
+    await Promise.all(
+      orderedIds.map((id, idx) =>
+        fetch(`/api/initiatives/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timelineRow: idx }),
+        }).then((res) => {
+          if (!res.ok) throw new Error("Failed to save timeline row");
+        }),
+      ),
+    );
   }
 
   async function unscheduleInitiative(initiativeId: string) {
@@ -372,6 +468,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   async function onDragEnd(event: DragEndEvent) {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : "";
+    console.log("[gantt-drop] app onDragEnd", { activeId, overId });
 
     if (isStoryDraggableId(activeId)) {
       const storyId = parseStoryIdFromDraggable(activeId);
@@ -441,7 +538,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
     if (isEpicPlanDraggableId(activeId)) {
       const epicId = parseEpicIdFromPlanDraggable(activeId);
-      if (!epicId) return;
+      if (!epicId) {
+        console.log("[gantt-drop] epic branch: no epicId", { activeId });
+        return;
+      }
+      console.log("[gantt-drop] epic branch", { epicId, overId });
 
       if (overId === EPICS_UNPLAN_DROP_ID) {
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
@@ -473,19 +574,30 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
       let month: number;
       let planSprint: 1 | 2;
+      let dropLaneIndex: number | undefined;
       const epicCell = /^epic-plan:(\d+):([12])$/.exec(overId);
       if (epicCell) {
         month = Number(epicCell[1]);
         planSprint = Number(epicCell[2]) as 1 | 2;
+        dropLaneIndex = undefined;
       } else if (overId.startsWith("month:")) {
-        const monthMatch = overId.match(/month:(\d+)/);
-        if (!monthMatch) return;
-        month = Number(monthMatch[1]);
+        const parsed = parseMonthDropTarget(overId);
+        if (!parsed) {
+          console.log("[gantt-drop] epic month drop: parse failed", { overId });
+          return;
+        }
+        month = parsed.month;
         planSprint = 1;
+        dropLaneIndex = parsed.laneIndex;
+        console.log("[gantt-drop] epic month drop parsed", { month, dropLaneIndex });
       } else {
+        console.log("[gantt-drop] epic branch: overId not epic-plan or month", { overId });
         return;
       }
-      if (!Number.isFinite(month)) return;
+      if (!Number.isFinite(month)) {
+        console.log("[gantt-drop] epic branch: invalid month", { month });
+        return;
+      }
 
       const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
       const epic = initiative?.epics?.find((e) => e.id === epicId);
@@ -520,14 +632,53 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
 
       flushSync(() => {
-        setInitiatives((prev) =>
-          prev.map((i) => {
+        setInitiatives((prev) => {
+          if (wasUnscheduled && dropLaneIndex !== undefined) {
+            const L = dropLaneIndex;
+            const bumped = prev.map((i) => {
+              if (i.status !== InitiativeStatus.scheduled || i.id === initiative.id) return i;
+              if (i.timelineRow >= L) return { ...i, timelineRow: i.timelineRow + 1 };
+              return i;
+            });
+            return bumped.map((i) => {
+              if (i.id !== initiative.id) return i;
+              return {
+                ...i,
+                status: InitiativeStatus.scheduled,
+                startMonth: nextStart,
+                endMonth: nextEnd,
+                timelineRow: L,
+                epics: (i.epics ?? []).map((e) =>
+                  e.id === epicId
+                    ? {
+                        ...e,
+                        planSprint,
+                        planStartMonth: planMonth,
+                        planEndMonth: planMonth,
+                      }
+                    : e,
+                ),
+              };
+            });
+          }
+          let nextRow: number | undefined;
+          if (wasUnscheduled) {
+            const maxR = Math.max(
+              -1,
+              ...prev
+                .filter((x) => x.status === InitiativeStatus.scheduled && x.id !== initiative.id)
+                .map((x) => x.timelineRow),
+            );
+            nextRow = maxR + 1;
+          }
+          return prev.map((i) => {
             if (i.id !== initiative.id) return i;
             return {
               ...i,
               status: InitiativeStatus.scheduled,
               startMonth: nextStart,
               endMonth: nextEnd,
+              ...(wasUnscheduled && nextRow !== undefined ? { timelineRow: nextRow } : {}),
               epics: (i.epics ?? []).map((e) =>
                 e.id === epicId
                   ? {
@@ -539,14 +690,21 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   : e,
               ),
             };
-          }),
-        );
+          });
+        });
       });
 
       try {
         if (wasUnscheduled) {
-          await scheduleInitiative(initiative.id, planMonth);
+          console.log("[gantt-drop] epic → scheduleInitiative", {
+            initiativeId: initiative.id,
+            planMonth,
+            dropLaneIndex,
+            wasUnscheduled,
+          });
+          await scheduleInitiative(initiative.id, planMonth, dropLaneIndex);
         } else if (rangeChanged) {
+          console.log("[gantt-drop] epic → patchInitiativeScheduleRange", { nextStart, nextEnd });
           await patchInitiativeScheduleRange(initiative.id, nextStart, nextEnd);
         }
         await patchEpicQuarterPlan(epicId, {
@@ -568,7 +726,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       return;
     }
 
-    if (!isInitiativeDraggableId(activeId)) return;
+    if (!isInitiativeDraggableId(activeId)) {
+      console.log("[gantt-drop] no handler for activeId (not initiative)", { activeId, overId });
+      return;
+    }
 
     const initiativeId = parseInitiativeIdFromDraggable(activeId);
     if (!initiativeId) return;
@@ -578,7 +739,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         setInitiatives((prev) =>
           prev.map((i) =>
             i.id === initiativeId
-              ? { ...i, status: InitiativeStatus.backlog, startMonth: null, endMonth: null }
+              ? { ...i, status: InitiativeStatus.backlog, startMonth: null, endMonth: null, timelineRow: 0 }
               : i,
           ),
         );
@@ -593,28 +754,66 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       return;
     }
 
-    if (!overId.startsWith("month:")) return;
+    if (!overId.startsWith("month:")) {
+      console.log("[gantt-drop] initiative: overId not month:*", { overId });
+      return;
+    }
 
-    const monthMatch = overId.match(/month:(\d+)/);
-    const month = monthMatch ? Number(monthMatch[1]) : Number.NaN;
-    if (!Number.isFinite(month)) return;
+    const parsedDrop = parseMonthDropTarget(overId);
+    if (!parsedDrop) {
+      console.log("[gantt-drop] initiative: parseMonthDropTarget null", { overId });
+      return;
+    }
+    const { month, laneIndex: laneFromTarget } = parsedDrop;
+    if (!Number.isFinite(month)) {
+      console.log("[gantt-drop] initiative: bad month", { month });
+      return;
+    }
+
+    let laneIndex = laneFromTarget;
+    if (laneIndex === undefined) {
+      const cy = clientYCenterFromDragEnd(event);
+      if (cy !== undefined) {
+        const inferred = inferGanttLaneInsertIndexFromClientY(cy);
+        if (inferred !== undefined) laneIndex = inferred;
+      }
+    }
 
     const initiativeBefore = initiatives.find((i) => i.id === initiativeId);
-    if (!initiativeBefore) return;
+    if (!initiativeBefore) {
+      console.log("[gantt-drop] initiative: not found", { initiativeId });
+      return;
+    }
     const isFirstSchedule = initiativeBefore.status === InitiativeStatus.backlog;
-
-    flushSync(() => {
-      setInitiatives((prev) =>
-        prev.map((i) =>
-          i.id === initiativeId
-            ? { ...i, status: InitiativeStatus.scheduled, startMonth: month, endMonth: month }
-            : i,
-        ),
-      );
+    console.log("[gantt-drop] initiative month drop", {
+      initiativeId,
+      month,
+      laneIndex,
+      laneFromTarget,
+      isFirstSchedule,
     });
+
+    const { next: placementNext, orderedScheduledIds } = computeInitiativeMonthLanePlacement(
+      initiatives,
+      initiativeId,
+      month,
+      laneIndex,
+      isFirstSchedule,
+    );
+    console.log("[gantt-drop] placement", {
+      orderedScheduledIds,
+      rowForMoved: orderedScheduledIds.indexOf(initiativeId),
+    });
+
+    flushSync(() => setInitiatives(placementNext));
     try {
       if (isFirstSchedule) {
+        console.log("[gantt-drop] initiative → scheduleInitiative + persist rows", {
+          initiativeId,
+          month,
+        });
         await scheduleInitiative(initiativeId, month);
+        await persistOrderedTimelineRows(orderedScheduledIds);
         toast.success("Initiative scheduled");
         if (focusedQuarterLabel != null) {
           setFocusedQuarterLabel((prev) => {
@@ -628,7 +827,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           queueTimelineDrillToMonth(month);
         }
       } else {
+        console.log("[gantt-drop] initiative reschedule → patch range + persist rows", {
+          initiativeId,
+          month,
+        });
         await patchInitiativeScheduleRange(initiativeId, month, month);
+        await persistOrderedTimelineRows(orderedScheduledIds);
         toast.success("Initiative moved");
         if (focusedQuarterLabel != null) {
           setFocusedQuarterLabel((prev) => {

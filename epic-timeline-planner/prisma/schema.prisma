@@ -31,6 +31,8 @@ model Initiative {
   status      InitiativeStatus    @default(backlog)
   startMonth  Int?
   endMonth    Int?
+  /** Vertical order in full-roadmap Gantt (lower = higher on screen). Preserved when moving months. */
+  timelineRow Int              @default(0)
   year        Int
   epics       Epic[]
   comments    InitiativeComment[]

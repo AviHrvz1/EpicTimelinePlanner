@@ -105,14 +105,22 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
         droppable: { strategy: MeasuringStrategy.Always },
       }}
       onDragStart={(event) => {
-        setActiveDragId(String(event.active.id));
+        const id = String(event.active.id);
+        console.log("[gantt-drop] dnd dragStart", { activeId: id });
+        setActiveDragId(id);
       }}
       onDragEnd={(event) => {
+        console.log("[gantt-drop] dnd dragEnd", {
+          activeId: event.active?.id,
+          overId: event.over?.id,
+          delta: event.delta,
+        });
         setActiveDragId(null);
         suppressPostDragClicksFor();
         onDragEnd(event);
       }}
       onDragCancel={() => {
+        console.log("[gantt-drop] dnd dragCancel");
         setActiveDragId(null);
         suppressPostDragClicksFor();
       }}
