@@ -492,6 +492,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     await refresh();
   }
 
+  async function deleteStory(storyId: string) {
+    const response = await fetch(`/api/stories/${storyId}`, { method: "DELETE" });
+    if (!response.ok) {
+      throw new Error("Failed to delete story");
+    }
+    await refresh();
+  }
+
   async function onDragEnd(event: DragEndEvent) {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : "";
@@ -1221,6 +1229,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           setEditingEpicInitiativeId(null);
         }}
         onSubmit={handleUpsertEpic}
+        onDelete={async (epicId) => {
+          try {
+            await handleDeleteEpic(epicId);
+            toast.success("Epic deleted");
+          } catch {
+            toast.error("Failed to delete epic");
+          }
+        }}
       />
       <StoryDetailsDialog
         open={Boolean(selectedStory) || Boolean(creatingStoryEpicId)}
@@ -1253,6 +1269,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             toast.success("Comment added");
           } catch {
             toast.error("Failed to add comment");
+          }
+        }}
+        onDelete={async (storyId) => {
+          try {
+            await deleteStory(storyId);
+            toast.success("User story deleted");
+          } catch {
+            toast.error("Failed to delete user story");
           }
         }}
       />

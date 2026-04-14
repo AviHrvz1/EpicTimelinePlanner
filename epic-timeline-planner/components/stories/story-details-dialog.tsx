@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { History, MessageSquare, Plus, Save, X, XCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { History, MessageSquare, Plus, Save, Trash2, X, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -37,6 +37,7 @@ type StoryDetailsDialogProps = {
       epicId: string;
     },
   ) => Promise<void>;
+  onDelete?: (storyId: string) => Promise<void>;
   onAddComment: (storyId: string, body: string) => Promise<void>;
 };
 
@@ -48,6 +49,7 @@ export function StoryDetailsDialog({
   onClose,
   onCreate,
   onSave,
+  onDelete,
   onAddComment,
 }: StoryDetailsDialogProps) {
   const [title, setTitle] = useState("");
@@ -62,6 +64,9 @@ export function StoryDetailsDialog({
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [saving, setSaving] = useState(false);
   const [commenting, setCommenting] = useState(false);
+  const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
+  const [isDraggingDialog, setIsDraggingDialog] = useState(false);
+  const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
 
   const allEpics = useMemo(
     () =>
@@ -100,6 +105,14 @@ export function StoryDetailsDialog({
     setCommentBody("");
     setActivityTab("comments");
   }, [story, initiatives, lockParentEpicId, firstEpicId]);
+
+  useEffect(() => {
+    if (open) {
+      setDialogOffset({ x: 0, y: 0 });
+      setIsDraggingDialog(false);
+      dragStartRef.current = null;
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -146,11 +159,58 @@ export function StoryDetailsDialog({
     }
   }
 
+  async function handleDelete() {
+    if (isCreateMode || !story || !onDelete) return;
+    const confirmed = window.confirm("Delete this user story?");
+    if (!confirmed) return;
+    await onDelete(story.id);
+    onClose();
+  }
+
+  function beginDialogDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    dragStartRef.current = {
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      startX: dialogOffset.x,
+      startY: dialogOffset.y,
+    };
+    setIsDraggingDialog(true);
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const start = dragStartRef.current;
+      if (!start) return;
+      const dx = moveEvent.clientX - start.pointerX;
+      const dy = moveEvent.clientY - start.pointerY;
+      setDialogOffset({ x: start.startX + dx, y: start.startY + dy });
+    }
+
+    function onPointerUp() {
+      setIsDraggingDialog(false);
+      dragStartRef.current = null;
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
-      <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border bg-card p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[1px]">
+      <div
+        className={`
+          max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl
+          ${isDraggingDialog ? "select-none" : ""}
+        `}
+        style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
+      >
+        <div
+          className="mb-4 flex cursor-move items-center justify-between border-b border-slate-100 pb-3"
+          onPointerDown={beginDialogDrag}
+        >
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900">
             {isCreateMode ? "Create user story" : "User story details"}
           </h2>
           <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close story details">
@@ -247,6 +307,12 @@ export function StoryDetailsDialog({
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
+          {!isCreateMode ? (
+            <Button variant="destructive" onClick={() => void handleDelete()}>
+              <Trash2 />
+              Delete
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={onClose}>
             <XCircle />
             Cancel
