@@ -652,14 +652,24 @@ export function InitiativeListPanel({
     const rest = [...byId.values()].sort((a, b) => a.epic.title.localeCompare(b.epic.title));
     return [...ordered, ...rest];
   }, [monthAssignedEpics, activeMonth, epicBacklogOrderByMonth]);
+  const sprintEpics = useMemo(() => {
+    if (activeMonth == null || activeSprintLane == null) return [];
+    return monthAssignedEpics.filter(({ epic }) => {
+      const hasStoryInSprint = (epic.userStories ?? []).some((story) => story.sprint === activeSprintLane);
+      const plannedForSprint =
+        epicIsOnPlanForMonth(epic, activeMonth) && epic.planSprint != null && epic.planSprint === activeSprintLane;
+      return plannedForSprint || hasStoryInSprint;
+    });
+  }, [monthAssignedEpics, activeMonth, activeSprintLane]);
+  const monthPanelEpics = isSprintModeActive ? sprintEpics : monthBacklogEpics;
   const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
-    if (!q) return monthBacklogEpics;
-    return monthBacklogEpics.filter(
+    if (!q) return monthPanelEpics;
+    return monthPanelEpics.filter(
       ({ epic, initiative }) =>
         epic.title.toLowerCase().includes(q) || initiative.title.toLowerCase().includes(q),
     );
-  }, [monthBacklogEpics, epicSearch]);
+  }, [monthPanelEpics, epicSearch]);
 
   const initiativeList = useMemo(
     () =>
@@ -729,13 +739,15 @@ export function InitiativeListPanel({
               aria-label="Search epics in selected month"
             />
             <datalist id="month-epic-search-suggestions">
-              {monthBacklogEpics.map(({ epic }) => (
+              {monthPanelEpics.map(({ epic }) => (
                 <option key={`${epic.id}-${epic.title}`} value={epic.title} />
               ))}
             </datalist>
           </div>
           <h3 className="mt-4 mb-2 text-[12px] font-semibold tracking-[0.01em] text-slate-900">
-            Epic backlog ({filteredMonthBacklogEpics.length})
+            {isSprintModeActive && activeSprintLane != null
+              ? `Sprint ${activeSprintLane} epics (${filteredMonthBacklogEpics.length})`
+              : `Epic backlog (${filteredMonthBacklogEpics.length})`}
           </h3>
           <div
             ref={setEpicUnplanDropRef}
@@ -747,8 +759,10 @@ export function InitiativeListPanel({
             {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={0} /> : null}
             {filteredMonthBacklogEpics.length === 0 ? (
               <p className="text-[11px] text-slate-700">
-                {monthBacklogEpics.length === 0
-                  ? "Drag epics from the month timeline here to move them into epic backlog."
+                {monthPanelEpics.length === 0
+                  ? isSprintModeActive && activeSprintLane != null
+                    ? `No epics or stories are assigned to Sprint ${activeSprintLane} for this month yet.`
+                    : "Drag epics from the month timeline here to move them into epic backlog."
                   : "No epics match your search."}
               </p>
             ) : (
