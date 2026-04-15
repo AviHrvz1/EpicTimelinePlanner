@@ -326,7 +326,7 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-lg ring-1 ring-slate-200">
-        <div className="sticky top-0 z-10 grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 text-[13px] font-semibold text-slate-700">
+        <div className="sticky top-0 z-10 grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 text-[14px] font-semibold text-slate-700">
           <span>Work item</span>
           <span>Year</span>
           <span>Q</span>
@@ -360,16 +360,16 @@ export function BacklogPlanningPanel({
                       <Target className="size-4 shrink-0 text-slate-700" />
                       <span className="truncate text-[15px] font-semibold text-slate-900">{initiative.title}</span>
                     </button>
-                    <span className="text-[13px] text-slate-700">{initiative.year}</span>
-                    <span className="text-[13px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>
-                    <span className="text-[13px] text-slate-700">{monthLabel(initiative.startMonth)}</span>
-                    <span className="w-fit rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                    <span className="text-[14px] text-slate-700">{initiative.year}</span>
+                    <span className="text-[14px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>
+                    <span className="text-[14px] text-slate-700">{monthLabel(initiative.startMonth)}</span>
+                    <span className="w-fit rounded bg-slate-100 px-2 py-0.5 text-[12px] font-medium text-slate-700">
                       {initiative.status}
                     </span>
-                    <span className="text-[13px] text-slate-500">-</span>
-                    <span className="truncate text-[13px] text-slate-700">{initiative.assignee ?? "Unassigned"}</span>
-                    <span className="text-[13px] text-slate-500">-</span>
-                    <span className="text-[13px] text-slate-500">-</span>
+                    <span className="text-[14px] text-slate-500">-</span>
+                    <span className="truncate text-[14px] text-slate-700">{initiative.assignee ?? "Unassigned"}</span>
+                    <span className="text-[14px] text-slate-500">-</span>
+                    <span className="text-[14px] text-slate-500">-</span>
                   </div>
 
                   {isInitOpen ? (
@@ -394,16 +394,16 @@ export function BacklogPlanningPanel({
                                   {epic.icon} {epic.title}
                                 </span>
                               </button>
-                              <span className="text-[13px] text-slate-700">{initiative.year}</span>
-                              <span className="text-[13px] text-slate-700">{quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}</span>
-                              <span className="text-[13px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
-                              <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                              <span className="text-[14px] text-slate-700">{initiative.year}</span>
+                              <span className="text-[14px] text-slate-700">{quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}</span>
+                              <span className="text-[14px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
+                              <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-[12px] font-medium text-amber-700">
                                 {(epic.userStories ?? []).length} stories
                               </span>
-                              <span className="text-[13px] text-slate-500">-</span>
-                              <span className="truncate text-[13px] text-slate-700">{epic.assignee ?? "Unassigned"}</span>
-                              <span className="text-[13px] text-slate-500">-</span>
-                              <span className="text-[13px] text-slate-500">-</span>
+                              <span className="text-[14px] text-slate-500">-</span>
+                              <span className="truncate text-[14px] text-slate-700">{epic.assignee ?? "Unassigned"}</span>
+                              <span className="text-[14px] text-slate-500">-</span>
+                              <span className="text-[14px] text-slate-500">-</span>
                             </div>
 
                             {isEpicOpen ? (
@@ -424,18 +424,18 @@ export function BacklogPlanningPanel({
                                         #{storyRefById[story.id] ?? story.id.slice(0, 6)}
                                       </span>
                                     </span>
-                                    <span className="text-[13px] text-slate-700">{initiative.year}</span>
-                                    <span className="text-[13px] text-slate-700">
+                                    <span className="text-[14px] text-slate-700">{initiative.year}</span>
+                                    <span className="text-[14px] text-slate-700">
                                       {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
-                                    <span className="text-[13px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
-                                    <span className={cn("w-fit rounded px-2 py-0.5 text-[11px] font-medium", statusChip(story.status))}>
+                                    <span className="text-[14px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
+                                    <span className={cn("w-fit rounded px-2 py-0.5 text-[12px] font-medium", statusChip(story.status))}>
                                       {story.status === "inProgress" ? "In progress" : story.status}
                                     </span>
-                                    <span className="text-[13px] text-slate-700">{sprintLabel(story.sprint)}</span>
-                                    <span className="truncate text-[13px] text-slate-700">{story.assignee?.trim() || "Unassigned"}</span>
-                                    <span className="text-[13px] text-slate-700">{story.estimatedDays ?? 0}d</span>
-                                    <span className="text-[13px] text-slate-700">{story.daysLeft ?? 0}d</span>
+                                    <span className="text-[14px] text-slate-700">{sprintLabel(story.sprint)}</span>
+                                    <span className="truncate text-[14px] text-slate-700">{story.assignee?.trim() || "Unassigned"}</span>
+                                    <span className="text-[14px] text-slate-700">{story.estimatedDays ?? 0}d</span>
+                                    <span className="text-[14px] text-slate-700">{story.daysLeft ?? 0}d</span>
                                   </button>
                                 ))}
                               </div>
