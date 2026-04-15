@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Folder, FolderKanban, Search, Target } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Folder, FolderKanban, Plus, Search, Target, X } from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
 
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,14 @@ type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
   storyRefById: Record<string, string>;
   onOpenStory: (storyId: string) => void;
+  onCreateInitiativeQuick: (title: string) => Promise<void>;
+  onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
+  onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
 };
 
 type OptionItem = { id: string; label: string };
+type CreateKind = "initiative" | "epic" | "story";
+type CreateScope = "initiative" | "epic" | "story";
 
 function statusChip(status: string) {
   if (status === "approved") return "bg-violet-100 text-violet-700";
@@ -107,6 +112,9 @@ export function BacklogPlanningPanel({
   initiatives,
   storyRefById,
   onOpenStory,
+  onCreateInitiativeQuick,
+  onCreateEpicQuick,
+  onCreateStoryQuick,
 }: BacklogPlanningPanelProps) {
   const [query, setQuery] = useState("");
   const [openInitiatives, setOpenInitiatives] = useState<Record<string, boolean>>({});
@@ -119,6 +127,17 @@ export function BacklogPlanningPanel({
   const [sortBy, setSortBy] = useState<"titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status">(
     "titleAsc",
   );
+  const [openCreateMenuKey, setOpenCreateMenuKey] = useState<string | null>(null);
+  const [createDraftTitle, setCreateDraftTitle] = useState("");
+  const [createSelection, setCreateSelection] = useState<{
+    anchorKey: string;
+    scope: CreateScope;
+    kind: CreateKind;
+    initiativeId?: string;
+    epicId?: string;
+  } | null>(null);
+  const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
+  const [submittingKey, setSubmittingKey] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -275,6 +294,56 @@ export function BacklogPlanningPanel({
       .filter(Boolean) as typeof filteredWithControls;
   }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter]);
 
+  function openCreateComposer(selection: {
+    anchorKey: string;
+    scope: CreateScope;
+    kind: CreateKind;
+    initiativeId?: string;
+    epicId?: string;
+  }) {
+    setOpenCreateMenuKey(null);
+    setCreateSelection(selection);
+    setCreateDraftTitle("");
+    if (selection.kind === "story" && selection.scope === "initiative" && selection.initiativeId) {
+      const initiative = initiatives.find((item) => item.id === selection.initiativeId);
+      setStoryTargetEpicId(initiative?.epics?.[0]?.id ?? "");
+    } else {
+      setStoryTargetEpicId(selection.epicId ?? "");
+    }
+  }
+
+  async function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!createSelection) return;
+    const title = createDraftTitle.trim();
+    if (title.length < 2) return;
+    setSubmittingKey("create");
+    try {
+      if (createSelection.kind === "initiative") {
+        await onCreateInitiativeQuick(title);
+      } else if (createSelection.kind === "epic") {
+        if (!createSelection.initiativeId) return;
+        await onCreateEpicQuick(createSelection.initiativeId, title);
+        setOpenInitiatives((prev) => ({ ...prev, [createSelection.initiativeId!]: true }));
+      } else {
+        const epicId = createSelection.scope === "initiative" ? storyTargetEpicId : createSelection.epicId;
+        if (!epicId) return;
+        await onCreateStoryQuick(epicId, title);
+        setOpenEpics((prev) => ({ ...prev, [epicId!]: true }));
+      }
+      setCreateDraftTitle("");
+      setCreateSelection(null);
+    } finally {
+      setSubmittingKey(null);
+    }
+  }
+
+  function closeInlineCreator() {
+    setCreateSelection(null);
+    setCreateDraftTitle("");
+    setStoryTargetEpicId("");
+  }
+
   return (
     <section className="h-full min-h-0 overflow-hidden rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -346,20 +415,79 @@ export function BacklogPlanningPanel({
               const isInitOpen = openInitiatives[initiative.id] ?? true;
               return (
                 <div key={initiative.id}>
-                  <div className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
-                    <button
-                      type="button"
-                      onClick={() => setOpenInitiatives((prev) => ({ ...prev, [initiative.id]: !isInitOpen }))}
-                      className="flex min-w-0 items-center gap-2 text-left"
-                    >
-                      {isInitOpen ? (
-                        <ChevronDown className="size-4 shrink-0 text-slate-500" />
-                      ) : (
-                        <ChevronRight className="size-4 shrink-0 text-slate-500" />
-                      )}
-                      <Target className="size-4 shrink-0 text-slate-700" />
-                      <span className="truncate text-[15px] font-semibold text-slate-900">{initiative.title}</span>
-                    </button>
+                  <div className="group grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
+                    <div className="relative flex min-w-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOpenInitiatives((prev) => ({ ...prev, [initiative.id]: !isInitOpen }))}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        {isInitOpen ? (
+                          <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                        ) : (
+                          <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                        )}
+                        <Target className="size-4 shrink-0 text-slate-700" />
+                        <span className="truncate text-[15px] font-semibold text-slate-900">{initiative.title}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
+                        }}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                        title="Add from this row"
+                      >
+                        <Plus className="size-3.5 text-slate-600" />
+                      </button>
+                      {openCreateMenuKey === `initiative:${initiative.id}` ? (
+                        <div className="absolute left-full top-1/2 z-30 ml-1 w-44 -translate-y-1/2 rounded-md border border-slate-200 bg-white p-1.5 shadow-lg">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openCreateComposer({
+                                anchorKey: `initiative:${initiative.id}`,
+                                scope: "initiative",
+                                kind: "initiative",
+                                initiativeId: initiative.id,
+                              })
+                            }
+                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                          >
+                            Add initiative
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openCreateComposer({
+                                anchorKey: `initiative:${initiative.id}`,
+                                scope: "initiative",
+                                kind: "epic",
+                                initiativeId: initiative.id,
+                              })
+                            }
+                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                          >
+                            Add epic
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openCreateComposer({
+                                anchorKey: `initiative:${initiative.id}`,
+                                scope: "initiative",
+                                kind: "story",
+                                initiativeId: initiative.id,
+                              })
+                            }
+                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                          >
+                            Add user story
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                     <span className="text-[14px] text-slate-700">{initiative.year}</span>
                     <span className="text-[14px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>
                     <span className="text-[14px] text-slate-700">{monthLabel(initiative.startMonth)}</span>
@@ -371,29 +499,160 @@ export function BacklogPlanningPanel({
                     <span className="text-[14px] text-slate-500">-</span>
                     <span className="text-[14px] text-slate-500">-</span>
                   </div>
+                  {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
+                    <form
+                      onSubmit={handleCreateSubmit}
+                      className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 bg-slate-50 px-3 py-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <input
+                          value={createDraftTitle}
+                          onChange={(event) => setCreateDraftTitle(event.target.value)}
+                          placeholder="Type initiative title and press Enter..."
+                          className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="col-span-8 flex items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          <Plus className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeInlineCreator}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
 
                   {isInitOpen ? (
                     <div className="bg-slate-50/50">
+                      {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
+                        <form
+                          onSubmit={handleCreateSubmit}
+                          className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2"
+                        >
+                          <div className="flex min-w-0 items-center gap-2 pl-6">
+                            <input
+                              value={createDraftTitle}
+                              onChange={(event) => setCreateDraftTitle(event.target.value)}
+                              placeholder={
+                                createSelection.kind === "epic"
+                                  ? "Type epic title and press Enter..."
+                                  : "Type user story title and press Enter..."
+                              }
+                              className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="col-span-8 flex items-center gap-2">
+                            {createSelection.kind === "story" ? (
+                              <select
+                                value={storyTargetEpicId}
+                                onChange={(event) => setStoryTargetEpicId(event.target.value)}
+                                className="h-8 rounded-md bg-white px-2 text-[12px] ring-1 ring-slate-200 outline-none"
+                              >
+                                <option value="">Select epic</option>
+                                {(initiative.epics ?? []).map((epic) => (
+                                  <option key={epic.id} value={epic.id}>
+                                    {epic.icon} {epic.title}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null}
+                            <button
+                              type="submit"
+                              disabled={
+                                createDraftTitle.trim().length < 2 ||
+                                submittingKey === "create" ||
+                                (createSelection.kind === "story" && !storyTargetEpicId)
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              <Plus className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={closeInlineCreator}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
                       {(initiative.epics ?? []).map((epic) => {
                         const isEpicOpen = openEpics[epic.id] ?? true;
                         return (
                           <div key={epic.id}>
-                            <div className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
-                              <button
-                                type="button"
-                                onClick={() => setOpenEpics((prev) => ({ ...prev, [epic.id]: !isEpicOpen }))}
-                                className="flex min-w-0 items-center gap-2 pl-6 text-left"
-                              >
-                                {isEpicOpen ? (
-                                  <ChevronDown className="size-4 shrink-0 text-slate-500" />
-                                ) : (
-                                  <ChevronRight className="size-4 shrink-0 text-slate-500" />
-                                )}
-                                <FolderKanban className="size-4 shrink-0 text-slate-700" />
-                                <span className="truncate text-[14px] font-semibold text-slate-800">
-                                  {epic.icon} {epic.title}
-                                </span>
-                              </button>
+                            <div className="group grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
+                              <div className="relative flex min-w-0 items-center gap-2 pl-6">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenEpics((prev) => ({ ...prev, [epic.id]: !isEpicOpen }))}
+                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                >
+                                  {isEpicOpen ? (
+                                    <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                                  ) : (
+                                    <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                                  )}
+                                  <FolderKanban className="size-4 shrink-0 text-slate-700" />
+                                  <span className="truncate text-[14px] font-semibold text-slate-800">
+                                    {epic.icon} {epic.title}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setOpenCreateMenuKey((prev) => (prev === `epic:${epic.id}` ? null : `epic:${epic.id}`));
+                                  }}
+                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                                  title="Add from this row"
+                                >
+                                  <Plus className="size-3.5 text-slate-600" />
+                                </button>
+                                {openCreateMenuKey === `epic:${epic.id}` ? (
+                                  <div className="absolute left-full top-1/2 z-30 ml-1 w-44 -translate-y-1/2 rounded-md border border-slate-200 bg-white p-1.5 shadow-lg">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openCreateComposer({
+                                          anchorKey: `epic:${epic.id}`,
+                                          scope: "epic",
+                                          kind: "epic",
+                                          initiativeId: initiative.id,
+                                        })
+                                      }
+                                      className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                                    >
+                                      Add epic
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openCreateComposer({
+                                          anchorKey: `epic:${epic.id}`,
+                                          scope: "epic",
+                                          kind: "story",
+                                          epicId: epic.id,
+                                        })
+                                      }
+                                      className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                                    >
+                                      Add user story
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                               <span className="text-[14px] text-slate-700">{initiative.year}</span>
                               <span className="text-[14px] text-slate-700">{quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}</span>
                               <span className="text-[14px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
@@ -405,25 +664,94 @@ export function BacklogPlanningPanel({
                               <span className="text-[14px] text-slate-500">-</span>
                               <span className="text-[14px] text-slate-500">-</span>
                             </div>
+                            {createSelection?.anchorKey === `epic:${epic.id}` ? (
+                              <form
+                                onSubmit={handleCreateSubmit}
+                                className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2"
+                              >
+                                <div className="flex min-w-0 items-center gap-2 pl-12">
+                                  <input
+                                    value={createDraftTitle}
+                                    onChange={(event) => setCreateDraftTitle(event.target.value)}
+                                    placeholder={
+                                      createSelection.kind === "epic"
+                                        ? "Type epic title and press Enter..."
+                                        : "Type user story title and press Enter..."
+                                    }
+                                    className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="col-span-8 flex items-center gap-2">
+                                  <button
+                                    type="submit"
+                                    disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
+                                  >
+                                    <Plus className="size-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={closeInlineCreator}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+                                  >
+                                    <X className="size-3.5" />
+                                  </button>
+                                </div>
+                              </form>
+                            ) : null}
 
                             {isEpicOpen ? (
                               <div>
                                 {(epic.userStories ?? []).map((story) => (
-                                  <button
-                                    key={story.id}
-                                    type="button"
-                                    onClick={() => onOpenStory(story.id)}
-                                    className="grid w-full grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                                  <div key={story.id}>
+                                    <div
+                                    className="group grid w-full grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
                                   >
-                                    <span className="flex min-w-0 items-center gap-2 pl-12">
-                                      <Folder className="size-3.5 shrink-0 text-slate-500" />
-                                      <span className="truncate text-[14px] text-slate-800">
-                                        {story.icon} {story.title}
-                                      </span>
-                                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                                        #{storyRefById[story.id] ?? story.id.slice(0, 6)}
-                                      </span>
-                                    </span>
+                                    <div className="relative flex min-w-0 items-center gap-2 pl-12">
+                                      <button
+                                        type="button"
+                                        onClick={() => onOpenStory(story.id)}
+                                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                      >
+                                        <Folder className="size-3.5 shrink-0 text-slate-500" />
+                                        <span className="truncate text-[14px] text-slate-800">
+                                          {story.icon} {story.title}
+                                        </span>
+                                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                          #{storyRefById[story.id] ?? story.id.slice(0, 6)}
+                                        </span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setOpenCreateMenuKey((prev) => (prev === `story:${story.id}` ? null : `story:${story.id}`));
+                                        }}
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                                        title="Add from this row"
+                                      >
+                                        <Plus className="size-3.5 text-slate-600" />
+                                      </button>
+                                      {openCreateMenuKey === `story:${story.id}` ? (
+                                        <div className="absolute left-full top-1/2 z-30 ml-1 w-44 -translate-y-1/2 rounded-md border border-slate-200 bg-white p-1.5 shadow-lg">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              openCreateComposer({
+                                                anchorKey: `story:${story.id}`,
+                                                scope: "story",
+                                                kind: "story",
+                                                epicId: epic.id,
+                                              })
+                                            }
+                                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                                          >
+                                            Add user story
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </div>
                                     <span className="text-[14px] text-slate-700">{initiative.year}</span>
                                     <span className="text-[14px] text-slate-700">
                                       {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
@@ -436,7 +764,40 @@ export function BacklogPlanningPanel({
                                     <span className="truncate text-[14px] text-slate-700">{story.assignee?.trim() || "Unassigned"}</span>
                                     <span className="text-[14px] text-slate-700">{story.estimatedDays ?? 0}d</span>
                                     <span className="text-[14px] text-slate-700">{story.daysLeft ?? 0}d</span>
-                                  </button>
+                                    </div>
+                                  {createSelection?.anchorKey === `story:${story.id}` ? (
+                                    <form
+                                      onSubmit={handleCreateSubmit}
+                                      className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 bg-slate-50 px-3 py-2"
+                                    >
+                                      <div className="flex min-w-0 items-center gap-2 pl-12">
+                                        <input
+                                          value={createDraftTitle}
+                                          onChange={(event) => setCreateDraftTitle(event.target.value)}
+                                          placeholder="Type user story title and press Enter..."
+                                          className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                                          autoFocus
+                                        />
+                                      </div>
+                                      <div className="col-span-8 flex items-center gap-2">
+                                        <button
+                                          type="submit"
+                                          disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
+                                        >
+                                          <Plus className="size-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={closeInlineCreator}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+                                        >
+                                          <X className="size-3.5" />
+                                        </button>
+                                      </div>
+                                    </form>
+                                  ) : null}
+                                  </div>
                                 ))}
                               </div>
                             ) : null}

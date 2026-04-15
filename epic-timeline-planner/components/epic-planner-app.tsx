@@ -406,6 +406,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     await refresh();
   }
 
+  async function createInitiativeQuick(title: string) {
+    const response = await fetch("/api/initiatives", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, year }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to create initiative");
+    }
+    await refresh();
+  }
+
   async function createStoryQuick(epicId: string, title: string) {
     const response = await fetch(`/api/epics/${epicId}/stories`, {
       method: "POST",
@@ -1367,6 +1379,30 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               storyRefById={storyRefMaps.byId}
               onOpenStory={(storyId) => {
                 setSelectedStoryId(storyId);
+              }}
+              onCreateInitiativeQuick={async (title) => {
+                try {
+                  await createInitiativeQuick(title);
+                  toast.success("Initiative added");
+                } catch {
+                  toast.error("Failed to add initiative");
+                }
+              }}
+              onCreateEpicQuick={async (initiativeId, title) => {
+                try {
+                  await createEpicQuick(initiativeId, title);
+                  toast.success("Epic added");
+                } catch {
+                  toast.error("Failed to add epic");
+                }
+              }}
+              onCreateStoryQuick={async (epicId, title) => {
+                try {
+                  await createStoryQuick(epicId, title);
+                  toast.success("User story added");
+                } catch {
+                  toast.error("Failed to add user story");
+                }
               }}
             />
           )}
