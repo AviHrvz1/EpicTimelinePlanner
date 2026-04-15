@@ -135,11 +135,11 @@ type TimelineGridProps = {
   onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
 };
 
-const QUARTER_YEAR_FRACTION: Record<string, number> = {
-  Q1: 0.25,
-  Q2: 0.5,
-  Q3: 0.75,
-  Q4: 1,
+const QUARTER_PROGRESS_STEPS: Record<string, number> = {
+  Q1: 1,
+  Q2: 2,
+  Q3: 3,
+  Q4: 4,
 };
 
 const FULL_MONTH_NAMES = [
@@ -157,21 +157,6 @@ const FULL_MONTH_NAMES = [
   "December",
 ] as const;
 
-function quarterWedgePath(frac: number): string | null {
-  if (frac >= 1 - 1e-6) return null;
-  const cx = 12;
-  const cy = 12;
-  const r = 8;
-  const start = -Math.PI / 2;
-  const end = start + frac * 2 * Math.PI;
-  const x1 = cx + r * Math.cos(start);
-  const y1 = cy + r * Math.sin(start);
-  const x2 = cx + r * Math.cos(end);
-  const y2 = cy + r * Math.sin(end);
-  const largeArc = frac > 0.5 ? 1 : 0;
-  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-}
-
 function QuarterYearProgressIcon({
   quarterLabel,
   className,
@@ -179,30 +164,26 @@ function QuarterYearProgressIcon({
   quarterLabel: string;
   className?: string;
 }) {
-  const frac = QUARTER_YEAR_FRACTION[quarterLabel] ?? 0.25;
-  const wedge = quarterWedgePath(frac);
+  const activeSteps = Math.max(1, Math.min(4, QUARTER_PROGRESS_STEPS[quarterLabel] ?? 1));
 
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className={cn("size-[18px] shrink-0", className)}
-      aria-hidden
-    >
-      <circle
-        cx={12}
-        cy={12}
-        r={8}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.25}
-        className="opacity-40"
-      />
-      {frac >= 1 - 1e-6 ? (
-        <circle cx={12} cy={12} r={7} fill="currentColor" className="opacity-95" />
-      ) : wedge ? (
-        <path d={wedge} fill="currentColor" className="opacity-95" />
-      ) : null}
-    </svg>
+    <span className={cn("inline-flex h-4 w-4 items-center justify-center", className)} aria-hidden>
+      <span className="inline-flex h-3 w-3 items-end gap-[1px]">
+        {Array.from({ length: 4 }, (_, idx) => (
+          <span
+            key={idx}
+            className={cn(
+              "w-[2px] rounded-[1px] bg-current transition-opacity",
+              idx === 0 && "h-[4px]",
+              idx === 1 && "h-[6px]",
+              idx === 2 && "h-[8px]",
+              idx === 3 && "h-[10px]",
+              idx < activeSteps ? "opacity-95" : "opacity-25",
+            )}
+          />
+        ))}
+      </span>
+    </span>
   );
 }
 

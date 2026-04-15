@@ -64,11 +64,8 @@ export function InitiativeTimelineBar({
       <div className="mt-0.5 flex items-center gap-1.5 px-2">
         <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
-            className="h-full rounded-[3px] transition-all"
-            style={{
-              width: `${safeProgress}%`,
-              backgroundImage: "linear-gradient(to right, rgb(34 211 238), rgb(139 92 246))",
-            }}
+            className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
+            style={{ width: `${safeProgress}%` }}
             aria-hidden
           />
         </div>

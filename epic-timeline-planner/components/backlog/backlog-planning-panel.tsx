@@ -737,7 +737,7 @@ export function BacklogPlanningPanel({
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all"
+                          className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
                           style={{ width: `${initiativeProgress.percent}%` }}
                         />
                       </div>
@@ -954,7 +954,7 @@ export function BacklogPlanningPanel({
                                 </div>
                                 <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                                   <div
-                                    className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all"
+                                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
                                     style={{ width: `${epicProgress.percent}%` }}
                                   />
                                 </div>
@@ -1086,7 +1086,7 @@ export function BacklogPlanningPanel({
                                       </div>
                                       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                                         <div
-                                          className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all"
+                                          className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
                                           style={{ width: `${progress.percent}%` }}
                                         />
                                       </div>
