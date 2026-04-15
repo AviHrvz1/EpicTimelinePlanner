@@ -72,7 +72,7 @@ function KanbanStoryCard({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-lg border border-slate-200/90 bg-white px-2 py-2 shadow-sm",
+        "rounded-lg border border-slate-200/90 bg-white px-3 py-2.5 shadow-sm",
         isDragging && "opacity-60",
       )}
       style={{
@@ -80,10 +80,10 @@ function KanbanStoryCard({
         zIndex: isDragging ? 20 : undefined,
       }}
     >
-      <div className="flex items-start gap-1.5">
+      <div className="flex items-start gap-2.5">
         <button
           type="button"
-          className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+          className="mt-1 shrink-0 cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
           aria-label="Drag story"
           {...attributes}
           {...listeners}
@@ -93,22 +93,22 @@ function KanbanStoryCard({
         <button
           type="button"
           onClick={() => onOpenStory(story.id)}
-          className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left transition hover:bg-slate-50"
+          className="min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-left transition hover:bg-slate-50"
           aria-label="Open user story details"
         >
-          <p className="min-w-0 text-[14px] font-semibold leading-snug text-slate-900">
-            {story.icon ? <span className="mr-0.5">{story.icon}</span> : null}
+          <p className="min-w-0 text-[15px] font-semibold leading-snug text-slate-900">
+            {story.icon ? <span className="mr-1.5 inline-block align-middle">{story.icon}</span> : null}
             {story.title}
           </p>
-          <p className="mt-1 truncate text-[12px] text-slate-500">{epic.title}</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[12px] font-medium text-slate-700">
+          <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-700">
               {story.assignee?.trim() || "Unassigned"}
             </span>
-            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[12px] font-medium text-blue-700">
+            <span className="rounded-md bg-blue-100 px-2 py-1 text-[12px] font-medium text-blue-700">
               Est: {story.estimatedDays ?? 0}d
             </span>
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[12px] font-medium text-amber-700">
+            <span className="rounded-md bg-amber-100 px-2 py-1 text-[12px] font-medium text-amber-700">
               Left: {story.daysLeft ?? 0}d
             </span>
           </div>
