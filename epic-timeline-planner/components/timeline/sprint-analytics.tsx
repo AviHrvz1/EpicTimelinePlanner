@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react";
 import { Activity, ChartNoAxesCombined, PieChart as PieChartIcon } from "lucide-react";
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -45,7 +43,6 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const topSlice = pieData[0] ?? null;
-  const assigneeChartData = analytics.assigneeBars;
   const renderSpacedLegend = ({
     payload,
   }: {
@@ -63,12 +60,6 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
       ))}
     </div>
   );
-  const renderAssigneeLegend = ({
-    payload,
-  }: {
-    payload?: ReadonlyArray<{ color?: string; value?: string }>;
-  }) => renderSpacedLegend({ payload });
-
   return (
     <section className="mb-4 grid gap-3 lg:grid-cols-3">
       <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
@@ -193,31 +184,59 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
         </div>
       </article>
 
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-3">
+      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-1">
+        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+          <Activity className="size-4 text-slate-600" />
+          Flow trend (30d)
+        </h3>
+        <div className="rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+          <svg viewBox="0 0 100 100" className="h-28 w-full" preserveAspectRatio="none" aria-hidden>
+            <polyline
+              fill="none"
+              stroke="rgb(59 130 246)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              points={analytics.flowSparkline}
+            />
+          </svg>
+        </div>
+        <p className="mt-2 text-[12px] text-slate-600">
+          {analytics.doneLast7d} stories moved to done/approved in the last 7 days.
+        </p>
+      </article>
+
+      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-2">
         <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <ChartNoAxesCombined className="size-4 text-slate-600" />
-          Assignee progress
+          Workload balance
         </h3>
-        <div className="h-60">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={assigneeChartData}
-              margin={{ top: 8, right: 20, left: 12, bottom: 12 }}
-              barCategoryGap="42%"
-              barGap={3}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="assignee" type="category" interval={0} tickMargin={12} />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Legend content={renderAssigneeLegend} />
-              <Bar dataKey="todo" stackId="progress" fill="#f59e0b" name="To do" maxBarSize={36} />
-              <Bar dataKey="inProgress" stackId="progress" fill="#3b82f6" name="In progress" maxBarSize={36} />
-              <Bar dataKey="done" stackId="progress" fill="#10b981" name="Done" maxBarSize={36} />
-              <Bar dataKey="approved" stackId="progress" fill="#8b5cf6" name="Approved" maxBarSize={36} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="space-y-2">
+          {analytics.workloadByAssignee.length > 0 ? (
+            analytics.workloadByAssignee.map((item) => (
+              <div key={item.assignee}>
+                <div className="mb-0.5 flex items-center justify-between text-[12px] text-slate-700">
+                  <span className="truncate pr-2">{item.assignee}</span>
+                  <span>
+                    {item.daysLeftTotal}d left · {item.openCount} open
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-cyan-500"
+                    style={{ width: `${Math.max(10, (item.daysLeftTotal / analytics.workloadMaxDays) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-[12px] text-slate-500">No open workload found for this sprint.</p>
+          )}
         </div>
+        <p className="mt-2 text-[12px] text-slate-600">
+          {analytics.openStories} open stories, <span className="text-amber-700">{analytics.atRiskStories} at risk</span>
+          .
+        </p>
       </article>
     </section>
   );

@@ -5,14 +5,16 @@ export type BurndownMetric = "daysLeft" | "storyCount";
 export type SprintAnalyticsData = {
   statusPie: Array<{ name: string; value: number }>;
   burndown: Array<{ day: string; ideal: number; actual: number | null }>;
-  assigneeBars: Array<{
+  workloadByAssignee: Array<{
     assignee: string;
-    todo: number;
-    inProgress: number;
-    done: number;
-    approved: number;
-    total: number;
+    openCount: number;
+    daysLeftTotal: number;
   }>;
+  workloadMaxDays: number;
+  flowSparkline: string;
+  doneLast7d: number;
+  openStories: number;
+  atRiskStories: number;
   totalStories: number;
 };
 
@@ -90,32 +92,69 @@ function buildBurndown(stories: UserStoryItem[], sprintLane: 1 | 2, metric: Burn
   });
 }
 
-function buildAssigneeBars(stories: UserStoryItem[], sprintLane: 1 | 2) {
+function buildWorkloadByAssignee(stories: UserStoryItem[], sprintLane: 1 | 2) {
   const sprintStories = stories.filter((story) => story.sprint === sprintLane);
-  const byAssignee = new Map<
-    string,
-    { todo: number; inProgress: number; done: number; approved: number; total: number }
-  >();
-  for (const story of sprintStories) {
+  const openStories = sprintStories.filter(
+    (story) => story.status === "todo" || story.status === "inProgress",
+  );
+  const byAssignee = new Map<string, { openCount: number; daysLeftTotal: number }>();
+  for (const story of openStories) {
     const assignee = story.assignee?.trim() || "Unassigned";
-    const row = byAssignee.get(assignee) ?? { todo: 0, inProgress: 0, done: 0, approved: 0, total: 0 };
-    row.total += 1;
-    if (story.status === "inProgress") row.inProgress += 1;
-    else if (story.status === "done") row.done += 1;
-    else if (story.status === "approved") row.approved += 1;
-    else row.todo += 1;
+    const row = byAssignee.get(assignee) ?? { openCount: 0, daysLeftTotal: 0 };
+    row.openCount += 1;
+    row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
     byAssignee.set(assignee, row);
   }
-  return [...byAssignee.entries()]
+  const workload = [...byAssignee.entries()]
     .map(([assignee, v]) => ({
       assignee,
-      todo: v.todo,
-      inProgress: v.inProgress,
-      done: v.done,
-      approved: v.approved,
-      total: v.total,
+      openCount: v.openCount,
+      daysLeftTotal: v.daysLeftTotal,
     }))
-    .sort((a, b) => b.total - a.total || a.assignee.localeCompare(b.assignee));
+    .sort((a, b) => b.daysLeftTotal - a.daysLeftTotal || b.openCount - a.openCount || a.assignee.localeCompare(b.assignee));
+  const workloadMaxDays = Math.max(1, ...workload.map((item) => item.daysLeftTotal));
+  const atRiskStories = openStories.filter(
+    (story) => story.status === "inProgress" && (story.daysLeft ?? 0) < 0,
+  ).length;
+  return {
+    workloadByAssignee: workload,
+    workloadMaxDays,
+    openStories: openStories.length,
+    atRiskStories,
+  };
+}
+
+function buildFlowTrend(stories: UserStoryItem[], sprintLane: 1 | 2) {
+  const sprintStories = stories.filter((story) => story.sprint === sprintLane);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const points = Array.from({ length: 30 }, (_, index) => {
+    const pointDate = new Date(today);
+    pointDate.setDate(today.getDate() - (29 - index));
+    const cumulativeDone = sprintStories.filter((story) => {
+      if (!(story.status === "done" || story.status === "approved")) return false;
+      const updatedAt = new Date(story.updatedAt);
+      updatedAt.setHours(0, 0, 0, 0);
+      return updatedAt.getTime() <= pointDate.getTime();
+    }).length;
+    return { cumulativeDone };
+  });
+  const maxDone = Math.max(1, ...points.map((point) => point.cumulativeDone));
+  const flowSparkline = points
+    .map((point, index) => {
+      const x = points.length === 1 ? 0 : (index / (points.length - 1)) * 100;
+      const y = 100 - (point.cumulativeDone / maxDone) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 7);
+  const doneLast7d = sprintStories.filter((story) => {
+    if (!(story.status === "done" || story.status === "approved")) return false;
+    const updatedAt = new Date(story.updatedAt);
+    return updatedAt.getTime() >= sevenDaysAgo.getTime();
+  }).length;
+  return { flowSparkline, doneLast7d };
 }
 
 export function buildSprintAnalytics(
@@ -125,10 +164,13 @@ export function buildSprintAnalytics(
   metric: BurndownMetric,
 ): SprintAnalyticsData {
   const stories = collectMonthStories(initiatives, month);
+  const workload = buildWorkloadByAssignee(stories, sprintLane);
+  const flow = buildFlowTrend(stories, sprintLane);
   return {
     statusPie: buildStatusPie(stories, sprintLane),
     burndown: buildBurndown(stories, sprintLane, metric),
-    assigneeBars: buildAssigneeBars(stories, sprintLane),
+    ...workload,
+    ...flow,
     totalStories: stories.filter((story) => story.sprint === sprintLane).length,
   };
 }

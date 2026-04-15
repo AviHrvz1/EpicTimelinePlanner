@@ -648,7 +648,7 @@ export function TimelineGrid({
       {activeMonth ? (
         <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
           <div className="flex min-h-[56rem] flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <div className="mb-4 flex justify-end">
+            <div className="mb-4 flex justify-end gap-2">
               <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
                 {([1, 2] as const).map((sprint) => (
                   <button
@@ -670,8 +670,6 @@ export function TimelineGrid({
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="mb-4 flex justify-end">
               <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
                 <button
                   type="button"

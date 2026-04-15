@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Epic Timeline Planner",
-  description: "Professional roadmap planning with draggable epics",
+  title: "Bird Eye Viewer",
+  description: "Bird's-eye roadmap planning across quarters, months, and sprints",
 };
 
 export default function RootLayout({

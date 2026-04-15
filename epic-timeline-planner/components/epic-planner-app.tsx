@@ -193,7 +193,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
   const hasHydratedFromUrlRef = useRef(false);
 
-  const title = useMemo(() => `Roadmap ${selectedYear}`, [selectedYear]);
   const roadmapSummary = useMemo(() => {
     const scheduled = initiatives.filter((i) => i.status === "scheduled");
     const backlog = initiatives.filter((i) => i.status === "backlog");
@@ -202,6 +201,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       (sum, i) => sum + (i.epics ?? []).reduce((es, e) => es + (e.userStories?.length ?? 0), 0),
       0,
     );
+    const completedStories = initiatives.reduce(
+      (sum, initiative) =>
+        sum +
+        (initiative.epics ?? []).reduce(
+          (epicSum, epic) =>
+            epicSum +
+            (epic.userStories ?? []).filter(
+              (story) => story.status === StoryStatus.done || story.status === StoryStatus.approved,
+            ).length,
+          0,
+        ),
+      0,
+    );
+    const completionPercent = totalStories > 0 ? Math.round((completedStories / totalStories) * 100) : 0;
 
     return {
       totalInitiatives: initiatives.length,
@@ -209,9 +222,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       backlogInitiatives: backlog.length,
       totalEpics,
       totalStories,
+      completedStories,
+      completionPercent,
     };
   }, [initiatives]);
-
   const selectedStory = (() => {
     if (!selectedStoryId) return null;
     for (const initiative of initiatives) {
@@ -1197,14 +1211,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     <DragContext onDragEnd={onDragEnd}>
       <main className="h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8">
         <div className="mx-auto flex h-full w-full max-w-[2550px] flex-col gap-5 overflow-hidden">
-          <div className="rounded-2xl bg-card p-6 shadow-lg ring-1 ring-black/5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-[26px] leading-8 font-semibold tracking-tight text-slate-900">{title}</h1>
-                <p className="text-[15px] leading-6 font-normal text-slate-600">
-                  Initiative planning with quarter-based timeline scheduling.
-                </p>
-                <div className="mt-4 inline-flex rounded-xl bg-slate-100/90 p-1 ring-1 ring-slate-200">
+          <div className="rounded-2xl bg-card p-4 shadow-lg ring-1 ring-black/5">
+            <div className="flex items-start justify-between gap-6">
+              <div className="min-w-0 flex-1">
+                <div className="inline-flex flex-col">
+                  <img
+                    src="/bird-eye-lockup-wide.png"
+                    alt="Bird Eye Viewer logo"
+                    className="h-[96px] w-auto max-w-[560px] object-contain"
+                  />
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-3">
+                <div className="inline-flex rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200">
                   <button
                     type="button"
                     onClick={() => setTopMode("roadmap")}
