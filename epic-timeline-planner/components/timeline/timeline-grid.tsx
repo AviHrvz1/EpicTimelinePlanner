@@ -1,16 +1,13 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { CalendarDays, Flag } from "lucide-react";
+import { Flag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
-import { EpicPlanBlock } from "@/components/timeline/epic-plan-block";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
-import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
-import { collectPlannedEpicsForMonth } from "@/lib/sprint-plan";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -199,21 +196,6 @@ function MonthDropCell({ month }: { month: number }) {
       ref={setNodeRef}
       className={cn("h-2 w-full shrink-0 rounded-sm transition", isOver && "bg-primary/25")}
       aria-hidden
-    />
-  );
-}
-
-function EpicPlanDropCell({ month, sprint }: { month: number; sprint: 1 | 2 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `epic-plan:${month}:${sprint}` });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "min-h-[4.5rem] rounded-md bg-slate-50/40 transition",
-        isOver && "ring-1 ring-slate-300",
-      )}
-      aria-label={`Drop epic in sprint ${sprint}`}
     />
   );
 }
@@ -425,17 +407,20 @@ export function TimelineGrid({
       const hadPreviousMonth = prevActiveMonthRef.current != null;
       prevActiveMonthRef.current = activeMonth;
       if (hadPreviousMonth) {
-        setActiveSprint(null);
+        setActiveSprint(1);
         setActiveSprintTab("kanban");
       }
     }
   }, [activeMonth]);
 
   useEffect(() => {
+    if (activeMonth != null && activeSprint == null) {
+      setActiveSprint(1);
+    }
     if (activeSprint == null) {
       setActiveSprintTab("kanban");
     }
-  }, [activeSprint]);
+  }, [activeMonth, activeSprint]);
 
   useEffect(() => {
     onSprintTabChange?.(activeSprintTab);
@@ -446,11 +431,7 @@ export function TimelineGrid({
       onSprintModeChange(false, null, null);
       return;
     }
-    if (activeSprint != null) {
-      onSprintModeChange(true, activeMonth, activeSprint);
-    } else {
-      onSprintModeChange(false, activeMonth, null);
-    }
+    onSprintModeChange(true, activeMonth, activeSprint ?? 1);
   }, [activeMonth, activeSprint, onSprintModeChange]);
 
   const breadcrumbItems: Array<{
@@ -541,99 +522,37 @@ export function TimelineGrid({
       ) : null}
       {activeMonth ? (
         <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
-          {activeSprint != null ? (
-            <div className="flex min-h-[56rem] flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
-              <div className="mb-4 rounded-lg bg-slate-100 py-2 text-center ring-1 ring-black/5">
-                <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
-                  <Flag className={cn("size-3.5", sprintTheme[activeSprint].icon)} />
-                  {sprintLaneLabels[activeSprint - 1]}
-                </span>
-              </div>
-              <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+          <div className="flex min-h-[56rem] flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
+            <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+              {([1, 2] as const).map((sprint) => (
                 <button
+                  key={`month-sprint-tab-${sprint}`}
                   type="button"
-                  onClick={() => setActiveSprintTab("kanban")}
+                  onClick={() => {
+                    setActiveSprintTab("kanban");
+                    setActiveSprint(sprint);
+                  }}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                    activeSprintTab === "kanban"
+                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                    (activeSprint ?? 1) === sprint
                       ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
                       : "text-slate-600 hover:text-slate-800",
                   )}
                 >
-                  Kanban
+                  <Flag className={cn("size-3.5", sprintTheme[sprint].icon)} />
+                  {sprintLaneLabels[sprint - 1]}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSprintTab("status")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                    activeSprintTab === "status"
-                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                      : "text-slate-600 hover:text-slate-800",
-                  )}
-                >
-                  Sprint status
-                </button>
-              </div>
-              {activeSprintTab === "kanban" ? (
-                <div className="flex-1">
-                  <SprintKanbanBoard
-                    initiatives={initiatives}
-                    month={activeMonth}
-                    sprintLane={activeSprint}
-                    onOpenStory={onOpenStory ?? (() => {})}
-                  />
-                </div>
-              ) : (
-                <SprintAnalytics initiatives={initiatives} month={activeMonth} sprintLane={activeSprint} />
-              )}
+              ))}
             </div>
-          ) : (
-            <>
-              <div className="flex min-h-[50rem] flex-col rounded-lg bg-white p-2.5 shadow-sm ring-1 ring-black/5">
-                <div className="mb-2 rounded-md bg-slate-100 py-2 text-center">
-                  <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
-                    <CalendarDays className="size-3.5 text-slate-600" />
-                    {FULL_MONTH_NAMES[activeMonth - 1]}
-                  </span>
-                </div>
-                <div className="grid flex-1 grid-cols-2 gap-2.5">
-                  {([1, 2] as const).map((sprint) => {
-                    const planned = collectPlannedEpicsForMonth(initiatives, sprint, activeMonth);
-                    return (
-                      <div
-                        key={`sprint-col-${sprint}`}
-                        className={cn("flex h-full flex-col rounded-lg p-2", sprintTheme[sprint].col)}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setActiveSprint(sprint)}
-                          className={cn(
-                            "mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-center text-[14px] font-semibold shadow-sm transition",
-                            sprintTheme[sprint].header,
-                          )}
-                        >
-                          <Flag className={cn("size-3.5", sprintTheme[sprint].icon)} />
-                          {sprintLaneLabels[sprint - 1]}
-                        </button>
-                        <EpicPlanDropCell month={activeMonth} sprint={sprint} />
-                        <div className="mt-2 flex-1 space-y-1.5">
-                          {planned.map(({ epic }) => (
-                            <EpicPlanBlock
-                              key={epic.id}
-                              epic={epic}
-                              onOpenEpic={() => onOpenEpic(epic.id)}
-                              onOpenStory={onOpenStory}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
+            <div className="flex-1">
+              <SprintKanbanBoard
+                initiatives={initiatives}
+                month={activeMonth}
+                sprintLane={activeSprint ?? 1}
+                onOpenStory={onOpenStory ?? (() => {})}
+              />
+            </div>
+          </div>
         </div>
       ) : (
         <>

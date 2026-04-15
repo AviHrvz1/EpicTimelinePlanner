@@ -128,3 +128,16 @@ export function parseStoryIdFromDraggable(activeId: string): string | null {
 export function sprintKanbanDropId(month: number, sprint: 1 | 2, status: string): string {
   return `kanban:${month}:${sprint}:${status}`;
 }
+
+/** Month-level epic status board: StoryStatus column (only `todo` accepts epic drops). */
+export function monthEpicKanbanDropId(month: number, status: string): string {
+  return `epic-kanban:${month}:${status}`;
+}
+
+export function parseMonthEpicKanbanDropId(overId: string): { month: number; status: string } | null {
+  const m = /^epic-kanban:(\d+):(todo|inProgress|done|approved)$/.exec(overId);
+  if (!m) return null;
+  const month = Number(m[1]);
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null;
+  return { month, status: m[2] };
+}
