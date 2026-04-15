@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, FileText, Folder, FolderKanban, Plus, Search, Target, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { InitiativeItem } from "@/lib/types";
@@ -87,14 +87,14 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-9 min-w-[9.5rem] cursor-pointer items-center justify-between rounded-md bg-white px-2.5 text-[13px] ring-1 ring-slate-200 outline-none"
+        className="flex h-10 min-w-[10.5rem] cursor-pointer items-center justify-between rounded-md bg-white px-3 text-[15px] ring-1 ring-slate-200 outline-none"
       >
         <span className="font-medium text-slate-700">{label}: </span>
         <span className="ml-1 truncate text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
-        <label className="mb-1 flex items-center gap-2 text-[12px] text-slate-700">
+        <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
           <input
             type="checkbox"
             checked={allSelected}
@@ -105,7 +105,7 @@ function MultiCheckboxFilter({
         </label>
         <div className="max-h-44 space-y-1 overflow-auto pr-1">
           {options.map((option) => (
-            <label key={option.id} className="flex items-center gap-2 text-[12px] text-slate-700">
+            <label key={option.id} className="flex items-center gap-2 text-[14px] text-slate-700">
               <input
                 type="checkbox"
                 checked={allSelected || selected.includes(option.id)}
@@ -388,8 +388,7 @@ export function BacklogPlanningPanel({
     <section className="h-full min-h-0 overflow-hidden rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-[20px] font-semibold tracking-tight text-slate-900">Backlog</h2>
-          <p className="text-[14px] text-slate-600">Accordion table view across initiatives, epics, and stories.</p>
+          <h2 className="text-[24px] font-semibold tracking-tight text-slate-900">Backlog</h2>
         </div>
       </div>
 
@@ -400,7 +399,7 @@ export function BacklogPlanningPanel({
           onChange={(event) => setQuery(event.target.value)}
           list="backlog-search-suggestions"
           placeholder="Search work items..."
-          className="h-9 w-full rounded-md bg-white px-3 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+          className="h-10 w-full rounded-md bg-white px-3 text-[15px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
         />
         <datalist id="backlog-search-suggestions">
           {suggestions.map((item) => (
@@ -423,7 +422,7 @@ export function BacklogPlanningPanel({
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="h-9 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+          className="h-10 rounded-md bg-white px-3 text-[15px] ring-1 ring-slate-200 outline-none"
         >
           <option value="titleAsc">Sort: Title (A-Z)</option>
           <option value="titleDesc">Title (Z-A)</option>
@@ -435,7 +434,7 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-lg ring-1 ring-slate-200">
-        <div className="sticky top-0 z-10 grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 text-[14px] font-semibold text-slate-700">
+        <div className="sticky top-0 z-10 grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2.5 text-[16px] font-semibold text-slate-700">
           <span>Work item</span>
           <span>Year</span>
           <span>Q</span>
@@ -448,7 +447,7 @@ export function BacklogPlanningPanel({
         </div>
 
         {fullyFiltered.length === 0 ? (
-          <div className="p-4 text-[14px] text-slate-600">No items match your search/filter settings.</div>
+          <div className="p-4 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
           <div className="divide-y divide-slate-100 bg-white">
             {fullyFiltered.map((initiative) => {
@@ -472,7 +471,7 @@ export function BacklogPlanningPanel({
                           <ChevronRight className="size-4 shrink-0 text-slate-500" />
                         )}
                         <Target className="size-4 shrink-0 text-slate-700" />
-                        <span className="truncate text-[15px] font-semibold text-slate-900">{initiative.title}</span>
+                        <span className="truncate text-[17px] font-medium text-slate-900">{initiative.title}</span>
                       </button>
                       <button
                         type="button"
@@ -497,7 +496,7 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
                           >
                             <Target className="size-3.5 text-slate-500" />
                             Add initiative
@@ -512,7 +511,7 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
                           >
                             <FolderKanban className="size-3.5 text-slate-500" />
                             Add epic
@@ -527,7 +526,7 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
                           >
                             <FileText className="size-3.5 text-slate-500" />
                             Add user story
@@ -535,16 +534,16 @@ export function BacklogPlanningPanel({
                         </div>
                       ) : null}
                     </div>
-                    <span className="text-[14px] text-slate-700">{initiative.year}</span>
-                    <span className="text-[14px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>
-                    <span className="text-[14px] text-slate-700">{monthLabel(initiative.startMonth)}</span>
-                    <span className="w-fit rounded bg-slate-100 px-2 py-0.5 text-[12px] font-medium text-slate-700">
+                    <span className="text-[15px] text-slate-700">{initiative.year}</span>
+                    <span className="text-[15px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>
+                    <span className="text-[15px] text-slate-700">{monthLabel(initiative.startMonth)}</span>
+                    <span className="w-fit rounded bg-slate-100 px-2 py-0.5 text-[13px] font-medium text-slate-700">
                       {initiative.status}
                     </span>
-                    <span className="text-[14px] text-slate-500">-</span>
-                    <span className="truncate text-[14px] text-slate-700">{initiative.assignee ?? "Unassigned"}</span>
-                    <span className="text-[14px] text-slate-500">-</span>
-                    <span className="text-[14px] text-slate-500">-</span>
+                    <span className="text-[15px] text-slate-500">-</span>
+                    <span className="truncate text-[15px] text-slate-700">{initiative.assignee ?? "Unassigned"}</span>
+                    <span className="text-[15px] text-slate-500">-</span>
+                    <span className="text-[15px] text-slate-500">-</span>
                   </div>
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
                     <form
@@ -562,7 +561,7 @@ export function BacklogPlanningPanel({
                           spellCheck={false}
                           data-1p-ignore="true"
                           data-lpignore="true"
-                          className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                          className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                           autoFocus
                         />
                       </div>
@@ -607,7 +606,7 @@ export function BacklogPlanningPanel({
                               spellCheck={false}
                               data-1p-ignore="true"
                               data-lpignore="true"
-                              className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                              className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                               autoFocus
                             />
                           </div>
@@ -616,7 +615,7 @@ export function BacklogPlanningPanel({
                               <select
                                 value={storyTargetEpicId}
                                 onChange={(event) => setStoryTargetEpicId(event.target.value)}
-                                className="h-8 rounded-md bg-white px-2 text-[12px] ring-1 ring-slate-200 outline-none"
+                                className="h-9 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
                               >
                                 <option value="">Select epic</option>
                                 {(initiative.epics ?? []).map((epic) => (
@@ -667,8 +666,8 @@ export function BacklogPlanningPanel({
                                   ) : (
                                     <ChevronRight className="size-4 shrink-0 text-slate-500" />
                                   )}
-                                  <FolderKanban className="size-4 shrink-0 text-slate-700" />
-                                  <span className="truncate text-[14px] font-semibold text-slate-800">
+                                  <span className="inline-block size-4 shrink-0" aria-hidden />
+                                  <span className="truncate text-[16px] font-medium text-slate-800">
                                     {epic.icon} {epic.title}
                                   </span>
                                 </button>
@@ -695,7 +694,7 @@ export function BacklogPlanningPanel({
                                           initiativeId: initiative.id,
                                         })
                                       }
-                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
                                     >
                                       <FolderKanban className="size-3.5 text-slate-500" />
                                       Add epic
@@ -710,7 +709,7 @@ export function BacklogPlanningPanel({
                                           epicId: epic.id,
                                         })
                                       }
-                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
                                     >
                                       <FileText className="size-3.5 text-slate-500" />
                                       Add user story
@@ -718,16 +717,16 @@ export function BacklogPlanningPanel({
                                   </div>
                                 ) : null}
                               </div>
-                              <span className="text-[14px] text-slate-700">{initiative.year}</span>
-                              <span className="text-[14px] text-slate-700">{quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}</span>
-                              <span className="text-[14px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
-                              <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-[12px] font-medium text-amber-700">
+                              <span className="text-[15px] text-slate-700">{initiative.year}</span>
+                              <span className="text-[15px] text-slate-700">{quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}</span>
+                              <span className="text-[15px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
+                              <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-[13px] font-medium text-amber-700">
                                 {(epic.userStories ?? []).length} stories
                               </span>
-                              <span className="text-[14px] text-slate-500">-</span>
-                              <span className="truncate text-[14px] text-slate-700">{epic.assignee ?? "Unassigned"}</span>
-                              <span className="text-[14px] text-slate-500">-</span>
-                              <span className="text-[14px] text-slate-500">-</span>
+                              <span className="text-[15px] text-slate-500">-</span>
+                              <span className="truncate text-[15px] text-slate-700">{epic.assignee ?? "Unassigned"}</span>
+                              <span className="text-[15px] text-slate-500">-</span>
+                              <span className="text-[15px] text-slate-500">-</span>
                             </div>
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
                               <form
@@ -749,7 +748,7 @@ export function BacklogPlanningPanel({
                                     spellCheck={false}
                                     data-1p-ignore="true"
                                     data-lpignore="true"
-                                    className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                                    className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                     autoFocus
                                   />
                                 </div>
@@ -789,11 +788,11 @@ export function BacklogPlanningPanel({
                                         onClick={() => onOpenStory(story.id)}
                                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                       >
-                                        <Folder className="size-3.5 shrink-0 text-slate-500" />
-                                        <span className="truncate text-[14px] text-slate-800">
+                                        <span className="inline-block size-3.5 shrink-0" aria-hidden />
+                                        <span className="truncate text-[15px] text-slate-800">
                                           {story.icon} {story.title}
                                         </span>
-                                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[12px] font-semibold text-slate-600">
                                           #{storyRefById[story.id] ?? story.id.slice(0, 6)}
                                         </span>
                                       </button>
@@ -820,7 +819,7 @@ export function BacklogPlanningPanel({
                                                 epicId: epic.id,
                                               })
                                             }
-                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
                                           >
                                             <FileText className="size-3.5 text-slate-500" />
                                             Add user story
@@ -828,18 +827,18 @@ export function BacklogPlanningPanel({
                                         </div>
                                       ) : null}
                                     </div>
-                                    <span className="text-[14px] text-slate-700">{initiative.year}</span>
-                                    <span className="text-[14px] text-slate-700">
+                                    <span className="text-[15px] text-slate-700">{initiative.year}</span>
+                                    <span className="text-[15px] text-slate-700">
                                       {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
-                                    <span className="text-[14px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
-                                    <span className={cn("w-fit rounded px-2 py-0.5 text-[12px] font-medium", statusChip(story.status))}>
+                                    <span className="text-[15px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
+                                    <span className={cn("w-fit rounded px-2 py-0.5 text-[13px] font-medium", statusChip(story.status))}>
                                       {story.status === "inProgress" ? "In progress" : story.status}
                                     </span>
-                                    <span className="text-[14px] text-slate-700">{sprintLabel(story.sprint)}</span>
-                                    <span className="truncate text-[14px] text-slate-700">{story.assignee?.trim() || "Unassigned"}</span>
-                                    <span className="text-[14px] text-slate-700">{story.estimatedDays ?? 0}d</span>
-                                    <span className="text-[14px] text-slate-700">{story.daysLeft ?? 0}d</span>
+                                    <span className="text-[15px] text-slate-700">{sprintLabel(story.sprint)}</span>
+                                    <span className="truncate text-[15px] text-slate-700">{story.assignee?.trim() || "Unassigned"}</span>
+                                    <span className="text-[15px] text-slate-700">{story.estimatedDays ?? 0}d</span>
+                                    <span className="text-[15px] text-slate-700">{story.daysLeft ?? 0}d</span>
                                     </div>
                                   {createSelection?.anchorKey === `story:${story.id}` ? (
                                     <form
@@ -857,7 +856,7 @@ export function BacklogPlanningPanel({
                                           spellCheck={false}
                                           data-1p-ignore="true"
                                           data-lpignore="true"
-                                          className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                                          className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                           autoFocus
                                         />
                                       </div>
