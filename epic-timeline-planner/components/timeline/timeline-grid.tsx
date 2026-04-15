@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { ChevronRight, Flag } from "lucide-react";
+import { ChevronDown, ChevronRight, Flag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -535,18 +535,26 @@ export function TimelineGrid({
         ) : null}
         {!focusedQuarter && !activeMonth ? (
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <label className="ml-3 inline-flex items-center gap-2.5 rounded-lg bg-slate-100 px-2.5 py-1 font-sans text-[13px] font-semibold text-slate-700">
-              <span className="shrink-0">Roadmap</span>
-              <select
-                value={currentYear}
-                onChange={(event) => onYearChange?.(Number(event.target.value))}
-                className="h-9 min-w-[5.75rem] cursor-pointer rounded-md border border-slate-200 bg-white px-2.5 font-sans text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:ring-2 focus-visible:ring-slate-300/70"
-              >
-                <option value={2024}>2024</option>
-                <option value={2025}>2025</option>
-                <option value={2026}>2026</option>
-                <option value={2027}>2027</option>
-              </select>
+            <label className="ml-3 inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-gradient-to-b from-white to-slate-50 px-2.5 py-1.5 shadow-sm ring-1 ring-white/70">
+              <span className="shrink-0 text-[11.5px] font-semibold tracking-[0.035em] text-slate-600 uppercase">
+                Roadmap
+              </span>
+              <div className="relative">
+                <select
+                  value={currentYear}
+                  onChange={(event) => onYearChange?.(Number(event.target.value))}
+                  className="h-[34px] min-w-[6rem] cursor-pointer appearance-none rounded-md border border-slate-300 bg-white py-0 pl-2.5 pr-8 font-sans text-[13.5px] font-semibold leading-none text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.05)] outline-none transition hover:border-slate-400 hover:shadow-[0_1px_4px_rgba(15,23,42,0.08)] focus-visible:border-slate-500 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                >
+                  <option value={2024}>2024</option>
+                  <option value={2025}>2025</option>
+                  <option value={2026}>2026</option>
+                  <option value={2027}>2027</option>
+                </select>
+                <ChevronDown
+                  className="pointer-events-none absolute right-2 top-1/2 size-[15px] -translate-y-1/2 text-slate-500"
+                  aria-hidden
+                />
+              </div>
             </label>
             {summaryBadges ? (
               <div className="flex flex-wrap items-center justify-end gap-2 pr-3">
@@ -741,6 +749,14 @@ export function TimelineGrid({
                         >
                           {MONTHS[month - 1]}
                         </button>
+                        <div className="grid grid-cols-2 gap-1">
+                          <span className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80">
+                            S1
+                          </span>
+                          <span className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80">
+                            S2
+                          </span>
+                        </div>
                         <MonthDropCell month={month} />
                       </div>
                     ))}
