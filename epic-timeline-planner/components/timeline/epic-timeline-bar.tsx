@@ -67,7 +67,7 @@ export function InitiativeTimelineBar({
             className="h-full rounded-[3px] transition-all"
             style={{
               width: `${safeProgress}%`,
-              backgroundColor: "#eab308",
+              backgroundImage: "linear-gradient(to right, rgb(34 211 238), rgb(139 92 246))",
             }}
             aria-hidden
           />

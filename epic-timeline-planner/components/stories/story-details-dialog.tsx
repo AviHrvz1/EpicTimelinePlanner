@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { History, MessageSquare, Plus, X } from "lucide-react";
+import { StoryStatus } from "@/lib/generated/prisma";
 
 import { Button } from "@/components/ui/button";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -22,6 +23,7 @@ type StoryDetailsDialogProps = {
     sprint: number | null;
     estimatedDays: number | null;
     daysLeft: number | null;
+    status: StoryStatus;
     epicId: string;
   }) => Promise<void>;
   onSave: (
@@ -34,6 +36,7 @@ type StoryDetailsDialogProps = {
       sprint: number | null;
       estimatedDays: number | null;
       daysLeft: number | null;
+      status: StoryStatus;
       epicId: string;
     },
   ) => Promise<void>;
@@ -59,6 +62,7 @@ export function StoryDetailsDialog({
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState("");
   const [sprint, setSprint] = useState("");
+  const [status, setStatus] = useState<StoryStatus>(StoryStatus.todo);
   const [estimatedDays, setEstimatedDays] = useState("");
   const [daysLeft, setDaysLeft] = useState("");
   const [epicId, setEpicId] = useState("");
@@ -91,6 +95,7 @@ export function StoryDetailsDialog({
       setDescription(story.description ?? "");
       setAssignee(story.assignee ?? "");
       setSprint(story.sprint == null ? "" : String(story.sprint));
+      setStatus(story.status ?? StoryStatus.todo);
       setEstimatedDays(story.estimatedDays == null ? "" : String(story.estimatedDays));
       setDaysLeft(story.daysLeft == null ? "" : String(story.daysLeft));
       setEpicId(story.epicId);
@@ -100,6 +105,7 @@ export function StoryDetailsDialog({
       setDescription("");
       setAssignee("");
       setSprint("");
+      setStatus(StoryStatus.todo);
       setEstimatedDays("");
       setDaysLeft("");
       setEpicId(lockParentEpicId ?? firstEpicId);
@@ -134,6 +140,7 @@ export function StoryDetailsDialog({
         sprint: sprint.trim() === "" ? null : Number(sprint),
         estimatedDays: estimatedDays.trim() === "" ? null : Number(estimatedDays),
         daysLeft: daysLeft.trim() === "" ? null : Number(daysLeft),
+        status,
         epicId,
       };
       if (isCreateMode) {
@@ -242,7 +249,7 @@ export function StoryDetailsDialog({
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              className="h-28 w-full rounded-md border bg-background px-3 py-2 text-base"
+              className="h-40 w-full rounded-md border bg-background px-3 py-2 text-base"
             />
           </label>
           <label className="space-y-1">
@@ -287,6 +294,19 @@ export function StoryDetailsDialog({
             </select>
           </label>
           <label className="space-y-1">
+            <p className="text-sm font-medium text-slate-600">Status</p>
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as StoryStatus)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-base"
+            >
+              <option value={StoryStatus.todo}>To do</option>
+              <option value={StoryStatus.inProgress}>In progress</option>
+              <option value={StoryStatus.done}>Done</option>
+              <option value={StoryStatus.approved}>Approved</option>
+            </select>
+          </label>
+          <label className="space-y-1">
             <p className="text-sm font-medium text-slate-600">Estimated days</p>
             <input
               type="number"
@@ -306,14 +326,6 @@ export function StoryDetailsDialog({
               className="w-full rounded-md border bg-background px-3 py-2 text-base"
             />
           </label>
-          {!isCreateMode ? (
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-slate-600">Story reference</p>
-              <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-base text-slate-700">
-                {storyRef ?? "--"}
-              </div>
-            </div>
-          ) : null}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
@@ -330,7 +342,7 @@ export function StoryDetailsDialog({
           </Button>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-10">
           <section className="space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-800">Activity</h3>

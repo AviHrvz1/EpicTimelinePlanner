@@ -552,6 +552,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     sprint: number | null;
     estimatedDays: number | null;
     daysLeft: number | null;
+    status: StoryStatus;
     epicId: string;
   }) {
     const response = await fetch(`/api/epics/${payload.epicId}/stories`, {
@@ -599,6 +600,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       sprint: number | null;
       estimatedDays: number | null;
       daysLeft: number | null;
+      status: StoryStatus;
       epicId: string;
     },
   ) {
@@ -1377,6 +1379,22 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             <BacklogPlanningPanel
               initiatives={initiatives}
               storyRefById={storyRefMaps.byId}
+              onOpenInitiative={(initiativeId) => {
+                const initiative = initiatives.find((item) => item.id === initiativeId);
+                if (!initiative) return;
+                setEditingInitiative(initiative);
+                setInitiativeDialogOpen(true);
+              }}
+              onOpenEpic={(epicId) => {
+                for (const initiative of initiatives) {
+                  const epic = (initiative.epics ?? []).find((item) => item.id === epicId);
+                  if (!epic) continue;
+                  setEditingEpic(epic);
+                  setEditingEpicInitiativeId(initiative.id);
+                  setEpicDialogOpen(true);
+                  return;
+                }
+              }}
               onOpenStory={(storyId) => {
                 setSelectedStoryId(storyId);
               }}

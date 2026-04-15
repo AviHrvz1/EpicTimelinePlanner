@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { StoryStatus } from "@/lib/generated/prisma";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
@@ -11,6 +12,7 @@ const createStorySchema = z.object({
   sprint: z.number().int().min(1).max(2).optional().nullable(),
   estimatedDays: z.number().int().min(0).max(3650).optional().nullable(),
   daysLeft: z.number().int().min(0).max(3650).optional().nullable(),
+  status: z.nativeEnum(StoryStatus).optional(),
 });
 
 export async function POST(
@@ -37,6 +39,7 @@ export async function POST(
       sprint: parsed.data.sprint ?? null,
       estimatedDays: parsed.data.estimatedDays ?? null,
       daysLeft: parsed.data.daysLeft ?? null,
+      status: parsed.data.status ?? StoryStatus.todo,
       epicId: id,
       history: {
         create: {

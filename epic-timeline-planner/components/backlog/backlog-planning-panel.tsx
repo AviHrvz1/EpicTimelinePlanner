@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
   storyRefById: Record<string, string>;
+  onOpenInitiative: (initiativeId: string) => void;
+  onOpenEpic: (epicId: string) => void;
   onOpenStory: (storyId: string) => void;
   onCreateInitiativeQuick: (title: string) => Promise<void>;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
@@ -227,6 +229,8 @@ function MultiCheckboxFilter({
 export function BacklogPlanningPanel({
   initiatives,
   storyRefById,
+  onOpenInitiative,
+  onOpenEpic,
   onOpenStory,
   onCreateInitiativeQuick,
   onCreateEpicQuick,
@@ -636,13 +640,20 @@ export function BacklogPlanningPanel({
                       <button
                         type="button"
                         onClick={() => setOpenInitiatives((prev) => ({ ...prev, [initiative.id]: !isInitOpen }))}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                        aria-label={isInitOpen ? "Collapse initiative" : "Expand initiative"}
                       >
                         {isInitOpen ? (
                           <ChevronDown className="size-4 shrink-0 text-slate-500" />
                         ) : (
                           <ChevronRight className="size-4 shrink-0 text-slate-500" />
                         )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenInitiative(initiative.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
                         <Target className="size-4 shrink-0 text-slate-700" />
                         <span className="truncate text-[17px] font-medium text-slate-900">{initiative.title}</span>
                       </button>
@@ -859,13 +870,20 @@ export function BacklogPlanningPanel({
                                 <button
                                   type="button"
                                   onClick={() => setOpenEpics((prev) => ({ ...prev, [epic.id]: !isEpicOpen }))}
-                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                  aria-label={isEpicOpen ? "Collapse epic" : "Expand epic"}
                                 >
                                   {isEpicOpen ? (
                                     <ChevronDown className="size-4 shrink-0 text-slate-500" />
                                   ) : (
                                     <ChevronRight className="size-4 shrink-0 text-slate-500" />
                                   )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenEpic(epic.id)}
+                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                >
                                   <span className="inline-block size-4 shrink-0" aria-hidden />
                                   <span className="truncate text-[16px] font-medium text-slate-800">
                                     {epic.icon} {epic.title}
