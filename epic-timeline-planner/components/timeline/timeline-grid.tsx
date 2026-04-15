@@ -449,6 +449,7 @@ export function TimelineGrid({
   }> = [];
 
   if (activeMonth) {
+    const quarterForMonth = QUARTERS.find((q) => q.months.some((m) => m === activeMonth)) ?? null;
     breadcrumbItems.push({
       label: "Roadmap",
       onClick: () => {
@@ -457,6 +458,16 @@ export function TimelineGrid({
         onFocusedQuarterChange(null);
       },
     });
+    if (quarterForMonth) {
+      breadcrumbItems.push({
+        label: quarterForMonth.label,
+        onClick: () => {
+          setActiveSprint(null);
+          setFocusedMonth(null);
+          onFocusedQuarterChange(quarterForMonth.label);
+        },
+      });
+    }
     breadcrumbItems.push({
       label: MONTHS[activeMonth - 1],
       onClick: () => {
@@ -471,10 +482,15 @@ export function TimelineGrid({
     }
   } else if (focusedQuarter) {
     breadcrumbItems.push({
-      label: focusedQuarter.label,
+      label: "Roadmap",
       onClick: () => {
         setFocusedMonth(null);
+        onFocusedQuarterChange(null);
       },
+    });
+    breadcrumbItems.push({
+      label: focusedQuarter.label,
+      onClick: null,
     });
   }
 
