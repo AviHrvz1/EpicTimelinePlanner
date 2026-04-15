@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
+import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
@@ -544,14 +545,44 @@ export function TimelineGrid({
                 </button>
               ))}
             </div>
-            <div className="flex-1">
-              <SprintKanbanBoard
-                initiatives={initiatives}
-                month={activeMonth}
-                sprintLane={activeSprint ?? 1}
-                onOpenStory={onOpenStory ?? (() => {})}
-              />
+            <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setActiveSprintTab("kanban")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                  activeSprintTab === "kanban"
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                    : "text-slate-600 hover:text-slate-800",
+                )}
+              >
+                Kanban
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSprintTab("status")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                  activeSprintTab === "status"
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                    : "text-slate-600 hover:text-slate-800",
+                )}
+              >
+                Sprint status
+              </button>
             </div>
+            {activeSprintTab === "kanban" ? (
+              <div className="flex-1">
+                <SprintKanbanBoard
+                  initiatives={initiatives}
+                  month={activeMonth}
+                  sprintLane={activeSprint ?? 1}
+                  onOpenStory={onOpenStory ?? (() => {})}
+                />
+              </div>
+            ) : (
+              <SprintAnalytics initiatives={initiatives} month={activeMonth} sprintLane={activeSprint ?? 1} />
+            )}
           </div>
         </div>
       ) : (
