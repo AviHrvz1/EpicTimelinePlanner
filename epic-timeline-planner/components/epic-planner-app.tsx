@@ -8,6 +8,7 @@ import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
+import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-dialog";
 import { InitiativeListPanel } from "@/components/initiatives/initiative-list-panel";
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
@@ -181,6 +182,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
+  const [topMode, setTopMode] = useState<"roadmap" | "backlog">("roadmap");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
@@ -1187,6 +1189,32 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 <p className="text-[15px] leading-6 font-normal text-slate-600">
                   Initiative planning with quarter-based timeline scheduling.
                 </p>
+                <div className="mt-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setTopMode("roadmap")}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                      topMode === "roadmap"
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                        : "text-slate-600 hover:text-slate-800",
+                    )}
+                  >
+                    Roadmap planning
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTopMode("backlog")}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                      topMode === "backlog"
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                        : "text-slate-600 hover:text-slate-800",
+                    )}
+                  >
+                    Backlog
+                  </button>
+                </div>
                 <div className="mt-4 flex flex-wrap gap-2.5">
                   <div className="rounded-full bg-slate-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-slate-700">
                     {roadmapSummary.totalInitiatives} initiatives
@@ -1208,130 +1236,140 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             </div>
           </div>
 
-          <div
-            ref={layoutRef}
-            className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
-            style={{ gridTemplateColumns: `${panelWidth}px 14px minmax(0, 1fr)` }}
-          >
-            <InitiativeListPanel
-              initiatives={initiatives}
-              activeMonth={activeTimelineMonth}
-              activeSprintLane={activeSprintLane}
-              storyDragEnabled={isSprintModeActive}
-              isSprintModeActive={isSprintModeActive}
-              onCreateInitiative={() => {
-                setEditingInitiative(undefined);
-                setInitiativeDialogOpen(true);
-              }}
-              onCreateEpic={() => {
-                setEditingEpic(undefined);
-                const m = activeTimelineMonth;
-                const firstForMonth =
-                  m == null
-                    ? undefined
-                    : initiatives.find(
-                        (i) =>
-                          i.status === InitiativeStatus.scheduled &&
-                          i.startMonth != null &&
-                          i.endMonth != null &&
-                          i.startMonth <= m &&
-                          i.endMonth >= m,
-                      );
-                setEditingEpicInitiativeId(firstForMonth?.id ?? null);
-                setEpicDialogOpen(true);
-              }}
-              onEditInitiative={(initiative) => {
-                setEditingInitiative(initiative);
-                setInitiativeDialogOpen(true);
-              }}
-              onOpenEpic={(epic, initiative) => {
-                setEditingEpic(epic);
-                setEditingEpicInitiativeId(initiative.id);
-                setEpicDialogOpen(true);
-              }}
-              onOpenStory={(storyId) => {
-                setSelectedStoryId(storyId);
-              }}
-              onDeleteEpic={handleDeleteEpic}
-              onDeleteInitiative={handleDeleteInitiative}
-              onCreateEpicQuick={async (initiativeId, title) => {
-                try {
-                  await createEpicQuick(initiativeId, title);
-                  toast.success("Epic added");
-                } catch {
-                  toast.error("Failed to add epic");
-                }
-              }}
-              onCreateStoryQuick={async (epicId, title) => {
-                try {
-                  await createStoryQuick(epicId, title);
-                  toast.success("User story added");
-                } catch {
-                  toast.error("Failed to add user story");
-                }
-              }}
-              epicBacklogOrderByMonth={epicBacklogOrderByMonth}
-            />
+          {topMode === "roadmap" ? (
             <div
-              className="group relative flex cursor-col-resize items-stretch justify-center"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                setIsResizingPanel(true);
-              }}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize panel"
+              ref={layoutRef}
+              className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
+              style={{ gridTemplateColumns: `${panelWidth}px 14px minmax(0, 1fr)` }}
             >
-              <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
-              <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
-            </div>
-            <TimelineGrid
-              initiatives={initiatives}
-              zoom={1}
-              focusedQuarterLabel={focusedQuarterLabel}
-              focusedMonthExternal={activeTimelineMonth}
-              activeSprintExternal={activeSprintLane}
-              activeSprintTabExternal={activeSprintTab}
-              onFocusedQuarterChange={setFocusedQuarterLabel}
-              onSprintTabChange={setActiveSprintTab}
-              onOpenEpic={(epicId) => {
-                for (const initiative of initiatives) {
-                  const epic = (initiative.epics ?? []).find((e) => e.id === epicId);
-                  if (epic) {
-                    setEditingEpic(epic);
-                    setEditingEpicInitiativeId(initiative.id);
-                    setEpicDialogOpen(true);
-                    return;
+              <InitiativeListPanel
+                initiatives={initiatives}
+                activeMonth={activeTimelineMonth}
+                activeSprintLane={activeSprintLane}
+                storyDragEnabled={isSprintModeActive}
+                isSprintModeActive={isSprintModeActive}
+                onCreateInitiative={() => {
+                  setEditingInitiative(undefined);
+                  setInitiativeDialogOpen(true);
+                }}
+                onCreateEpic={() => {
+                  setEditingEpic(undefined);
+                  const m = activeTimelineMonth;
+                  const firstForMonth =
+                    m == null
+                      ? undefined
+                      : initiatives.find(
+                          (i) =>
+                            i.status === InitiativeStatus.scheduled &&
+                            i.startMonth != null &&
+                            i.endMonth != null &&
+                            i.startMonth <= m &&
+                            i.endMonth >= m,
+                        );
+                  setEditingEpicInitiativeId(firstForMonth?.id ?? null);
+                  setEpicDialogOpen(true);
+                }}
+                onEditInitiative={(initiative) => {
+                  setEditingInitiative(initiative);
+                  setInitiativeDialogOpen(true);
+                }}
+                onOpenEpic={(epic, initiative) => {
+                  setEditingEpic(epic);
+                  setEditingEpicInitiativeId(initiative.id);
+                  setEpicDialogOpen(true);
+                }}
+                onOpenStory={(storyId) => {
+                  setSelectedStoryId(storyId);
+                }}
+                onDeleteEpic={handleDeleteEpic}
+                onDeleteInitiative={handleDeleteInitiative}
+                onCreateEpicQuick={async (initiativeId, title) => {
+                  try {
+                    await createEpicQuick(initiativeId, title);
+                    toast.success("Epic added");
+                  } catch {
+                    toast.error("Failed to add epic");
                   }
-                }
-              }}
-              onOpenInitiative={(initiativeId) => {
-                const initiative = initiatives.find((i) => i.id === initiativeId);
-                if (!initiative) return;
-                setEditingInitiative(initiative);
-                setInitiativeDialogOpen(true);
-              }}
-              onResizeInitiativeRange={async (initiativeId, nextStart, nextEnd) => {
-                setInitiatives((prev) =>
-                  prev.map((i) =>
-                    i.id === initiativeId
-                      ? { ...i, startMonth: nextStart, endMonth: nextEnd }
-                      : i,
-                  ),
-                );
-                try {
-                  await patchInitiativeScheduleRange(initiativeId, nextStart, nextEnd);
-                } catch {
-                  await refresh();
-                  toast.error("Failed to resize initiative");
-                }
-              }}
+                }}
+                onCreateStoryQuick={async (epicId, title) => {
+                  try {
+                    await createStoryQuick(epicId, title);
+                    toast.success("User story added");
+                  } catch {
+                    toast.error("Failed to add user story");
+                  }
+                }}
+                epicBacklogOrderByMonth={epicBacklogOrderByMonth}
+              />
+              <div
+                className="group relative flex cursor-col-resize items-stretch justify-center"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setIsResizingPanel(true);
+                }}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize panel"
+              >
+                <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
+                <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+              </div>
+              <TimelineGrid
+                initiatives={initiatives}
+                zoom={1}
+                focusedQuarterLabel={focusedQuarterLabel}
+                focusedMonthExternal={activeTimelineMonth}
+                activeSprintExternal={activeSprintLane}
+                activeSprintTabExternal={activeSprintTab}
+                onFocusedQuarterChange={setFocusedQuarterLabel}
+                onSprintTabChange={setActiveSprintTab}
+                onOpenEpic={(epicId) => {
+                  for (const initiative of initiatives) {
+                    const epic = (initiative.epics ?? []).find((e) => e.id === epicId);
+                    if (epic) {
+                      setEditingEpic(epic);
+                      setEditingEpicInitiativeId(initiative.id);
+                      setEpicDialogOpen(true);
+                      return;
+                    }
+                  }
+                }}
+                onOpenInitiative={(initiativeId) => {
+                  const initiative = initiatives.find((i) => i.id === initiativeId);
+                  if (!initiative) return;
+                  setEditingInitiative(initiative);
+                  setInitiativeDialogOpen(true);
+                }}
+                onResizeInitiativeRange={async (initiativeId, nextStart, nextEnd) => {
+                  setInitiatives((prev) =>
+                    prev.map((i) =>
+                      i.id === initiativeId
+                        ? { ...i, startMonth: nextStart, endMonth: nextEnd }
+                        : i,
+                    ),
+                  );
+                  try {
+                    await patchInitiativeScheduleRange(initiativeId, nextStart, nextEnd);
+                  } catch {
+                    await refresh();
+                    toast.error("Failed to resize initiative");
+                  }
+                }}
+                onOpenStory={(storyId) => {
+                  setSelectedStoryId(storyId);
+                }}
+                onSprintModeChange={handleSprintModeChange}
+              />
+            </div>
+          ) : (
+            <BacklogPlanningPanel
+              initiatives={initiatives}
+              storyRefById={storyRefMaps.byId}
               onOpenStory={(storyId) => {
                 setSelectedStoryId(storyId);
               }}
-              onSprintModeChange={handleSprintModeChange}
             />
-          </div>
+          )}
         </div>
       </main>
       <InitiativeFormDialog
