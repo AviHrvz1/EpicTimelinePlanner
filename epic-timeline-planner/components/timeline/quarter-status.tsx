@@ -41,6 +41,8 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
 
   const selectedStories = selectedRows.flatMap(({ epic }) => epic.userStories ?? []);
   const pieData = buildQuarterStatusPie(selectedStories).filter((x) => x.value > 0);
+  const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
+  const topSlice = pieData[0] ?? null;
   const burndownData = buildQuarterBurndownSeries(
     selectedRows.map((r) => r.epic),
     aggregateMode ? "aggregate" : "individual",
@@ -181,18 +183,80 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
           <PieChartIcon className="size-4 text-slate-600" />
           User stories status
         </h3>
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={78} label>
-                {pieData.map((entry) => (
-                  <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
+          <div className="relative h-60 rounded-xl bg-gradient-to-br from-slate-50 via-white to-slate-100 ring-1 ring-slate-200/80">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <defs>
+                  <filter id="pieShadow">
+                    <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.18" />
+                  </filter>
+                </defs>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={64}
+                  outerRadius={92}
+                  paddingAngle={3}
+                  cornerRadius={8}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  labelLine={false}
+                  filter="url(#pieShadow)"
+                >
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name) => [
+                    `${Number(value ?? 0)} (${
+                      pieTotal > 0 ? Math.round((Number(value ?? 0) / pieTotal) * 100) : 0
+                    }%)`,
+                    name,
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="rounded-full bg-white/90 px-5 py-3 text-center shadow-sm ring-1 ring-slate-200">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total stories</p>
+                <p className="text-[28px] leading-none font-bold text-slate-900">{pieTotal}</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {pieData.map((slice) => {
+              const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
+              return (
+                <div
+                  key={slice.name}
+                  className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-2 ring-1 ring-slate-200"
+                >
+                  <span className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-700">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8" }}
+                    />
+                    {slice.name}
+                  </span>
+                  <span className="text-[13px] font-semibold text-slate-900">
+                    {slice.value} <span className="text-slate-500">({pct}%)</span>
+                  </span>
+                </div>
+              );
+            })}
+            {topSlice ? (
+              <p className="pt-1 text-[12px] text-slate-600">
+                Largest share: <span className="font-semibold text-slate-800">{topSlice.name}</span>
+              </p>
+            ) : (
+              <p className="pt-1 text-[12px] text-slate-600">No stories in the selected scope.</p>
+            )}
+          </div>
         </div>
         {!aggregateMode && selectedRows.length > 0 ? (
           <p className="mt-2 text-[12px] text-slate-600">
