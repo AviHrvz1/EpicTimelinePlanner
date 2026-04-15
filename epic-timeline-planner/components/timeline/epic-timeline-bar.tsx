@@ -60,24 +60,24 @@ export function InitiativeTimelineBar({
         style={{ backgroundColor: color }}
       >
         <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-center">{title}</span>
+      </div>
+      <div className="mt-0.5 flex items-center gap-1.5 px-2">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+          <div
+            className="h-full rounded-[3px] transition-all"
+            style={{
+              width: `${safeProgress}%`,
+              backgroundColor: "#eab308",
+            }}
+            aria-hidden
+          />
+        </div>
         <span
-          className="relative z-10 mr-2 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white/95 ring-1 ring-white/20"
+          className="shrink-0 text-[10px] font-semibold text-slate-500"
           title={progressLabel}
         >
           {safeProgress}%
         </span>
-      </div>
-      <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-300/80">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{
-            width: `${safeProgress}%`,
-            backgroundColor: "#facc15",
-            backgroundImage:
-              "repeating-linear-gradient(135deg, rgba(255,255,255,0.28) 0 8px, rgba(245,158,11,0.22) 8px 16px)",
-          }}
-          aria-hidden
-        />
       </div>
     </div>
   );
