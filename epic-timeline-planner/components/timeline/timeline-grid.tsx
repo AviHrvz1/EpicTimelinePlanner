@@ -5,6 +5,7 @@ import { Flag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
+import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
@@ -219,6 +220,7 @@ export function TimelineGrid({
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<1 | 2 | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
+  const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status">("gantt");
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const [resizePreview, setResizePreview] = useState<{
     initiativeId: string;
@@ -424,6 +426,12 @@ export function TimelineGrid({
   }, [activeMonth, activeSprint]);
 
   useEffect(() => {
+    if (!focusedQuarter) {
+      setQuarterViewTab("gantt");
+    }
+  }, [focusedQuarter]);
+
+  useEffect(() => {
     onSprintTabChange?.(activeSprintTab);
   }, [activeSprintTab, onSprintTabChange]);
 
@@ -497,6 +505,34 @@ export function TimelineGrid({
         </div>
         <div className="flex items-center gap-2" />
       </div>
+      {!activeMonth && focusedQuarter ? (
+        <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+          <button
+            type="button"
+            onClick={() => setQuarterViewTab("gantt")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+              quarterViewTab === "gantt"
+                ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                : "text-slate-600 hover:text-slate-800",
+            )}
+          >
+            Gantt
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuarterViewTab("status")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+              quarterViewTab === "status"
+                ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                : "text-slate-600 hover:text-slate-800",
+            )}
+          >
+            Quarter status
+          </button>
+        </div>
+      ) : null}
       {!activeMonth ? (
         <div className={cn("mb-4 grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
@@ -646,7 +682,9 @@ export function TimelineGrid({
       )}
 
       <div className="space-y-2">
-        {activeMonth ? null : visibleScheduledLanes.length === 0 ? (
+        {activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
+          <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} />
+        ) : visibleScheduledLanes.length === 0 ? (
           <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
             Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
             along the timeline.
