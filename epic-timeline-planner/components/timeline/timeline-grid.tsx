@@ -750,12 +750,30 @@ export function TimelineGrid({
                           {MONTHS[month - 1]}
                         </button>
                         <div className="grid grid-cols-2 gap-1">
-                          <span className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isPostDragClickSuppressed()) return;
+                              setFocusedMonth(month);
+                              setActiveSprint(1);
+                              setActiveSprintTab("kanban");
+                            }}
+                            className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                          >
                             S1
-                          </span>
-                          <span className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80">
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isPostDragClickSuppressed()) return;
+                              setFocusedMonth(month);
+                              setActiveSprint(2);
+                              setActiveSprintTab("kanban");
+                            }}
+                            className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                          >
                             S2
-                          </span>
+                          </button>
                         </div>
                         <MonthDropCell month={month} />
                       </div>
