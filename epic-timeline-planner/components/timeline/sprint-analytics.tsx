@@ -43,6 +43,8 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
   );
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
+  const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
+  const topSlice = pieData[0] ?? null;
   const assigneeChartData = analytics.assigneeBars;
   const renderSpacedLegend = ({
     payload,
@@ -74,18 +76,78 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
           <PieChartIcon className="size-4 text-slate-600" />
           User stories status
         </h3>
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={78} label>
-                {pieData.map((entry) => (
-                  <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend content={renderSpacedLegend} />
-            </PieChart>
-          </ResponsiveContainer>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-center">
+          <div className="relative h-56 rounded-xl bg-gradient-to-br from-slate-50 via-white to-slate-100 ring-1 ring-slate-200/80">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <defs>
+                  <filter id="sprintPieShadow">
+                    <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.18" />
+                  </filter>
+                </defs>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={56}
+                  outerRadius={84}
+                  paddingAngle={3}
+                  cornerRadius={8}
+                  stroke="#ffffff"
+                  strokeWidth={2}
+                  labelLine={false}
+                  filter="url(#sprintPieShadow)"
+                >
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name) => [
+                    `${Number(value ?? 0)} (${
+                      pieTotal > 0 ? Math.round((Number(value ?? 0) / pieTotal) * 100) : 0
+                    }%)`,
+                    name,
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="rounded-full bg-white/90 px-4 py-2.5 text-center shadow-sm ring-1 ring-slate-200">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
+                <p className="text-[24px] leading-none font-bold text-slate-900">{pieTotal}</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {pieData.map((slice) => {
+              const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
+              return (
+                <div
+                  key={slice.name}
+                  className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1.5 ring-1 ring-slate-200"
+                >
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8" }}
+                    />
+                    {slice.name}
+                  </span>
+                  <span className="text-[12px] font-semibold text-slate-900">
+                    {slice.value} <span className="text-slate-500">({pct}%)</span>
+                  </span>
+                </div>
+              );
+            })}
+            {topSlice ? (
+              <p className="pt-0.5 text-[11px] text-slate-600">
+                Largest: <span className="font-semibold text-slate-800">{topSlice.name}</span>
+              </p>
+            ) : null}
+          </div>
         </div>
       </article>
 
