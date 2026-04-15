@@ -29,8 +29,6 @@ export function InitiativeTimelineBar({
     disabled: Boolean(isResizing),
   });
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
-  const progressTone =
-    safeProgress >= 67 ? "bg-emerald-500" : safeProgress >= 34 ? "bg-amber-500" : "bg-rose-500";
 
   return (
     <div
@@ -43,12 +41,10 @@ export function InitiativeTimelineBar({
         onClick?.();
       }}
       className={cn(
-        "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-lg ring-1 ring-black/15 active:cursor-grabbing",
+        "relative z-20 space-y-0",
         isDragging && "z-50 opacity-60",
-        isResizing && "cursor-ew-resize",
       )}
       style={{
-        backgroundColor: color,
         transform:
           transform && !isResizing
             ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
@@ -56,20 +52,29 @@ export function InitiativeTimelineBar({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-center">{title}</span>
-      <span
-        className="relative z-10 mr-2 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white/95 ring-1 ring-white/20"
-        title={progressLabel}
+      <div
+        className={cn(
+          "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-lg ring-1 ring-black/15 active:cursor-grabbing",
+          isResizing && "cursor-ew-resize",
+        )}
+        style={{ backgroundColor: color }}
       >
-        {safeProgress}%
-      </span>
-      <div className="pointer-events-none absolute right-2 bottom-1 left-2 h-1.5 overflow-hidden rounded-full bg-black/20 ring-1 ring-white/25">
+        <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-center">{title}</span>
+        <span
+          className="relative z-10 mr-2 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white/95 ring-1 ring-white/20"
+          title={progressLabel}
+        >
+          {safeProgress}%
+        </span>
+      </div>
+      <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-300/80">
         <div
-          className={cn("h-full rounded-full", progressTone)}
+          className="h-full rounded-full transition-all"
           style={{
             width: `${safeProgress}%`,
+            backgroundColor: "#facc15",
             backgroundImage:
-              "repeating-linear-gradient(135deg, rgba(255,255,255,0.35) 0 4px, rgba(255,255,255,0.08) 4px 8px)",
+              "repeating-linear-gradient(135deg, rgba(255,255,255,0.28) 0 8px, rgba(245,158,11,0.22) 8px 16px)",
           }}
           aria-hidden
         />

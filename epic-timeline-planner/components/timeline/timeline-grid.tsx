@@ -66,7 +66,7 @@ function GanttLaneRow({
               if (node) barElsRef.current.set(initiative.id, node);
               else barElsRef.current.delete(initiative.id);
             }}
-            className="relative min-w-0 py-0.5"
+            className="relative z-20 min-w-0 pt-0.5 pb-2"
             style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
           >
             <InitiativeTimelineBar
