@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Folder, FolderKanban, Plus, Search, Target, X } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, FileText, Folder, FolderKanban, Plus, Search, Target, X } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -55,6 +55,8 @@ function MultiCheckboxFilter({
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const allSelected = selected.length === 0;
   const selectedLabel =
     allSelected
@@ -62,13 +64,36 @@ function MultiCheckboxFilter({
       : selected.length === 1
         ? options.find((option) => option.id === selected[0])?.label ?? "1 selected"
         : `${selected.length} selected`;
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  function scheduleClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setIsOpen(false), 180);
+  }
+
+  function cancelScheduledClose() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
   return (
-    <details className="group relative">
-      <summary className="flex h-9 min-w-[9.5rem] cursor-pointer list-none items-center justify-between rounded-md bg-white px-2.5 text-[13px] ring-1 ring-slate-200 outline-none">
+    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex h-9 min-w-[9.5rem] cursor-pointer items-center justify-between rounded-md bg-white px-2.5 text-[13px] ring-1 ring-slate-200 outline-none"
+      >
         <span className="font-medium text-slate-700">{label}: </span>
         <span className="ml-1 truncate text-slate-600">{selectedLabel}</span>
-      </summary>
-      <div className="absolute z-30 mt-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+      </button>
+      {isOpen ? (
+        <div className="absolute z-30 mt-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
         <label className="mb-1 flex items-center gap-2 text-[12px] text-slate-700">
           <input
             type="checkbox"
@@ -98,13 +123,9 @@ function MultiCheckboxFilter({
             </label>
           ))}
         </div>
-      </div>
-      <style jsx>{`
-        summary::-webkit-details-marker {
-          display: none;
-        }
-      `}</style>
-    </details>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -138,6 +159,7 @@ export function BacklogPlanningPanel({
   } | null>(null);
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
+  const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -344,6 +366,24 @@ export function BacklogPlanningPanel({
     setStoryTargetEpicId("");
   }
 
+  useEffect(() => {
+    return () => {
+      if (createMenuCloseTimerRef.current) clearTimeout(createMenuCloseTimerRef.current);
+    };
+  }, []);
+
+  function scheduleCreateMenuClose() {
+    if (createMenuCloseTimerRef.current) clearTimeout(createMenuCloseTimerRef.current);
+    createMenuCloseTimerRef.current = setTimeout(() => setOpenCreateMenuKey(null), 160);
+  }
+
+  function cancelCreateMenuClose() {
+    if (createMenuCloseTimerRef.current) {
+      clearTimeout(createMenuCloseTimerRef.current);
+      createMenuCloseTimerRef.current = null;
+    }
+  }
+
   return (
     <section className="h-full min-h-0 overflow-hidden rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -416,7 +456,11 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div className="group grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
-                    <div className="relative flex min-w-0 items-center gap-2">
+                    <div
+                      className="relative flex min-w-0 items-center gap-2"
+                      onMouseEnter={cancelCreateMenuClose}
+                      onMouseLeave={scheduleCreateMenuClose}
+                    >
                       <button
                         type="button"
                         onClick={() => setOpenInitiatives((prev) => ({ ...prev, [initiative.id]: !isInitOpen }))}
@@ -442,7 +486,7 @@ export function BacklogPlanningPanel({
                         <Plus className="size-3.5 text-slate-600" />
                       </button>
                       {openCreateMenuKey === `initiative:${initiative.id}` ? (
-                        <div className="absolute left-full top-1/2 z-30 ml-1 w-44 -translate-y-1/2 rounded-md border border-slate-200 bg-white p-1.5 shadow-lg">
+                        <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
                           <button
                             type="button"
                             onClick={() =>
@@ -453,8 +497,9 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
                           >
+                            <Target className="size-3.5 text-slate-500" />
                             Add initiative
                           </button>
                           <button
@@ -467,8 +512,9 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
                           >
+                            <FolderKanban className="size-3.5 text-slate-500" />
                             Add epic
                           </button>
                           <button
@@ -481,8 +527,9 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
                           >
+                            <FileText className="size-3.5 text-slate-500" />
                             Add user story
                           </button>
                         </div>
@@ -605,7 +652,11 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div className="group grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
-                              <div className="relative flex min-w-0 items-center gap-2 pl-6">
+                              <div
+                                className="relative flex min-w-0 items-center gap-2 pl-6"
+                                onMouseEnter={cancelCreateMenuClose}
+                                onMouseLeave={scheduleCreateMenuClose}
+                              >
                                 <button
                                   type="button"
                                   onClick={() => setOpenEpics((prev) => ({ ...prev, [epic.id]: !isEpicOpen }))}
@@ -633,7 +684,7 @@ export function BacklogPlanningPanel({
                                   <Plus className="size-3.5 text-slate-600" />
                                 </button>
                                 {openCreateMenuKey === `epic:${epic.id}` ? (
-                                  <div className="absolute left-full top-1/2 z-30 ml-1 w-44 -translate-y-1/2 rounded-md border border-slate-200 bg-white p-1.5 shadow-lg">
+                                  <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -644,8 +695,9 @@ export function BacklogPlanningPanel({
                                           initiativeId: initiative.id,
                                         })
                                       }
-                                      className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
                                     >
+                                      <FolderKanban className="size-3.5 text-slate-500" />
                                       Add epic
                                     </button>
                                     <button
@@ -658,8 +710,9 @@ export function BacklogPlanningPanel({
                                           epicId: epic.id,
                                         })
                                       }
-                                      className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
                                     >
+                                      <FileText className="size-3.5 text-slate-500" />
                                       Add user story
                                     </button>
                                   </div>
@@ -726,7 +779,11 @@ export function BacklogPlanningPanel({
                                     <div
                                     className="group grid w-full grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
                                   >
-                                    <div className="relative flex min-w-0 items-center gap-2 pl-12">
+                                    <div
+                                      className="relative flex min-w-0 items-center gap-2 pl-12"
+                                      onMouseEnter={cancelCreateMenuClose}
+                                      onMouseLeave={scheduleCreateMenuClose}
+                                    >
                                       <button
                                         type="button"
                                         onClick={() => onOpenStory(story.id)}
@@ -752,7 +809,7 @@ export function BacklogPlanningPanel({
                                         <Plus className="size-3.5 text-slate-600" />
                                       </button>
                                       {openCreateMenuKey === `story:${story.id}` ? (
-                                        <div className="absolute left-full top-1/2 z-30 ml-1 w-44 -translate-y-1/2 rounded-md border border-slate-200 bg-white p-1.5 shadow-lg">
+                                        <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -763,8 +820,9 @@ export function BacklogPlanningPanel({
                                                 epicId: epic.id,
                                               })
                                             }
-                                            className="flex w-full items-center rounded px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-50"
+                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-50"
                                           >
+                                            <FileText className="size-3.5 text-slate-500" />
                                             Add user story
                                           </button>
                                         </div>
