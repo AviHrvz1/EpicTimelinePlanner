@@ -554,12 +554,12 @@ export function TimelineGrid({
         ) : null}
         {!focusedQuarter && !activeMonth ? (
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <label className="inline-flex items-center gap-2 rounded-md bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-300">
-              <span>Roadmap</span>
+            <label className="ml-3 inline-flex items-center gap-2.5 rounded-lg bg-slate-100 px-2.5 py-1 font-sans text-[13px] font-semibold text-slate-700">
+              <span className="shrink-0">Roadmap</span>
               <select
                 value={currentYear}
                 onChange={(event) => onYearChange?.(Number(event.target.value))}
-                className="rounded-md bg-white px-2 py-1 text-[13px] font-semibold text-slate-800 outline-none ring-1 ring-slate-200"
+                className="h-9 min-w-[5.75rem] cursor-pointer rounded-md border border-slate-200 bg-white px-2.5 font-sans text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:ring-2 focus-visible:ring-slate-300/70"
               >
                 <option value={2024}>2024</option>
                 <option value={2025}>2025</option>
