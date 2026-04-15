@@ -50,6 +50,10 @@ function GanttLaneRow({
 }: GanttLaneRowProps) {
   const resizeEdgeClass =
     "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+  const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
+  const totalStories = stories.length;
+  const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
 
   return (
     <div
@@ -69,6 +73,10 @@ function GanttLaneRow({
               id={initiative.id}
               title={initiative.title}
               color={initiative.color}
+              progressPercent={completionPercent}
+              progressLabel={
+                totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+              }
               isResizing={Boolean(rz)}
               onClick={() => onOpenInitiative(initiative.id)}
             />

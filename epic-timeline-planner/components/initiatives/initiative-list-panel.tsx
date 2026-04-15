@@ -70,6 +70,18 @@ function storyStatusMeta(story: { sprint: number | null; status: string }): {
   };
 }
 
+function epicCompletionMeta(epic: EpicItem): {
+  total: number;
+  finished: number;
+  percent: number;
+} {
+  const stories = epic.userStories ?? [];
+  const total = stories.length;
+  const finished = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
+  return { total, finished, percent };
+}
+
 type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
   activeMonth: number | null;
@@ -280,6 +292,7 @@ function InitiativeTreeCard({
                 epics.map((epic) => {
                   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
                   const isEpicOpen = openEpicIds[epic.id] ?? false;
+                  const completion = epicCompletionMeta(epic);
                   return (
                     <div key={epic.id} className="rounded-lg bg-slate-50/70 p-2.5 ring-1 ring-slate-200/80">
                       <div className="flex items-start justify-between gap-2">
@@ -311,6 +324,20 @@ function InitiativeTreeCard({
                           <Button size="icon-xs" variant="ghost" onClick={() => onDeleteEpic(epic.id)}>
                             <Trash2 />
                           </Button>
+                        </div>
+                      </div>
+                      <div className="mt-1.5 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-medium text-slate-600">
+                          <span>{completion.total === 0 ? "No user stories" : "Completion"}</span>
+                          <span>
+                            {completion.finished}/{completion.total} · {completion.percent}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
+                            style={{ width: `${completion.percent}%` }}
+                          />
                         </div>
                       </div>
                       {isEpicOpen ? (
