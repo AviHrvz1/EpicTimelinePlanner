@@ -45,6 +45,7 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
     selectedRows.map((r) => r.epic),
     aggregateMode ? "aggregate" : "individual",
     metric,
+    quarterMonths,
   );
 
   const legendMap = new Map(epicRows.map(({ epic }) => [epic.id, epic.title]));
@@ -137,11 +138,22 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
         </div>
         <div className="h-60">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={burndownData}>
+            <LineChart data={burndownData} margin={{ top: 8, right: 20, left: 8, bottom: 12 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis />
-              <Tooltip />
+              <XAxis dataKey="axisLabel" interval={0} minTickGap={10} tick={{ fontSize: 11 }} />
+              <YAxis
+                allowDecimals={metric !== "storyCount"}
+                tick={{ fontSize: 11 }}
+                width={46}
+                label={{
+                  value: metric === "daysLeft" ? "Days" : "Stories",
+                  angle: -90,
+                  position: "insideLeft",
+                  offset: 2,
+                  style: { fill: "#64748b", fontSize: 11 },
+                }}
+              />
+              <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.dayLabel ?? String(label)} />
               <Legend />
               <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
               {aggregateMode ? (

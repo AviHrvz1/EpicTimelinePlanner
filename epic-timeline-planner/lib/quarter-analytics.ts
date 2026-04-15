@@ -6,11 +6,29 @@ export type QuarterEpicRow = {
 };
 
 export type QuarterBurndownPoint = {
-  day: string;
+  dayLabel: string;
+  axisLabel: string;
+  monthLabel: string;
   [key: string]: string | number | null;
 };
 
 export type QuarterBurndownMetric = "daysLeft" | "storyCount";
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+const MONTH_DAY_COUNTS: Record<number, number> = {
+  1: 31,
+  2: 28,
+  3: 31,
+  4: 30,
+  5: 31,
+  6: 30,
+  7: 31,
+  8: 31,
+  9: 30,
+  10: 31,
+  11: 30,
+  12: 31,
+};
 
 function overlapRange(start: number, end: number, qStart: number, qEnd: number): boolean {
   return !(end < qStart || start > qEnd);
@@ -66,8 +84,23 @@ export function buildQuarterBurndownSeries(
   selectedEpics: EpicItem[],
   mode: "aggregate" | "individual",
   metric: QuarterBurndownMetric,
-  horizon = 12,
+  quarterMonths: readonly number[],
 ): QuarterBurndownPoint[] {
+  const quarterDays = quarterMonths.flatMap((month) => {
+    const total = MONTH_DAY_COUNTS[month] ?? 30;
+    return Array.from({ length: total }, (_, idx) => {
+      const day = idx + 1;
+      const monthShort = MONTH_SHORT[month - 1] ?? `M${month}`;
+      const axisLabel = day === 1 ? monthShort : day % 7 === 0 ? String(day) : "";
+      return {
+        dayLabel: `${monthShort} ${day}`,
+        axisLabel,
+        monthLabel: monthShort,
+      };
+    });
+  });
+  const horizon = Math.max(quarterDays.length, 1);
+
   const series = selectedEpics.map((epic) => {
     const stories = epic.userStories ?? [];
     const start =
@@ -85,7 +118,16 @@ export function buildQuarterBurndownSeries(
 
   return Array.from({ length: horizon }, (_, idx) => {
     const dayIdx = idx + 1;
-    const row: QuarterBurndownPoint = { day: `D${dayIdx}` };
+    const dayInfo = quarterDays[idx] ?? {
+      dayLabel: `Day ${dayIdx}`,
+      axisLabel: String(dayIdx),
+      monthLabel: "",
+    };
+    const row: QuarterBurndownPoint = {
+      dayLabel: dayInfo.dayLabel,
+      axisLabel: dayInfo.axisLabel,
+      monthLabel: dayInfo.monthLabel,
+    };
     const startTotal = series.reduce((sum, s) => sum + s.start, 0);
     const remainingTotal = series.reduce((sum, s) => sum + s.actualRemaining, 0);
     const progressTotal = startTotal > 0 ? Math.max(0, Math.min(1, 1 - remainingTotal / startTotal)) : 0;
