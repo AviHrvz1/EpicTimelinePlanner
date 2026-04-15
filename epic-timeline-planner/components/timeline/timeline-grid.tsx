@@ -113,6 +113,15 @@ function GanttLaneRow({
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
   zoom: number;
+  currentYear: number;
+  onYearChange?: (year: number) => void | Promise<void>;
+  summaryBadges?: {
+    totalInitiatives: number;
+    scheduledInitiatives: number;
+    backlogInitiatives: number;
+    totalEpics: number;
+    totalStories: number;
+  };
   focusedQuarterLabel: string | null;
   focusedMonthExternal?: number | null;
   activeSprintExternal?: 1 | 2 | null;
@@ -213,6 +222,9 @@ function MonthDropCell({ month }: { month: number }) {
 export function TimelineGrid({
   initiatives,
   zoom,
+  currentYear,
+  onYearChange,
+  summaryBadges,
   focusedQuarterLabel,
   focusedMonthExternal,
   activeSprintExternal,
@@ -502,9 +514,16 @@ export function TimelineGrid({
     });
   }
 
+  const hasBreadcrumbs = breadcrumbItems.length > 0;
+
   return (
     <div className="h-full min-h-0 w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
-      <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-slate-100 px-3.5 py-2.5">
+      <div
+        className={cn(
+          "mb-4 flex items-center gap-3 rounded-lg bg-slate-100 px-3.5 py-2.5",
+          hasBreadcrumbs ? "justify-between" : "justify-start",
+        )}
+      >
         <div className="flex items-center gap-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700">
           {breadcrumbItems.map((item, index) => (
             <div key={`${item.label}-${index}`} className="flex items-center gap-1.5">
@@ -527,7 +546,44 @@ export function TimelineGrid({
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-2" />
+        {!focusedQuarter && !activeMonth ? (
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <label className="inline-flex items-center gap-2 rounded-md bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-300">
+              <span>Roadmap</span>
+              <select
+                value={currentYear}
+                onChange={(event) => onYearChange?.(Number(event.target.value))}
+                className="rounded-md bg-white px-2 py-1 text-[13px] font-semibold text-slate-800 outline-none ring-1 ring-slate-200"
+              >
+                <option value={2024}>2024</option>
+                <option value={2025}>2025</option>
+                <option value={2026}>2026</option>
+                <option value={2027}>2027</option>
+              </select>
+            </label>
+            {summaryBadges ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="rounded-full bg-slate-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-700">
+                  {summaryBadges.totalInitiatives} initiatives
+                </div>
+                <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-emerald-800">
+                  {summaryBadges.scheduledInitiatives} scheduled
+                </div>
+                <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800">
+                  {summaryBadges.backlogInitiatives} backlog
+                </div>
+                <div className="rounded-full bg-amber-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-amber-800">
+                  {summaryBadges.totalEpics} epics
+                </div>
+                <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
+                  {summaryBadges.totalStories} user stories
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2" />
+        )}
       </div>
       {!activeMonth && focusedQuarter ? (
         <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">

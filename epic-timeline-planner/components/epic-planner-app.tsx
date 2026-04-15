@@ -172,6 +172,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [initiatives, setInitiatives] = useState(initialInitiatives);
+  const [selectedYear, setSelectedYear] = useState(year);
   const [initiativeDialogOpen, setInitiativeDialogOpen] = useState(false);
   const [editingInitiative, setEditingInitiative] = useState<InitiativeItem | undefined>(undefined);
   const [epicDialogOpen, setEpicDialogOpen] = useState(false);
@@ -192,7 +193,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
   const hasHydratedFromUrlRef = useRef(false);
 
-  const title = useMemo(() => `Roadmap ${year}`, [year]);
+  const title = useMemo(() => `Roadmap ${selectedYear}`, [selectedYear]);
   const roadmapSummary = useMemo(() => {
     const scheduled = initiatives.filter((i) => i.status === "scheduled");
     const backlog = initiatives.filter((i) => i.status === "backlog");
@@ -325,9 +326,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     [],
   );
 
-  async function refresh() {
+  async function refresh(targetYear = selectedYear) {
     const data = await parseJson<InitiativeItem[]>(
-      await fetch(`/api/initiatives?year=${year}`, { cache: "no-store" }),
+      await fetch(`/api/initiatives?year=${targetYear}`, { cache: "no-store" }),
     );
     setInitiatives(data);
   }
@@ -355,7 +356,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       : fetch("/api/initiatives", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, year }),
+          body: JSON.stringify({ ...payload, year: selectedYear }),
         });
 
     await request;
@@ -410,7 +411,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const response = await fetch("/api/initiatives", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, year }),
+      body: JSON.stringify({ title, year: selectedYear }),
     });
     if (!response.ok) {
       throw new Error("Failed to create initiative");
@@ -432,7 +433,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   async function scheduleInitiative(initiativeId: string, month: number, timelineRow?: number) {
     const payload: { year: number; startMonth: number; endMonth: number; timelineRow?: number } = {
-      year,
+      year: selectedYear,
       startMonth: month,
       endMonth: month,
     };
@@ -483,7 +484,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const response = await fetch(`/api/initiatives/${initiativeId}/schedule`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, startMonth: null, endMonth: null }),
+      body: JSON.stringify({ year: selectedYear, startMonth: null, endMonth: null }),
     });
     if (!response.ok) {
       throw new Error("Failed to unschedule initiative");
@@ -494,7 +495,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const response = await fetch(`/api/initiatives/${initiativeId}/schedule`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, startMonth, endMonth }),
+      body: JSON.stringify({ year: selectedYear, startMonth, endMonth }),
     });
     if (!response.ok) {
       throw new Error("Failed to resize initiative");
@@ -1203,14 +1204,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 <p className="text-[15px] leading-6 font-normal text-slate-600">
                   Initiative planning with quarter-based timeline scheduling.
                 </p>
-                <div className="mt-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+                <div className="mt-4 inline-flex rounded-xl bg-slate-100/90 p-1 ring-1 ring-slate-200">
                   <button
                     type="button"
                     onClick={() => setTopMode("roadmap")}
                     className={cn(
-                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                      "rounded-lg px-4 py-2 text-[14px] font-semibold transition",
                       topMode === "roadmap"
-                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                        ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-600 hover:text-slate-800",
                     )}
                   >
@@ -1220,31 +1221,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     type="button"
                     onClick={() => setTopMode("backlog")}
                     className={cn(
-                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                      "rounded-lg px-4 py-2 text-[14px] font-semibold transition",
                       topMode === "backlog"
-                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                        ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-600 hover:text-slate-800",
                     )}
                   >
                     Backlog
                   </button>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2.5">
-                  <div className="rounded-full bg-slate-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-slate-700">
-                    {roadmapSummary.totalInitiatives} initiatives
-                  </div>
-                  <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-emerald-800">
-                    {roadmapSummary.scheduledInitiatives} scheduled
-                  </div>
-                  <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-slate-800">
-                    {roadmapSummary.backlogInitiatives} backlog
-                  </div>
-                  <div className="rounded-full bg-amber-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-amber-800">
-                    {roadmapSummary.totalEpics} epics
-                  </div>
-                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[14px] font-semibold tracking-[0.02em] text-blue-800">
-                    {roadmapSummary.totalStories} user stories
-                  </div>
                 </div>
               </div>
             </div>
@@ -1331,6 +1315,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <TimelineGrid
                 initiatives={initiatives}
                 zoom={1}
+                currentYear={selectedYear}
+                summaryBadges={roadmapSummary}
+                onYearChange={async (nextYear) => {
+                  if (nextYear === selectedYear) return;
+                  setSelectedYear(nextYear);
+                  await refresh(nextYear);
+                  setFocusedQuarterLabel(null);
+                  setActiveTimelineMonth(null);
+                  setActiveSprintLane(null);
+                  setActiveSprintTab("kanban");
+                }}
                 focusedQuarterLabel={focusedQuarterLabel}
                 focusedMonthExternal={activeTimelineMonth}
                 activeSprintExternal={activeSprintLane}
