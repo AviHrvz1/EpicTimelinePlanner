@@ -12,6 +12,8 @@ type BacklogPlanningPanelProps = {
   onOpenStory: (storyId: string) => void;
 };
 
+type OptionItem = { id: string; label: string };
+
 function statusChip(status: string) {
   if (status === "approved") return "bg-violet-100 text-violet-700";
   if (status === "done") return "bg-emerald-100 text-emerald-700";
@@ -37,6 +39,70 @@ function monthLabel(month: number | null | undefined): string {
   return months[month - 1] ?? "-";
 }
 
+function MultiCheckboxFilter({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: OptionItem[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const allSelected = selected.length === 0;
+  const selectedLabel =
+    allSelected
+      ? "All"
+      : selected.length === 1
+        ? options.find((option) => option.id === selected[0])?.label ?? "1 selected"
+        : `${selected.length} selected`;
+  return (
+    <details className="group relative">
+      <summary className="flex h-9 min-w-[9.5rem] cursor-pointer list-none items-center justify-between rounded-md bg-white px-2.5 text-[13px] ring-1 ring-slate-200 outline-none">
+        <span className="font-medium text-slate-700">{label}: </span>
+        <span className="ml-1 truncate text-slate-600">{selectedLabel}</span>
+      </summary>
+      <div className="absolute z-30 mt-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+        <label className="mb-1 flex items-center gap-2 text-[12px] text-slate-700">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => onChange([])}
+            className="h-3.5 w-3.5 rounded border-slate-300"
+          />
+          All
+        </label>
+        <div className="max-h-44 space-y-1 overflow-auto pr-1">
+          {options.map((option) => (
+            <label key={option.id} className="flex items-center gap-2 text-[12px] text-slate-700">
+              <input
+                type="checkbox"
+                checked={allSelected || selected.includes(option.id)}
+                onChange={() => {
+                  const next = allSelected
+                    ? [option.id]
+                    : selected.includes(option.id)
+                      ? selected.filter((x) => x !== option.id)
+                      : [...selected, option.id];
+                  onChange(next);
+                }}
+                className="h-3.5 w-3.5 rounded border-slate-300"
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </div>
+      <style jsx>{`
+        summary::-webkit-details-marker {
+          display: none;
+        }
+      `}</style>
+    </details>
+  );
+}
+
 export function BacklogPlanningPanel({
   initiatives,
   storyRefById,
@@ -45,11 +111,11 @@ export function BacklogPlanningPanel({
   const [query, setQuery] = useState("");
   const [openInitiatives, setOpenInitiatives] = useState<Record<string, boolean>>({});
   const [openEpics, setOpenEpics] = useState<Record<string, boolean>>({});
-  const [statusFilter, setStatusFilter] = useState<"all" | "todo" | "inProgress" | "done" | "approved">("all");
-  const [sprintFilter, setSprintFilter] = useState<"all" | "unscheduled" | "1" | "2">("all");
-  const [yearFilter, setYearFilter] = useState<string>("all");
-  const [quarterFilter, setQuarterFilter] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
-  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [sprintFilter, setSprintFilter] = useState<string[]>([]);
+  const [yearFilter, setYearFilter] = useState<string[]>([]);
+  const [quarterFilter, setQuarterFilter] = useState<string[]>([]);
+  const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status">(
     "titleAsc",
   );
@@ -98,9 +164,9 @@ export function BacklogPlanningPanel({
           .map((epic) => {
             const stories = [...(epic.userStories ?? [])]
               .filter((story) => {
-                if (statusFilter !== "all" && story.status !== statusFilter) return false;
-                if (sprintFilter === "unscheduled" && story.sprint != null) return false;
-                if ((sprintFilter === "1" || sprintFilter === "2") && String(story.sprint ?? "") !== sprintFilter) return false;
+                if (statusFilter.length > 0 && !statusFilter.includes(story.status)) return false;
+                const sprintKey = story.sprint == null ? "unscheduled" : String(story.sprint);
+                if (sprintFilter.length > 0 && !sprintFilter.includes(sprintKey)) return false;
                 return true;
               })
               .sort((a, b) => {
@@ -113,9 +179,9 @@ export function BacklogPlanningPanel({
               });
             return { ...epic, userStories: stories };
           })
-          .filter((epic) => (epic.userStories ?? []).length > 0 || statusFilter === "all" && sprintFilter === "all"),
+          .filter((epic) => (epic.userStories ?? []).length > 0 || (statusFilter.length === 0 && sprintFilter.length === 0)),
       }))
-      .filter((initiative) => (initiative.epics ?? []).length > 0 || (statusFilter === "all" && sprintFilter === "all"));
+      .filter((initiative) => (initiative.epics ?? []).length > 0 || (statusFilter.length === 0 && sprintFilter.length === 0));
   }, [filtered, statusFilter, sprintFilter, sortBy]);
 
   const suggestions = useMemo(() => {
@@ -136,8 +202,9 @@ export function BacklogPlanningPanel({
   }, [initiatives, storyRefById]);
 
   const yearOptions = useMemo(() => {
-    const years = Array.from(new Set(initiatives.map((initiative) => String(initiative.year)))).sort();
-    return ["all", ...years];
+    return Array.from(new Set(initiatives.map((initiative) => String(initiative.year))))
+      .sort()
+      .map((year) => ({ id: year, label: year }));
   }, [initiatives]);
 
   const assigneeOptions = useMemo(() => {
@@ -151,33 +218,58 @@ export function BacklogPlanningPanel({
         }
       }
     }
-    return ["all", ...Array.from(names).sort((a, b) => a.localeCompare(b))];
+    return Array.from(names)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ id: name, label: name }));
   }, [initiatives]);
+
+  const statusOptions: OptionItem[] = [
+    { id: "todo", label: "To do" },
+    { id: "inProgress", label: "In progress" },
+    { id: "done", label: "Done" },
+    { id: "approved", label: "Approved" },
+  ];
+  const sprintOptions: OptionItem[] = [
+    { id: "unscheduled", label: "Unscheduled" },
+    { id: "1", label: "Sprint 1" },
+    { id: "2", label: "Sprint 2" },
+  ];
+  const quarterOptions: OptionItem[] = [
+    { id: "Q1", label: "Q1" },
+    { id: "Q2", label: "Q2" },
+    { id: "Q3", label: "Q3" },
+    { id: "Q4", label: "Q4" },
+  ];
 
   const fullyFiltered = useMemo(() => {
     return filteredWithControls
       .map((initiative) => {
-        if (yearFilter !== "all" && String(initiative.year) !== yearFilter) return null;
+        if (yearFilter.length > 0 && !yearFilter.includes(String(initiative.year))) return null;
         const initiativeQuarter = quarterFromMonth(initiative.startMonth);
-        if (quarterFilter !== "all" && initiativeQuarter !== quarterFilter) return null;
+        if (quarterFilter.length > 0 && !quarterFilter.includes(initiativeQuarter)) return null;
         const initAssignee = initiative.assignee?.trim() || "Unassigned";
         const epics = (initiative.epics ?? [])
           .map((epic) => {
             const epicQuarter = quarterFromMonth(epic.planStartMonth ?? initiative.startMonth);
-            if (quarterFilter !== "all" && epicQuarter !== quarterFilter) return null;
+            if (quarterFilter.length > 0 && !quarterFilter.includes(epicQuarter)) return null;
             const epicAssignee = epic.assignee?.trim() || "Unassigned";
             const stories = (epic.userStories ?? []).filter((story) => {
-              if (assigneeFilter === "all") return true;
+              if (assigneeFilter.length === 0) return true;
               const storyAssignee = story.assignee?.trim() || "Unassigned";
-              return storyAssignee === assigneeFilter || epicAssignee === assigneeFilter || initAssignee === assigneeFilter;
+              return (
+                assigneeFilter.includes(storyAssignee) ||
+                assigneeFilter.includes(epicAssignee) ||
+                assigneeFilter.includes(initAssignee)
+              );
             });
-            if (assigneeFilter !== "all" && stories.length === 0 && epicAssignee !== assigneeFilter) return null;
+            if (assigneeFilter.length > 0 && stories.length === 0 && !assigneeFilter.includes(epicAssignee)) return null;
             return { ...epic, userStories: stories };
           })
           .filter(Boolean) as typeof initiative.epics;
 
-        if (assigneeFilter !== "all" && epics.length === 0 && initAssignee !== assigneeFilter) return null;
-        if (epics.length === 0 && (yearFilter !== "all" || quarterFilter !== "all" || assigneeFilter !== "all")) return null;
+        if (assigneeFilter.length > 0 && epics.length === 0 && !assigneeFilter.includes(initAssignee)) return null;
+        if (epics.length === 0 && (yearFilter.length > 0 || quarterFilter.length > 0 || assigneeFilter.length > 0))
+          return null;
         return { ...initiative, epics };
       })
       .filter(Boolean) as typeof filteredWithControls;
@@ -209,60 +301,16 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="h-9 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
-        >
-          <option value="all">Status: All</option>
-          <option value="todo">To do</option>
-          <option value="inProgress">In progress</option>
-          <option value="done">Done</option>
-          <option value="approved">Approved</option>
-        </select>
-        <select
-          value={sprintFilter}
-          onChange={(e) => setSprintFilter(e.target.value as typeof sprintFilter)}
-          className="h-9 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
-        >
-          <option value="all">Sprint: All</option>
-          <option value="unscheduled">Unscheduled</option>
-          <option value="1">Sprint 1</option>
-          <option value="2">Sprint 2</option>
-        </select>
-        <select
-          value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value)}
-          className="h-9 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
-        >
-          {yearOptions.map((year) => (
-            <option key={year} value={year}>
-              {year === "all" ? "Year: All" : `Year: ${year}`}
-            </option>
-          ))}
-        </select>
-        <select
-          value={quarterFilter}
-          onChange={(e) => setQuarterFilter(e.target.value as typeof quarterFilter)}
-          className="h-9 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
-        >
-          <option value="all">Quarter: All</option>
-          <option value="Q1">Q1</option>
-          <option value="Q2">Q2</option>
-          <option value="Q3">Q3</option>
-          <option value="Q4">Q4</option>
-        </select>
-        <select
-          value={assigneeFilter}
-          onChange={(e) => setAssigneeFilter(e.target.value)}
-          className="h-9 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
-        >
-          {assigneeOptions.map((assignee) => (
-            <option key={assignee} value={assignee}>
-              {assignee === "all" ? "Assignee: All" : `Assignee: ${assignee}`}
-            </option>
-          ))}
-        </select>
+        <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
+        <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
+        <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
+        <MultiCheckboxFilter label="Quarter" options={quarterOptions} selected={quarterFilter} onChange={setQuarterFilter} />
+        <MultiCheckboxFilter
+          label="Assignee"
+          options={assigneeOptions}
+          selected={assigneeFilter}
+          onChange={setAssigneeFilter}
+        />
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
