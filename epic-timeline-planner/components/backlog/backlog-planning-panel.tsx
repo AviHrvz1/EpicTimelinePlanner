@@ -509,6 +509,12 @@ export function BacklogPlanningPanel({
                           value={createDraftTitle}
                           onChange={(event) => setCreateDraftTitle(event.target.value)}
                           placeholder="Type initiative title and press Enter..."
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          data-1p-ignore="true"
+                          data-lpignore="true"
                           className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                           autoFocus
                         />
@@ -548,6 +554,12 @@ export function BacklogPlanningPanel({
                                   ? "Type epic title and press Enter..."
                                   : "Type user story title and press Enter..."
                               }
+                              autoComplete="off"
+                              autoCorrect="off"
+                              autoCapitalize="none"
+                              spellCheck={false}
+                              data-1p-ignore="true"
+                              data-lpignore="true"
                               className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                               autoFocus
                             />
@@ -678,6 +690,12 @@ export function BacklogPlanningPanel({
                                         ? "Type epic title and press Enter..."
                                         : "Type user story title and press Enter..."
                                     }
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    autoCapitalize="none"
+                                    spellCheck={false}
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
                                     className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                     autoFocus
                                   />
@@ -775,6 +793,12 @@ export function BacklogPlanningPanel({
                                           value={createDraftTitle}
                                           onChange={(event) => setCreateDraftTitle(event.target.value)}
                                           placeholder="Type user story title and press Enter..."
+                                          autoComplete="off"
+                                          autoCorrect="off"
+                                          autoCapitalize="none"
+                                          spellCheck={false}
+                                          data-1p-ignore="true"
+                                          data-lpignore="true"
                                           className="h-8 w-full rounded-md bg-white px-2.5 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                           autoFocus
                                         />
