@@ -525,31 +525,33 @@ export function TimelineGrid({
           hasBreadcrumbs ? "justify-between" : "justify-start",
         )}
       >
-        <div className="inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
-          {breadcrumbItems.map((item, index) => (
-            <div key={`${item.label}-${index}`} className="flex items-center gap-1">
-              {item.onClick ? (
-                <button
-                  type="button"
-                  onClick={item.onClick}
-                  className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 active:scale-[0.98]"
-                >
-                  {item.label}
-                </button>
-              ) : (
-                <span
-                  aria-current="page"
-                  className="rounded-lg bg-slate-800 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-white shadow-sm ring-1 ring-slate-900/10"
-                >
-                  {item.label}
-                </span>
-              )}
-              {index < breadcrumbItems.length - 1 ? (
-                <ChevronRight className="size-4 text-slate-400" aria-hidden />
-              ) : null}
-            </div>
-          ))}
-        </div>
+        {hasBreadcrumbs ? (
+          <div className="inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
+            {breadcrumbItems.map((item, index) => (
+              <div key={`${item.label}-${index}`} className="flex items-center gap-1">
+                {item.onClick ? (
+                  <button
+                    type="button"
+                    onClick={item.onClick}
+                    className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 active:scale-[0.98]"
+                  >
+                    {item.label}
+                  </button>
+                ) : (
+                  <span
+                    aria-current="page"
+                    className="rounded-lg bg-slate-800 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-white shadow-sm ring-1 ring-slate-900/10"
+                  >
+                    {item.label}
+                  </span>
+                )}
+                {index < breadcrumbItems.length - 1 ? (
+                  <ChevronRight className="size-4 text-slate-400" aria-hidden />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {!focusedQuarter && !activeMonth ? (
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
             <label className="inline-flex items-center gap-2 rounded-md bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-300">
@@ -590,31 +592,33 @@ export function TimelineGrid({
         )}
       </div>
       {!activeMonth && focusedQuarter ? (
-        <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-          <button
-            type="button"
-            onClick={() => setQuarterViewTab("gantt")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-              quarterViewTab === "gantt"
-                ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                : "text-slate-600 hover:text-slate-800",
-            )}
-          >
-            Gantt
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuarterViewTab("status")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-              quarterViewTab === "status"
-                ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                : "text-slate-600 hover:text-slate-800",
-            )}
-          >
-            Quarter status
-          </button>
+        <div className="mb-4 flex justify-end">
+          <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("gantt")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                quarterViewTab === "gantt"
+                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                  : "text-slate-600 hover:text-slate-800",
+              )}
+            >
+              Gantt
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("status")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                quarterViewTab === "status"
+                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                  : "text-slate-600 hover:text-slate-800",
+              )}
+            >
+              Quarter status
+            </button>
+          </div>
         </div>
       ) : null}
       {!activeMonth ? (
@@ -644,52 +648,56 @@ export function TimelineGrid({
       {activeMonth ? (
         <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
           <div className="flex min-h-[56rem] flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-              {([1, 2] as const).map((sprint) => (
+            <div className="mb-4 flex justify-end">
+              <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+                {([1, 2] as const).map((sprint) => (
+                  <button
+                    key={`month-sprint-tab-${sprint}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveSprintTab("kanban");
+                      setActiveSprint(sprint);
+                    }}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                      (activeSprint ?? 1) === sprint
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                        : "text-slate-600 hover:text-slate-800",
+                    )}
+                  >
+                    <Flag className={cn("size-3.5", sprintTheme[sprint].icon)} />
+                    {sprintLaneLabels[sprint - 1]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4 flex justify-end">
+              <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
                 <button
-                  key={`month-sprint-tab-${sprint}`}
                   type="button"
-                  onClick={() => {
-                    setActiveSprintTab("kanban");
-                    setActiveSprint(sprint);
-                  }}
+                  onClick={() => setActiveSprintTab("kanban")}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                    (activeSprint ?? 1) === sprint
+                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                    activeSprintTab === "kanban"
                       ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
                       : "text-slate-600 hover:text-slate-800",
                   )}
                 >
-                  <Flag className={cn("size-3.5", sprintTheme[sprint].icon)} />
-                  {sprintLaneLabels[sprint - 1]}
+                  Kanban
                 </button>
-              ))}
-            </div>
-            <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-              <button
-                type="button"
-                onClick={() => setActiveSprintTab("kanban")}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                  activeSprintTab === "kanban"
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                    : "text-slate-600 hover:text-slate-800",
-                )}
-              >
-                Kanban
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSprintTab("status")}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                  activeSprintTab === "status"
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                    : "text-slate-600 hover:text-slate-800",
-                )}
-              >
-                Sprint status
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSprintTab("status")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                    activeSprintTab === "status"
+                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                      : "text-slate-600 hover:text-slate-800",
+                  )}
+                >
+                  Sprint status
+                </button>
+              </div>
             </div>
             {activeSprintTab === "kanban" ? (
               <div className="flex-1">
