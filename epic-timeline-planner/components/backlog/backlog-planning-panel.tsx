@@ -561,6 +561,9 @@ export function BacklogPlanningPanel({
                           spellCheck={false}
                           data-1p-ignore="true"
                           data-lpignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
+                          data-protonpass-ignore="true"
                           className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                           autoFocus
                         />
@@ -606,6 +609,9 @@ export function BacklogPlanningPanel({
                               spellCheck={false}
                               data-1p-ignore="true"
                               data-lpignore="true"
+                              data-bwignore="true"
+                              data-form-type="other"
+                              data-protonpass-ignore="true"
                               className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                               autoFocus
                             />
@@ -748,6 +754,9 @@ export function BacklogPlanningPanel({
                                     spellCheck={false}
                                     data-1p-ignore="true"
                                     data-lpignore="true"
+                                    data-bwignore="true"
+                                    data-form-type="other"
+                                    data-protonpass-ignore="true"
                                     className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                     autoFocus
                                   />
@@ -779,7 +788,7 @@ export function BacklogPlanningPanel({
                                     className="group grid w-full grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
                                   >
                                     <div
-                                      className="relative flex min-w-0 items-center gap-2 pl-12"
+                                      className="relative flex min-w-0 items-center gap-2 pl-16"
                                       onMouseEnter={cancelCreateMenuClose}
                                       onMouseLeave={scheduleCreateMenuClose}
                                     >
@@ -845,7 +854,7 @@ export function BacklogPlanningPanel({
                                       onSubmit={handleCreateSubmit}
                                       className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 bg-slate-50 px-3 py-2"
                                     >
-                                      <div className="flex min-w-0 items-center gap-2 pl-12">
+                                      <div className="flex min-w-0 items-center gap-2 pl-16">
                                         <input
                                           value={createDraftTitle}
                                           onChange={(event) => setCreateDraftTitle(event.target.value)}
@@ -856,6 +865,9 @@ export function BacklogPlanningPanel({
                                           spellCheck={false}
                                           data-1p-ignore="true"
                                           data-lpignore="true"
+                                          data-bwignore="true"
+                                          data-form-type="other"
+                                          data-protonpass-ignore="true"
                                           className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                           autoFocus
                                         />
