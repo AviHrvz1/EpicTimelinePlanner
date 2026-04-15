@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,71 @@ type BacklogPlanningPanelProps = {
 type OptionItem = { id: string; label: string };
 type CreateKind = "initiative" | "epic" | "story";
 type CreateScope = "initiative" | "epic" | "story";
+type BacklogColumnKey =
+  | "workItem"
+  | "year"
+  | "quarter"
+  | "month"
+  | "status"
+  | "sprint"
+  | "assignee"
+  | "estDays"
+  | "daysLeft"
+  | "progress";
+
+const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
+  "workItem",
+  "year",
+  "quarter",
+  "month",
+  "status",
+  "sprint",
+  "assignee",
+  "estDays",
+  "daysLeft",
+  "progress",
+];
+
+const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
+  workItem: "Work item",
+  year: "Year",
+  quarter: "Q",
+  month: "Month",
+  status: "Status",
+  sprint: "Sprint",
+  assignee: "Assignee",
+  estDays: "Est Days",
+  daysLeft: "Days Left",
+  progress: "Progress",
+};
+
+const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
+  workItem: 300,
+  year: 72,
+  quarter: 52,
+  month: 80,
+  status: 100,
+  sprint: 90,
+  assignee: 120,
+  estDays: 90,
+  daysLeft: 90,
+  progress: 180,
+};
+
+const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
+  workItem: 420,
+  year: 96,
+  quarter: 72,
+  month: 120,
+  status: 168,
+  sprint: 148,
+  assignee: 190,
+  estDays: 128,
+  daysLeft: 128,
+  progress: 220,
+};
+
+const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1";
 
 function statusChip(status: string) {
   if (status === "approved") return "bg-violet-100 text-violet-700";
@@ -42,6 +107,36 @@ function monthLabel(month: number | null | undefined): string {
   if (month == null) return "-";
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
   return months[month - 1] ?? "-";
+}
+
+function sumStoryDays(stories: Array<{ estimatedDays?: number | null; daysLeft?: number | null }>) {
+  return stories.reduce(
+    (acc, story) => {
+      acc.estimated += story.estimatedDays ?? 0;
+      acc.left += story.daysLeft ?? 0;
+      return acc;
+    },
+    { estimated: 0, left: 0 },
+  );
+}
+
+function completionFromStories(stories: Array<{ status: string }>) {
+  const total = stories.length;
+  const finished = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const percent = total === 0 ? 0 : Math.round((finished / total) * 100);
+  return { finished, total, percent };
+}
+
+function storyCompletion(story: { status: string; estimatedDays?: number | null; daysLeft?: number | null }) {
+  const estimated = story.estimatedDays ?? 0;
+  const left = story.daysLeft ?? 0;
+  if (estimated > 0) {
+    const percent = Math.max(0, Math.min(100, Math.round(((estimated - left) / estimated) * 100)));
+    return { label: `${Math.max(0, estimated - left)}/${estimated}`, percent };
+  }
+  if (story.status === "approved" || story.status === "done") return { label: "Done", percent: 100 };
+  if (story.status === "inProgress") return { label: "In progress", percent: 50 };
+  return { label: "To do", percent: 0 };
 }
 
 function MultiCheckboxFilter({
@@ -160,6 +255,8 @@ export function BacklogPlanningPanel({
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
+  const resizeStateRef = useRef<{ key: BacklogColumnKey; startX: number; startWidth: number } | null>(null);
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -316,6 +413,11 @@ export function BacklogPlanningPanel({
       .filter(Boolean) as typeof filteredWithControls;
   }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter]);
 
+  const tableGridTemplate = useMemo(
+    () => BACKLOG_COLUMN_ORDER.map((key) => `${columnWidths[key]}px`).join(" "),
+    [columnWidths],
+  );
+
   function openCreateComposer(selection: {
     anchorKey: string;
     scope: CreateScope;
@@ -384,6 +486,62 @@ export function BacklogPlanningPanel({
     }
   }
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(BACKLOG_COLUMN_WIDTHS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<Record<BacklogColumnKey, number>>;
+      setColumnWidths((prev) => {
+        const next = { ...prev };
+        for (const key of BACKLOG_COLUMN_ORDER) {
+          const candidate = parsed[key];
+          if (typeof candidate === "number" && Number.isFinite(candidate)) {
+            next[key] = Math.max(BACKLOG_COLUMN_MIN_WIDTHS[key], Math.round(candidate));
+          }
+        }
+        return next;
+      });
+    } catch {
+      // Ignore corrupt or unavailable localStorage data.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(BACKLOG_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(columnWidths));
+    } catch {
+      // Ignore write failures (private mode, quotas, etc.)
+    }
+  }, [columnWidths]);
+
+  function beginColumnResize(key: BacklogColumnKey, event: ReactMouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeStateRef.current = { key, startX: event.clientX, startWidth: columnWidths[key] };
+  }
+
+  useEffect(() => {
+    function onMouseMove(event: MouseEvent) {
+      const active = resizeStateRef.current;
+      if (!active) return;
+      const delta = event.clientX - active.startX;
+      const minWidth = BACKLOG_COLUMN_MIN_WIDTHS[active.key];
+      const nextWidth = Math.max(minWidth, active.startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [active.key]: nextWidth }));
+    }
+
+    function onMouseUp() {
+      resizeStateRef.current = null;
+    }
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
   return (
     <section className="h-full min-h-0 overflow-hidden rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -434,16 +592,25 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-lg ring-1 ring-slate-200">
-        <div className="sticky top-0 z-10 grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2.5 text-[16px] font-semibold text-slate-700">
-          <span>Work item</span>
-          <span>Year</span>
-          <span>Q</span>
-          <span>Month</span>
-          <span>Status</span>
-          <span>Sprint</span>
-          <span>Assignee</span>
-          <span>Est Days</span>
-          <span>Days Left</span>
+        <div
+          className="sticky top-0 z-10 grid items-center gap-3 border-b border-slate-200 bg-slate-100 px-3 py-2.5 text-[16px] font-semibold text-slate-700"
+          style={{ gridTemplateColumns: tableGridTemplate }}
+        >
+          {BACKLOG_COLUMN_ORDER.map((key, index) => (
+            <div key={key} className="relative min-w-0">
+              <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+              {index < BACKLOG_COLUMN_ORDER.length - 1 ? (
+                <button
+                  type="button"
+                  aria-label={`Resize ${BACKLOG_COLUMN_LABELS[key]} column`}
+                  onMouseDown={(event) => beginColumnResize(key, event)}
+                  className="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
+                >
+                  <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-slate-300" />
+                </button>
+              ) : null}
+            </div>
+          ))}
         </div>
 
         {fullyFiltered.length === 0 ? (
@@ -452,9 +619,15 @@ export function BacklogPlanningPanel({
           <div className="divide-y divide-slate-100 bg-white">
             {fullyFiltered.map((initiative) => {
               const isInitOpen = openInitiatives[initiative.id] ?? true;
+              const initiativeStories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
+              const initiativeDays = sumStoryDays(initiativeStories);
+              const initiativeProgress = completionFromStories(initiativeStories);
               return (
                 <div key={initiative.id}>
-                  <div className="group grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
+                  <div
+                    className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
+                    style={{ gridTemplateColumns: tableGridTemplate }}
+                  >
                     <div
                       className="relative flex min-w-0 items-center gap-2"
                       onMouseEnter={cancelCreateMenuClose}
@@ -542,13 +715,28 @@ export function BacklogPlanningPanel({
                     </span>
                     <span className="text-[15px] text-slate-500">-</span>
                     <span className="truncate text-[15px] text-slate-700">{initiative.assignee ?? "Unassigned"}</span>
-                    <span className="text-[15px] text-slate-500">-</span>
-                    <span className="text-[15px] text-slate-500">-</span>
+                    <span className="text-[15px] text-slate-700">{initiativeDays.estimated}d</span>
+                    <span className="text-[15px] text-slate-700">{initiativeDays.left}d</span>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[12px] text-slate-600">
+                        <span>{initiativeProgress.total === 0 ? "No stories" : "Completion"}</span>
+                        <span>
+                          {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all"
+                          style={{ width: `${initiativeProgress.percent}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
                     <form
                       onSubmit={handleCreateSubmit}
-                      className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 bg-slate-50 px-3 py-2"
+                      className="grid items-center gap-3 bg-slate-50 px-3 py-2"
+                      style={{ gridTemplateColumns: tableGridTemplate }}
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <input
@@ -592,7 +780,8 @@ export function BacklogPlanningPanel({
                       {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
                         <form
                           onSubmit={handleCreateSubmit}
-                          className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2"
+                          className="grid items-center gap-3 px-3 py-2"
+                          style={{ gridTemplateColumns: tableGridTemplate }}
                         >
                           <div className="flex min-w-0 items-center gap-2 pl-6">
                             <input
@@ -654,9 +843,14 @@ export function BacklogPlanningPanel({
                       ) : null}
                       {(initiative.epics ?? []).map((epic) => {
                         const isEpicOpen = openEpics[epic.id] ?? true;
+                        const epicDays = sumStoryDays(epic.userStories ?? []);
+                        const epicProgress = completionFromStories(epic.userStories ?? []);
                         return (
                           <div key={epic.id}>
-                            <div className="group grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 hover:bg-slate-50">
+                            <div
+                              className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
+                              style={{ gridTemplateColumns: tableGridTemplate }}
+                            >
                               <div
                                 className="relative flex min-w-0 items-center gap-2 pl-6"
                                 onMouseEnter={cancelCreateMenuClose}
@@ -731,13 +925,28 @@ export function BacklogPlanningPanel({
                               </span>
                               <span className="text-[15px] text-slate-500">-</span>
                               <span className="truncate text-[15px] text-slate-700">{epic.assignee ?? "Unassigned"}</span>
-                              <span className="text-[15px] text-slate-500">-</span>
-                              <span className="text-[15px] text-slate-500">-</span>
+                              <span className="text-[15px] text-slate-700">{epicDays.estimated}d</span>
+                              <span className="text-[15px] text-slate-700">{epicDays.left}d</span>
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[12px] text-slate-600">
+                                  <span>{epicProgress.total === 0 ? "No stories" : "Completion"}</span>
+                                  <span>
+                                    {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
+                                  </span>
+                                </div>
+                                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                                  <div
+                                    className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all"
+                                    style={{ width: `${epicProgress.percent}%` }}
+                                  />
+                                </div>
+                              </div>
                             </div>
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
                               <form
                                 onSubmit={handleCreateSubmit}
-                                className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2"
+                                className="grid items-center gap-3 px-3 py-2"
+                                style={{ gridTemplateColumns: tableGridTemplate }}
                               >
                                 <div className="flex min-w-0 items-center gap-2 pl-12">
                                   <input
@@ -784,9 +993,13 @@ export function BacklogPlanningPanel({
                               <div>
                                 {(epic.userStories ?? []).map((story) => (
                                   <div key={story.id}>
+                                    {(() => {
+                                      const progress = storyCompletion(story);
+                                      return (
                                     <div
-                                    className="group grid w-full grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
-                                  >
+                                      className="group grid w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50"
+                                      style={{ gridTemplateColumns: tableGridTemplate }}
+                                    >
                                     <div
                                       className="relative flex min-w-0 items-center gap-2 pl-16"
                                       onMouseEnter={cancelCreateMenuClose}
@@ -848,11 +1061,26 @@ export function BacklogPlanningPanel({
                                     <span className="truncate text-[15px] text-slate-700">{story.assignee?.trim() || "Unassigned"}</span>
                                     <span className="text-[15px] text-slate-700">{story.estimatedDays ?? 0}d</span>
                                     <span className="text-[15px] text-slate-700">{story.daysLeft ?? 0}d</span>
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between text-[12px] text-slate-600">
+                                        <span>{progress.label}</span>
+                                        <span>{progress.percent}%</span>
+                                      </div>
+                                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                                        <div
+                                          className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-violet-500 transition-all"
+                                          style={{ width: `${progress.percent}%` }}
+                                        />
+                                      </div>
                                     </div>
+                                    </div>
+                                      );
+                                    })()}
                                   {createSelection?.anchorKey === `story:${story.id}` ? (
                                     <form
                                       onSubmit={handleCreateSubmit}
-                                      className="grid grid-cols-[minmax(18rem,1fr)_5rem_4rem_6rem_9rem_8rem_10rem_8rem_8rem] items-center gap-2 bg-slate-50 px-3 py-2"
+                                      className="grid items-center gap-3 bg-slate-50 px-3 py-2"
+                                      style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                       <div className="flex min-w-0 items-center gap-2 pl-16">
                                         <input
