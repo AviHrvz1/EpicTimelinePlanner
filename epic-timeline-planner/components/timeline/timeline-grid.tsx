@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { Flag } from "lucide-react";
+import { ChevronRight, Flag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -520,29 +520,32 @@ export function TimelineGrid({
     <div className="h-full min-h-0 w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
-          "mb-4 flex items-center gap-3 rounded-lg bg-slate-100 py-2.5",
-          hasBreadcrumbs ? "px-3.5" : "px-0",
+          "mb-4 flex items-center gap-3",
+          hasBreadcrumbs ? "px-0 py-1" : "rounded-lg bg-slate-100 px-0 py-2.5",
           hasBreadcrumbs ? "justify-between" : "justify-start",
         )}
       >
-        <div className="flex items-center gap-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700">
+        <div className="inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
           {breadcrumbItems.map((item, index) => (
-            <div key={`${item.label}-${index}`} className="flex items-center gap-1.5">
+            <div key={`${item.label}-${index}`} className="flex items-center gap-1">
               {item.onClick ? (
                 <button
                   type="button"
                   onClick={item.onClick}
-                  className="cursor-pointer rounded-md bg-white px-2.5 py-1 text-slate-800 shadow-sm ring-1 ring-slate-300 transition hover:bg-slate-50 hover:ring-slate-400 active:scale-[0.98]"
+                  className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 active:scale-[0.98]"
                 >
                   {item.label}
                 </button>
               ) : (
-                <span className="rounded-md bg-white px-2.5 py-1 text-slate-700 shadow-sm ring-1 ring-slate-300">
+                <span
+                  aria-current="page"
+                  className="rounded-lg bg-slate-800 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-white shadow-sm ring-1 ring-slate-900/10"
+                >
                   {item.label}
                 </span>
               )}
               {index < breadcrumbItems.length - 1 ? (
-                <span className="text-slate-500">{">"}</span>
+                <ChevronRight className="size-4 text-slate-400" aria-hidden />
               ) : null}
             </div>
           ))}
