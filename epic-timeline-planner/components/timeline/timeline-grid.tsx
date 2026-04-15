@@ -520,7 +520,8 @@ export function TimelineGrid({
     <div className="h-full min-h-0 w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
-          "mb-4 flex items-center gap-3 rounded-lg bg-slate-100 px-3.5 py-2.5",
+          "mb-4 flex items-center gap-3 rounded-lg bg-slate-100 py-2.5",
+          hasBreadcrumbs ? "px-3.5" : "px-0",
           hasBreadcrumbs ? "justify-between" : "justify-start",
         )}
       >
@@ -562,8 +563,8 @@ export function TimelineGrid({
               </select>
             </label>
             {summaryBadges ? (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <div className="rounded-full bg-slate-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-700">
+              <div className="flex flex-wrap items-center justify-end gap-2 pr-3">
+                <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300">
                   {summaryBadges.totalInitiatives} initiatives
                 </div>
                 <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-emerald-800">
