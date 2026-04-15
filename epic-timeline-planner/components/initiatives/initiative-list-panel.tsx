@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Briefcase, ChevronRight, FileText, Folder, Pencil, Plus, Target, Trash2 } from "lucide-react";
+import { Briefcase, ChevronRight, FileText, Folder, Pencil, Plus, Target } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -147,9 +147,6 @@ function DraggableInitiativeCard({
               <Button size="icon-xs" variant="ghost" onClick={() => onEdit(initiative)}>
                 <Pencil />
               </Button>
-              <Button size="icon-xs" variant="ghost" onClick={() => onDelete(initiative.id)}>
-                <Trash2 />
-              </Button>
             </div>
           </div>
           {initiative.description ? (
@@ -276,9 +273,6 @@ function InitiativeTreeCard({
               <Button size="icon-xs" variant="ghost" onClick={() => onEditInitiative(initiative)}>
                 <Pencil />
               </Button>
-              <Button size="icon-xs" variant="ghost" onClick={() => onDeleteInitiative(initiative.id)}>
-                <Trash2 />
-              </Button>
             </div>
           </div>
 
@@ -320,9 +314,6 @@ function InitiativeTreeCard({
                         <div className="flex shrink-0 gap-0.5">
                           <Button size="icon-xs" variant="ghost" onClick={() => onOpenEpic(epic, initiative)}>
                             <Pencil />
-                          </Button>
-                          <Button size="icon-xs" variant="ghost" onClick={() => onDeleteEpic(epic.id)}>
-                            <Trash2 />
                           </Button>
                         </div>
                       </div>
@@ -518,9 +509,6 @@ function SprintEpicCard({
         <div className="flex shrink-0 gap-0.5">
           <Button size="icon-xs" variant="ghost" onClick={() => onOpenEpic(epic, initiative)}>
             <Pencil />
-          </Button>
-          <Button size="icon-xs" variant="ghost" onClick={() => onDeleteEpic(epic.id)}>
-            <Trash2 />
           </Button>
         </div>
       </div>
