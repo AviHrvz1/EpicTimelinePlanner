@@ -455,6 +455,7 @@ export function BacklogPlanningPanel({
       (initiative.epics ?? []).flatMap((epic) =>
         (epic.userStories ?? []).map((story) => {
           const monthNum = epic.planStartMonth ?? initiative.startMonth ?? null;
+          const initiativeMonthNum = initiative.startMonth ?? null;
           return {
             storyId: story.id,
             storyTitle: story.title,
@@ -466,8 +467,13 @@ export function BacklogPlanningPanel({
             initiativeId: initiative.id,
             initiativeTitle: initiative.title,
             initiativeYear: String(initiative.year),
+            initiativeStatus: initiative.status,
+            initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
+            initiativeQuarterLabelValue: quarterFromMonth(initiativeMonthNum),
+            initiativeMonthLabelValue: monthLabel(initiativeMonthNum),
             epicId: epic.id,
             epicTitle: epic.title,
+            epicAssignee: epic.assignee?.trim() || "Unassigned",
             monthNum,
             monthLabelValue: monthLabel(monthNum),
             quarterLabelValue: quarterFromMonth(monthNum),
@@ -533,8 +539,15 @@ export function BacklogPlanningPanel({
             style={{ gridTemplateColumns: tableGridTemplate }}
           >
             <div className="min-w-0" style={{ paddingLeft: indentPx }}>
-              <button type="button" onClick={() => onOpenStory(row.storyId)} className="truncate text-left text-[14px] text-slate-800 hover:text-slate-900">
-                {row.storyTitle}
+              <button
+                type="button"
+                onClick={() => onOpenStory(row.storyId)}
+                className="flex min-w-0 items-center gap-2 truncate text-left text-[14px] text-slate-800 hover:text-slate-900"
+              >
+                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
+                  <FileText className="size-3.5" />
+                </span>
+                <span className="truncate">{row.storyTitle}</span>
               </button>
             </div>
             <span className="justify-self-center text-center text-[14px] text-slate-700">{row.initiativeYear}</span>
@@ -595,42 +608,204 @@ export function BacklogPlanningPanel({
     if (groupLevels.includes("sprint")) {
       return renderStoryDataRows(rows, indentPx, `${path}/stories`);
     }
+
+    function completionForRows(storyRows: typeof groupedStoryRows) {
+      const total = storyRows.length;
+      const finished = storyRows.filter((r) => r.storyStatus === "done" || r.storyStatus === "approved").length;
+      const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
+      return { total, finished, percent };
+    }
+
+    function renderCompletionCell(storyRows: typeof groupedStoryRows) {
+      const { total, finished, percent } = completionForRows(storyRows);
+      return (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[12px] text-slate-600">
+            <span>{total === 0 ? "No stories" : "Completion"}</span>
+            <span>
+              {finished}/{total} · {percent}%
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    function sumEstimatedAndLeft(storyRows: typeof groupedStoryRows) {
+      const estimated = storyRows.reduce((sum, r) => sum + (r.storyEstimatedDays ?? 0), 0);
+      const left = storyRows.reduce((sum, r) => sum + (r.storyDaysLeft ?? 0), 0);
+      return { estimated, left };
+    }
+
+    function renderEpicRow(epicId: string, epicTitle: string, epicAssignee: string, epicRows: typeof groupedStoryRows, epicIndentPx: number, epicPath: string) {
+      const folderId = `${epicPath}/epic:${epicId}`;
+      const isOpen = openGroupFolders[folderId] ?? true;
+      const storyCount = epicRows.length;
+      const { estimated, left } = sumEstimatedAndLeft(epicRows);
+      const completion = completionForRows(epicRows);
+
+      return (
+        <div key={folderId}>
+          <div
+            className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
+            style={{ gridTemplateColumns: tableGridTemplate }}
+          >
+            <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx }}>
+              <button
+                type="button"
+                onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                aria-label={isOpen ? "Collapse epic" : "Expand epic"}
+              >
+                {isOpen ? (
+                  <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                ) : (
+                  <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenEpic(epicId)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <FolderKanban className="size-4 shrink-0 text-slate-700" />
+                <span className="truncate text-[15px] font-medium text-slate-900">{epicTitle}</span>
+              </button>
+            </div>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">
+              {quarterFromMonth(epicRows[0]?.monthNum ?? null)}
+            </span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>
+            <span className="w-fit justify-self-center rounded bg-amber-100 px-2 py-0.5 text-[13px] font-medium text-amber-700">
+              {storyCount} stories
+            </span>
+            <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{epicAssignee}</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{estimated}d</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{left}d</span>
+            <div>{renderCompletionCell(epicRows)}</div>
+          </div>
+          {isOpen ? (
+            <div>
+              {renderStoryDataRows(epicRows, epicIndentPx + 18, `${folderId}/stories`)}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    function renderInitiativeRow(initiativeId: string, initiativeTitle: string, initiativeYear: string, initiativeStatus: string, initiativeAssignee: string, initiativeQuarterLabel: string, initiativeMonthLabel: string, initiativeRows: typeof groupedStoryRows, initIndentPx: number, initPath: string) {
+      const folderId = `${initPath}/initiative:${initiativeId}`;
+      const isOpen = openGroupFolders[folderId] ?? true;
+      const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
+      return (
+        <div key={folderId}>
+          <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+            <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx }}>
+              <button
+                type="button"
+                onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                aria-label={isOpen ? "Collapse initiative" : "Expand initiative"}
+              >
+                {isOpen ? (
+                  <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                ) : (
+                  <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenInitiative(initiativeId)}
+                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <Target className="size-4 shrink-0 text-slate-700" />
+                <span className="truncate text-[15px] font-medium text-slate-900">{initiativeTitle}</span>
+              </button>
+            </div>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeYear}</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeQuarterLabel}</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeMonthLabel}</span>
+            <span className="w-fit justify-self-center rounded bg-slate-100 px-2 py-0.5 text-[13px] font-medium text-slate-700">
+              {initiativeStatus}
+            </span>
+            <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeAssignee}</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{estimated}d</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{left}d</span>
+            <div>{renderCompletionCell(initiativeRows)}</div>
+          </div>
+          {isOpen ? (
+            <div>
+              {(() => {
+                const byEpic = new Map<string, typeof groupedStoryRows>();
+                for (const r of initiativeRows) {
+                  if (!byEpic.has(r.epicId)) byEpic.set(r.epicId, []);
+                  byEpic.get(r.epicId)!.push(r);
+                }
+                return Array.from(byEpic.entries())
+                  .sort((a, b) => a[1][0]?.epicTitle.localeCompare(b[1][0]?.epicTitle ?? "") ?? 0)
+                  .map(([epicId, epicRows]) => {
+                    const first = epicRows[0];
+                    return renderEpicRow(
+                      epicId,
+                      first.epicTitle,
+                      first.epicAssignee,
+                      epicRows,
+                      initIndentPx + 18,
+                      folderId,
+                    );
+                  });
+              })()}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
     if (groupLevels.includes("month")) {
-      const byEpic = new Map<string, { title: string; rows: typeof groupedStoryRows }>();
+      const byEpic = new Map<string, typeof groupedStoryRows>();
       for (const row of rows) {
-        if (!byEpic.has(row.epicId)) byEpic.set(row.epicId, { title: row.epicTitle, rows: [] });
-        byEpic.get(row.epicId)!.rows.push(row);
+        if (!byEpic.has(row.epicId)) byEpic.set(row.epicId, []);
+        byEpic.get(row.epicId)!.push(row);
       }
       return Array.from(byEpic.entries())
-        .sort((a, b) => a[1].title.localeCompare(b[1].title))
-        .map(([epicId, epic]) =>
-          renderFolderRow(`${path}/epic:${epicId}`, epic.title, epic.rows.length, indentPx, (
-            <>{renderStoryDataRows(epic.rows, indentPx + 18, `${path}/epic:${epicId}`)}</>
-          )),
-        );
+        .sort((a, b) => (a[1][0]?.epicTitle ?? "").localeCompare(b[1][0]?.epicTitle ?? ""))
+        .map(([epicId, epicRows]) => {
+          const first = epicRows[0];
+          return renderEpicRow(epicId, first.epicTitle, first.epicAssignee, epicRows, indentPx, path);
+        });
     }
-    const byInitiative = new Map<string, { title: string; epics: Map<string, { title: string; rows: typeof groupedStoryRows }> }>();
+
+    const byInitiative = new Map<string, typeof groupedStoryRows>();
     for (const row of rows) {
-      if (!byInitiative.has(row.initiativeId)) byInitiative.set(row.initiativeId, { title: row.initiativeTitle, epics: new Map() });
-      const init = byInitiative.get(row.initiativeId)!;
-      if (!init.epics.has(row.epicId)) init.epics.set(row.epicId, { title: row.epicTitle, rows: [] });
-      init.epics.get(row.epicId)!.rows.push(row);
+      if (!byInitiative.has(row.initiativeId)) byInitiative.set(row.initiativeId, []);
+      byInitiative.get(row.initiativeId)!.push(row);
     }
+
     return Array.from(byInitiative.entries())
-      .sort((a, b) => a[1].title.localeCompare(b[1].title))
-      .map(([initiativeId, initiative]) =>
-        renderFolderRow(`${path}/initiative:${initiativeId}`, initiative.title, Array.from(initiative.epics.values()).reduce((s, x) => s + x.rows.length, 0), indentPx, (
-          <>
-            {Array.from(initiative.epics.entries())
-              .sort((a, b) => a[1].title.localeCompare(b[1].title))
-              .map(([epicId, epic]) =>
-                renderFolderRow(`${path}/initiative:${initiativeId}/epic:${epicId}`, epic.title, epic.rows.length, indentPx + 18, (
-                  <>{renderStoryDataRows(epic.rows, indentPx + 36, `${path}/initiative:${initiativeId}/epic:${epicId}`)}</>
-                )),
-              )}
-          </>
-        )),
-      );
+      .sort((a, b) => (a[1][0]?.initiativeTitle ?? "").localeCompare(b[1][0]?.initiativeTitle ?? ""))
+      .map(([initiativeId, initiativeRows]) => {
+        const first = initiativeRows[0];
+        return renderInitiativeRow(
+          initiativeId,
+          first.initiativeTitle,
+          first.initiativeYear,
+          first.initiativeStatus,
+          first.initiativeAssignee,
+          first.initiativeQuarterLabelValue ?? "-",
+          first.initiativeMonthLabelValue ?? "-",
+          initiativeRows,
+          indentPx,
+          path,
+        );
+      });
   }
 
   function renderGroupedTree(rows: typeof groupedStoryRows, levelIndex = 0, path = ""): React.ReactNode {
