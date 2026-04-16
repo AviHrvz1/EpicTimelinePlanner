@@ -1214,11 +1214,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           <div className="rounded-2xl bg-card p-4 shadow-lg ring-1 ring-black/5">
             <div className="flex items-start justify-between gap-6">
               <div className="min-w-0 flex-1">
-                <div className="inline-flex flex-col">
+                <div className="inline-flex flex-col p-1">
                   <img
                     src="/bird-eye-lockup-wide.png"
                     alt="Bird Eye Viewer logo"
-                    className="h-[98px] w-auto max-w-[760px] rounded-md object-contain object-left"
+                    className="h-[90px] w-auto max-w-[760px] rounded-md object-contain object-left"
                   />
                 </div>
               </div>

@@ -31,6 +31,7 @@ type BacklogColumnKey =
   | "estDays"
   | "daysLeft"
   | "progress";
+type GroupLevel = "year" | "quarter" | "month" | "sprint";
 
 const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "workItem",
@@ -96,6 +97,13 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "daysLeft",
   "progress",
 ]);
+const GROUP_LEVEL_ORDER: GroupLevel[] = ["year", "quarter", "month", "sprint"];
+const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
+  year: "Year",
+  quarter: "Quarter",
+  month: "Month",
+  sprint: "Sprint",
+};
 
 function statusChip(status: string) {
   if (status === "approved") return "bg-violet-100 text-violet-700";
@@ -270,6 +278,10 @@ export function BacklogPlanningPanel({
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>([]);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
+  const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
   const resizeStateRef = useRef<{ key: BacklogColumnKey; startX: number; startWidth: number } | null>(null);
@@ -438,6 +450,32 @@ export function BacklogPlanningPanel({
     () => BACKLOG_COLUMN_ORDER.map((key) => `${columnWidths[key]}px`).join(" "),
     [columnWidths],
   );
+  const groupedStoryRows = useMemo(() => {
+    return fullyFiltered.flatMap((initiative) =>
+      (initiative.epics ?? []).flatMap((epic) =>
+        (epic.userStories ?? []).map((story) => {
+          const monthNum = epic.planStartMonth ?? initiative.startMonth ?? null;
+          return {
+            storyId: story.id,
+            storyTitle: story.title,
+            storyStatus: story.status,
+            storyAssignee: story.assignee?.trim() || "Unassigned",
+            storySprintLabel: sprintLabel(story.sprint),
+            storyEstimatedDays: story.estimatedDays ?? 0,
+            storyDaysLeft: story.daysLeft ?? 0,
+            initiativeId: initiative.id,
+            initiativeTitle: initiative.title,
+            initiativeYear: String(initiative.year),
+            epicId: epic.id,
+            epicTitle: epic.title,
+            monthNum,
+            monthLabelValue: monthLabel(monthNum),
+            quarterLabelValue: quarterFromMonth(monthNum),
+          };
+        }),
+      ),
+    );
+  }, [fullyFiltered]);
   const visibleEpicCount = useMemo(
     () => fullyFiltered.reduce((sum, initiative) => sum + (initiative.epics?.length ?? 0), 0),
     [fullyFiltered],
@@ -451,6 +489,167 @@ export function BacklogPlanningPanel({
       ),
     [fullyFiltered],
   );
+  const groupSummaryLabel = groupLevels.length === 0 ? "None" : groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ");
+
+  function toggleGroupLevel(level: GroupLevel) {
+    setGroupLevels((prev) => {
+      const idx = GROUP_LEVEL_ORDER.indexOf(level);
+      if (prev.includes(level)) {
+        return GROUP_LEVEL_ORDER.slice(0, idx).filter((item) => prev.includes(item));
+      }
+      return GROUP_LEVEL_ORDER.slice(0, idx + 1);
+    });
+  }
+
+  function keyForLevel(row: (typeof groupedStoryRows)[number], level: GroupLevel): { key: string; label: string; sort: string } {
+    if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
+    if (level === "quarter") {
+      const q = row.quarterLabelValue;
+      return { key: q, label: q, sort: String(["Q1", "Q2", "Q3", "Q4"].indexOf(q)).padStart(2, "0") };
+    }
+    if (level === "month") {
+      const m = row.monthNum ?? 0;
+      return { key: String(m), label: row.monthLabelValue, sort: String(m).padStart(2, "0") };
+    }
+    const sprint = row.storySprintLabel;
+    const order = sprint === "Sprint 1" ? "01" : sprint === "Sprint 2" ? "02" : "99";
+    return { key: sprint, label: sprint, sort: order };
+  }
+
+  function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
+    return rows
+      .slice()
+      .sort((a, b) => a.storyTitle.localeCompare(b.storyTitle))
+      .map((row) => {
+        const progress = storyCompletion({
+          status: row.storyStatus,
+          estimatedDays: row.storyEstimatedDays,
+          daysLeft: row.storyDaysLeft,
+        });
+        return (
+          <div
+            key={`${keyPrefix}-story-${row.storyId}`}
+            className="grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
+            style={{ gridTemplateColumns: tableGridTemplate }}
+          >
+            <div className="min-w-0" style={{ paddingLeft: indentPx }}>
+              <button type="button" onClick={() => onOpenStory(row.storyId)} className="truncate text-left text-[14px] text-slate-800 hover:text-slate-900">
+                {row.storyTitle}
+              </button>
+            </div>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.initiativeYear}</span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.quarterLabelValue}</span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.monthLabelValue}</span>
+            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[12px] font-medium", statusChip(row.storyStatus))}>
+              {row.storyStatus === "inProgress" ? "In progress" : row.storyStatus}
+            </span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storySprintLabel}</span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storyAssignee}</span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storyEstimatedDays}d</span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storyDaysLeft}d</span>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-slate-600">
+                <span>{progress.label}</span>
+                <span>{progress.percent}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500" style={{ width: `${progress.percent}%` }} />
+              </div>
+            </div>
+          </div>
+        );
+      });
+  }
+
+  function renderFolderRow(folderId: string, label: string, count: number, indentPx: number, children: React.ReactNode) {
+    const isOpen = openGroupFolders[folderId] ?? true;
+    return (
+      <div key={folderId}>
+        <div className="grid items-center gap-3 px-3 py-1.5 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+          <button
+            type="button"
+            onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? true) }))}
+            className="flex min-w-0 items-center gap-1.5 text-left text-[13px] font-semibold text-slate-700"
+            style={{ paddingLeft: indentPx }}
+          >
+            {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+            <span className="truncate">{label}</span>
+            <span className="text-[11px] font-medium text-slate-500">({count})</span>
+          </button>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-slate-400">-</span>
+        </div>
+        {isOpen ? children : null}
+      </div>
+    );
+  }
+
+  function renderLeafRows(rows: typeof groupedStoryRows, indentPx: number, path: string): React.ReactNode {
+    if (groupLevels.includes("sprint")) {
+      return renderStoryDataRows(rows, indentPx, `${path}/stories`);
+    }
+    if (groupLevels.includes("month")) {
+      const byEpic = new Map<string, { title: string; rows: typeof groupedStoryRows }>();
+      for (const row of rows) {
+        if (!byEpic.has(row.epicId)) byEpic.set(row.epicId, { title: row.epicTitle, rows: [] });
+        byEpic.get(row.epicId)!.rows.push(row);
+      }
+      return Array.from(byEpic.entries())
+        .sort((a, b) => a[1].title.localeCompare(b[1].title))
+        .map(([epicId, epic]) =>
+          renderFolderRow(`${path}/epic:${epicId}`, epic.title, epic.rows.length, indentPx, (
+            <>{renderStoryDataRows(epic.rows, indentPx + 18, `${path}/epic:${epicId}`)}</>
+          )),
+        );
+    }
+    const byInitiative = new Map<string, { title: string; epics: Map<string, { title: string; rows: typeof groupedStoryRows }> }>();
+    for (const row of rows) {
+      if (!byInitiative.has(row.initiativeId)) byInitiative.set(row.initiativeId, { title: row.initiativeTitle, epics: new Map() });
+      const init = byInitiative.get(row.initiativeId)!;
+      if (!init.epics.has(row.epicId)) init.epics.set(row.epicId, { title: row.epicTitle, rows: [] });
+      init.epics.get(row.epicId)!.rows.push(row);
+    }
+    return Array.from(byInitiative.entries())
+      .sort((a, b) => a[1].title.localeCompare(b[1].title))
+      .map(([initiativeId, initiative]) =>
+        renderFolderRow(`${path}/initiative:${initiativeId}`, initiative.title, Array.from(initiative.epics.values()).reduce((s, x) => s + x.rows.length, 0), indentPx, (
+          <>
+            {Array.from(initiative.epics.entries())
+              .sort((a, b) => a[1].title.localeCompare(b[1].title))
+              .map(([epicId, epic]) =>
+                renderFolderRow(`${path}/initiative:${initiativeId}/epic:${epicId}`, epic.title, epic.rows.length, indentPx + 18, (
+                  <>{renderStoryDataRows(epic.rows, indentPx + 36, `${path}/initiative:${initiativeId}/epic:${epicId}`)}</>
+                )),
+              )}
+          </>
+        )),
+      );
+  }
+
+  function renderGroupedTree(rows: typeof groupedStoryRows, levelIndex = 0, path = ""): React.ReactNode {
+    if (levelIndex >= groupLevels.length) return renderLeafRows(rows, levelIndex * 14, path);
+    const level = groupLevels[levelIndex];
+    const groups = new Map<string, { label: string; sort: string; rows: typeof groupedStoryRows }>();
+    for (const row of rows) {
+      const { key, label, sort } = keyForLevel(row, level);
+      if (!groups.has(key)) groups.set(key, { label, sort, rows: [] });
+      groups.get(key)!.rows.push(row);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
+      .map(([key, group]) =>
+        renderFolderRow(`${path}${level}:${key}`, group.label, group.rows.length, levelIndex * 14, (
+          <>{renderGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>
+        )),
+      );
+  }
 
   function openCreateComposer(selection: {
     anchorKey: string;
@@ -506,6 +705,16 @@ export function BacklogPlanningPanel({
     return () => {
       if (createMenuCloseTimerRef.current) clearTimeout(createMenuCloseTimerRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (!groupMenuRef.current) return;
+      if (groupMenuRef.current.contains(event.target as Node)) return;
+      setGroupMenuOpen(false);
+    }
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
   }, []);
 
   function scheduleCreateMenuClose() {
@@ -632,6 +841,36 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white p-3 shadow-sm ring-1 ring-white/60">
+        <div className="relative" ref={groupMenuRef}>
+          <button
+            type="button"
+            onClick={() => setGroupMenuOpen((prev) => !prev)}
+            className="flex h-8 min-w-[11rem] items-center justify-between rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[13px] ring-1 ring-slate-300/80 shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
+          >
+            <span className="font-medium text-slate-700">Group By:</span>
+            <span className="ml-1 truncate text-slate-600">{groupSummaryLabel}</span>
+          </button>
+          {groupMenuOpen ? (
+            <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+              {GROUP_LEVEL_ORDER.map((level, idx) => {
+                const checked = groupLevels.includes(level);
+                const disabled = idx > 0 && !groupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
+                return (
+                  <label key={level} className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700", disabled && "opacity-50")}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled && !checked}
+                      onChange={() => toggleGroupLevel(level)}
+                      className="h-3.5 w-3.5 rounded border-slate-300"
+                    />
+                    {GROUP_LEVEL_LABELS[level]}
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
         <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
         <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
         <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
@@ -645,6 +884,7 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white shadow-inner">
+        <>
         <div
           className="sticky top-0 z-10 grid items-center gap-3 border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-3 py-2.5 text-[13px] font-semibold tracking-[0.02em] text-slate-700 uppercase"
           style={{ gridTemplateColumns: tableGridTemplate }}
@@ -670,6 +910,10 @@ export function BacklogPlanningPanel({
           <div className="p-4 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
           <div className="divide-y divide-slate-100 bg-white">
+            {groupLevels.length > 0 ? (
+              <>{renderGroupedTree(groupedStoryRows)}</>
+            ) : (
+            <>
             {fullyFiltered.map((initiative) => {
               const isInitOpen = openInitiatives[initiative.id] ?? true;
               const initiativeStories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
@@ -1220,8 +1464,11 @@ export function BacklogPlanningPanel({
                 </div>
               );
             })}
+            </>
+            )}
           </div>
         )}
+        </>
       </div>
     </section>
   );
