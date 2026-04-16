@@ -1215,15 +1215,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             <div className="flex items-start justify-between gap-6">
               <div className="min-w-0 flex-1">
                 <div className="inline-flex flex-col">
-                  <div
-                    role="img"
-                    aria-label="Bird Eye Viewer logo"
-                    className="h-[98px] w-[760px] max-w-full rounded-md bg-no-repeat"
-                    style={{
-                      backgroundImage: "url('/bird-eye-lockup-wide.png')",
-                      backgroundSize: "79% auto",
-                      backgroundPosition: "-63% center",
-                    }}
+                  <img
+                    src="/bird-eye-lockup-wide.png"
+                    alt="Bird Eye Viewer logo"
+                    className="h-[98px] w-auto max-w-[760px] rounded-md object-contain object-left"
                   />
                 </div>
               </div>
