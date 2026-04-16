@@ -66,6 +66,8 @@ model Epic {
   assignee     String?
   color        String        @default("#3B82F6")
   initiativeId String
+  planYear       Int?
+  planQuarter    Int?
   initiative     Initiative    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
   planSprint     Int?
   planStartMonth Int?
@@ -100,6 +102,8 @@ model UserStory {
   icon          String         @default("📄")
   description   String?
   assignee      String?
+  planYear      Int?
+  planQuarter   Int?
   sprint        Int?
   estimatedDays Int?
   daysLeft      Int?

@@ -16,6 +16,14 @@ const updateStorySchema = z.object({
   epicId: z.string().uuid().optional(),
 });
 
+function quarterFromMonth(month: number | null | undefined): number | null {
+  if (month == null) return null;
+  if (month <= 3) return 1;
+  if (month <= 6) return 2;
+  if (month <= 9) return 3;
+  return 4;
+}
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -43,6 +51,8 @@ export async function PATCH(
       daysLeft: true,
       status: true,
       epicId: true,
+      planYear: true,
+      planQuarter: true,
     },
   });
   if (!existing) {
@@ -64,6 +74,23 @@ export async function PATCH(
     changes.push(`Status changed to ${patch.status}`);
   if (patch.epicId !== undefined && patch.epicId !== existing.epicId) changes.push("Parent epic changed");
 
+  const targetEpicId = patch.epicId ?? existing.epicId;
+  const targetEpic = await db.epic.findUnique({
+    where: { id: targetEpicId },
+    select: {
+      planYear: true,
+      planQuarter: true,
+      planStartMonth: true,
+      initiative: { select: { year: true, startMonth: true } },
+    },
+  });
+  const nextPlanYear = targetEpic?.planYear ?? targetEpic?.initiative.year ?? existing.planYear ?? null;
+  const nextPlanQuarter =
+    targetEpic?.planQuarter ??
+    quarterFromMonth(targetEpic?.planStartMonth ?? targetEpic?.initiative.startMonth ?? null) ??
+    existing.planQuarter ??
+    null;
+
   const story = await db.userStory.update({
     where: { id },
     data: {
@@ -76,6 +103,8 @@ export async function PATCH(
       ...(patch.daysLeft !== undefined ? { daysLeft: patch.daysLeft } : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.epicId !== undefined ? { epicId: patch.epicId } : {}),
+      planYear: nextPlanYear,
+      planQuarter: nextPlanQuarter,
       ...(changes.length > 0
         ? {
             history: {

@@ -11,6 +11,14 @@ const createEpicSchema = z.object({
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
 });
 
+function quarterFromMonth(month: number | null | undefined): number | null {
+  if (month == null) return null;
+  if (month <= 3) return 1;
+  if (month <= 6) return 2;
+  if (month <= 9) return 3;
+  return 4;
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -26,6 +34,14 @@ export async function POST(
     );
   }
 
+  const initiative = await db.initiative.findUnique({
+    where: { id },
+    select: { year: true, startMonth: true },
+  });
+  if (!initiative) {
+    return NextResponse.json({ message: "Initiative not found" }, { status: 404 });
+  }
+
   const epic = await db.epic.create({
     data: {
       title: parsed.data.title,
@@ -34,6 +50,8 @@ export async function POST(
       assignee: parsed.data.assignee || null,
       color: parsed.data.color ?? "#3B82F6",
       initiativeId: id,
+      planYear: initiative.year,
+      planQuarter: quarterFromMonth(initiative.startMonth),
       history: { create: { entry: "Epic created" } },
     },
   });

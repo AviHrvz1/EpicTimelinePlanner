@@ -145,6 +145,33 @@ function monthLabel(month: number | null | undefined): string {
   return months[month - 1] ?? "-";
 }
 
+function quarterRange(quarter: string): { start: number; end: number } | null {
+  if (quarter === "Q1") return { start: 1, end: 3 };
+  if (quarter === "Q2") return { start: 4, end: 6 };
+  if (quarter === "Q3") return { start: 7, end: 9 };
+  if (quarter === "Q4") return { start: 10, end: 12 };
+  return null;
+}
+
+function matchesAnySelectedQuarterByRange(
+  selectedQuarters: string[],
+  startMonth: number | null | undefined,
+  endMonth: number | null | undefined,
+): boolean {
+  if (selectedQuarters.length === 0) return true;
+  if (startMonth == null && endMonth == null) return false;
+  const normalizedStart = startMonth ?? endMonth ?? null;
+  const normalizedEnd = endMonth ?? startMonth ?? null;
+  if (normalizedStart == null || normalizedEnd == null) return false;
+  const rangeStart = Math.min(normalizedStart, normalizedEnd);
+  const rangeEnd = Math.max(normalizedStart, normalizedEnd);
+  return selectedQuarters.some((quarter) => {
+    const qRange = quarterRange(quarter);
+    if (!qRange) return false;
+    return !(qRange.end < rangeStart || qRange.start > rangeEnd);
+  });
+}
+
 function sumStoryDays(stories: Array<{ estimatedDays?: number | null; daysLeft?: number | null }>) {
   return stories.reduce(
     (acc, story) => {
@@ -547,13 +574,18 @@ export function BacklogPlanningPanel({
     return filteredWithControls
       .map((initiative) => {
         if (yearFilter.length > 0 && !yearFilter.includes(String(initiative.year))) return null;
-        const initiativeQuarter = quarterFromMonth(initiative.startMonth);
-        if (quarterFilter.length > 0 && !quarterFilter.includes(initiativeQuarter)) return null;
+        const initiativeQuarterMatch = matchesAnySelectedQuarterByRange(
+          quarterFilter,
+          initiative.startMonth,
+          initiative.endMonth,
+        );
         const initAssignee = initiative.assignee?.trim() || "Unassigned";
         const epics = (initiative.epics ?? [])
           .map((epic) => {
-            const epicQuarter = quarterFromMonth(epic.planStartMonth ?? initiative.startMonth);
-            if (quarterFilter.length > 0 && !quarterFilter.includes(epicQuarter)) return null;
+            const epicStartMonth = epic.planStartMonth ?? initiative.startMonth;
+            const epicEndMonth = epic.planEndMonth ?? initiative.endMonth ?? epicStartMonth;
+            const epicQuarterMatch = matchesAnySelectedQuarterByRange(quarterFilter, epicStartMonth, epicEndMonth);
+            if (!initiativeQuarterMatch && !epicQuarterMatch) return null;
             const epicAssignee = epic.assignee?.trim() || "Unassigned";
             const stories = (epic.userStories ?? []).filter((story) => {
               if (assigneeFilter.length === 0) return true;
@@ -569,9 +601,10 @@ export function BacklogPlanningPanel({
           })
           .filter(Boolean) as typeof initiative.epics;
 
-        if (assigneeFilter.length > 0 && epics.length === 0 && !assigneeFilter.includes(initAssignee)) return null;
-        if (epics.length === 0 && (yearFilter.length > 0 || quarterFilter.length > 0 || assigneeFilter.length > 0))
-          return null;
+        const initiativeAssigneeMatch = assigneeFilter.length === 0 || assigneeFilter.includes(initAssignee);
+        if (assigneeFilter.length > 0 && epics.length === 0 && !initiativeAssigneeMatch) return null;
+        if (!initiativeQuarterMatch && epics.length === 0 && quarterFilter.length > 0) return null;
+        if (epics.length === 0 && !initiativeQuarterMatch) return null;
         return { ...initiative, epics };
       })
       .filter(Boolean) as typeof filteredWithControls;
@@ -600,6 +633,7 @@ export function BacklogPlanningPanel({
             initiativeYear: String(initiative.year),
             initiativeStatus: rollupWorkflowStatus((initiative.epics ?? []).flatMap((epic) => epic.userStories ?? [])),
             initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
+            initiativeMonthNum,
             initiativeQuarterLabelValue: quarterFromMonth(initiativeMonthNum),
             initiativeMonthLabelValue: monthLabel(initiativeMonthNum),
             epicId: epic.id,
@@ -612,6 +646,28 @@ export function BacklogPlanningPanel({
         }),
       ),
     );
+  }, [fullyFiltered]);
+  const groupedStandaloneInitiatives = useMemo(() => {
+    return fullyFiltered
+      .filter((initiative) => (initiative.epics ?? []).every((epic) => (epic.userStories ?? []).length === 0))
+      .map((initiative) => ({
+        initiativeId: initiative.id,
+        initiativeTitle: initiative.title,
+        initiativeYear: String(initiative.year),
+        initiativeStatus: rollupWorkflowStatus([]),
+        initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
+        initiativeMonthNum: initiative.startMonth ?? null,
+        initiativeMonthLabelValue: monthLabel(initiative.startMonth),
+        initiativeQuarterLabelValue: quarterFromMonth(initiative.startMonth),
+        epics: (initiative.epics ?? []).map((epic) => ({
+          epicId: epic.id,
+          epicTitle: epic.title,
+          epicAssignee: epic.assignee?.trim() || "Unassigned",
+          epicMonthNum: epic.planStartMonth ?? initiative.startMonth ?? null,
+          epicMonthLabelValue: monthLabel(epic.planStartMonth ?? initiative.startMonth),
+          epicQuarterLabelValue: quarterFromMonth(epic.planStartMonth ?? initiative.startMonth),
+        })),
+      }));
   }, [fullyFiltered]);
   const visibleEpicCount = useMemo(
     () => fullyFiltered.reduce((sum, initiative) => sum + (initiative.epics?.length ?? 0), 0),
@@ -641,16 +697,32 @@ export function BacklogPlanningPanel({
   function keyForLevel(row: (typeof groupedStoryRows)[number], level: GroupLevel): { key: string; label: string; sort: string } {
     if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
     if (level === "quarter") {
-      const q = row.quarterLabelValue;
+      const q = row.initiativeQuarterLabelValue;
       return { key: q, label: q, sort: String(["Q1", "Q2", "Q3", "Q4"].indexOf(q)).padStart(2, "0") };
     }
     if (level === "month") {
-      const m = row.monthNum ?? 0;
-      return { key: String(m), label: row.monthLabelValue, sort: String(m).padStart(2, "0") };
+      const m = row.initiativeMonthNum ?? 0;
+      return { key: String(m), label: row.initiativeMonthLabelValue, sort: String(m).padStart(2, "0") };
     }
     const sprint = row.storySprintLabel;
     const order = sprint === "Sprint 1" ? "01" : sprint === "Sprint 2" ? "02" : "99";
     return { key: sprint, label: sprint, sort: order };
+  }
+
+  function keyForStandaloneLevel(
+    row: (typeof groupedStandaloneInitiatives)[number],
+    level: GroupLevel,
+  ): { key: string; label: string; sort: string } {
+    if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
+    if (level === "quarter") {
+      const q = row.initiativeQuarterLabelValue;
+      return { key: q, label: q, sort: String(["Q1", "Q2", "Q3", "Q4"].indexOf(q)).padStart(2, "0") };
+    }
+    if (level === "month") {
+      const m = row.initiativeMonthNum ?? 0;
+      return { key: String(m), label: row.initiativeMonthLabelValue, sort: String(m).padStart(2, "0") };
+    }
+    return { key: "none", label: "No sprint", sort: "99" };
   }
 
   function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
@@ -1047,6 +1119,22 @@ export function BacklogPlanningPanel({
                 <FolderKanban className="size-4 shrink-0 text-slate-700" />
                 <span className="truncate text-[15px] font-medium text-slate-900">{epicTitle}</span>
               </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openCreateComposer({
+                    anchorKey: `group-epic:${epicId}`,
+                    scope: "epic",
+                    kind: "story",
+                    epicId,
+                  });
+                }}
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                title="Add user story"
+              >
+                <Plus className="size-3.5 text-slate-600" />
+              </button>
             </div>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>
             <span className="justify-self-center text-center text-[15px] text-slate-700">
@@ -1132,6 +1220,38 @@ export function BacklogPlanningPanel({
               >
                 <Target className="size-4 shrink-0 text-slate-700" />
                 <span className="truncate text-[15px] font-medium text-slate-900">{initiativeTitle}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openCreateComposer({
+                    anchorKey: `group-initiative:${initiativeId}`,
+                    scope: "initiative",
+                    kind: "epic",
+                    initiativeId,
+                  });
+                }}
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                title="Add epic"
+              >
+                <Plus className="size-3.5 text-slate-600" />
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openCreateComposer({
+                    anchorKey: `group-initiative:${initiativeId}`,
+                    scope: "initiative",
+                    kind: "story",
+                    initiativeId,
+                  });
+                }}
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                title="Add user story"
+              >
+                <FileText className="size-3.5 text-slate-600" />
               </button>
             </div>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeYear}</span>
@@ -1265,6 +1385,154 @@ export function BacklogPlanningPanel({
       .map(([key, group]) =>
         renderFolderRow(`${path}${level}:${key}`, group.label, group.rows.length, levelIndex * 14, (
           <>{renderGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>
+        )),
+      );
+  }
+
+  function renderStandaloneInitiativeRows(rows: typeof groupedStandaloneInitiatives, indentPx: number): React.ReactNode {
+    return rows
+      .slice()
+      .sort((a, b) => a.initiativeTitle.localeCompare(b.initiativeTitle))
+      .map((initiative) => {
+        const initFolderId = `standalone-init:${initiative.initiativeId}`;
+        const isInitOpen = openGroupFolders[initFolderId] ?? true;
+        return (
+          <div key={initFolderId}>
+            <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+              <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx }}>
+                <button
+                  type="button"
+                  onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [initFolderId]: !isInitOpen }))}
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                  aria-label={isInitOpen ? "Collapse initiative" : "Expand initiative"}
+                >
+                  {isInitOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+                </button>
+                <button type="button" onClick={() => onOpenInitiative(initiative.initiativeId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  <Target className="size-4 shrink-0 text-slate-700" />
+                  <span className="truncate text-[15px] font-medium text-slate-900">{initiative.initiativeTitle}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openCreateComposer({
+                      anchorKey: `group-standalone-initiative:${initiative.initiativeId}`,
+                      scope: "initiative",
+                      kind: "epic",
+                      initiativeId: initiative.initiativeId,
+                    });
+                  }}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                  title="Add epic"
+                >
+                  <Plus className="size-3.5 text-slate-600" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openCreateComposer({
+                      anchorKey: `group-standalone-initiative:${initiative.initiativeId}`,
+                      scope: "initiative",
+                      kind: "story",
+                      initiativeId: initiative.initiativeId,
+                    });
+                  }}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                  title="Add user story"
+                >
+                  <FileText className="size-3.5 text-slate-600" />
+                </button>
+              </div>
+              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
+              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeQuarterLabelValue}</span>
+              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>
+              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiative.initiativeStatus))}>
+                {workflowStatusLabel(initiative.initiativeStatus)}
+              </span>
+              <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
+              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeAssignee}</span>
+              <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                Σ 0d
+              </span>
+              <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                Σ 0d
+              </span>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[12px] text-slate-600">
+                  <span>No stories</span>
+                  <span>0/0 · 0%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+              </div>
+            </div>
+            {isInitOpen ? (
+              <div>
+                {initiative.epics.map((epic) => (
+                  <div key={`standalone-epic:${epic.epicId}`} className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+                    <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
+                      <span className="inline-block h-7 w-7 shrink-0" />
+                      <button type="button" onClick={() => onOpenEpic(epic.epicId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        <FolderKanban className="size-4 shrink-0 text-slate-700" />
+                        <span className="truncate text-[15px] font-medium text-slate-900">{epic.epicTitle}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openCreateComposer({
+                            anchorKey: `group-standalone-epic:${epic.epicId}`,
+                            scope: "epic",
+                            kind: "story",
+                            epicId: epic.epicId,
+                          });
+                        }}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                        title="Add user story"
+                      >
+                        <Plus className="size-3.5 text-slate-600" />
+                      </button>
+                    </div>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicQuarterLabelValue}</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicMonthLabelValue}</span>
+                    <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip("todo"))}>To do</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicAssignee}</span>
+                    <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
+                    <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[12px] text-slate-600">
+                        <span>No stories</span>
+                        <span>0/0 · 0%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        );
+      });
+  }
+
+  function renderStandaloneGroupedTree(rows: typeof groupedStandaloneInitiatives, levelIndex = 0, path = "standalone/"): React.ReactNode {
+    if (rows.length === 0) return null;
+    if (levelIndex >= groupLevels.length) return renderStandaloneInitiativeRows(rows, levelIndex * 14);
+    const level = groupLevels[levelIndex];
+    const groups = new Map<string, { label: string; sort: string; rows: typeof groupedStandaloneInitiatives }>();
+    for (const row of rows) {
+      const { key, label, sort } = keyForStandaloneLevel(row, level);
+      if (!groups.has(key)) groups.set(key, { label, sort, rows: [] });
+      groups.get(key)!.rows.push(row);
+    }
+    return Array.from(groups.entries())
+      .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
+      .map(([key, group]) =>
+        renderFolderRow(`${path}${level}:${key}`, group.label, group.rows.length, levelIndex * 14, (
+          <>{renderStandaloneGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>
         )),
       );
   }
@@ -1586,7 +1854,10 @@ export function BacklogPlanningPanel({
         ) : (
           <div className="divide-y divide-slate-100 bg-white">
             {groupLevels.length > 0 ? (
-              <>{renderGroupedTree(groupedStoryRows)}</>
+              <>
+                {renderGroupedTree(groupedStoryRows)}
+                {renderStandaloneGroupedTree(groupedStandaloneInitiatives)}
+              </>
             ) : (
             <>
             {fullyFiltered.map((initiative) => {

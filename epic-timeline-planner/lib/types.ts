@@ -51,6 +51,8 @@ export type UserStoryItem = {
   icon: string;
   description: string | null;
   assignee: string | null;
+  planYear: number | null;
+  planQuarter: number | null;
   sprint: number | null;
   estimatedDays: number | null;
   daysLeft: number | null;
@@ -70,6 +72,8 @@ export type EpicItem = {
   assignee: string | null;
   color: string;
   initiativeId: string;
+  planYear: number | null;
+  planQuarter: number | null;
   planSprint: number | null;
   planStartMonth: number | null;
   planEndMonth: number | null;

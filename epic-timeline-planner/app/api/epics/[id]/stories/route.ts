@@ -15,6 +15,14 @@ const createStorySchema = z.object({
   status: z.nativeEnum(StoryStatus).optional(),
 });
 
+function quarterFromMonth(month: number | null | undefined): number | null {
+  if (month == null) return null;
+  if (month <= 3) return 1;
+  if (month <= 6) return 2;
+  if (month <= 9) return 3;
+  return 4;
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -30,6 +38,18 @@ export async function POST(
     );
   }
 
+  const epic = await db.epic.findUnique({
+    where: { id },
+    select: {
+      planQuarter: true,
+      planStartMonth: true,
+      initiative: { select: { year: true, startMonth: true } },
+    },
+  });
+  if (!epic) {
+    return NextResponse.json({ message: "Epic not found" }, { status: 404 });
+  }
+
   const story = await db.userStory.create({
     data: {
       title: parsed.data.title,
@@ -41,6 +61,8 @@ export async function POST(
       daysLeft: parsed.data.daysLeft ?? null,
       status: parsed.data.status ?? StoryStatus.todo,
       epicId: id,
+      planYear: epic.initiative.year,
+      planQuarter: epic.planQuarter ?? quarterFromMonth(epic.planStartMonth ?? epic.initiative.startMonth),
       history: {
         create: {
           entry: "Story created",

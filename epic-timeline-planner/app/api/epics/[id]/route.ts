@@ -15,6 +15,14 @@ const updateEpicSchema = z.object({
   planEndMonth: z.number().int().min(1).max(12).optional().nullable(),
 });
 
+function quarterFromMonth(month: number | null | undefined): number | null {
+  if (month == null) return null;
+  if (month <= 3) return 1;
+  if (month <= 6) return 2;
+  if (month <= 9) return 3;
+  return 4;
+}
+
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -40,6 +48,8 @@ export async function PATCH(
         assignee: true,
         color: true,
         initiativeId: true,
+        planYear: true,
+        planQuarter: true,
         planSprint: true,
         planStartMonth: true,
         planEndMonth: true,
@@ -66,6 +76,15 @@ export async function PATCH(
     if (patch.planEndMonth !== undefined && patch.planEndMonth !== existing.planEndMonth)
       changes.push("Quarter plan end month updated");
 
+    const nextInitiativeId = patch.initiativeId ?? existing.initiativeId;
+    const initiative = await db.initiative.findUnique({
+      where: { id: nextInitiativeId },
+      select: { year: true, startMonth: true },
+    });
+    const nextPlanStartMonth = patch.planStartMonth ?? existing.planStartMonth ?? initiative?.startMonth ?? null;
+    const nextPlanYear = initiative?.year ?? existing.planYear ?? null;
+    const nextPlanQuarter = quarterFromMonth(nextPlanStartMonth);
+
     const epic = await db.epic.update({
       where: { id },
       data: {
@@ -78,6 +97,8 @@ export async function PATCH(
         ...(patch.planSprint !== undefined ? { planSprint: patch.planSprint } : {}),
         ...(patch.planStartMonth !== undefined ? { planStartMonth: patch.planStartMonth } : {}),
         ...(patch.planEndMonth !== undefined ? { planEndMonth: patch.planEndMonth } : {}),
+        planYear: nextPlanYear,
+        planQuarter: nextPlanQuarter,
         ...(changes.length > 0
           ? { history: { create: changes.map((entry) => ({ entry })) } }
           : {}),
