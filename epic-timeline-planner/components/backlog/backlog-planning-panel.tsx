@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
+import { ClipboardList, ChevronDown, ChevronRight, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
 import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { InitiativeItem } from "@/lib/types";
@@ -48,7 +48,7 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
 const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   workItem: "Work item",
   year: "Year",
-  quarter: "Q",
+  quarter: "Quarter",
   month: "Month",
   status: "Status",
   sprint: "Sprint",
@@ -85,6 +85,17 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
 };
 
 const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1";
+const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
+  "year",
+  "quarter",
+  "month",
+  "status",
+  "sprint",
+  "assignee",
+  "estDays",
+  "daysLeft",
+  "progress",
+]);
 
 function statusChip(status: string) {
   if (status === "approved") return "bg-violet-100 text-violet-700";
@@ -184,13 +195,13 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-10 min-w-[10.5rem] cursor-pointer items-center justify-between rounded-md bg-white px-3 text-[15px] ring-1 ring-slate-200 outline-none"
+        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-white px-2.5 text-[13px] ring-1 ring-slate-200 outline-none transition hover:ring-slate-300"
       >
         <span className="font-medium text-slate-700">{label}: </span>
         <span className="ml-1 truncate text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
-        <div className="absolute z-30 mt-1 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+        <div className="absolute z-30 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
         <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
           <input
             type="checkbox"
@@ -258,6 +269,7 @@ export function BacklogPlanningPanel({
   } | null>(null);
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
   const resizeStateRef = useRef<{ key: BacklogColumnKey; startX: number; startWidth: number } | null>(null);
@@ -342,6 +354,11 @@ export function BacklogPlanningPanel({
     }
     return [...new Set(list)].slice(0, 250);
   }, [initiatives, storyRefById]);
+  const searchSuggestions = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    return suggestions.filter((item) => item.toLowerCase().includes(needle)).slice(0, 8);
+  }, [query, suggestions]);
 
   const yearOptions = useMemo(() => {
     return Array.from(new Set(initiatives.map((initiative) => String(initiative.year))))
@@ -420,6 +437,19 @@ export function BacklogPlanningPanel({
   const tableGridTemplate = useMemo(
     () => BACKLOG_COLUMN_ORDER.map((key) => `${columnWidths[key]}px`).join(" "),
     [columnWidths],
+  );
+  const visibleEpicCount = useMemo(
+    () => fullyFiltered.reduce((sum, initiative) => sum + (initiative.epics?.length ?? 0), 0),
+    [fullyFiltered],
+  );
+  const visibleStoryCount = useMemo(
+    () =>
+      fullyFiltered.reduce(
+        (sum, initiative) =>
+          sum + (initiative.epics ?? []).reduce((epicSum, epic) => epicSum + (epic.userStories?.length ?? 0), 0),
+        0,
+      ),
+    [fullyFiltered],
   );
 
   function openCreateComposer(selection: {
@@ -547,30 +577,61 @@ export function BacklogPlanningPanel({
   }, []);
 
   return (
-    <section className="h-full min-h-0 overflow-hidden rounded-xl bg-card p-4 shadow-lg ring-1 ring-black/5">
+    <section className="h-full min-h-0 overflow-hidden rounded-2xl bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-xl ring-1 ring-slate-200/80">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex size-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+            <ClipboardList className="size-4" />
+          </span>
           <h2 className="text-[24px] font-semibold tracking-tight text-slate-900">Backlog</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200">
+            {fullyFiltered.length} initiatives
+          </span>
+          <span className="rounded-full bg-blue-100 px-3 py-1 text-[12px] font-semibold text-blue-700">
+            {visibleEpicCount} epics
+          </span>
+          <span className="rounded-full bg-violet-100 px-3 py-1 text-[12px] font-semibold text-violet-700">
+            {visibleStoryCount} stories
+          </span>
         </div>
       </div>
 
-      <div className="mb-3 flex items-center gap-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+      <div className="relative mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
         <Search className="size-4 text-slate-500" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          list="backlog-search-suggestions"
           placeholder="Search work items..."
-          className="h-10 w-full rounded-md bg-white px-3 text-[15px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+          autoComplete="off"
+          onFocus={() => setShowSearchSuggestions(true)}
+          onBlur={() => {
+            window.setTimeout(() => setShowSearchSuggestions(false), 120);
+          }}
+          className="h-9 w-full rounded-lg bg-white px-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-200 transition focus:ring-2 focus:ring-slate-300/70"
         />
-        <datalist id="backlog-search-suggestions">
-          {suggestions.map((item) => (
-            <option key={item} value={item} />
-          ))}
-        </datalist>
+        {showSearchSuggestions && searchSuggestions.length > 0 ? (
+          <div className="absolute left-2 right-2 top-[calc(100%+0.35rem)] z-20 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+            {searchSuggestions.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setQuery(item);
+                  setShowSearchSuggestions(false);
+                }}
+                className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+      <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
         <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
         <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
@@ -581,27 +642,15 @@ export function BacklogPlanningPanel({
           selected={assigneeFilter}
           onChange={setAssigneeFilter}
         />
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="h-10 rounded-md bg-white px-3 text-[15px] ring-1 ring-slate-200 outline-none"
-        >
-          <option value="titleAsc">Sort: Title (A-Z)</option>
-          <option value="titleDesc">Title (Z-A)</option>
-          <option value="assigneeAsc">Assignee</option>
-          <option value="status">Status</option>
-          <option value="estDesc">Est Days (High-Low)</option>
-          <option value="leftDesc">Days Left (High-Low)</option>
-        </select>
       </div>
 
-      <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-lg ring-1 ring-slate-200">
+      <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white shadow-inner">
         <div
-          className="sticky top-0 z-10 grid items-center gap-3 border-b border-slate-200 bg-slate-100 px-3 py-2.5 text-[16px] font-semibold text-slate-700"
+          className="sticky top-0 z-10 grid items-center gap-3 border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-3 py-2.5 text-[13px] font-semibold tracking-[0.02em] text-slate-700 uppercase"
           style={{ gridTemplateColumns: tableGridTemplate }}
         >
           {BACKLOG_COLUMN_ORDER.map((key, index) => (
-            <div key={key} className="relative min-w-0">
+            <div key={key} className={cn("relative min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center")}>
               <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
               {index < BACKLOG_COLUMN_ORDER.length - 1 ? (
                 <button
@@ -718,16 +767,22 @@ export function BacklogPlanningPanel({
                         </div>
                       ) : null}
                     </div>
-                    <span className="text-[15px] text-slate-700">{initiative.year}</span>
-                    <span className="text-[15px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>
-                    <span className="text-[15px] text-slate-700">{monthLabel(initiative.startMonth)}</span>
-                    <span className="w-fit rounded bg-slate-100 px-2 py-0.5 text-[13px] font-medium text-slate-700">
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.year}</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                      {quarterFromMonth(initiative.startMonth)}
+                    </span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                      {monthLabel(initiative.startMonth)}
+                    </span>
+                    <span className="w-fit justify-self-center rounded bg-slate-100 px-2 py-0.5 text-[13px] font-medium text-slate-700">
                       {initiative.status}
                     </span>
-                    <span className="text-[15px] text-slate-500">-</span>
-                    <span className="truncate text-[15px] text-slate-700">{initiative.assignee ?? "Unassigned"}</span>
-                    <span className="text-[15px] text-slate-700">{initiativeDays.estimated}d</span>
-                    <span className="text-[15px] text-slate-700">{initiativeDays.left}d</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                      {initiative.assignee ?? "Unassigned"}
+                    </span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeDays.estimated}d</span>
+                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeDays.left}d</span>
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[12px] text-slate-600">
                         <span>{initiativeProgress.total === 0 ? "No stories" : "Completion"}</span>
@@ -935,16 +990,22 @@ export function BacklogPlanningPanel({
                                   </div>
                                 ) : null}
                               </div>
-                              <span className="text-[15px] text-slate-700">{initiative.year}</span>
-                              <span className="text-[15px] text-slate-700">{quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}</span>
-                              <span className="text-[15px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
-                              <span className="w-fit rounded bg-amber-100 px-2 py-0.5 text-[13px] font-medium text-amber-700">
+                              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.year}</span>
+                              <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
+                              </span>
+                              <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
+                              </span>
+                              <span className="w-fit justify-self-center rounded bg-amber-100 px-2 py-0.5 text-[13px] font-medium text-amber-700">
                                 {(epic.userStories ?? []).length} stories
                               </span>
-                              <span className="text-[15px] text-slate-500">-</span>
-                              <span className="truncate text-[15px] text-slate-700">{epic.assignee ?? "Unassigned"}</span>
-                              <span className="text-[15px] text-slate-700">{epicDays.estimated}d</span>
-                              <span className="text-[15px] text-slate-700">{epicDays.left}d</span>
+                              <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
+                              <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                {epic.assignee ?? "Unassigned"}
+                              </span>
+                              <span className="justify-self-center text-center text-[15px] text-slate-700">{epicDays.estimated}d</span>
+                              <span className="justify-self-center text-center text-[15px] text-slate-700">{epicDays.left}d</span>
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between text-[12px] text-slate-600">
                                   <span>{epicProgress.total === 0 ? "No stories" : "Completion"}</span>
@@ -1067,18 +1128,29 @@ export function BacklogPlanningPanel({
                                         </div>
                                       ) : null}
                                     </div>
-                                    <span className="text-[15px] text-slate-700">{initiative.year}</span>
-                                    <span className="text-[15px] text-slate-700">
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.year}</span>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
                                       {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
-                                    <span className="text-[15px] text-slate-700">{monthLabel(epic.planStartMonth ?? initiative.startMonth)}</span>
-                                    <span className={cn("w-fit rounded px-2 py-0.5 text-[13px] font-medium", statusChip(story.status))}>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                      {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium",
+                                        statusChip(story.status),
+                                      )}
+                                    >
                                       {story.status === "inProgress" ? "In progress" : story.status}
                                     </span>
-                                    <span className="text-[15px] text-slate-700">{sprintLabel(story.sprint)}</span>
-                                    <span className="truncate text-[15px] text-slate-700">{story.assignee?.trim() || "Unassigned"}</span>
-                                    <span className="text-[15px] text-slate-700">{story.estimatedDays ?? 0}d</span>
-                                    <span className="text-[15px] text-slate-700">{story.daysLeft ?? 0}d</span>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                      {sprintLabel(story.sprint)}
+                                    </span>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                      {story.assignee?.trim() || "Unassigned"}
+                                    </span>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">{story.estimatedDays ?? 0}d</span>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">{story.daysLeft ?? 0}d</span>
                                     <div className="space-y-1">
                                       <div className="flex items-center justify-between text-[12px] text-slate-600">
                                         <span>{progress.label}</span>
