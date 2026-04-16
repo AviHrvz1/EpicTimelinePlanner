@@ -1436,6 +1436,47 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   toast.error("Failed to add user story");
                 }
               }}
+              onPatchStoryQuick={async (storyId, patch) => {
+                try {
+                  const response = await fetch(`/api/stories/${storyId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(patch),
+                  });
+                  if (!response.ok) {
+                    throw new Error("Failed to patch story");
+                  }
+                  await refresh();
+                } catch {
+                  toast.error("Failed to update story");
+                }
+              }}
+              onPatchInitiativeQuick={async (initiativeId, patch) => {
+                try {
+                  const response = await fetch(`/api/initiatives/${initiativeId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(patch),
+                  });
+                  if (!response.ok) throw new Error("Failed to patch initiative");
+                  await refresh();
+                } catch {
+                  toast.error("Failed to update initiative assignee");
+                }
+              }}
+              onPatchEpicQuick={async (epicId, patch) => {
+                try {
+                  const response = await fetch(`/api/epics/${epicId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(patch),
+                  });
+                  if (!response.ok) throw new Error("Failed to patch epic");
+                  await refresh();
+                } catch {
+                  toast.error("Failed to update epic assignee");
+                }
+              }}
             />
           )}
         </div>

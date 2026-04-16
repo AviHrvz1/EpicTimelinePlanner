@@ -1,7 +1,7 @@
 "use client";
 
-import { ClipboardList, ChevronDown, ChevronRight, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
-import { FormEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ClipboardList, ChevronDown, ChevronRight, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,18 @@ type BacklogPlanningPanelProps = {
   onCreateInitiativeQuick: (title: string) => Promise<void>;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
+  onPatchStoryQuick: (
+    storyId: string,
+    patch: Partial<{
+      status: "todo" | "inProgress" | "done" | "approved";
+      sprint: number | null;
+      assignee: string | null;
+      estimatedDays: number | null;
+      daysLeft: number | null;
+    }>,
+  ) => Promise<void>;
+  onPatchInitiativeQuick: (initiativeId: string, patch: { assignee: string | null }) => Promise<void>;
+  onPatchEpicQuick: (epicId: string, patch: { assignee: string | null }) => Promise<void>;
 };
 
 type OptionItem = { id: string; label: string };
@@ -32,6 +44,8 @@ type BacklogColumnKey =
   | "daysLeft"
   | "progress";
 type GroupLevel = "year" | "quarter" | "month" | "sprint";
+type WorkflowStatus = "todo" | "inProgress" | "done" | "approved";
+type InlineEditableStoryField = "status" | "sprint" | "assignee" | "estimatedDays" | "daysLeft";
 
 const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "workItem",
@@ -86,6 +100,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
 };
 
 const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1";
+const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "year",
   "quarter",
@@ -158,6 +173,25 @@ function storyCompletion(story: { status: string; estimatedDays?: number | null;
   if (story.status === "approved" || story.status === "done") return { label: "Done", percent: 100 };
   if (story.status === "inProgress") return { label: "In progress", percent: 50 };
   return { label: "To do", percent: 0 };
+}
+
+function rollupWorkflowStatus(stories: Array<{ status: string }>): WorkflowStatus {
+  if (stories.length === 0) return "todo";
+  const statuses = stories.map((story) => story.status);
+  if (statuses.every((status) => status === "approved")) return "approved";
+  if (statuses.every((status) => status === "done" || status === "approved")) return "done";
+  if (statuses.some((status) => status === "inProgress" || status === "done" || status === "approved")) return "inProgress";
+  return "todo";
+}
+
+function rollupWorkflowStatusFromGroupedRows(rows: Array<{ storyStatus: string }>): WorkflowStatus {
+  return rollupWorkflowStatus(rows.map((row) => ({ status: row.storyStatus })));
+}
+
+function workflowStatusLabel(status: WorkflowStatus): string {
+  if (status === "inProgress") return "In progress";
+  if (status === "todo") return "To do";
+  return status;
 }
 
 function MultiCheckboxFilter({
@@ -254,6 +288,9 @@ export function BacklogPlanningPanel({
   onCreateInitiativeQuick,
   onCreateEpicQuick,
   onCreateStoryQuick,
+  onPatchStoryQuick,
+  onPatchInitiativeQuick,
+  onPatchEpicQuick,
 }: BacklogPlanningPanelProps) {
   const [query, setQuery] = useState("");
   const [openInitiatives, setOpenInitiatives] = useState<Record<string, boolean>>({});
@@ -285,6 +322,100 @@ export function BacklogPlanningPanel({
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
   const resizeStateRef = useRef<{ key: BacklogColumnKey; startX: number; startWidth: number } | null>(null);
+  const [hasLoadedViewState, setHasLoadedViewState] = useState(false);
+  const [savingStoryId, setSavingStoryId] = useState<string | null>(null);
+  const [editingStoryCell, setEditingStoryCell] = useState<{
+    storyId: string;
+    field: InlineEditableStoryField;
+    value: string;
+  } | null>(null);
+  const [editingParentAssignee, setEditingParentAssignee] = useState<{
+    kind: "initiative" | "epic";
+    id: string;
+    value: string;
+  } | null>(null);
+
+  async function patchStoryInline(
+    storyId: string,
+    patch: Partial<{
+      status: "todo" | "inProgress" | "done" | "approved";
+      sprint: number | null;
+      assignee: string | null;
+      estimatedDays: number | null;
+      daysLeft: number | null;
+    }>,
+  ) {
+    if (Object.keys(patch).length === 0) return;
+    setSavingStoryId(storyId);
+    try {
+      await onPatchStoryQuick(storyId, patch);
+    } finally {
+      setSavingStoryId((current) => (current === storyId ? null : current));
+    }
+  }
+
+  function beginStoryCellEdit(storyId: string, field: InlineEditableStoryField, value: string) {
+    setEditingStoryCell({ storyId, field, value });
+  }
+
+  function cancelStoryCellEdit() {
+    setEditingStoryCell(null);
+  }
+
+  async function confirmStoryCellEdit(
+    storyId: string,
+    field: InlineEditableStoryField,
+    current: { status: string; sprint: number | null; assignee: string | null; estimatedDays: number | null; daysLeft: number | null },
+  ) {
+    if (!editingStoryCell || editingStoryCell.storyId !== storyId || editingStoryCell.field !== field) return;
+    const nextRaw = editingStoryCell.value.trim();
+    if (field === "status") {
+      const next = nextRaw as "todo" | "inProgress" | "done" | "approved";
+      if (next !== current.status) await patchStoryInline(storyId, { status: next });
+    } else if (field === "sprint") {
+      const next = nextRaw === "unscheduled" ? null : Number(nextRaw);
+      if (next !== current.sprint) await patchStoryInline(storyId, { sprint: next });
+    } else if (field === "assignee") {
+      const next = nextRaw === "" ? null : nextRaw;
+      const currentValue = current.assignee?.trim() || null;
+      if (next !== currentValue) await patchStoryInline(storyId, { assignee: next });
+    } else if (field === "estimatedDays") {
+      const next = nextRaw === "" ? 0 : Math.max(0, Number(nextRaw) || 0);
+      if (next !== (current.estimatedDays ?? 0)) await patchStoryInline(storyId, { estimatedDays: next });
+    } else if (field === "daysLeft") {
+      const next = nextRaw === "" ? 0 : Math.max(0, Number(nextRaw) || 0);
+      if (next !== (current.daysLeft ?? 0)) await patchStoryInline(storyId, { daysLeft: next });
+    }
+    setEditingStoryCell(null);
+  }
+
+  function handleStoryCellKeyDown(
+    event: ReactKeyboardEvent<HTMLElement>,
+    storyId: string,
+    field: InlineEditableStoryField,
+    current: { status: string; sprint: number | null; assignee: string | null; estimatedDays: number | null; daysLeft: number | null },
+  ) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelStoryCellEdit();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void confirmStoryCellEdit(storyId, field, current);
+    }
+  }
+
+  async function confirmParentAssigneeEdit(kind: "initiative" | "epic", id: string, currentAssignee: string | null) {
+    if (!editingParentAssignee || editingParentAssignee.kind !== kind || editingParentAssignee.id !== id) return;
+    const next = editingParentAssignee.value.trim() || null;
+    const current = currentAssignee?.trim() || null;
+    if (next !== current) {
+      if (kind === "initiative") await onPatchInitiativeQuick(id, { assignee: next });
+      else await onPatchEpicQuick(id, { assignee: next });
+    }
+    setEditingParentAssignee(null);
+  }
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -467,7 +598,7 @@ export function BacklogPlanningPanel({
             initiativeId: initiative.id,
             initiativeTitle: initiative.title,
             initiativeYear: String(initiative.year),
-            initiativeStatus: initiative.status,
+            initiativeStatus: rollupWorkflowStatus((initiative.epics ?? []).flatMap((epic) => epic.userStories ?? [])),
             initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
             initiativeQuarterLabelValue: quarterFromMonth(initiativeMonthNum),
             initiativeMonthLabelValue: monthLabel(initiativeMonthNum),
@@ -554,12 +685,252 @@ export function BacklogPlanningPanel({
             <span className="justify-self-center text-center text-[14px] text-slate-700">{row.quarterLabelValue}</span>
             <span className="justify-self-center text-center text-[14px] text-slate-700">{row.monthLabelValue}</span>
             <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[12px] font-medium", statusChip(row.storyStatus))}>
-              {row.storyStatus === "inProgress" ? "In progress" : row.storyStatus}
+              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
+                <span className="flex items-center gap-1">
+                  <select
+                    value={editingStoryCell.value}
+                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    onKeyDown={(event) =>
+                      handleStoryCellKeyDown(event, row.storyId, "status", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="w-full cursor-pointer bg-transparent text-[12px] font-medium outline-none"
+                  >
+                    <option value="todo">To do</option>
+                    <option value="inProgress">In progress</option>
+                    <option value="done">Done</option>
+                    <option value="approved">Approved</option>
+                  </select>
+                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200">
+                    <X className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirmStoryCellEdit(row.storyId, "status", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"
+                  >
+                    <Check className="size-3" />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    beginStoryCellEdit(row.storyId, "status", row.storyStatus);
+                  }}
+                  className="text-[12px] font-medium"
+                >
+                  {row.storyStatus === "inProgress" ? "In progress" : row.storyStatus}
+                </button>
+              )}
             </span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storySprintLabel}</span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storyAssignee}</span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storyEstimatedDays}d</span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.storyDaysLeft}d</span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">
+              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "sprint" ? (
+                <span className="inline-flex items-center gap-1">
+                  <select
+                    value={editingStoryCell.value}
+                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    onKeyDown={(event) =>
+                      handleStoryCellKeyDown(event, row.storyId, "sprint", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="h-7 min-w-[94px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                  >
+                    <option value="unscheduled">Unscheduled</option>
+                    <option value="1">Sprint 1</option>
+                    <option value="2">Sprint 2</option>
+                  </select>
+                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirmStoryCellEdit(row.storyId, "sprint", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                  ><Check className="size-3.5" /></button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    beginStoryCellEdit(
+                      row.storyId,
+                      "sprint",
+                      row.storySprintLabel === "Unscheduled" ? "unscheduled" : row.storySprintLabel === "Sprint 1" ? "1" : "2",
+                    );
+                  }}
+                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                >
+                  {row.storySprintLabel}
+                </button>
+              )}
+            </span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">
+              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "assignee" ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    value={editingStoryCell.value}
+                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    onKeyDown={(event) =>
+                      handleStoryCellKeyDown(event, row.storyId, "assignee", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    placeholder="Unassigned"
+                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                  />
+                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirmStoryCellEdit(row.storyId, "assignee", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                  ><Check className="size-3.5" /></button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee);
+                  }}
+                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                >
+                  {row.storyAssignee}
+                </button>
+              )}
+            </span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">
+              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "estimatedDays" ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    value={editingStoryCell.value}
+                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    onKeyDown={(event) =>
+                      handleStoryCellKeyDown(event, row.storyId, "estimatedDays", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                  />
+                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirmStoryCellEdit(row.storyId, "estimatedDays", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                  ><Check className="size-3.5" /></button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays));
+                  }}
+                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                >
+                  {row.storyEstimatedDays}d
+                </button>
+              )}
+            </span>
+            <span className="justify-self-center text-center text-[14px] text-slate-700">
+              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "daysLeft" ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    value={editingStoryCell.value}
+                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    onKeyDown={(event) =>
+                      handleStoryCellKeyDown(event, row.storyId, "daysLeft", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                  />
+                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirmStoryCellEdit(row.storyId, "daysLeft", {
+                        status: row.storyStatus,
+                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+                        estimatedDays: row.storyEstimatedDays,
+                        daysLeft: row.storyDaysLeft,
+                      })
+                    }
+                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                  ><Check className="size-3.5" /></button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft));
+                  }}
+                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                >
+                  {row.storyDaysLeft}d
+                </button>
+              )}
+            </span>
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[11px] text-slate-600">
                 <span>{progress.label}</span>
@@ -682,25 +1053,59 @@ export function BacklogPlanningPanel({
               {quarterFromMonth(epicRows[0]?.monthNum ?? null)}
             </span>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>
-            <span className="w-fit justify-self-center rounded bg-amber-100 px-2 py-0.5 text-[13px] font-medium text-amber-700">
-              {storyCount} stories
+            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+              {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
             </span>
             <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{epicAssignee}</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{estimated}d</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{left}d</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">
+              {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    value={editingParentAssignee.value}
+                    onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    placeholder="Unassigned"
+                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                  />
+                  <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                  <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setEditingParentAssignee({ kind: "epic", id: epicId, value: epicAssignee === "Unassigned" ? "" : epicAssignee });
+                  }}
+                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                >
+                  {epicAssignee}
+                </button>
+              )}
+            </span>
+            <span
+              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              title="Auto-summed from child user stories"
+            >
+              Σ {estimated}d
+            </span>
+            <span
+              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              title="Auto-summed from child user stories"
+            >
+              Σ {left}d
+            </span>
             <div>{renderCompletionCell(epicRows)}</div>
           </div>
           {isOpen ? (
             <div>
-              {renderStoryDataRows(epicRows, epicIndentPx + 18, `${folderId}/stories`)}
+              {renderStoryDataRows(epicRows, epicIndentPx + 34, `${folderId}/stories`)}
             </div>
           ) : null}
         </div>
       );
     }
 
-    function renderInitiativeRow(initiativeId: string, initiativeTitle: string, initiativeYear: string, initiativeStatus: string, initiativeAssignee: string, initiativeQuarterLabel: string, initiativeMonthLabel: string, initiativeRows: typeof groupedStoryRows, initIndentPx: number, initPath: string) {
+    function renderInitiativeRow(initiativeId: string, initiativeTitle: string, initiativeYear: string, initiativeStatus: WorkflowStatus, initiativeAssignee: string, initiativeQuarterLabel: string, initiativeMonthLabel: string, initiativeRows: typeof groupedStoryRows, initIndentPx: number, initPath: string) {
       const folderId = `${initPath}/initiative:${initiativeId}`;
       const isOpen = openGroupFolders[folderId] ?? true;
       const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
@@ -732,13 +1137,51 @@ export function BacklogPlanningPanel({
             <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeYear}</span>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeQuarterLabel}</span>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeMonthLabel}</span>
-            <span className="w-fit justify-self-center rounded bg-slate-100 px-2 py-0.5 text-[13px] font-medium text-slate-700">
-              {initiativeStatus}
+            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiativeStatus))}>
+              {workflowStatusLabel(initiativeStatus)}
             </span>
             <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeAssignee}</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{estimated}d</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{left}d</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">
+              {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    value={editingParentAssignee.value}
+                    onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    placeholder="Unassigned"
+                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                  />
+                  <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                  <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiativeId, initiativeAssignee === "Unassigned" ? null : initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setEditingParentAssignee({
+                      kind: "initiative",
+                      id: initiativeId,
+                      value: initiativeAssignee === "Unassigned" ? "" : initiativeAssignee,
+                    });
+                  }}
+                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                >
+                  {initiativeAssignee}
+                </button>
+              )}
+            </span>
+            <span
+              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              title="Auto-summed from child user stories"
+            >
+              Σ {estimated}d
+            </span>
+            <span
+              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              title="Auto-summed from child user stories"
+            >
+              Σ {left}d
+            </span>
             <div>{renderCompletionCell(initiativeRows)}</div>
           </div>
           {isOpen ? (
@@ -881,6 +1324,63 @@ export function BacklogPlanningPanel({
       if (createMenuCloseTimerRef.current) clearTimeout(createMenuCloseTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(BACKLOG_VIEW_STATE_STORAGE_KEY);
+      if (!raw) {
+        setHasLoadedViewState(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as {
+        query?: unknown;
+        statusFilter?: unknown;
+        sprintFilter?: unknown;
+        yearFilter?: unknown;
+        quarterFilter?: unknown;
+        assigneeFilter?: unknown;
+        groupLevels?: unknown;
+      };
+      if (typeof parsed.query === "string") setQuery(parsed.query);
+      if (Array.isArray(parsed.statusFilter)) setStatusFilter(parsed.statusFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.sprintFilter)) setSprintFilter(parsed.sprintFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.yearFilter)) setYearFilter(parsed.yearFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.quarterFilter))
+        setQuarterFilter(parsed.quarterFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.assigneeFilter))
+        setAssigneeFilter(parsed.assigneeFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.groupLevels)) {
+        const validLevels = parsed.groupLevels.filter(
+          (v): v is GroupLevel => v === "year" || v === "quarter" || v === "month" || v === "sprint",
+        );
+        setGroupLevels(validLevels);
+      }
+    } catch {
+      // Ignore corrupt localStorage entries.
+    } finally {
+      setHasLoadedViewState(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedViewState) return;
+    try {
+      window.localStorage.setItem(
+        BACKLOG_VIEW_STATE_STORAGE_KEY,
+        JSON.stringify({
+          query,
+          statusFilter,
+          sprintFilter,
+          yearFilter,
+          quarterFilter,
+          assigneeFilter,
+          groupLevels,
+        }),
+      );
+    } catch {
+      // Ignore write failures (private mode, quotas, etc.)
+    }
+  }, [hasLoadedViewState, query, statusFilter, sprintFilter, yearFilter, quarterFilter, assigneeFilter, groupLevels]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -1092,6 +1592,7 @@ export function BacklogPlanningPanel({
             {fullyFiltered.map((initiative) => {
               const isInitOpen = openInitiatives[initiative.id] ?? true;
               const initiativeStories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
+              const initiativeWorkflowStatus = rollupWorkflowStatus(initiativeStories);
               const initiativeDays = sumStoryDays(initiativeStories);
               const initiativeProgress = completionFromStories(initiativeStories);
               return (
@@ -1193,15 +1694,47 @@ export function BacklogPlanningPanel({
                     <span className="justify-self-center text-center text-[15px] text-slate-700">
                       {monthLabel(initiative.startMonth)}
                     </span>
-                    <span className="w-fit justify-self-center rounded bg-slate-100 px-2 py-0.5 text-[13px] font-medium text-slate-700">
-                      {initiative.status}
+                    <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiativeWorkflowStatus))}>
+                      {workflowStatusLabel(initiativeWorkflowStatus)}
                     </span>
                     <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
                     <span className="justify-self-center text-center text-[15px] text-slate-700">
-                      {initiative.assignee ?? "Unassigned"}
+                      {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiative.id ? (
+                        <span className="inline-flex items-center gap-1">
+                          <input
+                            value={editingParentAssignee.value}
+                            onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                            placeholder="Unassigned"
+                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                          />
+                          <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                          <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiative.id, initiative.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            setEditingParentAssignee({ kind: "initiative", id: initiative.id, value: initiative.assignee?.trim() || "" });
+                          }}
+                          className="rounded px-1 py-0.5 hover:bg-slate-100"
+                        >
+                          {initiative.assignee ?? "Unassigned"}
+                        </button>
+                      )}
                     </span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeDays.estimated}d</span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeDays.left}d</span>
+                    <span
+                      className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                      title="Auto-summed from child user stories"
+                    >
+                      Σ {initiativeDays.estimated}d
+                    </span>
+                    <span
+                      className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                      title="Auto-summed from child user stories"
+                    >
+                      Σ {initiativeDays.left}d
+                    </span>
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[12px] text-slate-600">
                         <span>{initiativeProgress.total === 0 ? "No stories" : "Completion"}</span>
@@ -1328,6 +1861,7 @@ export function BacklogPlanningPanel({
                       ) : null}
                       {(initiative.epics ?? []).map((epic) => {
                         const isEpicOpen = openEpics[epic.id] ?? true;
+                        const epicWorkflowStatus = rollupWorkflowStatus(epic.userStories ?? []);
                         const epicDays = sumStoryDays(epic.userStories ?? []);
                         const epicProgress = completionFromStories(epic.userStories ?? []);
                         return (
@@ -1416,15 +1950,47 @@ export function BacklogPlanningPanel({
                               <span className="justify-self-center text-center text-[15px] text-slate-700">
                                 {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
                               </span>
-                              <span className="w-fit justify-self-center rounded bg-amber-100 px-2 py-0.5 text-[13px] font-medium text-amber-700">
-                                {(epic.userStories ?? []).length} stories
+                              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(epicWorkflowStatus))}>
+                                {workflowStatusLabel(epicWorkflowStatus)}
                               </span>
                               <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
                               <span className="justify-self-center text-center text-[15px] text-slate-700">
-                                {epic.assignee ?? "Unassigned"}
+                                {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epic.id ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <input
+                                      value={editingParentAssignee.value}
+                                      onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                      placeholder="Unassigned"
+                                      className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                    />
+                                    <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epic.id, epic.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      setEditingParentAssignee({ kind: "epic", id: epic.id, value: epic.assignee?.trim() || "" });
+                                    }}
+                                    className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                  >
+                                    {epic.assignee ?? "Unassigned"}
+                                  </button>
+                                )}
                               </span>
-                              <span className="justify-self-center text-center text-[15px] text-slate-700">{epicDays.estimated}d</span>
-                              <span className="justify-self-center text-center text-[15px] text-slate-700">{epicDays.left}d</span>
+                              <span
+                                className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                                title="Auto-summed from child user stories"
+                              >
+                                Σ {epicDays.estimated}d
+                              </span>
+                              <span
+                                className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                                title="Auto-summed from child user stories"
+                              >
+                                Σ {epicDays.left}d
+                              </span>
                               <div className="space-y-1">
                                 <div className="flex items-center justify-between text-[12px] text-slate-600">
                                   <span>{epicProgress.total === 0 ? "No stories" : "Completion"}</span>
@@ -1499,7 +2065,7 @@ export function BacklogPlanningPanel({
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                     <div
-                                      className="relative flex min-w-0 items-center gap-2 pl-16"
+                                      className="relative flex min-w-0 items-center gap-2 pl-24"
                                       onMouseEnter={cancelCreateMenuClose}
                                       onMouseLeave={scheduleCreateMenuClose}
                                     >
@@ -1560,16 +2126,244 @@ export function BacklogPlanningPanel({
                                         statusChip(story.status),
                                       )}
                                     >
-                                      {story.status === "inProgress" ? "In progress" : story.status}
+                                      {editingStoryCell?.storyId === story.id && editingStoryCell.field === "status" ? (
+                                        <span className="flex items-center gap-1">
+                                          <select
+                                            value={editingStoryCell.value}
+                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                            onKeyDown={(event) =>
+                                              handleStoryCellKeyDown(event, story.id, "status", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="w-full cursor-pointer bg-transparent text-[13px] font-medium outline-none"
+                                          >
+                                            <option value="todo">To do</option>
+                                            <option value="inProgress">In progress</option>
+                                            <option value="done">Done</option>
+                                            <option value="approved">Approved</option>
+                                          </select>
+                                          <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"><X className="size-3" /></button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              confirmStoryCellEdit(story.id, "status", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"
+                                          ><Check className="size-3" /></button>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            beginStoryCellEdit(story.id, "status", story.status);
+                                          }}
+                                          className="text-[13px] font-medium"
+                                        >
+                                          {story.status === "inProgress" ? "In progress" : story.status}
+                                        </button>
+                                      )}
                                     </span>
                                     <span className="justify-self-center text-center text-[15px] text-slate-700">
-                                      {sprintLabel(story.sprint)}
+                                      {editingStoryCell?.storyId === story.id && editingStoryCell.field === "sprint" ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          <select
+                                            value={editingStoryCell.value}
+                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                            onKeyDown={(event) =>
+                                              handleStoryCellKeyDown(event, story.id, "sprint", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="h-7 min-w-[96px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                          >
+                                            <option value="unscheduled">Unscheduled</option>
+                                            <option value="1">Sprint 1</option>
+                                            <option value="2">Sprint 2</option>
+                                          </select>
+                                          <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              confirmStoryCellEdit(story.id, "sprint", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                                          ><Check className="size-3.5" /></button>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            beginStoryCellEdit(story.id, "sprint", story.sprint == null ? "unscheduled" : String(story.sprint));
+                                          }}
+                                          className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                        >
+                                          {sprintLabel(story.sprint)}
+                                        </button>
+                                      )}
                                     </span>
                                     <span className="justify-self-center text-center text-[15px] text-slate-700">
-                                      {story.assignee?.trim() || "Unassigned"}
+                                      {editingStoryCell?.storyId === story.id && editingStoryCell.field === "assignee" ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          <input
+                                            value={editingStoryCell.value}
+                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                            onKeyDown={(event) =>
+                                              handleStoryCellKeyDown(event, story.id, "assignee", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            placeholder="Unassigned"
+                                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                          />
+                                          <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              confirmStoryCellEdit(story.id, "assignee", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                                          ><Check className="size-3.5" /></button>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            beginStoryCellEdit(story.id, "assignee", story.assignee?.trim() || "");
+                                          }}
+                                          className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                        >
+                                          {story.assignee?.trim() || "Unassigned"}
+                                        </button>
+                                      )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">{story.estimatedDays ?? 0}d</span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">{story.daysLeft ?? 0}d</span>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                      {editingStoryCell?.storyId === story.id && editingStoryCell.field === "estimatedDays" ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            value={editingStoryCell.value}
+                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                            onKeyDown={(event) =>
+                                              handleStoryCellKeyDown(event, story.id, "estimatedDays", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                          />
+                                          <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              confirmStoryCellEdit(story.id, "estimatedDays", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                                          ><Check className="size-3.5" /></button>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            beginStoryCellEdit(story.id, "estimatedDays", String(story.estimatedDays ?? 0));
+                                          }}
+                                          className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                        >
+                                          {story.estimatedDays ?? 0}d
+                                        </button>
+                                      )}
+                                    </span>
+                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                      {editingStoryCell?.storyId === story.id && editingStoryCell.field === "daysLeft" ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            value={editingStoryCell.value}
+                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                            onKeyDown={(event) =>
+                                              handleStoryCellKeyDown(event, story.id, "daysLeft", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                          />
+                                          <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              confirmStoryCellEdit(story.id, "daysLeft", {
+                                                status: story.status,
+                                                sprint: story.sprint,
+                                                assignee: story.assignee,
+                                                estimatedDays: story.estimatedDays,
+                                                daysLeft: story.daysLeft,
+                                              })
+                                            }
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                                          ><Check className="size-3.5" /></button>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            beginStoryCellEdit(story.id, "daysLeft", String(story.daysLeft ?? 0));
+                                          }}
+                                          className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                        >
+                                          {story.daysLeft ?? 0}d
+                                        </button>
+                                      )}
+                                    </span>
                                     <div className="space-y-1">
                                       <div className="flex items-center justify-between text-[12px] text-slate-600">
                                         <span>{progress.label}</span>
