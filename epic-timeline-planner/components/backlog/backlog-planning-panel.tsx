@@ -195,7 +195,7 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-white px-2.5 text-[13px] ring-1 ring-slate-200 outline-none transition hover:ring-slate-300"
+        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[13px] ring-1 ring-slate-300/80 outline-none shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
       >
         <span className="font-medium text-slate-700">{label}: </span>
         <span className="ml-1 truncate text-slate-600">{selectedLabel}</span>
@@ -598,7 +598,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative mb-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+      <div className="relative mb-3 flex items-center gap-2 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white p-2.5 shadow-sm ring-1 ring-white/60">
         <Search className="size-4 text-slate-500" />
         <input
           value={query}
@@ -609,7 +609,7 @@ export function BacklogPlanningPanel({
           onBlur={() => {
             window.setTimeout(() => setShowSearchSuggestions(false), 120);
           }}
-          className="h-9 w-full rounded-lg bg-white px-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-200 transition focus:ring-2 focus:ring-slate-300/70"
+          className="h-9 w-full rounded-lg bg-white/95 px-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-300/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
         />
         {showSearchSuggestions && searchSuggestions.length > 0 ? (
           <div className="absolute left-2 right-2 top-[calc(100%+0.35rem)] z-20 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -631,7 +631,7 @@ export function BacklogPlanningPanel({
         ) : null}
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white p-3 shadow-sm ring-1 ring-white/60">
         <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
         <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
         <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
