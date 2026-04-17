@@ -1461,7 +1461,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   if (!response.ok) throw new Error("Failed to patch initiative");
                   await refresh();
                 } catch {
-                  toast.error("Failed to update initiative assignee");
+                  toast.error("Failed to update initiative");
                 }
               }}
               onPatchEpicQuick={async (epicId, patch) => {
@@ -1474,7 +1474,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   if (!response.ok) throw new Error("Failed to patch epic");
                   await refresh();
                 } catch {
-                  toast.error("Failed to update epic assignee");
+                  toast.error("Failed to update epic");
                 }
               }}
             />

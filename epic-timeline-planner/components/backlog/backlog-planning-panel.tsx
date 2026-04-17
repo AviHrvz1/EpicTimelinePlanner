@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, ClipboardList, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
+import { Check, ClipboardList, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FileText, FolderKanban, Pencil, Plus, Search, Target, X } from "lucide-react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ type BacklogPlanningPanelProps = {
   onPatchStoryQuick: (
     storyId: string,
     patch: Partial<{
+      title: string;
       status: "todo" | "inProgress" | "done" | "approved";
       sprint: number | null;
       assignee: string | null;
@@ -25,8 +27,8 @@ type BacklogPlanningPanelProps = {
       daysLeft: number | null;
     }>,
   ) => Promise<void>;
-  onPatchInitiativeQuick: (initiativeId: string, patch: { assignee: string | null }) => Promise<void>;
-  onPatchEpicQuick: (epicId: string, patch: { assignee: string | null }) => Promise<void>;
+  onPatchInitiativeQuick: (initiativeId: string, patch: { assignee?: string | null; title?: string }) => Promise<void>;
+  onPatchEpicQuick: (epicId: string, patch: { assignee?: string | null; title?: string }) => Promise<void>;
 };
 
 type OptionItem = { id: string; label: string };
@@ -365,6 +367,12 @@ export function BacklogPlanningPanel({
     id: string;
     value: string;
   } | null>(null);
+  const [editingParentTitle, setEditingParentTitle] = useState<{
+    kind: "initiative" | "epic";
+    id: string;
+    value: string;
+  } | null>(null);
+  const [editingStoryTitle, setEditingStoryTitle] = useState<{ id: string; value: string } | null>(null);
 
   async function patchStoryInline(
     storyId: string,
@@ -374,6 +382,7 @@ export function BacklogPlanningPanel({
       assignee: string | null;
       estimatedDays: number | null;
       daysLeft: number | null;
+      title: string;
     }>,
   ) {
     if (Object.keys(patch).length === 0) return;
@@ -417,6 +426,7 @@ export function BacklogPlanningPanel({
       const next = nextRaw === "" ? 0 : Math.max(0, Number(nextRaw) || 0);
       if (next !== (current.daysLeft ?? 0)) await patchStoryInline(storyId, { daysLeft: next });
     }
+    toast.success("User story updated");
     setEditingStoryCell(null);
   }
 
@@ -444,8 +454,30 @@ export function BacklogPlanningPanel({
     if (next !== current) {
       if (kind === "initiative") await onPatchInitiativeQuick(id, { assignee: next });
       else await onPatchEpicQuick(id, { assignee: next });
+      toast.success(`${kind === "initiative" ? "Initiative" : "Epic"} updated`);
     }
     setEditingParentAssignee(null);
+  }
+
+  async function confirmParentTitleEdit(kind: "initiative" | "epic", id: string, currentTitle: string) {
+    if (!editingParentTitle || editingParentTitle.kind !== kind || editingParentTitle.id !== id) return;
+    const next = editingParentTitle.value.trim();
+    if (next.length >= 2 && next !== currentTitle) {
+      if (kind === "initiative") await onPatchInitiativeQuick(id, { title: next });
+      else await onPatchEpicQuick(id, { title: next });
+      toast.success(`${kind === "initiative" ? "Initiative" : "Epic"} title updated`);
+    }
+    setEditingParentTitle(null);
+  }
+
+  async function confirmStoryTitleEdit(storyId: string, currentTitle: string) {
+    if (!editingStoryTitle || editingStoryTitle.id !== storyId) return;
+    const next = editingStoryTitle.value.trim();
+    if (next.length >= 2 && next !== currentTitle) {
+      await patchStoryInline(storyId, { title: next });
+      toast.success("User story title updated");
+    }
+    setEditingStoryTitle(null);
   }
 
   const q = query.trim().toLowerCase();
@@ -769,16 +801,35 @@ export function BacklogPlanningPanel({
             style={{ gridTemplateColumns: tableGridTemplate }}
           >
             <div className="min-w-0" style={{ paddingLeft: indentPx }}>
-              <button
-                type="button"
-                onClick={() => onOpenStory(row.storyId)}
-                className="flex min-w-0 items-center gap-2 truncate text-left text-[14px] text-slate-800 hover:text-slate-900"
-              >
+              <div className="flex min-w-0 items-center gap-2 truncate text-left text-[14px] text-slate-800">
                 <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
                   <FileText className="size-3.5" />
                 </span>
-                <span className="truncate">{row.storyTitle}</span>
-              </button>
+                {editingStoryTitle?.id === row.storyId ? (
+                  <span className="flex min-w-0 items-center gap-1">
+                    <input
+                      value={editingStoryTitle.value}
+                      onChange={(event) => setEditingStoryTitle({ id: row.storyId, value: event.target.value })}
+                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                      autoFocus
+                    />
+                    <button type="button" onClick={() => setEditingStoryTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                    <button type="button" onClick={() => void confirmStoryTitleEdit(row.storyId, row.storyTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                  </span>
+                ) : (
+                  <span className="inline-flex min-w-0 items-center gap-1 truncate text-left">
+                    <span className="truncate">{row.storyTitle}</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      aria-label="Edit user story title"
+                    >
+                      <Pencil className="size-3.5 text-slate-500" />
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
             <span className="justify-self-center text-center text-[14px] text-slate-700">{row.initiativeYear}</span>
             <span className="justify-self-center text-center text-[14px] text-slate-700">{row.quarterLabelValue}</span>
@@ -1144,7 +1195,30 @@ export function BacklogPlanningPanel({
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
                 <FolderKanban className="size-4 shrink-0 text-slate-700" />
-                <span className="truncate text-[15px] font-medium text-slate-900">{epicTitle}</span>
+                {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
+                  <span className="flex min-w-0 items-center gap-1">
+                    <input
+                      value={editingParentTitle.value}
+                      onChange={(event) => setEditingParentTitle({ kind: "epic", id: epicId, value: event.target.value })}
+                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                      autoFocus
+                    />
+                    <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                    <button type="button" onClick={() => void confirmParentTitleEdit("epic", epicId, epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                  </span>
+                ) : (
+                  <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                    <span className="truncate">{epicTitle}</span>
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epicId, value: epicTitle }); }}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      aria-label="Edit epic title"
+                    >
+                      <Pencil className="size-3.5 text-slate-500" />
+                    </button>
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -1263,7 +1337,30 @@ export function BacklogPlanningPanel({
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
                 <Target className="size-4 shrink-0 text-slate-700" />
-                <span className="truncate text-[15px] font-medium text-slate-900">{initiativeTitle}</span>
+                {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
+                  <span className="flex min-w-0 items-center gap-1">
+                    <input
+                      value={editingParentTitle.value}
+                      onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiativeId, value: event.target.value })}
+                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                      autoFocus
+                    />
+                    <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                    <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiativeId, initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                  </span>
+                ) : (
+                  <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                    <span className="truncate">{initiativeTitle}</span>
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiativeId, value: initiativeTitle }); }}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      aria-label="Edit initiative title"
+                    >
+                      <Pencil className="size-3.5 text-slate-500" />
+                    </button>
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -1482,7 +1579,30 @@ export function BacklogPlanningPanel({
                 </button>
                 <button type="button" onClick={() => onOpenInitiative(initiative.initiativeId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                   <Target className="size-4 shrink-0 text-slate-700" />
-                  <span className="truncate text-[15px] font-medium text-slate-900">{initiative.initiativeTitle}</span>
+                  {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
+                    <span className="flex min-w-0 items-center gap-1">
+                      <input
+                        value={editingParentTitle.value}
+                        onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: event.target.value })}
+                        className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                        autoFocus
+                      />
+                      <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                      <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.initiativeId, initiative.initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                    </span>
+                  ) : (
+                    <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                      <span className="truncate">{initiative.initiativeTitle}</span>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: initiative.initiativeTitle }); }}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                        aria-label="Edit initiative title"
+                      >
+                        <Pencil className="size-3.5 text-slate-500" />
+                      </button>
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -1565,7 +1685,30 @@ export function BacklogPlanningPanel({
                         <span className="inline-block h-7 w-7 shrink-0" />
                         <button type="button" onClick={() => onOpenEpic(epic.epicId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                           <FolderKanban className="size-4 shrink-0 text-slate-700" />
-                          <span className="truncate text-[15px] font-medium text-slate-900">{epic.epicTitle}</span>
+                          {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
+                            <span className="flex min-w-0 items-center gap-1">
+                              <input
+                                value={editingParentTitle.value}
+                                onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.epicId, value: event.target.value })}
+                                className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                autoFocus
+                              />
+                              <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                              <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.epicId, epic.epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                            </span>
+                          ) : (
+                            <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                              <span className="truncate">{epic.epicTitle}</span>
+                              <button
+                                type="button"
+                                onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.epicId, value: epic.epicTitle }); }}
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                aria-label="Edit epic title"
+                              >
+                                <Pencil className="size-3.5 text-slate-500" />
+                              </button>
+                            </span>
+                          )}
                         </button>
                         <button
                           type="button"
@@ -2098,7 +2241,30 @@ export function BacklogPlanningPanel({
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
                         <Target className="size-4 shrink-0 text-slate-700" />
-                        <span className="truncate text-[17px] font-medium text-slate-900">{initiative.title}</span>
+                        {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id ? (
+                          <span className="flex min-w-0 items-center gap-1">
+                            <input
+                              value={editingParentTitle.value}
+                              onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.id, value: event.target.value })}
+                              className="h-7 min-w-[220px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                              autoFocus
+                            />
+                            <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                            <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.id, initiative.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                          </span>
+                        ) : (
+                          <span className="inline-flex min-w-0 items-center gap-1 truncate text-[17px] font-medium text-slate-900">
+                            <span className="truncate">{initiative.title}</span>
+                            <button
+                              type="button"
+                              onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.id, value: initiative.title }); }}
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                              aria-label="Edit initiative title"
+                            >
+                              <Pencil className="size-3.5 text-slate-500" />
+                            </button>
+                          </span>
+                        )}
                       </button>
                       <button
                         type="button"
@@ -2367,9 +2533,30 @@ export function BacklogPlanningPanel({
                                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                 >
                                   <span className="inline-block size-4 shrink-0" aria-hidden />
-                                  <span className="truncate text-[16px] font-medium text-slate-800">
-                                    {epic.icon} {epic.title}
-                                  </span>
+                                  {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id ? (
+                                    <span className="flex min-w-0 items-center gap-1">
+                                      <input
+                                        value={editingParentTitle.value}
+                                        onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.id, value: event.target.value })}
+                                        className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                        autoFocus
+                                      />
+                                      <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                      <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.id, epic.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex min-w-0 items-center gap-1 truncate text-[16px] font-medium text-slate-800">
+                                      <span className="truncate">{epic.icon} {epic.title}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.id, value: epic.title }); }}
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                        aria-label="Edit epic title"
+                                      >
+                                        <Pencil className="size-3.5 text-slate-500" />
+                                      </button>
+                                    </span>
+                                  )}
                                 </button>
                                 <button
                                   type="button"
@@ -2549,9 +2736,30 @@ export function BacklogPlanningPanel({
                                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                       >
                                         <span className="inline-block size-3.5 shrink-0" aria-hidden />
-                                        <span className="truncate text-[15px] text-slate-800">
-                                          {story.icon} {story.title}
-                                        </span>
+                                        {editingStoryTitle?.id === story.id ? (
+                                          <span className="flex min-w-0 items-center gap-1">
+                                            <input
+                                              value={editingStoryTitle.value}
+                                              onChange={(event) => setEditingStoryTitle({ id: story.id, value: event.target.value })}
+                                              className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                              autoFocus
+                                            />
+                                            <button type="button" onClick={() => setEditingStoryTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                            <button type="button" onClick={() => void confirmStoryTitleEdit(story.id, story.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] text-slate-800">
+                                            <span className="truncate">{story.icon} {story.title}</span>
+                                            <button
+                                              type="button"
+                                              onClick={(event) => { event.stopPropagation(); setEditingStoryTitle({ id: story.id, value: story.title }); }}
+                                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                              aria-label="Edit user story title"
+                                            >
+                                              <Pencil className="size-3.5 text-slate-500" />
+                                            </button>
+                                          </span>
+                                        )}
                                         <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[12px] font-semibold text-slate-600">
                                           #{storyRefById[story.id] ?? story.id.slice(0, 6)}
                                         </span>
