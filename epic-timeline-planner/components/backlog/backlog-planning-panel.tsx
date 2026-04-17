@@ -1157,7 +1157,7 @@ export function BacklogPlanningPanel({
                     epicId,
                   });
                 }}
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
                 title="Add user story"
               >
                 <Plus className="size-3.5 text-slate-600" />
@@ -1211,6 +1211,23 @@ export function BacklogPlanningPanel({
             </span>
             <div>{renderCompletionCell(epicRows)}</div>
           </div>
+          {createSelection?.anchorKey === `group-epic:${epicId}` ? (
+            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+              <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx + 18 }}>
+                <input
+                  value={createDraftTitle}
+                  onChange={(event) => setCreateDraftTitle(event.target.value)}
+                  placeholder="Type user story title and press Enter..."
+                  className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                  autoFocus
+                />
+              </div>
+              <div className="col-span-8 flex items-center gap-2">
+                <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
+                <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
+              </div>
+            </form>
+          ) : null}
           {isOpen ? (
             <div>
               {renderStoryDataRows(epicRows, epicIndentPx + 34, `${folderId}/stories`)}
@@ -1259,7 +1276,7 @@ export function BacklogPlanningPanel({
                     initiativeId,
                   });
                 }}
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
                 title="Add epic"
               >
                 <Plus className="size-3.5 text-slate-600" />
@@ -1275,7 +1292,7 @@ export function BacklogPlanningPanel({
                     initiativeId,
                   });
                 }}
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
                 title="Add user story"
               >
                 <FileText className="size-3.5 text-slate-600" />
@@ -1331,6 +1348,34 @@ export function BacklogPlanningPanel({
             </span>
             <div>{renderCompletionCell(initiativeRows)}</div>
           </div>
+          {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
+            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+              <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx + 18 }}>
+                <input
+                  value={createDraftTitle}
+                  onChange={(event) => setCreateDraftTitle(event.target.value)}
+                  placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
+                  className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                  autoFocus
+                />
+              </div>
+              <div className="col-span-8 flex items-center gap-2">
+                {createSelection.kind === "story" ? (
+                  <select
+                    value={storyTargetEpicId}
+                    onChange={(event) => setStoryTargetEpicId(event.target.value)}
+                    className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                  >
+                    {Array.from(new Map(initiativeRows.map((r) => [r.epicId, r.epicTitle])).entries()).map(([epicId, title]) => (
+                      <option key={epicId} value={epicId}>{title}</option>
+                    ))}
+                  </select>
+                ) : null}
+                <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create" || (createSelection.kind === "story" && !storyTargetEpicId)} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
+                <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
+              </div>
+            </form>
+          ) : null}
           {isOpen ? (
             <div>
               {(() => {
@@ -1450,7 +1495,7 @@ export function BacklogPlanningPanel({
                       initiativeId: initiative.initiativeId,
                     });
                   }}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
                   title="Add epic"
                 >
                   <Plus className="size-3.5 text-slate-600" />
@@ -1466,7 +1511,7 @@ export function BacklogPlanningPanel({
                       initiativeId: initiative.initiativeId,
                     });
                   }}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
                   title="Add user story"
                 >
                   <FileText className="size-3.5 text-slate-600" />
@@ -1494,48 +1539,84 @@ export function BacklogPlanningPanel({
                 <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
               </div>
             </div>
+            {createSelection?.anchorKey === `group-standalone-initiative:${initiative.initiativeId}` ? (
+              <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+                <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 18 }}>
+                  <input
+                    value={createDraftTitle}
+                    onChange={(event) => setCreateDraftTitle(event.target.value)}
+                    placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
+                    className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                    autoFocus
+                  />
+                </div>
+                <div className="col-span-8 flex items-center gap-2">
+                  <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
+                  <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
+                </div>
+              </form>
+            ) : null}
             {isInitOpen ? (
               <div>
                 {initiative.epics.map((epic) => (
-                  <div key={`standalone-epic:${epic.epicId}`} className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
-                    <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
-                      <span className="inline-block h-7 w-7 shrink-0" />
-                      <button type="button" onClick={() => onOpenEpic(epic.epicId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                        <FolderKanban className="size-4 shrink-0 text-slate-700" />
-                        <span className="truncate text-[15px] font-medium text-slate-900">{epic.epicTitle}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openCreateComposer({
-                            anchorKey: `group-standalone-epic:${epic.epicId}`,
-                            scope: "epic",
-                            kind: "story",
-                            epicId: epic.epicId,
-                          });
-                        }}
-                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
-                        title="Add user story"
-                      >
-                        <Plus className="size-3.5 text-slate-600" />
-                      </button>
-                    </div>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicQuarterLabelValue}</span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicMonthLabelValue}</span>
-                    <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip("todo"))}>To do</span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicAssignee}</span>
-                    <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
-                    <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[12px] text-slate-600">
-                        <span>No stories</span>
-                        <span>0/0 · 0%</span>
+                  <div key={`standalone-epic:${epic.epicId}`}>
+                    <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+                      <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
+                        <span className="inline-block h-7 w-7 shrink-0" />
+                        <button type="button" onClick={() => onOpenEpic(epic.epicId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                          <FolderKanban className="size-4 shrink-0 text-slate-700" />
+                          <span className="truncate text-[15px] font-medium text-slate-900">{epic.epicTitle}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openCreateComposer({
+                              anchorKey: `group-standalone-epic:${epic.epicId}`,
+                              scope: "epic",
+                              kind: "story",
+                              epicId: epic.epicId,
+                            });
+                          }}
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                          title="Add user story"
+                        >
+                          <Plus className="size-3.5 text-slate-600" />
+                        </button>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+                      <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
+                      <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicQuarterLabelValue}</span>
+                      <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicMonthLabelValue}</span>
+                      <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip("todo"))}>To do</span>
+                      <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
+                      <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicAssignee}</span>
+                      <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
+                      <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[12px] text-slate-600">
+                          <span>No stories</span>
+                          <span>0/0 · 0%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+                      </div>
                     </div>
+                    {createSelection?.anchorKey === `group-standalone-epic:${epic.epicId}` ? (
+                      <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+                        <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 52 }}>
+                          <input
+                            value={createDraftTitle}
+                            onChange={(event) => setCreateDraftTitle(event.target.value)}
+                            placeholder="Type user story title and press Enter..."
+                            className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="col-span-8 flex items-center gap-2">
+                          <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
+                          <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
+                        </div>
+                      </form>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -1873,6 +1954,22 @@ export function BacklogPlanningPanel({
           selected={assigneeFilter}
           onChange={setAssigneeFilter}
         />
+        {groupLevels.length > 0 ? (
+          <button
+            type="button"
+            onClick={() =>
+              openCreateComposer({
+                anchorKey: "group-toolbar:add-initiative",
+                scope: "initiative",
+                kind: "initiative",
+              })
+            }
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[13px] font-medium text-slate-700 ring-1 ring-slate-300/80 shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
+          >
+            <Plus className="size-3.5 text-slate-600" />
+            Initiative
+          </button>
+        ) : null}
         <MultiCheckboxFilter
           label="Work Item"
           options={workItemOptions}
@@ -1884,6 +1981,27 @@ export function BacklogPlanningPanel({
           }
         />
       </div>
+      {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
+        <form
+          onSubmit={handleCreateSubmit}
+          className="mb-3 grid items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+          style={{ gridTemplateColumns: tableGridTemplate }}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <input
+              value={createDraftTitle}
+              onChange={(event) => setCreateDraftTitle(event.target.value)}
+              placeholder="Type initiative title and press Enter..."
+              className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              autoFocus
+            />
+          </div>
+          <div className="col-span-8 flex items-center gap-2">
+            <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
+            <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
+          </div>
+        </form>
+      ) : null}
 
       <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white shadow-inner">
         <>
@@ -1988,7 +2106,7 @@ export function BacklogPlanningPanel({
                           event.stopPropagation();
                           setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
                         }}
-                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
                         title="Add from this row"
                       >
                         <Plus className="size-3.5 text-slate-600" />
