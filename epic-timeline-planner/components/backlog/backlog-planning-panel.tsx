@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ClipboardList, Eraser, FileText, Filter, FolderKanban, Layers3, Pencil, Plus, Search, Target, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ClipboardList, Eraser, FileText, Filter, Folder, Layers3, Pencil, Plus, Search, TableProperties, X, Zap } from "lucide-react";
+import type { ReactNode } from "react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -104,6 +105,21 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
 
 const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1";
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
+const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
+
+const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
+  workItem: true,
+  year: true,
+  quarter: true,
+  month: true,
+  status: true,
+  sprint: true,
+  assignee: true,
+  estDays: true,
+  daysLeft: true,
+  progress: true,
+};
+
 const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "year",
   "quarter",
@@ -115,6 +131,12 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "daysLeft",
   "progress",
 ]);
+
+function backlogCellClassName(key: BacklogColumnKey): string {
+  if (key === "workItem") return "relative min-w-0";
+  if (key === "progress") return "min-w-0";
+  return cn("min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "justify-self-center text-center");
+}
 const GROUP_LEVEL_ORDER: GroupLevel[] = ["year", "quarter", "month", "sprint"];
 const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
   year: "Year",
@@ -362,8 +384,13 @@ export function BacklogPlanningPanel({
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
   const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
+  const columnsMenuRef = useRef<HTMLDivElement | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
+  const [columnVisibility, setColumnVisibility] = useState<Record<BacklogColumnKey, boolean>>(DEFAULT_BACKLOG_COLUMN_VISIBILITY);
+  const [showTableHeaderRow, setShowTableHeaderRow] = useState(true);
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const [hasLoadedTableLayout, setHasLoadedTableLayout] = useState(false);
   const resizeStateRef = useRef<{ key: BacklogColumnKey; startX: number; startWidth: number } | null>(null);
   const [hasLoadedViewState, setHasLoadedViewState] = useState(false);
   const [savingStoryId, setSavingStoryId] = useState<string | null>(null);
@@ -679,10 +706,28 @@ export function BacklogPlanningPanel({
       .filter(Boolean) as typeof filteredWithControls;
   }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter, workItemFilter]);
 
-  const tableGridTemplate = useMemo(
-    () => BACKLOG_COLUMN_ORDER.map((key) => `${columnWidths[key]}px`).join(" "),
-    [columnWidths],
+  const visibleColumnKeys = useMemo(
+    () => BACKLOG_COLUMN_ORDER.filter((key) => columnVisibility[key]),
+    [columnVisibility],
   );
+
+  const tableGridTemplate = useMemo(
+    () => visibleColumnKeys.map((key) => `${columnWidths[key]}px`).join(" "),
+    [visibleColumnKeys, columnWidths],
+  );
+
+  const createFormRestGridStyle = useMemo(
+    () => (visibleColumnKeys.length > 1 ? ({ gridColumn: "2 / -1" } as const) : undefined),
+    [visibleColumnKeys.length],
+  );
+
+  function renderBacklogCells(cells: Record<BacklogColumnKey, ReactNode>) {
+    return visibleColumnKeys.map((key) => (
+      <div key={key} className={backlogCellClassName(key)}>
+        {cells[key]}
+      </div>
+    ));
+  }
   const groupedStoryRows = useMemo(() => {
     return fullyFiltered.flatMap((initiative) =>
       (initiative.epics ?? []).flatMap((epic) =>
@@ -692,6 +737,7 @@ export function BacklogPlanningPanel({
           return {
             storyId: story.id,
             storyTitle: story.title,
+            storyIcon: story.icon,
             storyStatus: story.status,
             storyAssignee: story.assignee?.trim() || "Unassigned",
             storySprintLabel: sprintLabel(story.sprint),
@@ -831,40 +877,44 @@ export function BacklogPlanningPanel({
             className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
             style={{ gridTemplateColumns: tableGridTemplate }}
           >
-            <div className="min-w-0" style={{ paddingLeft: indentPx }}>
-              <div className="flex min-w-0 items-center gap-2 truncate text-left text-slate-800">
-                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
-                  <FileText className="size-3.5" />
-                </span>
-                {editingStoryTitle?.id === row.storyId ? (
-                  <span className="flex min-w-0 items-center gap-1">
-                    <input
-                      value={editingStoryTitle.value}
-                      onChange={(event) => setEditingStoryTitle({ id: row.storyId, value: event.target.value })}
-                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                      autoFocus
-                    />
-                    <button type="button" onClick={() => setEditingStoryTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                    <button type="button" onClick={() => void confirmStoryTitleEdit(row.storyId, row.storyTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                  </span>
-                ) : (
-                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
-                    <span className="truncate">{row.storyTitle}</span>
-                    <button
-                      type="button"
-                      onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
-                      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                      aria-label="Edit user story title"
-                    >
-                      <Pencil className="size-3.5 text-slate-500" />
-                    </button>
-                  </span>
-                )}
-              </div>
-            </div>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{row.initiativeYear}</span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{row.quarterLabelValue}</span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>
+            {renderBacklogCells({
+              workItem: (
+                <div className="min-w-0" style={{ paddingLeft: indentPx }}>
+                  <div className="flex min-w-0 items-center gap-2 truncate text-left text-slate-800">
+                    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600 ring-1 ring-slate-200/80" aria-hidden>
+                      <FileText className="size-3.5" strokeWidth={2} />
+                    </span>
+                    {editingStoryTitle?.id === row.storyId ? (
+                      <span className="flex min-w-0 items-center gap-1">
+                        <input
+                          value={editingStoryTitle.value}
+                          onChange={(event) => setEditingStoryTitle({ id: row.storyId, value: event.target.value })}
+                          className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                          autoFocus
+                        />
+                        <button type="button" onClick={() => setEditingStoryTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                        <button type="button" onClick={() => void confirmStoryTitleEdit(row.storyId, row.storyTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                      </span>
+                    ) : (
+                      <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
+                        <span className="truncate">{row.storyTitle}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
+                          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
+                          aria-label="Edit user story title"
+                        >
+                          <Pencil className="size-3.5 text-slate-500" />
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ),
+              year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
+              quarter: <span className="text-center text-[16px] text-slate-700">{row.quarterLabelValue}</span>,
+              month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
+              status: (
             <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(row.storyStatus))}>
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
                 <span className="flex items-center gap-1">
@@ -919,7 +969,9 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">
+              ),
+              sprint: (
+            <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "sprint" ? (
                 <span className="inline-flex items-center gap-1">
                   <select
@@ -972,7 +1024,9 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">
+              ),
+              assignee: (
+            <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "assignee" ? (
                 <span className="inline-flex items-center gap-1">
                   <input
@@ -1018,7 +1072,9 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">
+              ),
+              estDays: (
+            <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "estimatedDays" ? (
                 <span className="inline-flex items-center gap-1">
                   <input
@@ -1065,7 +1121,9 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">
+              ),
+              daysLeft: (
+            <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "daysLeft" ? (
                 <span className="inline-flex items-center gap-1">
                   <input
@@ -1112,6 +1170,8 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
+              ),
+              progress: (
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[16px] text-slate-600">
                 <span>{progress.label}</span>
@@ -1121,6 +1181,8 @@ export function BacklogPlanningPanel({
                 <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500" style={{ width: `${progress.percent}%` }} />
               </div>
             </div>
+              ),
+            })}
           </div>
         );
       });
@@ -1131,25 +1193,29 @@ export function BacklogPlanningPanel({
     return (
       <div key={folderId}>
         <div className="grid items-center gap-3 px-3 py-1.5 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
-          <button
-            type="button"
-            onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
-            className="flex min-w-0 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
-            style={{ paddingLeft: indentPx }}
-          >
-            {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
-            <span className="truncate">{label}</span>
-            <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
-          </button>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
-          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          {renderBacklogCells({
+            workItem: (
+              <button
+                type="button"
+                onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
+                className="flex min-w-0 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
+                style={{ paddingLeft: indentPx }}
+              >
+                {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+                <span className="truncate">{label}</span>
+                <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
+              </button>
+            ),
+            year: <span className="text-center text-[16px] text-slate-400">-</span>,
+            quarter: <span className="text-center text-[16px] text-slate-400">-</span>,
+            month: <span className="text-center text-[16px] text-slate-400">-</span>,
+            status: <span className="text-center text-[16px] text-slate-400">-</span>,
+            sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
+            assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
+            estDays: <span className="text-center text-[16px] text-slate-400">-</span>,
+            daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
+            progress: <span className="text-center text-[16px] text-slate-400">-</span>,
+          })}
         </div>
         {isOpen ? children : null}
       </div>
@@ -1173,7 +1239,7 @@ export function BacklogPlanningPanel({
       return (
         <div className="space-y-1">
           <div className="flex items-center justify-between text-[16px] text-slate-600">
-            <span>{total === 0 ? "No stories" : "Completion"}</span>
+            <span>{total === 0 ? "No stories" : null}</span>
             <span>
               {finished}/{total} · {percent}%
             </span>
@@ -1197,9 +1263,7 @@ export function BacklogPlanningPanel({
     function renderEpicRow(epicId: string, epicTitle: string, epicAssignee: string, epicRows: typeof groupedStoryRows, epicIndentPx: number, epicPath: string) {
       const folderId = `${epicPath}/epic:${epicId}`;
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
-      const storyCount = epicRows.length;
       const { estimated, left } = sumEstimatedAndLeft(epicRows);
-      const completion = completionForRows(epicRows);
 
       return (
         <div key={folderId}>
@@ -1207,114 +1271,122 @@ export function BacklogPlanningPanel({
             className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
             style={{ gridTemplateColumns: tableGridTemplate }}
           >
-            <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx }}>
-              <button
-                type="button"
-                onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
-                aria-label={isOpen ? "Collapse epic" : "Expand epic"}
-              >
-                {isOpen ? (
-                  <ChevronDown className="size-4 shrink-0 text-slate-500" />
-                ) : (
-                  <ChevronRight className="size-4 shrink-0 text-slate-500" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId) return; onOpenEpic(epicId); }}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-              >
-                <FolderKanban className="size-4 shrink-0 text-slate-700" />
-                {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
-                  <span className="flex min-w-0 items-center gap-1">
-                    <input
-                      value={editingParentTitle.value}
-                      onChange={(event) => setEditingParentTitle({ kind: "epic", id: epicId, value: event.target.value })}
-                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                      autoFocus
-                    />
-                    <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                    <button type="button" onClick={() => void confirmParentTitleEdit("epic", epicId, epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                  </span>
-                ) : (
-                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
-                    <span className="truncate">{epicTitle}</span>
+            {renderBacklogCells({
+              workItem: (
+                <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx }}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                    aria-label={isOpen ? "Collapse epic" : "Expand epic"}
+                  >
+                    {isOpen ? (
+                      <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId) return; onOpenEpic(epicId); }}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <Folder className="size-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                    {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
+                      <span className="flex min-w-0 items-center gap-1">
+                        <input
+                          value={editingParentTitle.value}
+                          onChange={(event) => setEditingParentTitle({ kind: "epic", id: epicId, value: event.target.value })}
+                          className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                          autoFocus
+                        />
+                        <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                        <button type="button" onClick={() => void confirmParentTitleEdit("epic", epicId, epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                      </span>
+                    ) : (
+                      <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                        <span className="truncate">{epicTitle}</span>
+                        <button
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epicId, value: epicTitle }); }}
+                          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
+                          aria-label="Edit epic title"
+                        >
+                          <Pencil className="size-3.5 text-slate-500" />
+                        </button>
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openCreateComposer({
+                        anchorKey: `group-epic:${epicId}`,
+                        scope: "epic",
+                        kind: "story",
+                        epicId,
+                      });
+                    }}
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                    title="Add user story"
+                  >
+                    <Plus className="size-3.5 text-slate-600" />
+                  </button>
+                </div>
+              ),
+              year: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>,
+              quarter: (
+                <span className="text-center text-[16px] text-slate-700">
+                  {quarterLabelOrUnscheduled(quarterFromMonth(epicRows[0]?.monthNum ?? null))}
+                </span>
+              ),
+              month: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
+              status: (
+                <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+                  {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
+                </span>
+              ),
+              sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+              assignee: (
+                <span className="text-center text-[16px] text-slate-700">
+                  {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
+                    <span className="inline-flex items-center gap-1">
+                      <input
+                        value={editingParentAssignee.value}
+                        onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                        placeholder="Unassigned"
+                        className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                      />
+                      <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                      <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                    </span>
+                  ) : (
                     <button
                       type="button"
-                      onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epicId, value: epicTitle }); }}
-                      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                      aria-label="Edit epic title"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        setEditingParentAssignee({ kind: "epic", id: epicId, value: epicAssignee === "Unassigned" ? "" : epicAssignee });
+                      }}
+                      className="rounded px-1 py-0.5 hover:bg-slate-100"
                     >
-                      <Pencil className="size-3.5 text-slate-500" />
+                      {epicAssignee}
                     </button>
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openCreateComposer({
-                    anchorKey: `group-epic:${epicId}`,
-                    scope: "epic",
-                    kind: "story",
-                    epicId,
-                  });
-                }}
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                title="Add user story"
-              >
-                <Plus className="size-3.5 text-slate-600" />
-              </button>
-            </div>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">
-              {quarterLabelOrUnscheduled(quarterFromMonth(epicRows[0]?.monthNum ?? null))}
-            </span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>
-            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
-              {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
-            </span>
-            <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">
-              {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
-                <span className="inline-flex items-center gap-1">
-                  <input
-                    value={editingParentAssignee.value}
-                    onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                    placeholder="Unassigned"
-                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  />
-                  <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                  <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                  )}
                 </span>
-              ) : (
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    setEditingParentAssignee({ kind: "epic", id: epicId, value: epicAssignee === "Unassigned" ? "" : epicAssignee });
-                  }}
-                  className="rounded px-1 py-0.5 hover:bg-slate-100"
-                >
-                  {epicAssignee}
-                </button>
-              )}
-            </span>
-            <span
-              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-              title="Auto-summed from child user stories"
-            >
-              Σ {estimated}d
-            </span>
-            <span
-              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-              title="Auto-summed from child user stories"
-            >
-              Σ {left}d
-            </span>
-            <div>{renderCompletionCell(epicRows)}</div>
+              ),
+              estDays: (
+                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                  Σ {estimated}d
+                </span>
+              ),
+              daysLeft: (
+                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                  Σ {left}d
+                </span>
+              ),
+              progress: <div>{renderCompletionCell(epicRows)}</div>,
+            })}
           </div>
           {createSelection?.anchorKey === `group-epic:${epicId}` ? (
             <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
@@ -1327,7 +1399,7 @@ export function BacklogPlanningPanel({
                   autoFocus
                 />
               </div>
-              <div className="col-span-8 flex items-center gap-2">
+              <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                 <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
                 <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
               </div>
@@ -1349,132 +1421,122 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
-            <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx }}>
-              <button
-                type="button"
-                onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
-                aria-label={isOpen ? "Collapse initiative" : "Expand initiative"}
-              >
-                {isOpen ? (
-                  <ChevronDown className="size-4 shrink-0 text-slate-500" />
-                ) : (
-                  <ChevronRight className="size-4 shrink-0 text-slate-500" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId) return; onOpenInitiative(initiativeId); }}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-              >
-                <Target className="size-4 shrink-0 text-slate-700" />
-                {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
-                  <span className="flex min-w-0 items-center gap-1">
-                    <input
-                      value={editingParentTitle.value}
-                      onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiativeId, value: event.target.value })}
-                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                      autoFocus
-                    />
-                    <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                    <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiativeId, initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                  </span>
-                ) : (
-                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
-                    <span className="truncate">{initiativeTitle}</span>
+            {renderBacklogCells({
+              workItem: (
+                <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx }}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                    aria-label={isOpen ? "Collapse initiative" : "Expand initiative"}
+                  >
+                    {isOpen ? (
+                      <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId) return; onOpenInitiative(initiativeId); }}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <Zap className="size-4 shrink-0 text-amber-500" strokeWidth={2} />
+                    {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
+                      <span className="flex min-w-0 items-center gap-1">
+                        <input
+                          value={editingParentTitle.value}
+                          onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiativeId, value: event.target.value })}
+                          className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                          autoFocus
+                        />
+                        <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                        <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiativeId, initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                      </span>
+                    ) : (
+                      <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                        <span className="truncate">{initiativeTitle}</span>
+                        <button
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiativeId, value: initiativeTitle }); }}
+                          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
+                          aria-label="Edit initiative title"
+                        >
+                          <Pencil className="size-3.5 text-slate-500" />
+                        </button>
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openCreateComposer({
+                        anchorKey: `group-initiative:${initiativeId}`,
+                        scope: "initiative",
+                        kind: "epic",
+                        initiativeId,
+                      });
+                    }}
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
+                    title="Add epic"
+                  >
+                    <Plus className="size-3.5 text-slate-600" />
+                  </button>
+                </div>
+              ),
+              year: <span className="text-center text-[16px] text-slate-700">{initiativeYear}</span>,
+              quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>,
+              month: <span className="text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>,
+              status: (
+                <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeStatus))}>
+                  {workflowStatusLabel(initiativeStatus)}
+                </span>
+              ),
+              sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+              assignee: (
+                <span className="text-center text-[16px] text-slate-700">
+                  {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
+                    <span className="inline-flex items-center gap-1">
+                      <input
+                        value={editingParentAssignee.value}
+                        onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                        placeholder="Unassigned"
+                        className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                      />
+                      <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                      <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiativeId, initiativeAssignee === "Unassigned" ? null : initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                    </span>
+                  ) : (
                     <button
                       type="button"
-                      onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiativeId, value: initiativeTitle }); }}
-                      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                      aria-label="Edit initiative title"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        setEditingParentAssignee({
+                          kind: "initiative",
+                          id: initiativeId,
+                          value: initiativeAssignee === "Unassigned" ? "" : initiativeAssignee,
+                        });
+                      }}
+                      className="rounded px-1 py-0.5 hover:bg-slate-100"
                     >
-                      <Pencil className="size-3.5 text-slate-500" />
+                      {initiativeAssignee}
                     </button>
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openCreateComposer({
-                    anchorKey: `group-initiative:${initiativeId}`,
-                    scope: "initiative",
-                    kind: "epic",
-                    initiativeId,
-                  });
-                }}
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                title="Add epic"
-              >
-                <Plus className="size-3.5 text-slate-600" />
-              </button>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openCreateComposer({
-                    anchorKey: `group-initiative:${initiativeId}`,
-                    scope: "initiative",
-                    kind: "story",
-                    initiativeId,
-                  });
-                }}
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                title="Add user story"
-              >
-                <FileText className="size-3.5 text-slate-600" />
-              </button>
-            </div>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{initiativeYear}</span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>
-            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeStatus))}>
-              {workflowStatusLabel(initiativeStatus)}
-            </span>
-            <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
-            <span className="justify-self-center text-center text-[16px] text-slate-700">
-              {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
-                <span className="inline-flex items-center gap-1">
-                  <input
-                    value={editingParentAssignee.value}
-                    onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                    placeholder="Unassigned"
-                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  />
-                  <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                  <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiativeId, initiativeAssignee === "Unassigned" ? null : initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                  )}
                 </span>
-              ) : (
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    setEditingParentAssignee({
-                      kind: "initiative",
-                      id: initiativeId,
-                      value: initiativeAssignee === "Unassigned" ? "" : initiativeAssignee,
-                    });
-                  }}
-                  className="rounded px-1 py-0.5 hover:bg-slate-100"
-                >
-                  {initiativeAssignee}
-                </button>
-              )}
-            </span>
-            <span
-              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-              title="Auto-summed from child user stories"
-            >
-              Σ {estimated}d
-            </span>
-            <span
-              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-              title="Auto-summed from child user stories"
-            >
-              Σ {left}d
-            </span>
-            <div>{renderCompletionCell(initiativeRows)}</div>
+              ),
+              estDays: (
+                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                  Σ {estimated}d
+                </span>
+              ),
+              daysLeft: (
+                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                  Σ {left}d
+                </span>
+              ),
+              progress: <div>{renderCompletionCell(initiativeRows)}</div>,
+            })}
           </div>
           {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
             <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
@@ -1487,7 +1549,7 @@ export function BacklogPlanningPanel({
                   autoFocus
                 />
               </div>
-              <div className="col-span-8 flex items-center gap-2">
+              <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                 {createSelection.kind === "story" ? (
                   <select
                     value={storyTargetEpicId}
@@ -1599,96 +1661,92 @@ export function BacklogPlanningPanel({
         return (
           <div key={initFolderId}>
             <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
-              <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx }}>
-                <button
-                  type="button"
-                  onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [initFolderId]: !isInitOpen }))}
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
-                  aria-label={isInitOpen ? "Collapse initiative" : "Expand initiative"}
-                >
-                  {isInitOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
-                </button>
-                <button type="button" onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId) return; onOpenInitiative(initiative.initiativeId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                  <Target className="size-4 shrink-0 text-slate-700" />
-                  {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
-                    <span className="flex min-w-0 items-center gap-1">
-                      <input
-                        value={editingParentTitle.value}
-                        onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: event.target.value })}
-                        className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                        autoFocus
-                      />
-                      <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                      <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.initiativeId, initiative.initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                    </span>
-                  ) : (
-                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
-                      <span className="truncate">{initiative.initiativeTitle}</span>
-                      <button
-                        type="button"
-                        onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: initiative.initiativeTitle }); }}
-                        className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                        aria-label="Edit initiative title"
-                      >
-                        <Pencil className="size-3.5 text-slate-500" />
-                      </button>
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openCreateComposer({
-                      anchorKey: `group-standalone-initiative:${initiative.initiativeId}`,
-                      scope: "initiative",
-                      kind: "epic",
-                      initiativeId: initiative.initiativeId,
-                    });
-                  }}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                  title="Add epic"
-                >
-                  <Plus className="size-3.5 text-slate-600" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openCreateComposer({
-                      anchorKey: `group-standalone-initiative:${initiative.initiativeId}`,
-                      scope: "initiative",
-                      kind: "story",
-                      initiativeId: initiative.initiativeId,
-                    });
-                  }}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                  title="Add user story"
-                >
-                  <FileText className="size-3.5 text-slate-600" />
-                </button>
-              </div>
-              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>
-              <span className="justify-self-center text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>
-              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>
-              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiative.initiativeStatus))}>
-                {workflowStatusLabel(initiative.initiativeStatus)}
-              </span>
-              <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
-              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeAssignee}</span>
-              <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
-                Σ 0d
-              </span>
-              <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
-                Σ 0d
-              </span>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[16px] text-slate-600">
-                  <span>No stories</span>
-                  <span>0/0 · 0%</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
-              </div>
+              {renderBacklogCells({
+                workItem: (
+                  <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx }}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [initFolderId]: !isInitOpen }))}
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      aria-label={isInitOpen ? "Collapse initiative" : "Expand initiative"}
+                    >
+                      {isInitOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+                    </button>
+                    <button type="button" onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId) return; onOpenInitiative(initiative.initiativeId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                      <Zap className="size-4 shrink-0 text-amber-500" strokeWidth={2} />
+                      {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
+                        <span className="flex min-w-0 items-center gap-1">
+                          <input
+                            value={editingParentTitle.value}
+                            onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: event.target.value })}
+                            className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                            autoFocus
+                          />
+                          <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                          <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.initiativeId, initiative.initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                        </span>
+                      ) : (
+                        <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                          <span className="truncate">{initiative.initiativeTitle}</span>
+                          <button
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: initiative.initiativeTitle }); }}
+                            className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
+                            aria-label="Edit initiative title"
+                          >
+                            <Pencil className="size-3.5 text-slate-500" />
+                          </button>
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openCreateComposer({
+                          anchorKey: `group-standalone-initiative:${initiative.initiativeId}`,
+                          scope: "initiative",
+                          kind: "epic",
+                          initiativeId: initiative.initiativeId,
+                        });
+                      }}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
+                      title="Add epic"
+                    >
+                      <Plus className="size-3.5 text-slate-600" />
+                    </button>
+                  </div>
+                ),
+                year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
+                quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>,
+                month: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
+                status: (
+                  <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiative.initiativeStatus))}>
+                    {workflowStatusLabel(initiative.initiativeStatus)}
+                  </span>
+                ),
+                sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+                assignee: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeAssignee}</span>,
+                estDays: (
+                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                    Σ 0d
+                  </span>
+                ),
+                daysLeft: (
+                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                    Σ 0d
+                  </span>
+                ),
+                progress: (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[16px] text-slate-600">
+                      <span>No stories</span>
+                      <span>0/0 · 0%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+                  </div>
+                ),
+              })}
             </div>
             {createSelection?.anchorKey === `group-standalone-initiative:${initiative.initiativeId}` ? (
               <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
@@ -1701,7 +1759,7 @@ export function BacklogPlanningPanel({
                     autoFocus
                   />
                 </div>
-                <div className="col-span-8 flex items-center gap-2">
+                <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                   <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
                   <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
                 </div>
@@ -1712,67 +1770,81 @@ export function BacklogPlanningPanel({
                 {initiative.epics.map((epic) => (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
-                      <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
-                        <span className="inline-block h-7 w-7 shrink-0" />
-                        <button type="button" onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId) return; onOpenEpic(epic.epicId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                          <FolderKanban className="size-4 shrink-0 text-slate-700" />
-                          {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
-                            <span className="flex min-w-0 items-center gap-1">
-                              <input
-                                value={editingParentTitle.value}
-                                onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.epicId, value: event.target.value })}
-                                className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                                autoFocus
-                              />
-                              <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                              <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.epicId, epic.epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                            </span>
-                          ) : (
-                            <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
-                              <span className="truncate">{epic.epicTitle}</span>
-                              <button
-                                type="button"
-                                onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.epicId, value: epic.epicTitle }); }}
-                                className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                                aria-label="Edit epic title"
-                              >
-                                <Pencil className="size-3.5 text-slate-500" />
-                              </button>
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openCreateComposer({
-                              anchorKey: `group-standalone-epic:${epic.epicId}`,
-                              scope: "epic",
-                              kind: "story",
-                              epicId: epic.epicId,
-                            });
-                          }}
-                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
-                          title="Add user story"
-                        >
-                          <Plus className="size-3.5 text-slate-600" />
-                        </button>
-                      </div>
-                      <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>
-                      <span className="justify-self-center text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>
-                      <span className="justify-self-center text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>
-                      <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip("todo"))}>To do</span>
-                      <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
-                      <span className="justify-self-center text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>
-                      <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
-                      <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[16px] text-slate-600">
-                          <span>No stories</span>
-                          <span>0/0 · 0%</span>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
-                      </div>
+                      {renderBacklogCells({
+                        workItem: (
+                          <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
+                            <span className="inline-block h-7 w-7 shrink-0" />
+                            <button type="button" onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId) return; onOpenEpic(epic.epicId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                              <Folder className="size-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                              {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
+                                <span className="flex min-w-0 items-center gap-1">
+                                  <input
+                                    value={editingParentTitle.value}
+                                    onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.epicId, value: event.target.value })}
+                                    className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                    autoFocus
+                                  />
+                                  <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                  <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.epicId, epic.epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                                </span>
+                              ) : (
+                                <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                                  <span className="truncate">{epic.epicTitle}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.epicId, value: epic.epicTitle }); }}
+                                    className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
+                                    aria-label="Edit epic title"
+                                  >
+                                    <Pencil className="size-3.5 text-slate-500" />
+                                  </button>
+                                </span>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openCreateComposer({
+                                  anchorKey: `group-standalone-epic:${epic.epicId}`,
+                                  scope: "epic",
+                                  kind: "story",
+                                  epicId: epic.epicId,
+                                });
+                              }}
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                              title="Add user story"
+                            >
+                              <Plus className="size-3.5 text-slate-600" />
+                            </button>
+                          </div>
+                        ),
+                        year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
+                        quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>,
+                        month: <span className="text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>,
+                        status: <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip("todo"))}>To do</span>,
+                        sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+                        assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
+                        estDays: (
+                          <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                            Σ 0d
+                          </span>
+                        ),
+                        daysLeft: (
+                          <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                            Σ 0d
+                          </span>
+                        ),
+                        progress: (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[16px] text-slate-600">
+                              <span>No stories</span>
+                              <span>0/0 · 0%</span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+                          </div>
+                        ),
+                      })}
                     </div>
                     {createSelection?.anchorKey === `group-standalone-epic:${epic.epicId}` ? (
                       <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
@@ -1785,7 +1857,7 @@ export function BacklogPlanningPanel({
                             autoFocus
                           />
                         </div>
-                        <div className="col-span-8 flex items-center gap-2">
+                        <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                           <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
                           <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
                         </div>
@@ -1934,9 +2006,9 @@ export function BacklogPlanningPanel({
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
-      if (!groupMenuRef.current) return;
-      if (groupMenuRef.current.contains(event.target as Node)) return;
-      setGroupMenuOpen(false);
+      const target = event.target as Node;
+      if (!groupMenuRef.current?.contains(target)) setGroupMenuOpen(false);
+      if (!columnsMenuRef.current?.contains(target)) setColumnsMenuOpen(false);
     }
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
@@ -1998,6 +2070,46 @@ export function BacklogPlanningPanel({
 
   useEffect(() => {
     try {
+      const raw = window.localStorage.getItem(BACKLOG_TABLE_LAYOUT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          columnVisibility?: Partial<Record<BacklogColumnKey, boolean>>;
+          showTableHeaderRow?: unknown;
+        };
+        if (parsed.columnVisibility && typeof parsed.columnVisibility === "object") {
+          setColumnVisibility((prev) => {
+            const next = { ...prev };
+            for (const key of BACKLOG_COLUMN_ORDER) {
+              const v = parsed.columnVisibility![key];
+              if (typeof v === "boolean") next[key] = v;
+            }
+            next.workItem = true;
+            return next;
+          });
+        }
+        if (typeof parsed.showTableHeaderRow === "boolean") setShowTableHeaderRow(parsed.showTableHeaderRow);
+      }
+    } catch {
+      // Ignore corrupt localStorage entries.
+    } finally {
+      setHasLoadedTableLayout(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedTableLayout) return;
+    try {
+      window.localStorage.setItem(
+        BACKLOG_TABLE_LAYOUT_STORAGE_KEY,
+        JSON.stringify({ columnVisibility, showTableHeaderRow }),
+      );
+    } catch {
+      // Ignore write failures (private mode, quotas, etc.)
+    }
+  }, [hasLoadedTableLayout, columnVisibility, showTableHeaderRow]);
+
+  useEffect(() => {
+    try {
       window.localStorage.setItem(BACKLOG_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(columnWidths));
     } catch {
       // Ignore write failures (private mode, quotas, etc.)
@@ -2041,20 +2153,20 @@ export function BacklogPlanningPanel({
           </span>
           <h2 className="text-[24px] font-semibold tracking-tight text-slate-900">Backlog</h2>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-slate-100 px-3.5 py-1.5 text-[14px] font-semibold text-slate-700 ring-1 ring-slate-200">
             {fullyFiltered.length} initiatives
           </span>
-          <span className="rounded-full bg-blue-100 px-3 py-1 text-[12px] font-semibold text-blue-700">
+          <span className="rounded-full bg-blue-100 px-3.5 py-1.5 text-[14px] font-semibold text-blue-700">
             {visibleEpicCount} epics
           </span>
-          <span className="rounded-full bg-violet-100 px-3 py-1 text-[12px] font-semibold text-violet-700">
+          <span className="rounded-full bg-violet-100 px-3.5 py-1.5 text-[14px] font-semibold text-violet-700">
             {visibleStoryCount} stories
           </span>
         </div>
       </div>
 
-      <div className="mb-3 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 py-3 shadow-sm ring-1 ring-white/60">
+      <div className="mb-6 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pt-3 pb-5 shadow-sm ring-1 ring-white/60">
         <div className="relative flex items-center gap-2">
           <Search className="size-4 text-slate-500" />
           <input
@@ -2161,7 +2273,7 @@ export function BacklogPlanningPanel({
             ) : null}
             <span
               role="tooltip"
-              className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 inline-block w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-nowrap rounded-lg border border-slate-300/70 bg-gradient-to-b from-white to-slate-50 px-3 py-2 text-left text-[12px] font-medium leading-normal text-slate-700 opacity-0 shadow-md ring-1 ring-white/60 transition-opacity duration-100 delay-0 group-hover:opacity-100"
+              className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
             >
               Erases all filters: search, group-by, and every filter selection.
             </span>
@@ -2183,61 +2295,172 @@ export function BacklogPlanningPanel({
               autoFocus
             />
           </div>
-          <div className="col-span-8 flex items-center gap-2">
+          <div className="flex items-center gap-2" style={createFormRestGridStyle}>
             <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
             <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
           </div>
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white text-[16px] shadow-inner">
+      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-xl border border-slate-200 bg-white text-[16px] shadow-inner">
         <>
-        <div
-          className="sticky top-0 z-10 grid items-center gap-3 border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-3 py-2.5 text-[13px] font-semibold tracking-[0.02em] text-slate-700 uppercase"
-          style={{ gridTemplateColumns: tableGridTemplate }}
-        >
-          {BACKLOG_COLUMN_ORDER.map((key, index) => (
-            <div key={key} className={cn("relative min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center")}>
-              {key === "workItem" ? (
-                <span className="flex items-center justify-between gap-2">
-                  <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
-                  <span className="inline-flex items-center gap-0.5 rounded-md bg-white/80 p-0.5 ring-1 ring-slate-200/90">
+        {showTableHeaderRow ? (
+          <div className="sticky top-0 z-10 relative border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50">
+            <div
+              className="grid items-center gap-3 px-3 py-2.5 pr-28 text-[13px] font-semibold tracking-[0.02em] text-slate-700 uppercase"
+              style={{ gridTemplateColumns: tableGridTemplate }}
+            >
+              {visibleColumnKeys.map((key, index) => (
+                <div key={key} className={cn("relative min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center")}>
+                  {key === "workItem" ? (
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+                      <span className="inline-flex items-center gap-0.5 rounded-md bg-white/80 p-0.5 ring-1 ring-slate-200/90">
+                        <button
+                          type="button"
+                          onClick={collapseAllRows}
+                          title="Collapse all rows"
+                          aria-label="Collapse all rows"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
+                        >
+                          <ChevronsUp className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={expandAllRows}
+                          title="Expand all rows"
+                          aria-label="Expand all rows"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
+                        >
+                          <ChevronsDown className="size-3.5" />
+                        </button>
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+                  )}
+                  {index < visibleColumnKeys.length - 1 ? (
                     <button
                       type="button"
-                      onClick={collapseAllRows}
-                      title="Collapse all rows"
-                      aria-label="Collapse all rows"
-                      className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
+                      aria-label={`Resize ${BACKLOG_COLUMN_LABELS[key]} column`}
+                      onMouseDown={(event) => beginColumnResize(key, event)}
+                      className="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
                     >
-                      <ChevronsUp className="size-3.5" />
+                      <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-slate-300" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={expandAllRows}
-                      title="Expand all rows"
-                      aria-label="Expand all rows"
-                      className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
-                    >
-                      <ChevronsDown className="size-3.5" />
-                    </button>
-                  </span>
-                </span>
-              ) : (
-                <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
-              )}
-              {index < BACKLOG_COLUMN_ORDER.length - 1 ? (
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+              <div className="pointer-events-auto relative" ref={columnsMenuRef}>
                 <button
                   type="button"
-                  aria-label={`Resize ${BACKLOG_COLUMN_LABELS[key]} column`}
-                  onMouseDown={(event) => beginColumnResize(key, event)}
-                  className="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
+                  onClick={() => setColumnsMenuOpen((open) => !open)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md bg-white/90 px-2.5 text-[12px] font-semibold normal-case tracking-normal text-slate-700 ring-1 ring-slate-200/90 shadow-sm transition hover:bg-white hover:text-slate-900"
                 >
-                  <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-slate-300" />
+                  <TableProperties className="size-3 text-slate-600" />
+                  Table
                 </button>
+                {columnsMenuOpen ? (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm">
+                    <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={showTableHeaderRow}
+                        onChange={() => setShowTableHeaderRow((v) => !v)}
+                        className="h-3.5 w-3.5 rounded border-slate-300"
+                      />
+                      Show column titles
+                    </label>
+                    <div className="mb-1 border-t border-slate-200 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Visible columns
+                    </div>
+                    {BACKLOG_COLUMN_ORDER.map((colKey) => {
+                      const locked = colKey === "workItem";
+                      return (
+                        <label
+                          key={colKey}
+                          className={cn(
+                            "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
+                            locked && "cursor-not-allowed opacity-70",
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={columnVisibility[colKey]}
+                            disabled={locked}
+                            onChange={() => {
+                              if (locked) return;
+                              setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
+                            }}
+                            className="h-3.5 w-3.5 rounded border-slate-300"
+                          />
+                          {BACKLOG_COLUMN_LABELS[colKey]}
+                          {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="sticky top-0 z-10 flex justify-end border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-3 py-2">
+            <div className="relative" ref={columnsMenuRef}>
+              <button
+                type="button"
+                onClick={() => setColumnsMenuOpen((open) => !open)}
+                className="inline-flex h-8 items-center gap-1 rounded-lg bg-white/90 px-2.5 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200/90 shadow-sm transition hover:bg-white hover:text-slate-900"
+              >
+                <TableProperties className="size-3 text-slate-600" />
+                Table
+              </button>
+              {columnsMenuOpen ? (
+                <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm">
+                  <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={showTableHeaderRow}
+                      onChange={() => setShowTableHeaderRow((v) => !v)}
+                      className="h-3.5 w-3.5 rounded border-slate-300"
+                    />
+                    Show column titles
+                  </label>
+                  <div className="mb-1 border-t border-slate-200 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Visible columns
+                  </div>
+                  {BACKLOG_COLUMN_ORDER.map((colKey) => {
+                    const locked = colKey === "workItem";
+                    return (
+                      <label
+                        key={colKey}
+                        className={cn(
+                          "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
+                          locked && "cursor-not-allowed opacity-70",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={columnVisibility[colKey]}
+                          disabled={locked}
+                          onChange={() => {
+                            if (locked) return;
+                            setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
+                          }}
+                          className="h-3.5 w-3.5 rounded border-slate-300"
+                        />
+                        {BACKLOG_COLUMN_LABELS[colKey]}
+                        {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
+                      </label>
+                    );
+                  })}
+                </div>
               ) : null}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
         {fullyFiltered.length === 0 ? (
           <div className="p-4 text-[16px] text-slate-600">No items match your search/filter settings.</div>
@@ -2262,177 +2485,181 @@ export function BacklogPlanningPanel({
                     className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
                     style={{ gridTemplateColumns: tableGridTemplate }}
                   >
-                    <div
-                      className="relative flex min-w-0 items-center gap-2"
-                      onMouseEnter={cancelCreateMenuClose}
-                      onMouseLeave={scheduleCreateMenuClose}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setOpenInitiatives((prev) => ({ ...prev, [initiative.id]: !isInitOpen }))}
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
-                        aria-label={isInitOpen ? "Collapse initiative" : "Expand initiative"}
-                      >
-                        {isInitOpen ? (
-                          <ChevronDown className="size-4 shrink-0 text-slate-500" />
-                        ) : (
-                          <ChevronRight className="size-4 shrink-0 text-slate-500" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id) return; onOpenInitiative(initiative.id); }}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      >
-                        <Target className="size-4 shrink-0 text-slate-700" />
-                        {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id ? (
-                          <span className="flex min-w-0 items-center gap-1">
-                            <input
-                              value={editingParentTitle.value}
-                              onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.id, value: event.target.value })}
-                              className="h-7 min-w-[220px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                              autoFocus
-                            />
-                            <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                            <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.id, initiative.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                          </span>
-                        ) : (
-                          <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
-                            <span className="truncate">{initiative.title}</span>
+                    {renderBacklogCells({
+                      workItem: (
+                        <div
+                          className="relative flex min-w-0 items-center gap-2"
+                          onMouseEnter={cancelCreateMenuClose}
+                          onMouseLeave={scheduleCreateMenuClose}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setOpenInitiatives((prev) => ({ ...prev, [initiative.id]: !isInitOpen }))}
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                            aria-label={isInitOpen ? "Collapse initiative" : "Expand initiative"}
+                          >
+                            {isInitOpen ? (
+                              <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                            ) : (
+                              <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id) return; onOpenInitiative(initiative.id); }}
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                          >
+                            <Zap className="size-4 shrink-0 text-amber-500" strokeWidth={2} />
+                            {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id ? (
+                              <span className="flex min-w-0 items-center gap-1">
+                                <input
+                                  value={editingParentTitle.value}
+                                  onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.id, value: event.target.value })}
+                                  className="h-7 min-w-[220px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                  autoFocus
+                                />
+                                <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.id, initiative.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                              </span>
+                            ) : (
+                              <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                                <span className="truncate">{initiative.title}</span>
+                                <button
+                                  type="button"
+                                  onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.id, value: initiative.title }); }}
+                                  className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
+                                  aria-label="Edit initiative title"
+                                >
+                                  <Pencil className="size-3.5 text-slate-500" />
+                                </button>
+                              </span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
+                            }}
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                            title="Add from this row"
+                          >
+                            <Plus className="size-3.5 text-slate-600" />
+                          </button>
+                          {openCreateMenuKey === `initiative:${initiative.id}` ? (
+                            <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openCreateComposer({
+                                    anchorKey: `initiative:${initiative.id}`,
+                                    scope: "initiative",
+                                    kind: "initiative",
+                                    initiativeId: initiative.id,
+                                  })
+                                }
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                <Zap className="size-3.5 text-amber-500" strokeWidth={2} />
+                                Add initiative
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openCreateComposer({
+                                    anchorKey: `initiative:${initiative.id}`,
+                                    scope: "initiative",
+                                    kind: "epic",
+                                    initiativeId: initiative.id,
+                                  })
+                                }
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                                Add epic
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openCreateComposer({
+                                    anchorKey: `initiative:${initiative.id}`,
+                                    scope: "initiative",
+                                    kind: "story",
+                                    initiativeId: initiative.id,
+                                  })
+                                }
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                <FileText className="size-3.5 text-slate-600" strokeWidth={2} aria-hidden />
+                                Add user story
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ),
+                      year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
+                      quarter: <span className="text-center text-[16px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>,
+                      month: <span className="text-center text-[16px] text-slate-700">{monthLabel(initiative.startMonth)}</span>,
+                      status: (
+                        <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeWorkflowStatus))}>
+                          {workflowStatusLabel(initiativeWorkflowStatus)}
+                        </span>
+                      ),
+                      sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+                      assignee: (
+                        <span className="text-center text-[16px] text-slate-700">
+                          {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiative.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                value={editingParentAssignee.value}
+                                onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                placeholder="Unassigned"
+                                className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                              />
+                              <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                              <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiative.id, initiative.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                            </span>
+                          ) : (
                             <button
                               type="button"
-                              onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.id, value: initiative.title }); }}
-                              className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                              aria-label="Edit initiative title"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setEditingParentAssignee({ kind: "initiative", id: initiative.id, value: initiative.assignee?.trim() || "" });
+                              }}
+                              className="rounded px-1 py-0.5 hover:bg-slate-100"
                             >
-                              <Pencil className="size-3.5 text-slate-500" />
+                              {initiative.assignee ?? "Unassigned"}
                             </button>
-                          </span>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
-                        }}
-                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                        title="Add from this row"
-                      >
-                        <Plus className="size-3.5 text-slate-600" />
-                      </button>
-                      {openCreateMenuKey === `initiative:${initiative.id}` ? (
-                        <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openCreateComposer({
-                                anchorKey: `initiative:${initiative.id}`,
-                                scope: "initiative",
-                                kind: "initiative",
-                                initiativeId: initiative.id,
-                              })
-                            }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            <Target className="size-3.5 text-slate-500" />
-                            Add initiative
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openCreateComposer({
-                                anchorKey: `initiative:${initiative.id}`,
-                                scope: "initiative",
-                                kind: "epic",
-                                initiativeId: initiative.id,
-                              })
-                            }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            <FolderKanban className="size-3.5 text-slate-500" />
-                            Add epic
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openCreateComposer({
-                                anchorKey: `initiative:${initiative.id}`,
-                                scope: "initiative",
-                                kind: "story",
-                                initiativeId: initiative.id,
-                              })
-                            }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            <FileText className="size-3.5 text-slate-500" />
-                            Add user story
-                          </button>
+                          )}
+                        </span>
+                      ),
+                      estDays: (
+                        <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                          Σ {initiativeDays.estimated}d
+                        </span>
+                      ),
+                      daysLeft: (
+                        <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                          Σ {initiativeDays.left}d
+                        </span>
+                      ),
+                      progress: (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[16px] text-slate-600">
+                            <span>{initiativeProgress.total === 0 ? "No stories" : null}</span>
+                            <span>
+                              {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
+                            </span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
+                              style={{ width: `${initiativeProgress.percent}%` }}
+                            />
+                          </div>
                         </div>
-                      ) : null}
-                    </div>
-                    <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.year}</span>
-                    <span className="justify-self-center text-center text-[16px] text-slate-700">
-                      {quarterFromMonth(initiative.startMonth)}
-                    </span>
-                    <span className="justify-self-center text-center text-[16px] text-slate-700">
-                      {monthLabel(initiative.startMonth)}
-                    </span>
-                    <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeWorkflowStatus))}>
-                      {workflowStatusLabel(initiativeWorkflowStatus)}
-                    </span>
-                    <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
-                    <span className="justify-self-center text-center text-[16px] text-slate-700">
-                      {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiative.id ? (
-                        <span className="inline-flex items-center gap-1">
-                          <input
-                            value={editingParentAssignee.value}
-                            onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                            placeholder="Unassigned"
-                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                          />
-                          <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                          <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiative.id, initiative.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            setEditingParentAssignee({ kind: "initiative", id: initiative.id, value: initiative.assignee?.trim() || "" });
-                          }}
-                          className="rounded px-1 py-0.5 hover:bg-slate-100"
-                        >
-                          {initiative.assignee ?? "Unassigned"}
-                        </button>
-                      )}
-                    </span>
-                    <span
-                      className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-                      title="Auto-summed from child user stories"
-                    >
-                      Σ {initiativeDays.estimated}d
-                    </span>
-                    <span
-                      className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-                      title="Auto-summed from child user stories"
-                    >
-                      Σ {initiativeDays.left}d
-                    </span>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[16px] text-slate-600">
-                        <span>{initiativeProgress.total === 0 ? "No stories" : "Completion"}</span>
-                        <span>
-                          {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
-                          style={{ width: `${initiativeProgress.percent}%` }}
-                        />
-                      </div>
-                    </div>
+                      ),
+                    })}
                   </div>
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
                     <form
@@ -2458,7 +2685,7 @@ export function BacklogPlanningPanel({
                           autoFocus
                         />
                       </div>
-                      <div className="col-span-8 flex items-center gap-2">
+                      <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                         <button
                           type="submit"
                           disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
@@ -2507,7 +2734,7 @@ export function BacklogPlanningPanel({
                               autoFocus
                             />
                           </div>
-                          <div className="col-span-8 flex items-center gap-2">
+                          <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                             {createSelection.kind === "story" ? (
                               <select
                                 value={storyTargetEpicId}
@@ -2554,162 +2781,174 @@ export function BacklogPlanningPanel({
                               className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             >
-                              <div
-                                className="relative flex min-w-0 items-center gap-2 pl-6"
-                                onMouseEnter={cancelCreateMenuClose}
-                                onMouseLeave={scheduleCreateMenuClose}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenEpics((prev) => ({ ...prev, [epic.id]: !isEpicOpen }))}
-                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
-                                  aria-label={isEpicOpen ? "Collapse epic" : "Expand epic"}
-                                >
-                                  {isEpicOpen ? (
-                                    <ChevronDown className="size-4 shrink-0 text-slate-500" />
-                                  ) : (
-                                    <ChevronRight className="size-4 shrink-0 text-slate-500" />
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id) return; onOpenEpic(epic.id); }}
-                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                                >
-                                  <span className="inline-block size-4 shrink-0" aria-hidden />
-                                  {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id ? (
-                                    <span className="flex min-w-0 items-center gap-1">
-                                      <input
-                                        value={editingParentTitle.value}
-                                        onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.id, value: event.target.value })}
-                                        className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                                        autoFocus
-                                      />
-                                      <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                                      <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.id, epic.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-800">
-                                      <span className="truncate">{epic.icon} {epic.title}</span>
+                              {renderBacklogCells({
+                                workItem: (
+                                  <div
+                                    className="relative flex min-w-0 items-center gap-2 pl-6"
+                                    onMouseEnter={cancelCreateMenuClose}
+                                    onMouseLeave={scheduleCreateMenuClose}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenEpics((prev) => ({ ...prev, [epic.id]: !isEpicOpen }))}
+                                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                      aria-label={isEpicOpen ? "Collapse epic" : "Expand epic"}
+                                    >
+                                      {isEpicOpen ? (
+                                        <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                                      ) : (
+                                        <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id) return; onOpenEpic(epic.id); }}
+                                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                    >
+                                      <span className="inline-block size-4 shrink-0" aria-hidden />
+                                      {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id ? (
+                                        <span className="flex min-w-0 items-center gap-1">
+                                          <input
+                                            value={editingParentTitle.value}
+                                            onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.id, value: event.target.value })}
+                                            className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                            autoFocus
+                                          />
+                                          <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.id, epic.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-800">
+                                          <span className="truncate">{epic.icon} {epic.title}</span>
+                                          <button
+                                            type="button"
+                                            onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.id, value: epic.title }); }}
+                                            className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
+                                            aria-label="Edit epic title"
+                                          >
+                                            <Pencil className="size-3.5 text-slate-500" />
+                                          </button>
+                                        </span>
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setOpenCreateMenuKey((prev) => (prev === `epic:${epic.id}` ? null : `epic:${epic.id}`));
+                                      }}
+                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                                      title="Add from this row"
+                                    >
+                                      <Plus className="size-3.5 text-slate-600" />
+                                    </button>
+                                    {openCreateMenuKey === `epic:${epic.id}` ? (
+                                      <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            openCreateComposer({
+                                              anchorKey: `epic:${epic.id}`,
+                                              scope: "epic",
+                                              kind: "epic",
+                                              initiativeId: initiative.id,
+                                            })
+                                          }
+                                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                        >
+                                          <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                                          Add epic
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            openCreateComposer({
+                                              anchorKey: `epic:${epic.id}`,
+                                              scope: "epic",
+                                              kind: "story",
+                                              epicId: epic.id,
+                                            })
+                                          }
+                                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                        >
+                                          <FileText className="size-3.5 text-slate-600" strokeWidth={2} aria-hidden />
+                                          Add user story
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ),
+                                year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
+                                quarter: (
+                                  <span className="text-center text-[16px] text-slate-700">
+                                    {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
+                                  </span>
+                                ),
+                                month: (
+                                  <span className="text-center text-[16px] text-slate-700">
+                                    {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
+                                  </span>
+                                ),
+                                status: (
+                                  <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(epicWorkflowStatus))}>
+                                    {workflowStatusLabel(epicWorkflowStatus)}
+                                  </span>
+                                ),
+                                sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+                                assignee: (
+                                  <span className="text-center text-[16px] text-slate-700">
+                                    {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epic.id ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <input
+                                          value={editingParentAssignee.value}
+                                          onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                          placeholder="Unassigned"
+                                          className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                        />
+                                        <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                        <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epic.id, epic.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                                      </span>
+                                    ) : (
                                       <button
                                         type="button"
-                                        onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.id, value: epic.title }); }}
-                                        className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                                        aria-label="Edit epic title"
+                                        onMouseDown={(event) => {
+                                          event.preventDefault();
+                                          setEditingParentAssignee({ kind: "epic", id: epic.id, value: epic.assignee?.trim() || "" });
+                                        }}
+                                        className="rounded px-1 py-0.5 hover:bg-slate-100"
                                       >
-                                        <Pencil className="size-3.5 text-slate-500" />
+                                        {epic.assignee ?? "Unassigned"}
                                       </button>
-                                    </span>
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setOpenCreateMenuKey((prev) => (prev === `epic:${epic.id}` ? null : `epic:${epic.id}`));
-                                  }}
-                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
-                                  title="Add from this row"
-                                >
-                                  <Plus className="size-3.5 text-slate-600" />
-                                </button>
-                                {openCreateMenuKey === `epic:${epic.id}` ? (
-                                  <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        openCreateComposer({
-                                          anchorKey: `epic:${epic.id}`,
-                                          scope: "epic",
-                                          kind: "epic",
-                                          initiativeId: initiative.id,
-                                        })
-                                      }
-                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
-                                    >
-                                      <FolderKanban className="size-3.5 text-slate-500" />
-                                      Add epic
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        openCreateComposer({
-                                          anchorKey: `epic:${epic.id}`,
-                                          scope: "epic",
-                                          kind: "story",
-                                          epicId: epic.id,
-                                        })
-                                      }
-                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
-                                    >
-                                      <FileText className="size-3.5 text-slate-500" />
-                                      Add user story
-                                    </button>
+                                    )}
+                                  </span>
+                                ),
+                                estDays: (
+                                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                                    Σ {epicDays.estimated}d
+                                  </span>
+                                ),
+                                daysLeft: (
+                                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                                    Σ {epicDays.left}d
+                                  </span>
+                                ),
+                                progress: (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-[16px] text-slate-600">
+                                      <span>{epicProgress.total === 0 ? "No stories" : null}</span>
+                                      <span>
+                                        {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
+                                      </span>
+                                    </div>
+                                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                                      <div
+                                        className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
+                                        style={{ width: `${epicProgress.percent}%` }}
+                                      />
+                                    </div>
                                   </div>
-                                ) : null}
-                              </div>
-                              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.year}</span>
-                              <span className="justify-self-center text-center text-[16px] text-slate-700">
-                                {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
-                              </span>
-                              <span className="justify-self-center text-center text-[16px] text-slate-700">
-                                {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
-                              </span>
-                              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(epicWorkflowStatus))}>
-                                {workflowStatusLabel(epicWorkflowStatus)}
-                              </span>
-                              <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
-                              <span className="justify-self-center text-center text-[16px] text-slate-700">
-                                {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epic.id ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <input
-                                      value={editingParentAssignee.value}
-                                      onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                                      placeholder="Unassigned"
-                                      className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                                    />
-                                    <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                                    <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epic.id, epic.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                                  </span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onMouseDown={(event) => {
-                                      event.preventDefault();
-                                      setEditingParentAssignee({ kind: "epic", id: epic.id, value: epic.assignee?.trim() || "" });
-                                    }}
-                                    className="rounded px-1 py-0.5 hover:bg-slate-100"
-                                  >
-                                    {epic.assignee ?? "Unassigned"}
-                                  </button>
-                                )}
-                              </span>
-                              <span
-                                className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-                                title="Auto-summed from child user stories"
-                              >
-                                Σ {epicDays.estimated}d
-                              </span>
-                              <span
-                                className="justify-self-center text-center text-[16px] font-medium text-slate-600"
-                                title="Auto-summed from child user stories"
-                              >
-                                Σ {epicDays.left}d
-                              </span>
-                              <div className="space-y-1">
-                                <div className="flex items-center justify-between text-[16px] text-slate-600">
-                                  <span>{epicProgress.total === 0 ? "No stories" : "Completion"}</span>
-                                  <span>
-                                    {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
-                                  </span>
-                                </div>
-                                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                                  <div
-                                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
-                                    style={{ width: `${epicProgress.percent}%` }}
-                                  />
-                                </div>
-                              </div>
+                                ),
+                              })}
                             </div>
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
                               <form
@@ -2739,7 +2978,7 @@ export function BacklogPlanningPanel({
                                     autoFocus
                                   />
                                 </div>
-                                <div className="col-span-8 flex items-center gap-2">
+                                <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                                   <button
                                     type="submit"
                                     disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
@@ -2764,11 +3003,13 @@ export function BacklogPlanningPanel({
                                   <div key={story.id}>
                                     {(() => {
                                       const progress = storyCompletion(story);
-                                      return (
+                                                                            return (
                                     <div
                                       className="group grid w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50"
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
+                                    {renderBacklogCells({
+                                      workItem: (
                                     <div
                                       className="relative flex min-w-0 items-center gap-2 pl-24"
                                       onMouseEnter={cancelCreateMenuClose}
@@ -2793,7 +3034,9 @@ export function BacklogPlanningPanel({
                                           </span>
                                         ) : (
                                           <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] text-slate-800">
-                                            <span className="truncate">{story.icon} {story.title}</span>
+                                            <span className="truncate">
+                                              {story.title}
+                                            </span>
                                             <button
                                               type="button"
                                               onClick={(event) => { event.stopPropagation(); setEditingStoryTitle({ id: story.id, value: story.title }); }}
@@ -2814,7 +3057,7 @@ export function BacklogPlanningPanel({
                                           event.stopPropagation();
                                           setOpenCreateMenuKey((prev) => (prev === `story:${story.id}` ? null : `story:${story.id}`));
                                         }}
-                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100"
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
                                         title="Add from this row"
                                       >
                                         <Plus className="size-3.5 text-slate-600" />
@@ -2833,19 +3076,25 @@ export function BacklogPlanningPanel({
                                             }
                                             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                                           >
-                                            <FileText className="size-3.5 text-slate-500" />
+                                            <FileText className="size-3.5 text-slate-600" strokeWidth={2} aria-hidden />
                                             Add user story
                                           </button>
                                         </div>
                                       ) : null}
                                     </div>
-                                    <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.year}</span>
-                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
+                                      ),
+                                      year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
+                                      quarter: (
+                                    <span className="text-center text-[16px] text-slate-700">
                                       {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
-                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
+                                      ),
+                                      month: (
+                                    <span className="text-center text-[16px] text-slate-700">
                                       {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
+                                      ),
+                                      status: (
                                     <span
                                       className={cn(
                                         "w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium",
@@ -2901,7 +3150,9 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
+                                      ),
+                                      sprint: (
+                                    <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "sprint" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <select
@@ -2950,7 +3201,9 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
+                                      ),
+                                      assignee: (
+                                    <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "assignee" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <input
@@ -2996,7 +3249,9 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
+                                      ),
+                                      estDays: (
+                                    <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "estimatedDays" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <input
@@ -3043,7 +3298,9 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
+                                      ),
+                                      daysLeft: (
+                                    <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "daysLeft" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <input
@@ -3090,6 +3347,8 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
+                                      ),
+                                      progress: (
                                     <div className="space-y-1">
                                       <div className="flex items-center justify-between text-[16px] text-slate-600">
                                         <span>{progress.label}</span>
@@ -3102,6 +3361,8 @@ export function BacklogPlanningPanel({
                                         />
                                       </div>
                                     </div>
+                                      ),
+                                    })}
                                     </div>
                                       );
                                     })()}
@@ -3129,7 +3390,7 @@ export function BacklogPlanningPanel({
                                           autoFocus
                                         />
                                       </div>
-                                      <div className="col-span-8 flex items-center gap-2">
+                                      <div className="flex items-center gap-2" style={createFormRestGridStyle}>
                                         <button
                                           type="submit"
                                           disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
