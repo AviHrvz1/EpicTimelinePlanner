@@ -299,13 +299,13 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[14px] ring-1 ring-slate-300/80 outline-none shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
+        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-slate-200/55 to-sky-100/70 px-2.5 text-[14px] ring-1 ring-sky-200/75 outline-none shadow-sm shadow-sky-900/5 transition hover:from-slate-200/80 hover:to-sky-100 hover:ring-sky-300/80"
       >
-        <span className="font-medium text-slate-700">{label}: </span>
-        <span className="ml-1 truncate text-slate-600">{selectedLabel}</span>
+        <span className="font-medium text-slate-800">{label}: </span>
+        <span className="ml-1 truncate text-slate-700">{selectedLabel}</span>
       </button>
       {isOpen ? (
-        <div className="absolute z-30 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+        <div className="absolute z-30 mt-1 w-56 rounded-lg border border-sky-200/80 bg-gradient-to-b from-slate-50 to-sky-50/50 p-2 shadow-lg shadow-sky-900/10 ring-1 ring-sky-100/60 backdrop-blur-sm">
         <label className="mb-1 flex items-center gap-2 text-[15px] text-slate-700">
           <input
             type="checkbox"
@@ -2206,11 +2206,11 @@ export function BacklogPlanningPanel({
             onClick={() => setGroupMenuOpen((prev) => !prev)}
             className="flex h-8 min-w-[12rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
           >
-            <span className="inline-flex items-center gap-1 font-semibold text-indigo-800">
-              <Layers3 className="size-3.5 text-indigo-700" />
+            <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+              <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
               Group By
             </span>
-            <span className="ml-1 truncate text-indigo-700">{groupSummaryLabel}</span>
+            <span className="ml-1 truncate font-medium text-slate-600">{groupSummaryLabel}</span>
           </button>
           {groupMenuOpen ? (
             <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
@@ -2233,9 +2233,9 @@ export function BacklogPlanningPanel({
             </div>
           ) : null}
           </div>
-          <div className="h-7 w-px shrink-0 bg-slate-300/80" aria-hidden />
-          <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-            <Filter className="size-3.5 text-slate-500" />
+          <div className="h-7 w-px shrink-0 bg-sky-200/70" aria-hidden />
+          <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-sky-900/55">
+            <Filter className="size-3.5 text-sky-700/75" />
             Filters
           </span>
           <MultiCheckboxFilter
@@ -2263,7 +2263,7 @@ export function BacklogPlanningPanel({
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 ring-1 ring-slate-300/80 transition hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+              className="relative z-0 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-b from-slate-200/40 to-sky-100/50 text-slate-700 ring-1 ring-sky-200/75 transition hover:from-slate-200/60 hover:to-sky-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
               aria-label="Clear all filters"
             >
               <Eraser className="size-3.5" />
