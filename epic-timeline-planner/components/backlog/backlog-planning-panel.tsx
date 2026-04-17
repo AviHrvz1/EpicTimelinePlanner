@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ClipboardList, ChevronDown, ChevronRight, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
+import { Check, ClipboardList, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FileText, FolderKanban, Plus, Search, Target, X } from "lucide-react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { InitiativeItem } from "@/lib/types";
@@ -345,6 +345,8 @@ export function BacklogPlanningPanel({
   const [groupLevels, setGroupLevels] = useState<GroupLevel[]>([]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
+  const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
+  const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
@@ -1018,13 +1020,13 @@ export function BacklogPlanningPanel({
   }
 
   function renderFolderRow(folderId: string, label: string, count: number, indentPx: number, children: React.ReactNode) {
-    const isOpen = openGroupFolders[folderId] ?? true;
+    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
     return (
       <div key={folderId}>
         <div className="grid items-center gap-3 px-3 py-1.5 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
           <button
             type="button"
-            onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? true) }))}
+            onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
             className="flex min-w-0 items-center gap-1.5 text-left text-[13px] font-semibold text-slate-700"
             style={{ paddingLeft: indentPx }}
           >
@@ -1087,7 +1089,7 @@ export function BacklogPlanningPanel({
 
     function renderEpicRow(epicId: string, epicTitle: string, epicAssignee: string, epicRows: typeof groupedStoryRows, epicIndentPx: number, epicPath: string) {
       const folderId = `${epicPath}/epic:${epicId}`;
-      const isOpen = openGroupFolders[folderId] ?? true;
+      const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const storyCount = epicRows.length;
       const { estimated, left } = sumEstimatedAndLeft(epicRows);
       const completion = completionForRows(epicRows);
@@ -1195,7 +1197,7 @@ export function BacklogPlanningPanel({
 
     function renderInitiativeRow(initiativeId: string, initiativeTitle: string, initiativeYear: string, initiativeStatus: WorkflowStatus, initiativeAssignee: string, initiativeQuarterLabel: string, initiativeMonthLabel: string, initiativeRows: typeof groupedStoryRows, initIndentPx: number, initPath: string) {
       const folderId = `${initPath}/initiative:${initiativeId}`;
-      const isOpen = openGroupFolders[folderId] ?? true;
+      const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
       return (
         <div key={folderId}>
@@ -1395,7 +1397,7 @@ export function BacklogPlanningPanel({
       .sort((a, b) => a.initiativeTitle.localeCompare(b.initiativeTitle))
       .map((initiative) => {
         const initFolderId = `standalone-init:${initiative.initiativeId}`;
-        const isInitOpen = openGroupFolders[initFolderId] ?? true;
+        const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
         return (
           <div key={initFolderId}>
             <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
@@ -1672,6 +1674,28 @@ export function BacklogPlanningPanel({
     }
   }
 
+  function collapseAllRows() {
+    if (groupLevels.length > 0) {
+      setDefaultGroupExpanded(false);
+      setOpenGroupFolders({});
+      return;
+    }
+    setDefaultTreeExpanded(false);
+    setOpenInitiatives({});
+    setOpenEpics({});
+  }
+
+  function expandAllRows() {
+    if (groupLevels.length > 0) {
+      setDefaultGroupExpanded(true);
+      setOpenGroupFolders({});
+      return;
+    }
+    setDefaultTreeExpanded(true);
+    setOpenInitiatives({});
+    setOpenEpics({});
+  }
+
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(BACKLOG_COLUMN_WIDTHS_STORAGE_KEY);
@@ -1834,7 +1858,33 @@ export function BacklogPlanningPanel({
         >
           {BACKLOG_COLUMN_ORDER.map((key, index) => (
             <div key={key} className={cn("relative min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center")}>
-              <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+              {key === "workItem" ? (
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+                  <span className="inline-flex items-center gap-0.5 rounded-md bg-white/80 p-0.5 ring-1 ring-slate-200/90">
+                    <button
+                      type="button"
+                      onClick={collapseAllRows}
+                      title="Collapse all rows"
+                      aria-label="Collapse all rows"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
+                    >
+                      <ChevronsUp className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={expandAllRows}
+                      title="Expand all rows"
+                      aria-label="Expand all rows"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
+                    >
+                      <ChevronsDown className="size-3.5" />
+                    </button>
+                  </span>
+                </span>
+              ) : (
+                <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+              )}
               {index < BACKLOG_COLUMN_ORDER.length - 1 ? (
                 <button
                   type="button"
@@ -1861,7 +1911,7 @@ export function BacklogPlanningPanel({
             ) : (
             <>
             {fullyFiltered.map((initiative) => {
-              const isInitOpen = openInitiatives[initiative.id] ?? true;
+              const isInitOpen = openInitiatives[initiative.id] ?? defaultTreeExpanded;
               const initiativeStories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
               const initiativeWorkflowStatus = rollupWorkflowStatus(initiativeStories);
               const initiativeDays = sumStoryDays(initiativeStories);
@@ -2131,7 +2181,7 @@ export function BacklogPlanningPanel({
                         </form>
                       ) : null}
                       {(initiative.epics ?? []).map((epic) => {
-                        const isEpicOpen = openEpics[epic.id] ?? true;
+                        const isEpicOpen = openEpics[epic.id] ?? defaultTreeExpanded;
                         const epicWorkflowStatus = rollupWorkflowStatus(epic.userStories ?? []);
                         const epicDays = sumStoryDays(epic.userStories ?? []);
                         const epicProgress = completionFromStories(epic.userStories ?? []);
