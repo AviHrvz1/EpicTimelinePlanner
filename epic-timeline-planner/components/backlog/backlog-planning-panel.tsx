@@ -2315,24 +2315,24 @@ export function BacklogPlanningPanel({
                   {key === "workItem" ? (
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
-                      <span className="inline-flex items-center gap-0.5 rounded-md bg-white/80 p-0.5 ring-1 ring-slate-200/90">
+                      <span className="mr-1.5 inline-flex shrink-0 items-center gap-0.5 rounded-md bg-white/85 p-0.5 ring-1 ring-slate-200/90" role="group" aria-label="Row tree expand and collapse">
                         <button
                           type="button"
                           onClick={collapseAllRows}
                           title="Collapse all rows"
                           aria-label="Collapse all rows"
-                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
                         >
-                          <ChevronsUp className="size-3.5" />
+                          <ChevronsUp className="size-3.5" strokeWidth={2.2} />
                         </button>
                         <button
                           type="button"
                           onClick={expandAllRows}
                           title="Expand all rows"
                           aria-label="Expand all rows"
-                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
                         >
-                          <ChevronsDown className="size-3.5" />
+                          <ChevronsDown className="size-3.5" strokeWidth={2.2} />
                         </button>
                       </span>
                     </span>
