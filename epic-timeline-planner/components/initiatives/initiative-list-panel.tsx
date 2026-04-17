@@ -1,11 +1,12 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ChevronRight, FileText, Folder, Pencil, Plus, Zap } from "lucide-react";
+import { ChevronRight, FileText, Folder, Plus, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
+import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import {
   EPICS_UNPLAN_DROP_ID,
   backlogSlotDropId,
@@ -15,7 +16,9 @@ import {
   storyListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
-import { EpicItem, InitiativeItem } from "@/lib/types";
+import { epicPlanMatchesYearSprint, storyMatchesYearSprint } from "@/lib/sprint-plan";
+import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
+import { resolveStoryYearSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
 
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
@@ -30,11 +33,22 @@ function quarterFromMonth(month: number): string {
   return "Q4";
 }
 
-function storyStatusMeta(story: { sprint: number | null; status: string }): {
+function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
   sprintLabel: string | null;
   statusLabel: string;
   statusClassName: string;
 } {
+  const resolved =
+    story.sprint == null
+      ? null
+      : contextMonth != null
+        ? resolveStoryYearSprint(story, contextMonth)
+        : story.sprint >= 3
+          ? story.sprint
+          : null;
+  const sprintLabel =
+    story.sprint == null ? null : resolved != null ? `Sprint ${resolved}` : `Sprint ${story.sprint}`;
+
   if (story.sprint == null) {
     return {
       sprintLabel: null,
@@ -44,27 +58,27 @@ function storyStatusMeta(story: { sprint: number | null; status: string }): {
   }
   if (story.status === "inProgress") {
     return {
-      sprintLabel: `Sprint ${story.sprint}`,
+      sprintLabel,
       statusLabel: "In progress",
       statusClassName: "bg-blue-100 text-blue-700",
     };
   }
   if (story.status === "done") {
     return {
-      sprintLabel: `Sprint ${story.sprint}`,
+      sprintLabel,
       statusLabel: "Done",
       statusClassName: "bg-emerald-100 text-emerald-700",
     };
   }
   if (story.status === "approved") {
     return {
-      sprintLabel: `Sprint ${story.sprint}`,
+      sprintLabel,
       statusLabel: "Approved",
       statusClassName: "bg-violet-100 text-violet-700",
     };
   }
   return {
-    sprintLabel: `Sprint ${story.sprint}`,
+    sprintLabel,
     statusLabel: "To do",
     statusClassName: "bg-amber-100 text-amber-700",
   };
@@ -85,7 +99,7 @@ function epicCompletionMeta(epic: EpicItem): {
 type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
   activeMonth: number | null;
-  activeSprintLane: 1 | 2 | null;
+  activeYearSprint: number | null;
   storyDragEnabled: boolean;
   isSprintModeActive: boolean;
   onCreateInitiative: () => void;
@@ -144,9 +158,7 @@ function DraggableInitiativeCard({
           <div className="flex items-center justify-between gap-3">
             <p className="min-w-0 text-[15px] leading-5 font-semibold text-slate-900">{initiative.title}</p>
             <div className="flex shrink-0 gap-1">
-              <Button size="icon-xs" variant="ghost" onClick={() => onEdit(initiative)}>
-                <Pencil />
-              </Button>
+              <EditRowIconButton label="Edit initiative" onClick={() => onEdit(initiative)} />
             </div>
           </div>
           {initiative.description ? (
@@ -174,6 +186,7 @@ function InitiativeTreeCard({
   onDeleteEpic,
   onCreateEpicQuick,
   backlogDropIndex,
+  planContextMonth,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -185,6 +198,7 @@ function InitiativeTreeCard({
   onDeleteEpic: (epicId: string) => void;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   backlogDropIndex?: number;
+  planContextMonth: number | null;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: initiativeListDraggableId(initiative.id),
@@ -242,7 +256,7 @@ function InitiativeTreeCard({
           <DragHandleIcon size="sm" />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
+          <div className="group/init flex items-start justify-between gap-2">
             <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2 text-left">
               <ChevronRight
                 className={cn(
@@ -269,10 +283,8 @@ function InitiativeTreeCard({
                 ) : null}
               </div>
             </button>
-            <div className="flex shrink-0 gap-1">
-              <Button size="icon-xs" variant="ghost" onClick={() => onEditInitiative(initiative)}>
-                <Pencil />
-              </Button>
+            <div className="flex shrink-0 gap-1 opacity-0 transition-opacity duration-150 group-hover/init:opacity-100 group-focus-within/init:opacity-100">
+              <EditRowIconButton label="Edit initiative" onClick={() => onEditInitiative(initiative)} />
             </div>
           </div>
 
@@ -288,7 +300,7 @@ function InitiativeTreeCard({
                   const isEpicOpen = openEpicIds[epic.id] ?? false;
                   const completion = epicCompletionMeta(epic);
                   return (
-                    <div key={epic.id} className="rounded-lg bg-slate-50/70 p-2.5 ring-1 ring-slate-200/80">
+                    <div key={epic.id} className="group/epic rounded-lg bg-slate-50/70 p-2.5 ring-1 ring-slate-200/80">
                       <div className="flex items-start justify-between gap-2">
                         <button
                           type="button"
@@ -309,10 +321,8 @@ function InitiativeTreeCard({
                             {epic.title}
                           </p>
                         </button>
-                        <div className="flex shrink-0 gap-0.5">
-                          <Button size="icon-xs" variant="ghost" onClick={() => onOpenEpic(epic, initiative)}>
-                            <Pencil />
-                          </Button>
+                        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover/epic:opacity-100 group-focus-within/epic:opacity-100">
+                          <EditRowIconButton label="Edit epic" onClick={() => onOpenEpic(epic, initiative)} />
                         </div>
                       </div>
                       <div className="mt-1.5 space-y-1">
@@ -334,7 +344,10 @@ function InitiativeTreeCard({
                           {stories.length === 0 ? null : (
                             stories.map((story) => (
                               (() => {
-                                const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story);
+                                const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(
+                                  story,
+                                  planContextMonth,
+                                );
                                 return (
                                   <div
                                     key={story.id}
@@ -423,6 +436,7 @@ function SprintEpicCard({
   onDeleteEpic,
   onCreateStoryQuick,
   backlogDropSlot,
+  planContextMonth,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -433,6 +447,7 @@ function SprintEpicCard({
   onDeleteEpic: (epicId: string) => void;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   backlogDropSlot?: { month: number; index: number };
+  planContextMonth: number | null;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
@@ -466,7 +481,7 @@ function SprintEpicCard({
         setDropRef(node);
       }}
       className={cn(
-        "bg-white p-2.5",
+        "group bg-white p-2.5",
         isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
@@ -507,10 +522,8 @@ function SprintEpicCard({
             </div>
           </button>
         </div>
-        <div className="flex shrink-0 gap-0.5">
-          <Button size="icon-xs" variant="ghost" onClick={() => onOpenEpic(epic, initiative)}>
-            <Pencil />
-          </Button>
+        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+          <EditRowIconButton label="Edit epic" onClick={() => onOpenEpic(epic, initiative)} />
         </div>
       </div>
       {isOpen ? (
@@ -520,7 +533,7 @@ function SprintEpicCard({
           ) : (
             stories.map((story) => (
               (() => {
-                const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story);
+                const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story, planContextMonth);
                 return (
               <div
                 key={story.id}
@@ -628,7 +641,7 @@ function EpicBacklogDropSlot({ month, index }: { month: number; index: number })
 export function InitiativeListPanel({
   initiatives,
   activeMonth,
-  activeSprintLane,
+  activeYearSprint,
   storyDragEnabled,
   isSprintModeActive,
   onCreateInitiative,
@@ -690,14 +703,18 @@ export function InitiativeListPanel({
     return [...ordered, ...rest];
   }, [monthAssignedEpics, activeMonth, epicBacklogOrderByMonth]);
   const sprintEpics = useMemo(() => {
-    if (activeMonth == null || activeSprintLane == null) return [];
+    if (activeMonth == null || activeYearSprint == null) return [];
     return monthAssignedEpics.filter(({ epic }) => {
-      const hasStoryInSprint = (epic.userStories ?? []).some((story) => story.sprint === activeSprintLane);
+      const hasStoryInSprint = (epic.userStories ?? []).some((story) =>
+        storyMatchesYearSprint(story, activeMonth, activeYearSprint),
+      );
       const plannedForSprint =
-        epicIsOnPlanForMonth(epic, activeMonth) && epic.planSprint != null && epic.planSprint === activeSprintLane;
+        epicIsOnPlanForMonth(epic, activeMonth) &&
+        epic.planSprint != null &&
+        epicPlanMatchesYearSprint(epic, activeMonth, activeYearSprint);
       return plannedForSprint || hasStoryInSprint;
     });
-  }, [monthAssignedEpics, activeMonth, activeSprintLane]);
+  }, [monthAssignedEpics, activeMonth, activeYearSprint]);
   const monthPanelEpics = isSprintModeActive ? sprintEpics : monthAssignedEpics;
   const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
@@ -793,8 +810,8 @@ export function InitiativeListPanel({
             </datalist>
           </div>
           <h3 className="mt-4 mb-2 text-[14px] font-semibold tracking-[0.01em] text-slate-900">
-            {isSprintModeActive && activeSprintLane != null
-              ? `Sprint ${activeSprintLane} epics (${filteredMonthBacklogEpics.length})`
+            {isSprintModeActive && activeYearSprint != null
+              ? `Sprint ${activeYearSprint} epics (${filteredMonthBacklogEpics.length})`
               : `Month epics (${filteredMonthBacklogEpics.length})`}
           </h3>
           <div
@@ -808,8 +825,8 @@ export function InitiativeListPanel({
             {filteredMonthBacklogEpics.length === 0 ? (
               <p className="text-[11px] text-slate-700">
                 {monthPanelEpics.length === 0
-                  ? isSprintModeActive && activeSprintLane != null
-                    ? `No epics or stories are assigned to Sprint ${activeSprintLane} for this month yet.`
+                  ? isSprintModeActive && activeYearSprint != null
+                    ? `No epics or stories are assigned to Sprint ${activeYearSprint} for this month yet.`
                     : "No epics are assigned to this month yet."
                   : "No epics match your search."}
               </p>
@@ -826,6 +843,7 @@ export function InitiativeListPanel({
                     onDeleteEpic={onDeleteEpic}
                     onCreateStoryQuick={onCreateStoryQuick}
                     backlogDropSlot={activeMonth != null ? { month: activeMonth, index: idx } : undefined}
+                    planContextMonth={activeMonth}
                   />
                   {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={idx + 1} /> : null}
                 </div>
@@ -868,6 +886,7 @@ export function InitiativeListPanel({
                     initiative={initiative}
                     isOpen={openInitiativeIds[initiative.id] ?? false}
                     backlogDropIndex={idx}
+                    planContextMonth={activeMonth}
                     onToggle={() =>
                       setOpenInitiativeIds((prev) => ({
                         ...prev,

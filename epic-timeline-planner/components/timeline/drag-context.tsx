@@ -52,7 +52,7 @@ const initiativeCollision: CollisionDetection = (args) => {
 
 const epicPlanCollision: CollisionDetection = (args) => {
   /** Roadmap month cells use `month:` — same targets as initiatives so epics can land on quarter months. */
-  const isKanbanTodoDrop = (id: string) => /^kanban:\d+:[12]:todo$/.test(id);
+  const isKanbanTodoDrop = (id: string) => /^kanban:(\d+):todo$/.test(id);
   const isDropTarget = (id: string) =>
     id.startsWith("epic-plan:") ||
     id.startsWith("month:") ||

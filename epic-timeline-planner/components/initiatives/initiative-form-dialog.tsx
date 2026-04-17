@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InitiativeItem } from "@/lib/types";
 import { MONTHS } from "@/lib/timeline";
+import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { cn } from "@/lib/utils";
 
 type InitiativeFormDialogProps = {
@@ -24,12 +25,15 @@ type InitiativeFormDialogProps = {
   onOpenEpic?: (epicId: string) => void;
   onRequestCreateEpic?: (initiativeId: string) => void;
   onAddComment?: (initiativeId: string, body: string) => Promise<void>;
+  /** Called after exit animation; use to clear selected entity in parent. */
+  onExitComplete?: () => void;
 };
 
 export function InitiativeFormDialog({
   open,
   initiative,
   onClose,
+  onExitComplete,
   onSubmit,
   onOpenEpic,
   onRequestCreateEpic,
@@ -57,7 +61,9 @@ export function InitiativeFormDialog({
     setActivityTab("comments");
   }, [initiative, open]);
 
-  if (!open) return null;
+  const { visible, leaving } = useDialogPresence(open, onExitComplete);
+
+  if (!visible) return null;
 
   async function handleSave() {
     const normalizedTitle = title.trim();
@@ -95,8 +101,21 @@ export function InitiativeFormDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 p-4">
-      <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border bg-card p-5 shadow-xl">
+    <div
+      className={cn(
+        "fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[1px]",
+        !leaving && "epic-dialog-backdrop",
+        leaving && "epic-dialog-backdrop--exit",
+        leaving && "pointer-events-none",
+      )}
+    >
+      <div
+        className={cn(
+          "w-full max-w-5xl",
+          !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
+        )}
+      >
+        <div className="max-h-[88vh] w-full overflow-y-auto rounded-2xl border bg-card p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-slate-900">
             {initiative ? "Initiative details" : "Create initiative"}
@@ -360,6 +379,7 @@ export function InitiativeFormDialog({
             </div>
           )}
         </section>
+        </div>
       </div>
     </div>
   );

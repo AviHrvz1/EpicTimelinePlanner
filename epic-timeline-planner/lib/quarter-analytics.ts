@@ -9,7 +9,10 @@ export type QuarterBurndownPoint = {
   dayLabel: string;
   axisLabel: string;
   monthLabel: string;
-  [key: string]: string | number | null;
+  isCalendarToday: boolean;
+  ideal?: number;
+  actual?: number | null;
+  [key: string]: string | number | boolean | null | undefined;
 };
 
 export type QuarterBurndownMetric = "daysLeft" | "storyCount";
@@ -29,6 +32,14 @@ const MONTH_DAY_COUNTS: Record<number, number> = {
   11: 30,
   12: 31,
 };
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+function startOfLocalDay(d: Date): number {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
+}
 
 function overlapRange(start: number, end: number, qStart: number, qEnd: number): boolean {
   return !(end < qStart || start > qEnd);
@@ -85,17 +96,23 @@ export function buildQuarterBurndownSeries(
   mode: "aggregate" | "individual",
   metric: QuarterBurndownMetric,
   quarterMonths: readonly number[],
+  planYear: number,
 ): QuarterBurndownPoint[] {
+  const todayMs = startOfLocalDay(new Date());
   const quarterDays = quarterMonths.flatMap((month) => {
     const total = MONTH_DAY_COUNTS[month] ?? 30;
     return Array.from({ length: total }, (_, idx) => {
       const day = idx + 1;
       const monthShort = MONTH_SHORT[month - 1] ?? `M${month}`;
-      const axisLabel = day === 1 ? monthShort : day % 7 === 0 ? String(day) : "";
+      const cal = new Date(planYear, month - 1, day);
+      const weekdayShort = WEEKDAY_SHORT[cal.getDay()];
+      const isCalendarToday = startOfLocalDay(cal) === todayMs;
+      const dateDayLabel = `${day}/${month} (${weekdayShort})`;
       return {
-        dayLabel: `${monthShort} ${day}`,
-        axisLabel,
+        dayLabel: dateDayLabel,
+        axisLabel: dateDayLabel,
         monthLabel: monthShort,
+        isCalendarToday,
       };
     });
   });
@@ -122,21 +139,26 @@ export function buildQuarterBurndownSeries(
       dayLabel: `Day ${dayIdx}`,
       axisLabel: String(dayIdx),
       monthLabel: "",
+      isCalendarToday: false,
     };
     const row: QuarterBurndownPoint = {
       dayLabel: dayInfo.dayLabel,
       axisLabel: dayInfo.axisLabel,
       monthLabel: dayInfo.monthLabel,
+      isCalendarToday: dayInfo.isCalendarToday,
     };
     const startTotal = series.reduce((sum, s) => sum + s.start, 0);
     const remainingTotal = series.reduce((sum, s) => sum + s.actualRemaining, 0);
     const progressTotal = startTotal > 0 ? Math.max(0, Math.min(1, 1 - remainingTotal / startTotal)) : 0;
     const todayTotal = Math.max(1, Math.min(horizon, Math.round(progressTotal * horizon)));
-    row.ideal = Number((startTotal * (1 - idx / (horizon - 1))).toFixed(1));
-    row.actual =
+    const idealRaw = startTotal * (1 - idx / (horizon - 1));
+    const actualRaw =
       dayIdx <= todayTotal
-        ? Number((startTotal - (startTotal - remainingTotal) * ((dayIdx - 1) / Math.max(todayTotal - 1, 1))).toFixed(1))
+        ? startTotal - (startTotal - remainingTotal) * ((dayIdx - 1) / Math.max(todayTotal - 1, 1))
         : null;
+    row.ideal = metric === "storyCount" ? Math.round(idealRaw) : Number(idealRaw.toFixed(1));
+    row.actual =
+      actualRaw == null ? null : metric === "storyCount" ? Math.round(actualRaw) : Number(actualRaw.toFixed(1));
     if (mode === "aggregate") {
       return row;
     }
@@ -145,7 +167,8 @@ export function buildQuarterBurndownSeries(
         dayIdx <= s.today
           ? s.start - (s.start - s.actualRemaining) * ((dayIdx - 1) / Math.max(s.today - 1, 1))
           : null;
-      row[s.key] = value == null ? null : Number(value.toFixed(1));
+      row[s.key] =
+        value == null ? null : metric === "storyCount" ? Math.round(value) : Number(value.toFixed(1));
     }
     return row;
   });

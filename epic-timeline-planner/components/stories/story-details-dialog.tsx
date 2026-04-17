@@ -6,6 +6,9 @@ import { StoryStatus } from "@/lib/generated/prisma";
 
 import { Button } from "@/components/ui/button";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
+import { useDialogPresence } from "@/lib/use-dialog-presence";
+import { cn } from "@/lib/utils";
+import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type StoryWithEpic = UserStoryItem & { epicTitle: string };
 
@@ -43,6 +46,8 @@ type StoryDetailsDialogProps = {
   onDelete?: (storyId: string) => Promise<void>;
   onAddComment: (storyId: string, body: string) => Promise<void>;
   storyRef?: string;
+  /** Called after exit animation; use to clear selection in parent without remounting mid-close. */
+  onExitComplete?: () => void;
 };
 
 export function StoryDetailsDialog({
@@ -51,6 +56,7 @@ export function StoryDetailsDialog({
   initiatives,
   lockParentEpicId,
   onClose,
+  onExitComplete,
   onCreate,
   onSave,
   onDelete,
@@ -122,7 +128,9 @@ export function StoryDetailsDialog({
     }
   }, [open]);
 
-  if (!open) return null;
+  const { visible, leaving } = useDialogPresence(open, onExitComplete);
+
+  if (!visible) return null;
 
   const isCreateMode = !story;
 
@@ -207,14 +215,27 @@ export function StoryDetailsDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[1px]">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[1px]",
+        !leaving && "epic-dialog-backdrop",
+        leaving && "epic-dialog-backdrop--exit",
+        leaving && "pointer-events-none",
+      )}
+    >
       <div
-        className={`
-          max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl
-          ${isDraggingDialog ? "select-none" : ""}
-        `}
-        style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
+        className={cn(
+          "w-full max-w-5xl",
+          !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
+        )}
       >
+        <div
+          className={cn(
+            "max-h-[88vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl",
+            isDraggingDialog && "select-none",
+          )}
+          style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
+        >
         <div
           className="mb-4 flex cursor-move items-center justify-between border-b border-slate-100 pb-3"
           onPointerDown={beginDialogDrag}
@@ -289,8 +310,14 @@ export function StoryDetailsDialog({
               className="w-full rounded-md border bg-background px-3 py-2 text-base"
             >
               <option value="">Not set</option>
-              <option value="1">Sprint 1</option>
-              <option value="2">Sprint 2</option>
+              {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => {
+                const n = i + 1;
+                return (
+                  <option key={n} value={String(n)}>
+                    Sprint {n}
+                  </option>
+                );
+              })}
             </select>
           </label>
           <label className="space-y-1">
@@ -422,6 +449,7 @@ export function StoryDetailsDialog({
               </div>
             )}
           </section>
+        </div>
         </div>
       </div>
     </div>

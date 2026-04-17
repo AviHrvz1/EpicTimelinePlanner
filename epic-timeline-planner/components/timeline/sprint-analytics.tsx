@@ -30,14 +30,14 @@ const STATUS_COLORS: Record<string, string> = {
 type SprintAnalyticsProps = {
   initiatives: InitiativeItem[];
   month: number;
-  sprintLane: 1 | 2;
+  yearSprint: number;
 };
 
-export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyticsProps) {
+export function SprintAnalytics({ initiatives, month, yearSprint }: SprintAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const analytics = useMemo(
-    () => buildSprintAnalytics(initiatives, month, sprintLane, metric),
-    [initiatives, month, sprintLane, metric],
+    () => buildSprintAnalytics(initiatives, month, yearSprint, metric),
+    [initiatives, month, yearSprint, metric],
   );
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
@@ -61,14 +61,14 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
     </div>
   );
   return (
-    <section className="mb-4 grid gap-3 lg:grid-cols-3">
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+    <section className="mb-4 grid gap-6 lg:grid-cols-3">
+      <article className="p-1">
         <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <PieChartIcon className="size-4 text-slate-600" />
           User stories status
         </h3>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-center">
-          <div className="relative h-56 rounded-xl bg-gradient-to-br from-slate-50 via-white to-slate-100 ring-1 ring-slate-200/80">
+          <div className="relative h-56 rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <defs>
@@ -106,7 +106,7 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="rounded-full bg-white/90 px-4 py-2.5 text-center shadow-sm ring-1 ring-slate-200">
+              <div className="rounded-full bg-white/90 px-4 py-2.5 text-center shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
                 <p className="text-[24px] leading-none font-bold text-slate-900">{pieTotal}</p>
               </div>
@@ -118,7 +118,7 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
               return (
                 <div
                   key={slice.name}
-                  className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1.5 ring-1 ring-slate-200"
+                  className="flex items-center justify-between rounded-lg bg-slate-50/80 px-2 py-1.5"
                 >
                   <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
                     <span
@@ -142,7 +142,7 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
         </div>
       </article>
 
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-2">
+      <article className="p-1 lg:col-span-2">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
@@ -173,9 +173,34 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={analytics.burndown}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis />
-              <Tooltip />
+              <XAxis
+                dataKey="day"
+                tick={(props) => {
+                  const { x, y, payload, index } = props;
+                  const label = typeof payload?.value === "string" ? payload.value : String(payload?.value ?? "");
+                  const bold = Boolean(analytics.burndown[index]?.isToday);
+                  return (
+                    <text
+                      x={x}
+                      y={y}
+                      dy={12}
+                      textAnchor="middle"
+                      fill="#334155"
+                      fontSize={11}
+                      fontWeight={bold ? 700 : 400}
+                    >
+                      {label}
+                    </text>
+                  );
+                }}
+              />
+              <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 11 }} width={46} />
+              <Tooltip
+                formatter={(value, name) => [
+                  metric === "storyCount" && typeof value === "number" ? Math.round(value) : value,
+                  name,
+                ]}
+              />
               <Legend content={renderSpacedLegend} />
               <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
               <Line type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2} name="Actual" />
@@ -184,12 +209,12 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
         </div>
       </article>
 
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-1">
+      <article className="p-1 lg:col-span-1">
         <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Flow trend (30d)
         </h3>
-        <div className="rounded-lg bg-slate-50 p-2 ring-1 ring-slate-200">
+        <div className="rounded-lg bg-slate-50/70 p-2">
           <svg viewBox="0 0 100 100" className="h-28 w-full" preserveAspectRatio="none" aria-hidden>
             <polyline
               fill="none"
@@ -206,7 +231,7 @@ export function SprintAnalytics({ initiatives, month, sprintLane }: SprintAnalyt
         </p>
       </article>
 
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200 lg:col-span-2">
+      <article className="p-1 lg:col-span-2">
         <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <ChartNoAxesCombined className="size-4 text-slate-600" />
           Workload balance

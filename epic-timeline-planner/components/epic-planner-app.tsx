@@ -35,6 +35,7 @@ import {
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { clampYearSprint, globalSprintFromMonthLane } from "@/lib/year-sprint";
 
 type PlannerProps = {
   initialInitiatives: InitiativeItem[];
@@ -181,12 +182,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [focusedQuarterLabel, setFocusedQuarterLabel] = useState<string | null>(null);
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
-  const [activeSprintLane, setActiveSprintLane] = useState<1 | 2 | null>(null);
+  const [activeYearSprint, setActiveYearSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [topMode, setTopMode] = useState<"roadmap" | "backlog">("roadmap");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
+  /** Separate from selection so `open` can go false before IDs clear, allowing exit animation. */
+  const [storyDialogOpen, setStoryDialogOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
@@ -255,6 +258,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   }, [initiatives, editingEpic]);
 
   useEffect(() => {
+    if (selectedStoryId != null || creatingStoryEpicId != null) {
+      setStoryDialogOpen(true);
+    }
+  }, [selectedStoryId, creatingStoryEpicId]);
+
+  useEffect(() => {
+    if (selectedStoryId == null && creatingStoryEpicId == null) {
+      setStoryDialogOpen(false);
+    }
+  }, [selectedStoryId, creatingStoryEpicId]);
+
+  useEffect(() => {
     if (hasHydratedFromUrlRef.current) return;
     hasHydratedFromUrlRef.current = true;
     const params = new URLSearchParams(window.location.search);
@@ -270,9 +285,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
     }
     const sprintRaw = params.get("sprint");
-    if (sprintRaw === "1" || sprintRaw === "2") {
-      setActiveSprintLane(Number(sprintRaw) as 1 | 2);
-      setIsSprintModeActive(true);
+    if (sprintRaw != null) {
+      const n = Number(sprintRaw);
+      if (Number.isFinite(n) && n >= 1 && n <= 24) {
+        setActiveYearSprint(clampYearSprint(n));
+        setIsSprintModeActive(true);
+      }
     }
     const sprintViewRaw = params.get("sprintView");
     if (sprintViewRaw === "kanban" || sprintViewRaw === "status") {
@@ -304,8 +322,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const params = new URLSearchParams();
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
     if (activeTimelineMonth != null) params.set("month", String(activeTimelineMonth));
-    if (activeSprintLane != null) params.set("sprint", String(activeSprintLane));
-    if (activeSprintLane != null) params.set("sprintView", activeSprintTab);
+    if (activeYearSprint != null) params.set("sprint", String(activeYearSprint));
+    if (activeYearSprint != null) params.set("sprintView", activeSprintTab);
     if (epicDialogOpen && editingEpic?.id) params.set("epic", editingEpic.id);
     if (selectedStoryId) params.set("story", storyRefMaps.byId[selectedStoryId] ?? selectedStoryId);
     const next = params.toString();
@@ -318,7 +336,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     isUrlHydrated,
     focusedQuarterLabel,
     activeTimelineMonth,
-    activeSprintLane,
+    activeYearSprint,
     activeSprintTab,
     epicDialogOpen,
     editingEpic?.id,
@@ -329,11 +347,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   ]);
 
   const handleSprintModeChange = useCallback(
-    (active: boolean, month: number | null, sprintLane: 1 | 2 | null) => {
+    (active: boolean, month: number | null, yearSprint: number | null) => {
       setIsSprintModeActive(active);
       setActiveTimelineMonth(month);
-      setActiveSprintLane(sprintLane ?? null);
-      if (sprintLane == null) {
+      setActiveYearSprint(yearSprint == null ? null : clampYearSprint(yearSprint));
+      if (yearSprint == null) {
         setActiveSprintTab("kanban");
       }
     },
@@ -540,7 +558,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   async function patchEpicQuarterPlan(
     epicId: string,
-    payload: { planSprint: 1 | 2; planStartMonth: number; planEndMonth: number },
+    payload: { planSprint: number; planStartMonth: number; planEndMonth: number },
   ) {
     const response = await fetch(`/api/epics/${epicId}`, {
       method: "PATCH",
@@ -688,9 +706,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         return;
       }
 
-      const kanbanMatch = /^kanban:(\d+):([12]):(todo|inProgress|done|approved)$/.exec(overId);
+      const kanbanMatch = /^kanban:(\d+):(todo|inProgress|done|approved)$/.exec(overId);
       if (!kanbanMatch) return;
-      const sprint = Number(kanbanMatch[2]) as 1 | 2;
+      const sprint = clampYearSprint(Number(kanbanMatch[1]));
       const status = kanbanMatch[3] as StoryStatus;
       const nextStatus = status;
 
@@ -779,9 +797,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         return;
       }
 
-      const epicKanbanTodoMatch = /^kanban:(\d+):([12]):todo$/.exec(overId);
+      const epicKanbanTodoMatch = /^kanban:(\d+):todo$/.exec(overId);
       if (epicKanbanTodoMatch) {
-        const sprint = Number(epicKanbanTodoMatch[2]) as 1 | 2;
+        const sprint = clampYearSprint(Number(epicKanbanTodoMatch[1]));
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
         const epic = initiative?.epics?.find((e) => e.id === epicId);
         if (!initiative || !epic) return;
@@ -884,12 +902,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
 
       let month: number;
-      let planSprint: 1 | 2;
+      let planSprint: number;
       let dropLaneIndex: number | undefined;
       const epicCell = /^epic-plan:(\d+):([12])$/.exec(overId);
       if (epicCell) {
         month = Number(epicCell[1]);
-        planSprint = Number(epicCell[2]) as 1 | 2;
+        const lane = Number(epicCell[2]) as 1 | 2;
+        planSprint = globalSprintFromMonthLane(month, lane);
         dropLaneIndex = undefined;
       } else if (overId.startsWith("month:")) {
         const parsed = parseMonthDropTarget(overId);
@@ -898,7 +917,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           return;
         }
         month = parsed.month;
-        planSprint = 1;
+        planSprint = globalSprintFromMonthLane(month, 1);
         dropLaneIndex = parsed.laneIndex;
         console.log("[gantt-drop] epic month drop parsed", { month, dropLaneIndex });
       } else {
@@ -1262,7 +1281,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <InitiativeListPanel
                 initiatives={initiatives}
                 activeMonth={activeTimelineMonth}
-                activeSprintLane={activeSprintLane}
+                activeYearSprint={activeYearSprint}
                 storyDragEnabled={isSprintModeActive}
                 isSprintModeActive={isSprintModeActive}
                 onCreateInitiative={() => {
@@ -1342,12 +1361,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   await refresh(nextYear);
                   setFocusedQuarterLabel(null);
                   setActiveTimelineMonth(null);
-                  setActiveSprintLane(null);
+                  setActiveYearSprint(null);
                   setActiveSprintTab("kanban");
                 }}
                 focusedQuarterLabel={focusedQuarterLabel}
                 focusedMonthExternal={activeTimelineMonth}
-                activeSprintExternal={activeSprintLane}
+                activeSprintExternal={activeYearSprint}
                 activeSprintTabExternal={activeSprintTab}
                 onFocusedQuarterChange={setFocusedQuarterLabel}
                 onSprintTabChange={setActiveSprintTab}
@@ -1482,7 +1501,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         </div>
       </main>
       <InitiativeFormDialog
-        key={currentEditingInitiative?.id ?? (initiativeDialogOpen ? "new-init" : "closed-init")}
         open={initiativeDialogOpen}
         initiative={currentEditingInitiative}
         onOpenEpic={(epicId) => {
@@ -1511,12 +1529,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }}
         onClose={() => {
           setInitiativeDialogOpen(false);
+        }}
+        onExitComplete={() => {
           setEditingInitiative(undefined);
         }}
         onSubmit={handleUpsertInitiative}
       />
       <EpicFormDialog
-        key={currentEditingEpic?.id ?? (epicDialogOpen ? "new-epic" : "closed-epic")}
         open={epicDialogOpen}
         epic={currentEditingEpic}
         initiatives={initiatives}
@@ -1539,6 +1558,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }}
         onClose={() => {
           setEpicDialogOpen(false);
+        }}
+        onExitComplete={() => {
           setEditingEpic(undefined);
           setEditingEpicInitiativeId(null);
         }}
@@ -1554,11 +1575,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }}
       />
       <StoryDetailsDialog
-        open={Boolean(selectedStory) || Boolean(creatingStoryEpicId)}
+        open={storyDialogOpen}
         story={selectedStory}
         initiatives={initiatives}
         lockParentEpicId={creatingStoryEpicId}
         onClose={() => {
+          setStoryDialogOpen(false);
+        }}
+        onExitComplete={() => {
           setSelectedStoryId(null);
           setCreatingStoryEpicId(null);
         }}

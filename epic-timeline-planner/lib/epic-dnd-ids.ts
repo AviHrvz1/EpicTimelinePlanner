@@ -124,9 +124,9 @@ export function parseStoryIdFromDraggable(activeId: string): string | null {
   return null;
 }
 
-/** Droppable id for sprint kanban columns: month, sprint lane (1|2), StoryStatus. */
-export function sprintKanbanDropId(month: number, sprint: 1 | 2, status: string): string {
-  return `kanban:${month}:${sprint}:${status}`;
+/** Droppable id for sprint kanban: year sprint number 1–24, StoryStatus. */
+export function sprintKanbanDropId(yearSprint: number, status: string): string {
+  return `kanban:${yearSprint}:${status}`;
 }
 
 /** Month-level epic status board: StoryStatus column (only `todo` accepts epic drops). */

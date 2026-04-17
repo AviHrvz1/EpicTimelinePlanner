@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { EpicItem, InitiativeItem } from "@/lib/types";
+import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { cn } from "@/lib/utils";
 
 type EpicFormDialogProps = {
@@ -26,6 +27,8 @@ type EpicFormDialogProps = {
   onRequestCreateStory?: (epicId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onAddComment?: (epicId: string, body: string) => Promise<void>;
+  /** Called after exit animation; use to clear selected entity in parent. */
+  onExitComplete?: () => void;
 };
 
 export function EpicFormDialog({
@@ -34,6 +37,7 @@ export function EpicFormDialog({
   initiatives,
   lockInitiativeId,
   onClose,
+  onExitComplete,
   onSubmit,
   onDelete,
   storyRefById,
@@ -82,7 +86,9 @@ export function EpicFormDialog({
     [initiatives],
   );
 
-  if (!open) return null;
+  const { visible, leaving } = useDialogPresence(open, onExitComplete);
+
+  if (!visible) return null;
 
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
@@ -169,14 +175,27 @@ export function EpicFormDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[1px]">
+    <div
+      className={cn(
+        "fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[1px]",
+        !leaving && "epic-dialog-backdrop",
+        leaving && "epic-dialog-backdrop--exit",
+        leaving && "pointer-events-none",
+      )}
+    >
       <div
         className={cn(
-          "max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl",
-          isDraggingDialog && "select-none",
+          "w-full max-w-5xl",
+          !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
         )}
-        style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
       >
+        <div
+          className={cn(
+            "max-h-[88vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl",
+            isDraggingDialog && "select-none",
+          )}
+          style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
+        >
         <div
           className="mb-4 flex cursor-move items-center justify-between border-b border-slate-100 pb-3"
           onPointerDown={beginDialogDrag}
@@ -458,6 +477,7 @@ export function EpicFormDialog({
             </div>
           )}
         </section>
+        </div>
       </div>
     </div>
   );

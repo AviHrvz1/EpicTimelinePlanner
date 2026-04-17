@@ -19,23 +19,21 @@ const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: 
 ];
 
 function KanbanColumn({
-  month,
-  sprintLane,
+  yearSprint,
   status,
   label,
   tone,
   Icon,
   children,
 }: {
-  month: number;
-  sprintLane: 1 | 2;
+  yearSprint: number;
   status: StoryStatus;
   label: string;
   tone: string;
   Icon: LucideIcon;
   children: ReactNode;
 }) {
-  const dropId = sprintKanbanDropId(month, sprintLane, status);
+  const dropId = sprintKanbanDropId(yearSprint, status);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
 
   return (
@@ -123,12 +121,12 @@ function KanbanStoryCard({
 type SprintKanbanProps = {
   initiatives: InitiativeItem[];
   month: number;
-  sprintLane: 1 | 2;
+  yearSprint: number;
   onOpenStory: (storyId: string) => void;
 };
 
-export function SprintKanbanBoard({ initiatives, month, sprintLane, onOpenStory }: SprintKanbanProps) {
-  const rows = collectStoriesForSprintBoard(initiatives, sprintLane, month);
+export function SprintKanbanBoard({ initiatives, month, yearSprint, onOpenStory }: SprintKanbanProps) {
+  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint);
   const byStatus = new Map<StoryStatus, BoardStoryRow[]>();
   for (const col of KANBAN_COLUMNS) {
     byStatus.set(col.status, []);
@@ -144,8 +142,7 @@ export function SprintKanbanBoard({ initiatives, month, sprintLane, onOpenStory 
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
           <KanbanColumn
             key={status}
-            month={month}
-            sprintLane={sprintLane}
+            yearSprint={yearSprint}
             status={status}
             label={label}
             tone={tone}

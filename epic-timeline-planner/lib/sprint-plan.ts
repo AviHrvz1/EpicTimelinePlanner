@@ -1,18 +1,38 @@
+import { resolveEpicPlanYearSprint, resolveStoryYearSprint } from "@/lib/year-sprint";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 
-/** Epic’s quarter plan covers this calendar month and sprint lane. */
-export function epicIsPlannedForMonthAndSprint(epic: EpicItem, month: number, sprintLane: 1 | 2): boolean {
-  if (epic.planSprint !== sprintLane) return false;
-  if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
-  if (epic.planEndMonth < month || epic.planStartMonth > month) return false;
-  return true;
+export function storyMatchesYearSprint(
+  story: UserStoryItem,
+  contextMonth: number,
+  targetGlobalSprint: number,
+): boolean {
+  const g = resolveStoryYearSprint(story, contextMonth);
+  return g === targetGlobalSprint;
 }
 
-/** Epics planned for a single calendar month in a given sprint lane (month drill-down view). */
+export function epicPlanMatchesYearSprint(epic: EpicItem, month: number, targetGlobalSprint: number): boolean {
+  if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
+  if (epic.planEndMonth < month || epic.planStartMonth > month) return false;
+  if (epic.planSprint == null) return false;
+  const g = resolveEpicPlanYearSprint(epic);
+  return g === targetGlobalSprint;
+}
+
+/** @deprecated alias */
+export function epicIsPlannedForMonthAndSprint(
+  epic: EpicItem,
+  month: number,
+  yearSprint: number,
+): boolean {
+  return epicPlanMatchesYearSprint(epic, month, yearSprint);
+}
+
+export type BoardStoryRow = { story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem };
+
 export function collectPlannedEpicsForMonth(
   initiatives: InitiativeItem[],
-  sprintLane: 1 | 2,
   month: number,
+  yearSprint: number,
 ): Array<{ epic: EpicItem; initiative: InitiativeItem }> {
   const out: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
   for (const initiative of initiatives) {
@@ -21,20 +41,17 @@ export function collectPlannedEpicsForMonth(
     }
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
-      if (!epicIsPlannedForMonthAndSprint(epic, month, sprintLane)) continue;
+      if (!epicPlanMatchesYearSprint(epic, month, yearSprint)) continue;
       out.push({ epic, initiative });
     }
   }
   return out;
 }
 
-export type BoardStoryRow = { story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem };
-
-/** Stories shown on this sprint board (initiative scheduled in month; story assigned to this sprint lane). */
 export function collectStoriesForSprintBoard(
   initiatives: InitiativeItem[],
-  sprintLane: 1 | 2,
   month: number,
+  yearSprint: number,
 ): BoardStoryRow[] {
   const out: BoardStoryRow[] = [];
   for (const initiative of initiatives) {
@@ -42,7 +59,7 @@ export function collectStoriesForSprintBoard(
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
       for (const story of epic.userStories ?? []) {
-        if (story.sprint !== sprintLane) continue;
+        if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
         out.push({ story, epic, initiative });
       }
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { ChevronDown, ChevronRight, Flag } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -12,13 +12,11 @@ import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { InitiativeItem } from "@/lib/types";
+import { clampYearSprint, firstGlobalSprintForMonth, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
-
-type QuarterDef = (typeof QUARTERS)[number];
 
 type GanttLaneRowProps = {
   initiative: InitiativeItem;
-  focusedQuarter: QuarterDef | null;
   gridStyle: CSSProperties;
   previewColumnStart: number;
   previewSpan: number;
@@ -37,7 +35,6 @@ type GanttLaneRowProps = {
 
 function GanttLaneRow({
   initiative,
-  focusedQuarter,
   gridStyle,
   previewColumnStart,
   previewSpan,
@@ -56,11 +53,8 @@ function GanttLaneRow({
   const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
 
   return (
-    <div
-      className={cn("relative", !focusedQuarter && "min-w-max")}
-      data-gantt-lane-index={ganttLaneSortIndex}
-    >
-      <div className={cn("relative grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
+    <div className="relative min-w-0" data-gantt-lane-index={ganttLaneSortIndex}>
+      <div className="relative grid min-w-0 gap-2" style={gridStyle}>
           <div
             ref={(node) => {
               if (node) barElsRef.current.set(initiative.id, node);
@@ -124,10 +118,10 @@ type TimelineGridProps = {
   };
   focusedQuarterLabel: string | null;
   focusedMonthExternal?: number | null;
-  activeSprintExternal?: 1 | 2 | null;
+  activeSprintExternal?: number | null;
   activeSprintTabExternal?: "kanban" | "status";
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
-  onSprintModeChange: (active: boolean, activeMonth: number | null, activeSprint: 1 | 2 | null) => void;
+  onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
   onOpenEpic: (epicId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
@@ -218,8 +212,9 @@ export function TimelineGrid({
   onOpenStory,
   onResizeInitiativeRange,
 }: TimelineGridProps) {
+  void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
-  const [activeSprint, setActiveSprint] = useState<1 | 2 | null>(null);
+  const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status">("gantt");
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -323,23 +318,6 @@ export function TimelineGrid({
     ? [...focusedQuarter.months]
     : Array.from({ length: 12 }, (_, index) => index + 1);
   const visibleQuarterHeaders = focusedQuarter ? [focusedQuarter] : QUARTERS;
-  const monthWidth = Math.round(90 * zoom);
-  const sprintLaneLabels: [string, string] = [
-    "Sprint 1",
-    "Sprint 2",
-  ];
-  const sprintTheme: Record<1 | 2, { col: string; header: string; icon: string }> = {
-    1: {
-      col: "bg-blue-50/40",
-      header: "bg-blue-100 text-blue-900 ring-1 ring-blue-200",
-      icon: "text-blue-600",
-    },
-    2: {
-      col: "bg-violet-50/40",
-      header: "bg-violet-100 text-violet-900 ring-1 ring-violet-200",
-      icon: "text-violet-600",
-    },
-  };
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
 
@@ -387,7 +365,7 @@ export function TimelineGrid({
   const gridStyle: CSSProperties = {
     gridTemplateColumns: focusedQuarter
       ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
-      : `repeat(12, minmax(${monthWidth}px, 1fr))`,
+      : `repeat(12, minmax(0, 1fr))`,
   };
 
   const prevActiveMonthRef = useRef<number | null>(null);
@@ -398,7 +376,7 @@ export function TimelineGrid({
 
   useEffect(() => {
     if (activeSprintExternal === undefined) return;
-    setActiveSprint(activeSprintExternal);
+    setActiveSprint(activeSprintExternal == null ? null : clampYearSprint(activeSprintExternal));
   }, [activeSprintExternal]);
 
   useEffect(() => {
@@ -410,8 +388,8 @@ export function TimelineGrid({
     if (prevActiveMonthRef.current !== activeMonth) {
       const hadPreviousMonth = prevActiveMonthRef.current != null;
       prevActiveMonthRef.current = activeMonth;
-      if (hadPreviousMonth) {
-        setActiveSprint(1);
+      if (hadPreviousMonth && activeMonth != null) {
+        setActiveSprint(firstGlobalSprintForMonth(activeMonth));
         setActiveSprintTab("kanban");
       }
     }
@@ -419,7 +397,7 @@ export function TimelineGrid({
 
   useEffect(() => {
     if (activeMonth != null && activeSprint == null) {
-      setActiveSprint(1);
+      setActiveSprint(firstGlobalSprintForMonth(activeMonth));
     }
     if (activeSprint == null) {
       setActiveSprintTab("kanban");
@@ -441,7 +419,7 @@ export function TimelineGrid({
       onSprintModeChange(false, null, null);
       return;
     }
-    onSprintModeChange(true, activeMonth, activeSprint ?? 1);
+    onSprintModeChange(true, activeMonth, activeSprint ?? firstGlobalSprintForMonth(activeMonth));
   }, [activeMonth, activeSprint, onSprintModeChange]);
 
   const breadcrumbItems: Array<{
@@ -477,7 +455,7 @@ export function TimelineGrid({
     });
     if (activeSprint != null) {
       breadcrumbItems.push({
-        label: sprintLaneLabels[activeSprint - 1],
+        label: `Sprint ${activeSprint}`,
         onClick: null,
       });
     }
@@ -498,7 +476,7 @@ export function TimelineGrid({
   const hasBreadcrumbs = breadcrumbItems.length > 0;
 
   return (
-    <div className="h-full min-h-0 w-full overflow-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+    <div className="h-full min-h-0 w-full overflow-x-hidden overflow-y-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
           "mb-4 flex items-center gap-3",
@@ -576,42 +554,70 @@ export function TimelineGrid({
               </div>
             ) : null}
           </div>
+        ) : activeMonth ? (
+          <div className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
+            <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setActiveSprintTab("kanban")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                  activeSprintTab === "kanban"
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                    : "text-slate-600 hover:text-slate-800",
+                )}
+              >
+                Kanban
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSprintTab("status")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                  activeSprintTab === "status"
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                    : "text-slate-600 hover:text-slate-800",
+                )}
+              >
+                Sprint status
+              </button>
+            </div>
+          </div>
+        ) : focusedQuarter ? (
+          <div className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
+            <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setQuarterViewTab("gantt")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                  quarterViewTab === "gantt"
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                    : "text-slate-600 hover:text-slate-800",
+                )}
+              >
+                Gantt
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuarterViewTab("status")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+                  quarterViewTab === "status"
+                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                    : "text-slate-600 hover:text-slate-800",
+                )}
+              >
+                Quarter status
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="flex items-center gap-2" />
         )}
       </div>
-      {!activeMonth && focusedQuarter ? (
-        <div className="mb-4 flex justify-end">
-          <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-            <button
-              type="button"
-              onClick={() => setQuarterViewTab("gantt")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                quarterViewTab === "gantt"
-                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                  : "text-slate-600 hover:text-slate-800",
-              )}
-            >
-              Gantt
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuarterViewTab("status")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                quarterViewTab === "status"
-                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                  : "text-slate-600 hover:text-slate-800",
-              )}
-            >
-              Quarter status
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {!activeMonth ? (
-        <div className={cn("mb-4 grid gap-2", !focusedQuarter && "min-w-max")} style={gridStyle}>
+      {!activeMonth && !(focusedQuarter && quarterViewTab === "status") ? (
+        <div className="mb-4 grid min-w-0 gap-2" style={gridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
               key={quarter.label}
@@ -629,7 +635,7 @@ export function TimelineGrid({
               style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
             >
               <QuarterYearProgressIcon quarterLabel={quarter.label} />
-              <span>{`Quarter ${quarter.label.replace("Q", "")}`}</span>
+              <span>{quarter.label}</span>
             </button>
           ))}
         </div>
@@ -637,73 +643,28 @@ export function TimelineGrid({
       {activeMonth ? (
         <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
           <div className="flex min-h-[56rem] flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
-            <div className="mb-4 flex justify-end gap-2">
-              <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-                {([1, 2] as const).map((sprint) => (
-                  <button
-                    key={`month-sprint-tab-${sprint}`}
-                    type="button"
-                    onClick={() => {
-                      setActiveSprintTab("kanban");
-                      setActiveSprint(sprint);
-                    }}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                      (activeSprint ?? 1) === sprint
-                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                        : "text-slate-600 hover:text-slate-800",
-                    )}
-                  >
-                    <Flag className={cn("size-3.5", sprintTheme[sprint].icon)} />
-                    {sprintLaneLabels[sprint - 1]}
-                  </button>
-                ))}
-              </div>
-              <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setActiveSprintTab("kanban")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                    activeSprintTab === "kanban"
-                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                      : "text-slate-600 hover:text-slate-800",
-                  )}
-                >
-                  Kanban
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSprintTab("status")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                    activeSprintTab === "status"
-                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                      : "text-slate-600 hover:text-slate-800",
-                  )}
-                >
-                  Sprint status
-                </button>
-              </div>
-            </div>
             {activeSprintTab === "kanban" ? (
               <div className="flex-1">
                 <SprintKanbanBoard
                   initiatives={initiatives}
                   month={activeMonth}
-                  sprintLane={activeSprint ?? 1}
+                  yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
                   onOpenStory={onOpenStory ?? (() => {})}
                 />
               </div>
             ) : (
-              <SprintAnalytics initiatives={initiatives} month={activeMonth} sprintLane={activeSprint ?? 1} />
+              <SprintAnalytics
+                initiatives={initiatives}
+                month={activeMonth}
+                yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+              />
             )}
           </div>
         </div>
       ) : (
         <>
-          {focusedQuarter ? (
-            <div className={cn("mb-4 grid gap-2", "min-w-max")} style={gridStyle}>
+          {focusedQuarter && quarterViewTab === "gantt" ? (
+            <div className="mb-4 grid min-w-0 gap-2" style={gridStyle}>
               {visibleMonths.map((month) => (
                 <div key={month} className="space-y-2">
                   <button
@@ -722,12 +683,40 @@ export function TimelineGrid({
                   >
                     {MONTHS[month - 1]}
                   </button>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      title={`Sprint ${globalSprintFromMonthLane(month, 1)}`}
+                      onClick={() => {
+                        if (isPostDragClickSuppressed()) return;
+                        setFocusedMonth(month);
+                        setActiveSprint(globalSprintFromMonthLane(month, 1));
+                        setActiveSprintTab("kanban");
+                      }}
+                      className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                    >
+                      {globalSprintFromMonthLane(month, 1)}
+                    </button>
+                    <button
+                      type="button"
+                      title={`Sprint ${globalSprintFromMonthLane(month, 2)}`}
+                      onClick={() => {
+                        if (isPostDragClickSuppressed()) return;
+                        setFocusedMonth(month);
+                        setActiveSprint(globalSprintFromMonthLane(month, 2));
+                        setActiveSprintTab("kanban");
+                      }}
+                      className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                    >
+                      {globalSprintFromMonthLane(month, 2)}
+                    </button>
+                  </div>
                   <MonthDropCell month={month} />
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="mb-4 grid min-w-max grid-cols-4 gap-2">
+          ) : !focusedQuarter ? (
+            <div className="mb-4 grid min-w-0 grid-cols-4 gap-2">
               {QUARTERS.map((quarter) => (
                 <section
                   key={quarter.label}
@@ -752,27 +741,29 @@ export function TimelineGrid({
                         <div className="grid grid-cols-2 gap-1">
                           <button
                             type="button"
+                            title={`Sprint ${globalSprintFromMonthLane(month, 1)}`}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
-                              setActiveSprint(1);
+                              setActiveSprint(globalSprintFromMonthLane(month, 1));
                               setActiveSprintTab("kanban");
                             }}
                             className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                           >
-                            S1
+                            {globalSprintFromMonthLane(month, 1)}
                           </button>
                           <button
                             type="button"
+                            title={`Sprint ${globalSprintFromMonthLane(month, 2)}`}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
-                              setActiveSprint(2);
+                              setActiveSprint(globalSprintFromMonthLane(month, 2));
                               setActiveSprintTab("kanban");
                             }}
                             className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                           >
-                            S2
+                            {globalSprintFromMonthLane(month, 2)}
                           </button>
                         </div>
                         <MonthDropCell month={month} />
@@ -782,13 +773,13 @@ export function TimelineGrid({
                 </section>
               ))}
             </div>
-          )}
+          ) : null}
         </>
       )}
 
       <div className="space-y-2">
         {activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
-          <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} />
+          <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
         ) : visibleScheduledLanes.length === 0 ? (
           <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
             Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
@@ -830,7 +821,6 @@ export function TimelineGrid({
                 <GanttLaneRow
                   key={initiative.id}
                   initiative={initiative}
-                  focusedQuarter={focusedQuarter}
                   gridStyle={gridStyle}
                   previewColumnStart={previewColumnStart}
                   previewSpan={previewSpan}
@@ -871,7 +861,6 @@ export function TimelineGrid({
                 <GanttLaneRow
                   key={initiative.id}
                   initiative={initiative}
-                  focusedQuarter={null}
                   gridStyle={gridStyle}
                   previewColumnStart={previewColumnStart}
                   previewSpan={previewSpan}

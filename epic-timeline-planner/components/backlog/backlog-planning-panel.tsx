@@ -1,12 +1,14 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Eraser, FileText, Filter, Folder, Layers3, ListTodo, Pencil, Plus, Search, TableProperties, X, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Eraser, FileText, Filter, Folder, Layers3, ListTodo, Plus, Search, TableProperties, X, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
@@ -633,8 +635,10 @@ export function BacklogPlanningPanel({
   ];
   const sprintOptions: OptionItem[] = [
     { id: "unscheduled", label: "Unscheduled" },
-    { id: "1", label: "Sprint 1" },
-    { id: "2", label: "Sprint 2" },
+    ...Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => {
+      const n = i + 1;
+      return { id: String(n), label: `Sprint ${n}` };
+    }),
   ];
   const quarterOptions: OptionItem[] = [
     { id: "Q1", label: "Q1" },
@@ -741,6 +745,7 @@ export function BacklogPlanningPanel({
             storyStatus: story.status,
             storyAssignee: story.assignee?.trim() || "Unassigned",
             storySprintLabel: sprintLabel(story.sprint),
+            storySprintNum: story.sprint,
             storyEstimatedDays: story.estimatedDays ?? 0,
             storyDaysLeft: story.daysLeft ?? 0,
             initiativeId: initiative.id,
@@ -840,8 +845,9 @@ export function BacklogPlanningPanel({
       const m = row.initiativeMonthNum ?? 0;
       return { key: String(m), label: row.initiativeMonthLabelValue, sort: String(m).padStart(2, "0") };
     }
+    const n = row.storySprintNum;
     const sprint = row.storySprintLabel;
-    const order = sprint === "Sprint 1" ? "01" : sprint === "Sprint 2" ? "02" : "99";
+    const order = n == null ? "99" : String(n).padStart(2, "0");
     return { key: sprint, label: sprint, sort: order };
   }
 
@@ -898,14 +904,12 @@ export function BacklogPlanningPanel({
                     ) : (
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
                         <span className="truncate">{row.storyTitle}</span>
-                        <button
-                          type="button"
-                          onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
-                          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                          aria-label="Edit user story title"
-                        >
-                          <Pencil className="size-3.5 text-slate-500" />
-                        </button>
+                        <span className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                          <EditRowIconButton
+                            label="Edit user story title"
+                            onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
+                          />
+                        </span>
                       </span>
                     )}
                   </div>
@@ -924,7 +928,7 @@ export function BacklogPlanningPanel({
                     onKeyDown={(event) =>
                       handleStoryCellKeyDown(event, row.storyId, "status", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -945,7 +949,7 @@ export function BacklogPlanningPanel({
                     onClick={() =>
                       confirmStoryCellEdit(row.storyId, "status", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -980,7 +984,7 @@ export function BacklogPlanningPanel({
                     onKeyDown={(event) =>
                       handleStoryCellKeyDown(event, row.storyId, "sprint", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -989,8 +993,14 @@ export function BacklogPlanningPanel({
                     className="h-7 min-w-[94px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   >
                     <option value="unscheduled">Unscheduled</option>
-                    <option value="1">Sprint 1</option>
-                    <option value="2">Sprint 2</option>
+                    {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => {
+                      const n = i + 1;
+                      return (
+                        <option key={n} value={String(n)}>
+                          Sprint {n}
+                        </option>
+                      );
+                    })}
                   </select>
                   <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                   <button
@@ -998,7 +1008,7 @@ export function BacklogPlanningPanel({
                     onClick={() =>
                       confirmStoryCellEdit(row.storyId, "sprint", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -1015,7 +1025,7 @@ export function BacklogPlanningPanel({
                     beginStoryCellEdit(
                       row.storyId,
                       "sprint",
-                      row.storySprintLabel === "Unscheduled" ? "unscheduled" : row.storySprintLabel === "Sprint 1" ? "1" : "2",
+                      row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum),
                     );
                   }}
                   className="rounded px-1 py-0.5 hover:bg-slate-100"
@@ -1035,7 +1045,7 @@ export function BacklogPlanningPanel({
                     onKeyDown={(event) =>
                       handleStoryCellKeyDown(event, row.storyId, "assignee", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -1050,7 +1060,7 @@ export function BacklogPlanningPanel({
                     onClick={() =>
                       confirmStoryCellEdit(row.storyId, "assignee", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -1085,7 +1095,7 @@ export function BacklogPlanningPanel({
                     onKeyDown={(event) =>
                       handleStoryCellKeyDown(event, row.storyId, "estimatedDays", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -1099,7 +1109,7 @@ export function BacklogPlanningPanel({
                     onClick={() =>
                       confirmStoryCellEdit(row.storyId, "estimatedDays", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -1134,7 +1144,7 @@ export function BacklogPlanningPanel({
                     onKeyDown={(event) =>
                       handleStoryCellKeyDown(event, row.storyId, "daysLeft", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -1148,7 +1158,7 @@ export function BacklogPlanningPanel({
                     onClick={() =>
                       confirmStoryCellEdit(row.storyId, "daysLeft", {
                         status: row.storyStatus,
-                        sprint: row.storySprintLabel === "Unscheduled" ? null : row.storySprintLabel === "Sprint 1" ? 1 : 2,
+                        sprint: row.storySprintNum,
                         assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
                         estimatedDays: row.storyEstimatedDays,
                         daysLeft: row.storyDaysLeft,
@@ -1306,14 +1316,15 @@ export function BacklogPlanningPanel({
                     ) : (
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                         <span className="truncate">{epicTitle}</span>
-                        <button
-                          type="button"
-                          onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epicId, value: epicTitle }); }}
-                          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                          aria-label="Edit epic title"
+                        <span
+                          className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                          onMouseDown={(event) => event.stopPropagation()}
                         >
-                          <Pencil className="size-3.5 text-slate-500" />
-                        </button>
+                          <EditRowIconButton
+                            label="Edit epic title"
+                            onClick={() => setEditingParentTitle({ kind: "epic", id: epicId, value: epicTitle })}
+                          />
+                        </span>
                       </span>
                     )}
                   </button>
@@ -1456,14 +1467,15 @@ export function BacklogPlanningPanel({
                     ) : (
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                         <span className="truncate">{initiativeTitle}</span>
-                        <button
-                          type="button"
-                          onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiativeId, value: initiativeTitle }); }}
-                          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                          aria-label="Edit initiative title"
+                        <span
+                          className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                          onMouseDown={(event) => event.stopPropagation()}
                         >
-                          <Pencil className="size-3.5 text-slate-500" />
-                        </button>
+                          <EditRowIconButton
+                            label="Edit initiative title"
+                            onClick={() => setEditingParentTitle({ kind: "initiative", id: initiativeId, value: initiativeTitle })}
+                          />
+                        </span>
                       </span>
                     )}
                   </button>
@@ -1688,14 +1700,21 @@ export function BacklogPlanningPanel({
                       ) : (
                         <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                           <span className="truncate">{initiative.initiativeTitle}</span>
-                          <button
-                            type="button"
-                            onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: initiative.initiativeTitle }); }}
-                            className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                            aria-label="Edit initiative title"
+                          <span
+                            className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                            onMouseDown={(event) => event.stopPropagation()}
                           >
-                            <Pencil className="size-3.5 text-slate-500" />
-                          </button>
+                            <EditRowIconButton
+                              label="Edit initiative title"
+                              onClick={() =>
+                                setEditingParentTitle({
+                                  kind: "initiative",
+                                  id: initiative.initiativeId,
+                                  value: initiative.initiativeTitle,
+                                })
+                              }
+                            />
+                          </span>
                         </span>
                       )}
                     </button>
@@ -1790,14 +1809,17 @@ export function BacklogPlanningPanel({
                               ) : (
                                 <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                                   <span className="truncate">{epic.epicTitle}</span>
-                                  <button
-                                    type="button"
-                                    onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.epicId, value: epic.epicTitle }); }}
-                                    className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                                    aria-label="Edit epic title"
+                                  <span
+                                    className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                    onMouseDown={(event) => event.stopPropagation()}
                                   >
-                                    <Pencil className="size-3.5 text-slate-500" />
-                                  </button>
+                                    <EditRowIconButton
+                                      label="Edit epic title"
+                                      onClick={() =>
+                                        setEditingParentTitle({ kind: "epic", id: epic.epicId, value: epic.epicTitle })
+                                      }
+                                    />
+                                  </span>
                                 </span>
                               )}
                             </button>
@@ -2524,14 +2546,17 @@ export function BacklogPlanningPanel({
                             ) : (
                               <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                                 <span className="truncate">{initiative.title}</span>
-                                <button
-                                  type="button"
-                                  onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.id, value: initiative.title }); }}
-                                  className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                                  aria-label="Edit initiative title"
+                                <span
+                                  className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                  onMouseDown={(event) => event.stopPropagation()}
                                 >
-                                  <Pencil className="size-3.5 text-slate-500" />
-                                </button>
+                                  <EditRowIconButton
+                                    label="Edit initiative title"
+                                    onClick={() =>
+                                      setEditingParentTitle({ kind: "initiative", id: initiative.id, value: initiative.title })
+                                    }
+                                  />
+                                </span>
                               </span>
                             )}
                           </button>
@@ -2820,14 +2845,17 @@ export function BacklogPlanningPanel({
                                       ) : (
                                         <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-800">
                                           <span className="truncate">{epic.icon} {epic.title}</span>
-                                          <button
-                                            type="button"
-                                            onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.id, value: epic.title }); }}
-                                            className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                                            aria-label="Edit epic title"
+                                          <span
+                                            className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                            onMouseDown={(event) => event.stopPropagation()}
                                           >
-                                            <Pencil className="size-3.5 text-slate-500" />
-                                          </button>
+                                            <EditRowIconButton
+                                              label="Edit epic title"
+                                              onClick={() =>
+                                                setEditingParentTitle({ kind: "epic", id: epic.id, value: epic.title })
+                                              }
+                                            />
+                                          </span>
                                         </span>
                                       )}
                                     </button>
@@ -3037,14 +3065,15 @@ export function BacklogPlanningPanel({
                                             <span className="truncate">
                                               {story.title}
                                             </span>
-                                            <button
-                                              type="button"
-                                              onClick={(event) => { event.stopPropagation(); setEditingStoryTitle({ id: story.id, value: story.title }); }}
-                                              className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
-                                              aria-label="Edit user story title"
+                                            <span
+                                              className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                              onMouseDown={(event) => event.stopPropagation()}
                                             >
-                                              <Pencil className="size-3.5 text-slate-500" />
-                                            </button>
+                                              <EditRowIconButton
+                                                label="Edit user story title"
+                                                onClick={() => setEditingStoryTitle({ id: story.id, value: story.title })}
+                                              />
+                                            </span>
                                           </span>
                                         )}
                                         <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[16px] font-semibold text-slate-600">
@@ -3170,8 +3199,14 @@ export function BacklogPlanningPanel({
                                             className="h-7 min-w-[96px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           >
                                             <option value="unscheduled">Unscheduled</option>
-                                            <option value="1">Sprint 1</option>
-                                            <option value="2">Sprint 2</option>
+                                            {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => {
+                                              const n = i + 1;
+                                              return (
+                                                <option key={n} value={String(n)}>
+                                                  Sprint {n}
+                                                </option>
+                                              );
+                                            })}
                                           </select>
                                           <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                           <button

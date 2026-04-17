@@ -1,10 +1,13 @@
+import { storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 
 export type BurndownMetric = "daysLeft" | "storyCount";
 
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
 export type SprintAnalyticsData = {
   statusPie: Array<{ name: string; value: number }>;
-  burndown: Array<{ day: string; ideal: number; actual: number | null }>;
+  burndown: Array<{ day: string; ideal: number; actual: number | null; isToday: boolean }>;
   workloadByAssignee: Array<{
     assignee: string;
     openCount: number;
@@ -30,7 +33,7 @@ function collectMonthStories(initiatives: InitiativeItem[], month: number): User
   return rows;
 }
 
-function buildStatusPie(stories: UserStoryItem[], sprintLane: 1 | 2): Array<{ name: string; value: number }> {
+function buildStatusPie(stories: UserStoryItem[], month: number, yearSprint: number): Array<{ name: string; value: number }> {
   const counts = {
     unscheduled: 0,
     todo: 0,
@@ -44,7 +47,7 @@ function buildStatusPie(stories: UserStoryItem[], sprintLane: 1 | 2): Array<{ na
       counts.unscheduled += 1;
       continue;
     }
-    if (story.sprint !== sprintLane) continue;
+    if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
     if (story.status === "todo") counts.todo += 1;
     else if (story.status === "inProgress") counts.inProgress += 1;
     else if (story.status === "done") counts.done += 1;
@@ -60,8 +63,8 @@ function buildStatusPie(stories: UserStoryItem[], sprintLane: 1 | 2): Array<{ na
   ];
 }
 
-function buildBurndown(stories: UserStoryItem[], sprintLane: 1 | 2, metric: BurndownMetric) {
-  const sprintStories = stories.filter((story) => story.sprint === sprintLane);
+function buildBurndown(stories: UserStoryItem[], month: number, yearSprint: number, metric: BurndownMetric) {
+  const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
   const horizon = 10;
 
   let startValue = 0;
@@ -77,6 +80,11 @@ function buildBurndown(stories: UserStoryItem[], sprintLane: 1 | 2, metric: Burn
   const progress = startValue > 0 ? Math.max(0, Math.min(1, 1 - actualRemaining / startValue)) : 0;
   const today = Math.max(1, Math.min(horizon, Math.round(progress * horizon)));
 
+  const anchorToday = new Date();
+  anchorToday.setHours(0, 0, 0, 0);
+
+  const roundBurndown = (n: number) => (metric === "storyCount" ? Math.round(n) : Number(n.toFixed(1)));
+
   return Array.from({ length: horizon }, (_, idx) => {
     const dayIdx = idx + 1;
     const ideal = startValue * (1 - idx / (horizon - 1));
@@ -84,16 +92,20 @@ function buildBurndown(stories: UserStoryItem[], sprintLane: 1 | 2, metric: Burn
       dayIdx <= today
         ? startValue - (startValue - actualRemaining) * ((dayIdx - 1) / Math.max(today - 1, 1))
         : null;
+    const cal = new Date(anchorToday);
+    cal.setDate(anchorToday.getDate() - (horizon - 1 - idx));
+    const weekday = WEEKDAY_NAMES[cal.getDay()];
     return {
-      day: `D${dayIdx}`,
-      ideal: Number(ideal.toFixed(1)),
-      actual: actual == null ? null : Number(actual.toFixed(1)),
+      day: weekday,
+      ideal: roundBurndown(ideal),
+      actual: actual == null ? null : roundBurndown(actual),
+      isToday: idx === horizon - 1,
     };
   });
 }
 
-function buildWorkloadByAssignee(stories: UserStoryItem[], sprintLane: 1 | 2) {
-  const sprintStories = stories.filter((story) => story.sprint === sprintLane);
+function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSprint: number) {
+  const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
   const openStories = sprintStories.filter(
     (story) => story.status === "todo" || story.status === "inProgress",
   );
@@ -124,8 +136,8 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], sprintLane: 1 | 2) {
   };
 }
 
-function buildFlowTrend(stories: UserStoryItem[], sprintLane: 1 | 2) {
-  const sprintStories = stories.filter((story) => story.sprint === sprintLane);
+function buildFlowTrend(stories: UserStoryItem[], month: number, yearSprint: number) {
+  const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const points = Array.from({ length: 30 }, (_, index) => {
@@ -160,17 +172,17 @@ function buildFlowTrend(stories: UserStoryItem[], sprintLane: 1 | 2) {
 export function buildSprintAnalytics(
   initiatives: InitiativeItem[],
   month: number,
-  sprintLane: 1 | 2,
+  yearSprint: number,
   metric: BurndownMetric,
 ): SprintAnalyticsData {
   const stories = collectMonthStories(initiatives, month);
-  const workload = buildWorkloadByAssignee(stories, sprintLane);
-  const flow = buildFlowTrend(stories, sprintLane);
+  const workload = buildWorkloadByAssignee(stories, month, yearSprint);
+  const flow = buildFlowTrend(stories, month, yearSprint);
   return {
-    statusPie: buildStatusPie(stories, sprintLane),
-    burndown: buildBurndown(stories, sprintLane, metric),
+    statusPie: buildStatusPie(stories, month, yearSprint),
+    burndown: buildBurndown(stories, month, yearSprint, metric),
     ...workload,
     ...flow,
-    totalStories: stories.filter((story) => story.sprint === sprintLane).length,
+    totalStories: stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint)).length,
   };
 }

@@ -25,9 +25,10 @@ const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#b
 type QuarterStatusProps = {
   initiatives: InitiativeItem[];
   quarterMonths: readonly number[];
+  planYear: number;
 };
 
-export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps) {
+export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterStatusProps) {
   const epicRows = useMemo(() => collectQuarterEpics(initiatives, quarterMonths), [initiatives, quarterMonths]);
   const [aggregateMode, setAggregateMode] = useState(true);
   const [metric, setMetric] = useState<QuarterBurndownMetric>("daysLeft");
@@ -48,13 +49,14 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
     aggregateMode ? "aggregate" : "individual",
     metric,
     quarterMonths,
+    planYear,
   );
 
   const legendMap = new Map(epicRows.map(({ epic }) => [epic.id, epic.title]));
 
   return (
-    <section className="space-y-3">
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+    <section className="space-y-6">
+      <article className="p-1">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-[15px] font-semibold text-slate-800">Quarter status filter</h3>
           <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
@@ -109,7 +111,7 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
         ) : null}
       </article>
 
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+      <article className="p-1">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
@@ -142,7 +144,30 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={burndownData} margin={{ top: 8, right: 20, left: 8, bottom: 12 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="axisLabel" interval={0} minTickGap={10} tick={{ fontSize: 11 }} />
+              <XAxis
+                dataKey="axisLabel"
+                minTickGap={12}
+                height={52}
+                tick={(props) => {
+                  const { x, y, payload, index } = props;
+                  const label = typeof payload?.value === "string" ? payload.value : String(payload?.value ?? "");
+                  const row = burndownData[index];
+                  const bold = Boolean(row?.isCalendarToday);
+                  return (
+                    <text
+                      x={x}
+                      y={y}
+                      dy={12}
+                      textAnchor="middle"
+                      fill="#334155"
+                      fontSize={11}
+                      fontWeight={bold ? 700 : 400}
+                    >
+                      {label}
+                    </text>
+                  );
+                }}
+              />
               <YAxis
                 allowDecimals={metric !== "storyCount"}
                 tick={{ fontSize: 11 }}
@@ -155,7 +180,13 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
                   style: { fill: "#64748b", fontSize: 11 },
                 }}
               />
-              <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.dayLabel ?? String(label)} />
+              <Tooltip
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.dayLabel ?? ""}
+                formatter={(value, name) => [
+                  metric === "storyCount" && typeof value === "number" ? Math.round(value) : value,
+                  name,
+                ]}
+              />
               <Legend />
               <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
               {aggregateMode ? (
@@ -178,13 +209,13 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
         </div>
       </article>
 
-      <article className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+      <article className="p-1">
         <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <PieChartIcon className="size-4 text-slate-600" />
           User stories status
         </h3>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
-          <div className="relative h-60 rounded-xl bg-gradient-to-br from-slate-50 via-white to-slate-100 ring-1 ring-slate-200/80">
+          <div className="relative h-60 rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <defs>
@@ -222,7 +253,7 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="rounded-full bg-white/90 px-5 py-3 text-center shadow-sm ring-1 ring-slate-200">
+              <div className="rounded-full bg-white/90 px-5 py-3 text-center shadow-sm">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total stories</p>
                 <p className="text-[28px] leading-none font-bold text-slate-900">{pieTotal}</p>
               </div>
@@ -234,7 +265,7 @@ export function QuarterStatus({ initiatives, quarterMonths }: QuarterStatusProps
               return (
                 <div
                   key={slice.name}
-                  className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-2 ring-1 ring-slate-200"
+                  className="flex items-center justify-between rounded-lg bg-slate-50/80 px-2.5 py-2"
                 >
                   <span className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-700">
                     <span
