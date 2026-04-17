@@ -1,6 +1,6 @@
 "use client";
 
-import { History, MessageSquare, Plus, X } from "lucide-react";
+import { FileText, History, MessageSquare, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -305,14 +305,15 @@ export function EpicFormDialog({
                         </tr>
                       </thead>
                       <tbody>
-                        {epic.userStories.map((story) => (
+                        {epic.userStories.map((story) => {
+                          return (
                           <tr key={story.id} className="border-t border-slate-100 align-middle">
                             <td className="px-3 py-2">
                               <p className="max-w-[280px] truncate text-sm font-medium text-slate-900">
                                 <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
                                   {storyRefById?.[story.id] ?? "--"}
                                 </span>
-                                {story.icon === "🧩" ? "📄" : (story.icon || "📄")} {story.title}
+                                <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 align-middle mr-1" aria-hidden><FileText className="size-2.5" strokeWidth={2} /></span>{story.title}
                               </p>
                               {story.sprint ? (
                                 <p className="mt-0.5 text-[11px] text-slate-500">Sprint {story.sprint}</p>
@@ -344,7 +345,8 @@ export function EpicFormDialog({
                               </Button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

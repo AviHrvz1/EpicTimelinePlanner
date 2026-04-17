@@ -1,9 +1,22 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
+import { Folder } from "lucide-react";
 
 import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
+
+function EpicBarIcon({ icon }: { icon?: string | null }) {
+  const raw = icon?.trim();
+  if (raw && raw !== "📁") {
+    return <span className="mr-1">{raw}</span>;
+  }
+  return (
+    <span className="mr-1 inline-flex size-4 shrink-0 items-center justify-center text-white/95" aria-hidden>
+      <Folder className="size-3.5" strokeWidth={2} />
+    </span>
+  );
+}
 
 type EpicPlanBarProps = {
   id: string;
@@ -38,7 +51,7 @@ export function EpicPlanBar({ id, title, icon, color, onClick }: EpicPlanBarProp
       }}
     >
       <span className="min-w-0 flex-1 truncate px-2.5 text-center">
-        {icon ? <span className="mr-1">{icon}</span> : null}
+        <EpicBarIcon icon={icon} />
         {title}
       </span>
     </div>

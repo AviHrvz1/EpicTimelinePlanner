@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LucideIcon } from "lucide-react";
-import { BadgeCheck, CheckCircle2, ListTodo, PlayCircle } from "lucide-react";
+import { BadgeCheck, CheckCircle2, FileText, ListTodo, PlayCircle } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
@@ -97,7 +97,9 @@ function KanbanStoryCard({
           aria-label="Open user story details"
         >
           <p className="min-w-0 text-[15px] font-semibold leading-snug text-slate-900">
-            {story.icon ? <span className="mr-1.5 inline-block align-middle">{story.icon}</span> : null}
+            <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 align-middle" aria-hidden>
+              <FileText className="size-3" strokeWidth={2} />
+            </span>
             {story.title}
           </p>
           <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>

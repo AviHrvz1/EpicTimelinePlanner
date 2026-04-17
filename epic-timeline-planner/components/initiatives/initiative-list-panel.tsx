@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Briefcase, ChevronRight, FileText, Folder, Pencil, Plus, Target } from "lucide-react";
+import { ChevronRight, FileText, Folder, Pencil, Plus, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -304,10 +304,8 @@ function InitiativeTreeCard({
                           <ChevronRight
                             className={cn("mt-0.5 size-4 shrink-0 text-slate-500 transition-transform", isEpicOpen && "rotate-90")}
                           />
-                          <p className="text-[13px] font-semibold text-slate-800">
-                            <span className="mr-1 inline-flex h-4 w-4 items-center justify-center align-middle text-slate-600">
-                              <Folder className="size-3.5" />
-                            </span>
+                          <p className="flex items-center gap-1 text-[13px] font-semibold text-slate-800">
+                            <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                             {epic.title}
                           </p>
                         </button>
@@ -319,7 +317,7 @@ function InitiativeTreeCard({
                       </div>
                       <div className="mt-1.5 space-y-1">
                         <div className="flex items-center justify-between text-[11px] font-medium text-slate-600">
-                          <span>{completion.total === 0 ? "No user stories" : "Completion"}</span>
+                          <span>{completion.total === 0 ? "No user stories" : null}</span>
                           <span>
                             {completion.finished}/{completion.total} · {completion.percent}%
                           </span>
@@ -345,10 +343,10 @@ function InitiativeTreeCard({
                                     <button
                                       type="button"
                                       onClick={() => onOpenStory(story.id)}
-                                      className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
+                                      className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
                                     >
-                                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
-                                        <FileText className="size-3.5" />
+                                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80" aria-hidden>
+                                        <FileText className="size-3" strokeWidth={2} />
                                       </span>
                                       <span className="truncate">{story.title}</span>
                                     </button>
@@ -501,7 +499,10 @@ function SprintEpicCard({
           >
             <ChevronRight className={cn("size-4 shrink-0 text-slate-500 transition-transform", isOpen && "rotate-90")} />
             <div className="min-w-0">
-              <p className="truncate text-[14px] font-semibold text-slate-900">{epic.title}</p>
+              <p className="flex min-w-0 items-center gap-1.5 truncate text-[14px] font-semibold text-slate-900">
+                <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                <span className="truncate">{epic.title}</span>
+              </p>
               <p className="truncate text-[11px] text-slate-500">{initiative.title}</p>
             </div>
           </button>
@@ -529,10 +530,10 @@ function SprintEpicCard({
                 <button
                   type="button"
                   onClick={() => onOpenStory(story.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] text-slate-700"
                 >
-                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
-                    <FileText className="size-3.5" />
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80" aria-hidden>
+                    <FileText className="size-3" strokeWidth={2} />
                   </span>
                   <span className="truncate">{story.title}</span>
                 </button>
@@ -730,15 +731,22 @@ export function InitiativeListPanel({
     <aside className="h-full min-h-0 overflow-x-hidden overflow-y-auto rounded-xl bg-slate-50 p-4 shadow-lg ring-1 ring-black/5">
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 pb-3">
         <div>
-          <h2 className="inline-flex items-center gap-1.5 text-[16px] leading-6 font-semibold tracking-tight text-slate-950">
+          <h2
+            className={cn(
+              "inline-flex items-center font-semibold tracking-tight text-slate-950",
+              inMonthView
+                ? "gap-1.5 text-[16px] leading-6"
+                : "gap-2 text-xl leading-8",
+            )}
+          >
             {inMonthView ? (
               <>
-                <Target className="size-4 text-slate-600" />
+                <Folder className="size-5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                 Epics
               </>
             ) : (
               <>
-                <Briefcase className="size-4 text-slate-600" />
+                <Zap className="size-6 shrink-0 text-amber-500" strokeWidth={2} aria-hidden />
                 Initiatives
               </>
             )}
@@ -842,7 +850,7 @@ export function InitiativeListPanel({
               ))}
             </datalist>
           </div>
-          <h3 className="mb-2 text-[14px] font-semibold tracking-[0.01em] text-slate-900">
+          <h3 className="mb-2 text-[15px] font-semibold tracking-[0.01em] text-slate-900">
             Initiatives ({filteredInitiatives.length})
           </h3>
           {filteredInitiatives.length === 0 ? (

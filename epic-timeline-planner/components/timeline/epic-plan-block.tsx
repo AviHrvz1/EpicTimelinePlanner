@@ -1,5 +1,7 @@
 "use client";
 
+import { FileText } from "lucide-react";
+
 import { EpicPlanBar } from "@/components/timeline/epic-plan-bar";
 import { EpicItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,7 +47,7 @@ export function EpicPlanBlock({
                 className="max-w-[10rem] truncate rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-left text-[9px] font-medium leading-tight text-amber-950 transition hover:bg-amber-100"
                 title={story.title}
               >
-                {story.icon ? <span className="mr-0.5">{story.icon}</span> : null}
+                <span className="mr-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-amber-100 text-amber-700" aria-hidden><FileText className="size-2.5" strokeWidth={2} /></span>
                 {story.title}
               </button>
             ))}

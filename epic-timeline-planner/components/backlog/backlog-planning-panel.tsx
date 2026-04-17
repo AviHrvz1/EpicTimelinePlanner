@@ -2357,23 +2357,23 @@ export function BacklogPlanningPanel({
                 <button
                   type="button"
                   onClick={() => setColumnsMenuOpen((open) => !open)}
-                  className="inline-flex h-8 items-center gap-1 rounded-md bg-white/90 px-2.5 text-[12px] font-semibold normal-case tracking-normal text-slate-700 ring-1 ring-slate-200/90 shadow-sm transition hover:bg-white hover:text-slate-900"
+                  className="inline-flex h-[30px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold normal-case tracking-normal text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
                 >
-                  <TableProperties className="size-3 text-slate-600" />
+                  <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
                   Table
                 </button>
                 {columnsMenuOpen ? (
-                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm">
-                    <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-slate-50">
+                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
+                    <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">
                       <input
                         type="checkbox"
                         checked={showTableHeaderRow}
                         onChange={() => setShowTableHeaderRow((v) => !v)}
-                        className="h-3.5 w-3.5 rounded border-slate-300"
+                        className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
                       />
                       Show column titles
                     </label>
-                    <div className="mb-1 border-t border-slate-200 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                       Visible columns
                     </div>
                     {BACKLOG_COLUMN_ORDER.map((colKey) => {
@@ -2383,7 +2383,7 @@ export function BacklogPlanningPanel({
                           key={colKey}
                           className={cn(
                             "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
-                            locked && "cursor-not-allowed opacity-70",
+                            locked ? "cursor-not-allowed opacity-70" : "hover:bg-indigo-100/40",
                           )}
                         >
                           <input
@@ -2394,7 +2394,7 @@ export function BacklogPlanningPanel({
                               if (locked) return;
                               setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
                             }}
-                            className="h-3.5 w-3.5 rounded border-slate-300"
+                            className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
                           />
                           {BACKLOG_COLUMN_LABELS[colKey]}
                           {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
@@ -2412,23 +2412,23 @@ export function BacklogPlanningPanel({
               <button
                 type="button"
                 onClick={() => setColumnsMenuOpen((open) => !open)}
-                className="inline-flex h-8 items-center gap-1 rounded-lg bg-white/90 px-2.5 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200/90 shadow-sm transition hover:bg-white hover:text-slate-900"
+                className="inline-flex h-[30px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
               >
-                <TableProperties className="size-3 text-slate-600" />
+                <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
                 Table
               </button>
               {columnsMenuOpen ? (
-                <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm">
-                  <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-slate-50">
+                <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
+                  <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">
                     <input
                       type="checkbox"
                       checked={showTableHeaderRow}
                       onChange={() => setShowTableHeaderRow((v) => !v)}
-                      className="h-3.5 w-3.5 rounded border-slate-300"
+                      className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
                     />
                     Show column titles
                   </label>
-                  <div className="mb-1 border-t border-slate-200 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                     Visible columns
                   </div>
                   {BACKLOG_COLUMN_ORDER.map((colKey) => {
@@ -2438,7 +2438,7 @@ export function BacklogPlanningPanel({
                         key={colKey}
                         className={cn(
                           "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
-                          locked && "cursor-not-allowed opacity-70",
+                          locked ? "cursor-not-allowed opacity-70" : "hover:bg-indigo-100/40",
                         )}
                       >
                         <input
@@ -2449,7 +2449,7 @@ export function BacklogPlanningPanel({
                             if (locked) return;
                             setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
                           }}
-                          className="h-3.5 w-3.5 rounded border-slate-300"
+                          className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
                         />
                         {BACKLOG_COLUMN_LABELS[colKey]}
                         {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}

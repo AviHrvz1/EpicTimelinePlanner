@@ -1223,15 +1223,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 </div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-3">
-                <div className="inline-flex rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200">
+                <div className="inline-flex gap-0.5 rounded-lg border border-indigo-200/70 bg-gradient-to-b from-indigo-50/50 to-violet-50/40 p-0.5 shadow-sm ring-1 ring-indigo-100/80">
                   <button
                     type="button"
                     onClick={() => setTopMode("roadmap")}
                     className={cn(
-                      "rounded-lg px-4 py-2 text-[14px] font-semibold transition",
+                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
                       topMode === "roadmap"
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-600 hover:text-slate-800",
+                        ? "bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-800 shadow-sm ring-1 ring-indigo-300/80"
+                        : "text-slate-600 hover:bg-indigo-100/45 hover:text-slate-900",
                     )}
                   >
                     Roadmap planning
@@ -1240,10 +1240,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     type="button"
                     onClick={() => setTopMode("backlog")}
                     className={cn(
-                      "rounded-lg px-4 py-2 text-[14px] font-semibold transition",
+                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
                       topMode === "backlog"
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-600 hover:text-slate-800",
+                        ? "bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-800 shadow-sm ring-1 ring-indigo-300/80"
+                        : "text-slate-600 hover:bg-indigo-100/45 hover:text-slate-900",
                     )}
                   >
                     Backlog

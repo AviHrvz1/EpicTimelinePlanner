@@ -535,15 +535,15 @@ export function TimelineGrid({
         ) : null}
         {!focusedQuarter && !activeMonth ? (
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <label className="ml-3 inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-gradient-to-b from-white to-slate-50 px-2.5 py-1.5 shadow-sm ring-1 ring-white/70">
-              <span className="shrink-0 text-[11.5px] font-semibold tracking-[0.035em] text-slate-600 uppercase">
+            <label className="ml-3 inline-flex items-center gap-3 rounded-md border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 py-1 shadow-sm ring-1 ring-indigo-200/60">
+              <span className="shrink-0 text-[12px] font-semibold tracking-[0.045em] text-slate-700 uppercase">
                 Roadmap
               </span>
               <div className="relative">
                 <select
                   value={currentYear}
                   onChange={(event) => onYearChange?.(Number(event.target.value))}
-                  className="h-[34px] min-w-[6rem] cursor-pointer appearance-none rounded-md border border-slate-300 bg-white py-0 pl-2.5 pr-8 font-sans text-[13.5px] font-semibold leading-none text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.05)] outline-none transition hover:border-slate-400 hover:shadow-[0_1px_4px_rgba(15,23,42,0.08)] focus-visible:border-slate-500 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                  className="h-[30px] min-w-[5.75rem] cursor-pointer appearance-none rounded-md border border-indigo-300/75 bg-white/95 py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-slate-800 shadow-[0_1px_2px_rgba(67,56,202,0.06)] outline-none transition hover:border-indigo-400/85 hover:bg-white hover:shadow-[0_1px_4px_rgba(67,56,202,0.1)] focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-300/55"
                 >
                   <option value={2024}>2024</option>
                   <option value={2025}>2025</option>
@@ -551,7 +551,7 @@ export function TimelineGrid({
                   <option value={2027}>2027</option>
                 </select>
                 <ChevronDown
-                  className="pointer-events-none absolute right-2 top-1/2 size-[15px] -translate-y-1/2 text-slate-500"
+                  className="pointer-events-none absolute right-1.5 top-1/2 size-[13px] -translate-y-1/2 text-indigo-600/90"
                   aria-hidden
                 />
               </div>

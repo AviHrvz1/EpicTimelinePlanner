@@ -1,6 +1,6 @@
 "use client";
 
-import { History, MessageSquare, Plus, X } from "lucide-react";
+import { Folder, History, MessageSquare, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -217,8 +217,20 @@ export function InitiativeFormDialog({
                         {initiative.epics.map((epic) => (
                           <tr key={epic.id} className="border-t border-slate-100 align-middle">
                             <td className="px-3 py-2">
-                              <p className="max-w-[280px] truncate text-sm font-medium text-slate-900">
-                                {epic.icon || "📁"} {epic.title}
+                              <p className="flex max-w-[280px] items-center gap-2 text-sm font-medium text-slate-900">
+                                {epic.icon && epic.icon.trim() !== "" && epic.icon !== "📁" ? (
+                                  <span className="shrink-0 text-[15px] leading-none" aria-hidden>
+                                    {epic.icon}
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400 ring-1 ring-slate-200/80"
+                                    aria-hidden
+                                  >
+                                    <Folder className="size-3.5" strokeWidth={2} />
+                                  </span>
+                                )}
+                                <span className="min-w-0 truncate">{epic.title}</span>
                               </p>
                             </td>
                             <td className="px-3 py-2 text-slate-700">
