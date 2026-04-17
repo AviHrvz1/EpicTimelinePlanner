@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ClipboardList, Eraser, FileText, Filter, Folder, Layers3, Pencil, Plus, Search, TableProperties, X, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Eraser, FileText, Filter, Folder, Layers3, ListTodo, Pencil, Plus, Search, TableProperties, X, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -2149,7 +2149,7 @@ export function BacklogPlanningPanel({
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="inline-flex size-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 ring-1 ring-slate-200">
-            <ClipboardList className="size-4" />
+            <ListTodo className="size-4" strokeWidth={2} aria-hidden />
           </span>
           <h2 className="text-[24px] font-semibold tracking-tight text-slate-900">Backlog</h2>
         </div>
