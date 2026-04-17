@@ -190,6 +190,30 @@ function quarterRange(quarter: string): { start: number; end: number } | null {
   return null;
 }
 
+function applyWorkItemKindFilter(rows: InitiativeItem[], workItemFilter: WorkItemKindFilter[]): InitiativeItem[] {
+  const selectedKinds = new Set(workItemFilter);
+  if (selectedKinds.size === 0) {
+    return rows;
+  }
+  const allowInitiative = selectedKinds.has("initiative");
+  const allowEpic = selectedKinds.has("epic");
+  const allowStory = selectedKinds.has("story");
+  return rows
+    .map((initiative) => {
+      const epics = (initiative.epics ?? [])
+        .map((epic) => {
+          const stories = (epic.userStories ?? []).filter(() => allowStory);
+          if (allowEpic || allowInitiative) return { ...epic, userStories: allowStory ? epic.userStories ?? [] : [] };
+          if (stories.length > 0) return { ...epic, userStories: stories };
+          return null;
+        })
+        .filter(Boolean) as NonNullable<InitiativeItem["epics"]>;
+      if (!allowInitiative && epics.length === 0) return null;
+      return { ...initiative, epics };
+    })
+    .filter(Boolean) as InitiativeItem[];
+}
+
 function matchesAnySelectedQuarterByRange(
   selectedQuarters: string[],
   startMonth: number | null | undefined,
@@ -652,7 +676,7 @@ export function BacklogPlanningPanel({
     { id: "story", label: "User Story" },
   ];
 
-  const fullyFiltered = useMemo(() => {
+  const backlogFilteredBeforeWorkItem = useMemo(() => {
     return filteredWithControls
       .map((initiative) => {
         if (yearFilter.length > 0 && !yearFilter.includes(String(initiative.year))) return null;
@@ -687,28 +711,30 @@ export function BacklogPlanningPanel({
         if (assigneeFilter.length > 0 && epics.length === 0 && !initiativeAssigneeMatch) return null;
         if (!initiativeQuarterMatch && epics.length === 0 && quarterFilter.length > 0) return null;
         if (epics.length === 0 && !initiativeQuarterMatch) return null;
-        const selectedKinds = new Set(workItemFilter);
-        if (selectedKinds.size === 0) {
-          return { ...initiative, epics };
-        }
-        const allowInitiative = selectedKinds.has("initiative");
-        const allowEpic = selectedKinds.has("epic");
-        const allowStory = selectedKinds.has("story");
-        const filteredEpicsByWorkItem = epics
-          .map((epic) => {
-            const stories = (epic.userStories ?? []).filter(
-              () => allowStory,
-            );
-            if (allowEpic || allowInitiative) return { ...epic, userStories: allowStory ? epic.userStories ?? [] : [] };
-            if (stories.length > 0) return { ...epic, userStories: stories };
-            return null;
-          })
-          .filter(Boolean) as typeof epics;
-        if (!allowInitiative && filteredEpicsByWorkItem.length === 0) return null;
-        return { ...initiative, epics: filteredEpicsByWorkItem };
+        return { ...initiative, epics };
       })
       .filter(Boolean) as typeof filteredWithControls;
-  }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter, workItemFilter]);
+  }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter]);
+
+  const fullyFiltered = useMemo(
+    () => applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter),
+    [backlogFilteredBeforeWorkItem, workItemFilter],
+  );
+
+  const summaryInitiativeCount = backlogFilteredBeforeWorkItem.length;
+  const summaryEpicCount = useMemo(
+    () => backlogFilteredBeforeWorkItem.reduce((sum, initiative) => sum + (initiative.epics?.length ?? 0), 0),
+    [backlogFilteredBeforeWorkItem],
+  );
+  const summaryStoryCount = useMemo(
+    () =>
+      backlogFilteredBeforeWorkItem.reduce(
+        (sum, initiative) =>
+          sum + (initiative.epics ?? []).reduce((epicSum, epic) => epicSum + (epic.userStories?.length ?? 0), 0),
+        0,
+      ),
+    [backlogFilteredBeforeWorkItem],
+  );
 
   const visibleColumnKeys = useMemo(
     () => BACKLOG_COLUMN_ORDER.filter((key) => columnVisibility[key]),
@@ -789,19 +815,6 @@ export function BacklogPlanningPanel({
         })),
       }));
   }, [fullyFiltered]);
-  const visibleEpicCount = useMemo(
-    () => fullyFiltered.reduce((sum, initiative) => sum + (initiative.epics?.length ?? 0), 0),
-    [fullyFiltered],
-  );
-  const visibleStoryCount = useMemo(
-    () =>
-      fullyFiltered.reduce(
-        (sum, initiative) =>
-          sum + (initiative.epics ?? []).reduce((epicSum, epic) => epicSum + (epic.userStories?.length ?? 0), 0),
-        0,
-      ),
-    [fullyFiltered],
-  );
   const groupSummaryLabel = groupLevels.length === 0 ? "None" : groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ");
   const hasAnyActiveFilter =
     yearFilter.length > 0 ||
@@ -833,6 +846,13 @@ export function BacklogPlanningPanel({
     setWorkItemFilter([]);
     setGroupLevels([]);
     setGroupMenuOpen(false);
+  }
+
+  function toggleWorkItemBadgeFilter(kind: WorkItemKindFilter) {
+    setWorkItemFilter((prev) => {
+      if (prev.length === 1 && prev[0] === kind) return [];
+      return [kind];
+    });
   }
 
   function keyForLevel(row: (typeof groupedStoryRows)[number], level: GroupLevel): { key: string; label: string; sort: string } {
@@ -2176,15 +2196,48 @@ export function BacklogPlanningPanel({
           <h2 className="text-[24px] font-semibold tracking-tight text-slate-900">Backlog</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-3.5 py-1.5 text-[14px] font-semibold text-slate-700 ring-1 ring-slate-200">
-            {fullyFiltered.length} initiatives
-          </span>
-          <span className="rounded-full bg-blue-100 px-3.5 py-1.5 text-[14px] font-semibold text-blue-700">
-            {visibleEpicCount} epics
-          </span>
-          <span className="rounded-full bg-violet-100 px-3.5 py-1.5 text-[14px] font-semibold text-violet-700">
-            {visibleStoryCount} stories
-          </span>
+          <button
+            type="button"
+            onClick={() => toggleWorkItemBadgeFilter("initiative")}
+            aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "initiative"}
+            title="Show only initiatives in the table (click again for all work items)"
+            className={cn(
+              "rounded-full px-3.5 py-1.5 text-[14px] font-semibold ring-1 transition",
+              workItemFilter.length === 1 && workItemFilter[0] === "initiative"
+                ? "bg-slate-800 text-white ring-slate-700 shadow-sm"
+                : "bg-slate-100 text-slate-700 ring-slate-200 hover:bg-slate-200/90",
+            )}
+          >
+            {summaryInitiativeCount} initiatives
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleWorkItemBadgeFilter("epic")}
+            aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "epic"}
+            title="Show only epics in the table (click again for all work items)"
+            className={cn(
+              "rounded-full px-3.5 py-1.5 text-[14px] font-semibold ring-1 transition",
+              workItemFilter.length === 1 && workItemFilter[0] === "epic"
+                ? "bg-blue-700 text-white ring-blue-800 shadow-sm"
+                : "bg-blue-100 text-blue-700 ring-blue-200/80 hover:bg-blue-200/90",
+            )}
+          >
+            {summaryEpicCount} epics
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleWorkItemBadgeFilter("story")}
+            aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "story"}
+            title="Show only user stories in the table (click again for all work items)"
+            className={cn(
+              "rounded-full px-3.5 py-1.5 text-[14px] font-semibold ring-1 transition",
+              workItemFilter.length === 1 && workItemFilter[0] === "story"
+                ? "bg-violet-700 text-white ring-violet-800 shadow-sm"
+                : "bg-violet-100 text-violet-700 ring-violet-200/80 hover:bg-violet-200/90",
+            )}
+          >
+            {summaryStoryCount} stories
+          </button>
         </div>
       </div>
 
