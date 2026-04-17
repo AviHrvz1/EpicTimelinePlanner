@@ -832,7 +832,7 @@ export function BacklogPlanningPanel({
             style={{ gridTemplateColumns: tableGridTemplate }}
           >
             <div className="min-w-0" style={{ paddingLeft: indentPx }}>
-              <div className="flex min-w-0 items-center gap-2 truncate text-left text-[14px] text-slate-800">
+              <div className="flex min-w-0 items-center gap-2 truncate text-left text-slate-800">
                 <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700 ring-1 ring-sky-200/80">
                   <FileText className="size-3.5" />
                 </span>
@@ -841,14 +841,14 @@ export function BacklogPlanningPanel({
                     <input
                       value={editingStoryTitle.value}
                       onChange={(event) => setEditingStoryTitle({ id: row.storyId, value: event.target.value })}
-                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                       autoFocus
                     />
                     <button type="button" onClick={() => setEditingStoryTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                     <button type="button" onClick={() => void confirmStoryTitleEdit(row.storyId, row.storyTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
-                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-left">
+                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
                     <span className="truncate">{row.storyTitle}</span>
                     <button
                       type="button"
@@ -862,10 +862,10 @@ export function BacklogPlanningPanel({
                 )}
               </div>
             </div>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.initiativeYear}</span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.quarterLabelValue}</span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">{row.monthLabelValue}</span>
-            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[12px] font-medium", statusChip(row.storyStatus))}>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{row.initiativeYear}</span>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{row.quarterLabelValue}</span>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>
+            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(row.storyStatus))}>
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
                 <span className="flex items-center gap-1">
                   <select
@@ -880,7 +880,7 @@ export function BacklogPlanningPanel({
                         daysLeft: row.storyDaysLeft,
                       })
                     }
-                    className="w-full cursor-pointer bg-transparent text-[12px] font-medium outline-none"
+                    className="w-full cursor-pointer bg-transparent text-[16px] font-medium outline-none"
                   >
                     <option value="todo">To do</option>
                     <option value="inProgress">In progress</option>
@@ -913,13 +913,13 @@ export function BacklogPlanningPanel({
                     event.preventDefault();
                     beginStoryCellEdit(row.storyId, "status", row.storyStatus);
                   }}
-                  className="text-[12px] font-medium"
+                  className="text-[16px] font-medium"
                 >
                   {row.storyStatus === "inProgress" ? "In progress" : row.storyStatus}
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">
+            <span className="justify-self-center text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "sprint" ? (
                 <span className="inline-flex items-center gap-1">
                   <select
@@ -934,7 +934,7 @@ export function BacklogPlanningPanel({
                         daysLeft: row.storyDaysLeft,
                       })
                     }
-                    className="h-7 min-w-[94px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                    className="h-7 min-w-[94px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   >
                     <option value="unscheduled">Unscheduled</option>
                     <option value="1">Sprint 1</option>
@@ -972,7 +972,7 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">
+            <span className="justify-self-center text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "assignee" ? (
                 <span className="inline-flex items-center gap-1">
                   <input
@@ -988,7 +988,7 @@ export function BacklogPlanningPanel({
                       })
                     }
                     placeholder="Unassigned"
-                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
                   <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                   <button
@@ -1018,7 +1018,7 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">
+            <span className="justify-self-center text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "estimatedDays" ? (
                 <span className="inline-flex items-center gap-1">
                   <input
@@ -1035,7 +1035,7 @@ export function BacklogPlanningPanel({
                         daysLeft: row.storyDaysLeft,
                       })
                     }
-                    className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                    className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
                   <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                   <button
@@ -1065,7 +1065,7 @@ export function BacklogPlanningPanel({
                 </button>
               )}
             </span>
-            <span className="justify-self-center text-center text-[14px] text-slate-700">
+            <span className="justify-self-center text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "daysLeft" ? (
                 <span className="inline-flex items-center gap-1">
                   <input
@@ -1082,7 +1082,7 @@ export function BacklogPlanningPanel({
                         daysLeft: row.storyDaysLeft,
                       })
                     }
-                    className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                    className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
                   <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                   <button
@@ -1113,7 +1113,7 @@ export function BacklogPlanningPanel({
               )}
             </span>
             <div className="space-y-1">
-              <div className="flex items-center justify-between text-[11px] text-slate-600">
+              <div className="flex items-center justify-between text-[16px] text-slate-600">
                 <span>{progress.label}</span>
                 <span>{progress.percent}%</span>
               </div>
@@ -1134,22 +1134,22 @@ export function BacklogPlanningPanel({
           <button
             type="button"
             onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
-            className="flex min-w-0 items-center gap-1.5 text-left text-[13px] font-semibold text-slate-700"
+            className="flex min-w-0 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
             style={{ paddingLeft: indentPx }}
           >
             {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
             <span className="truncate">{label}</span>
-            <span className="text-[11px] font-medium text-slate-500">({count})</span>
+            <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
           </button>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
-          <span className="justify-self-center text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
+          <span className="justify-self-center text-[16px] text-slate-400">-</span>
         </div>
         {isOpen ? children : null}
       </div>
@@ -1172,7 +1172,7 @@ export function BacklogPlanningPanel({
       const { total, finished, percent } = completionForRows(storyRows);
       return (
         <div className="space-y-1">
-          <div className="flex items-center justify-between text-[12px] text-slate-600">
+          <div className="flex items-center justify-between text-[16px] text-slate-600">
             <span>{total === 0 ? "No stories" : "Completion"}</span>
             <span>
               {finished}/{total} · {percent}%
@@ -1222,7 +1222,7 @@ export function BacklogPlanningPanel({
               </button>
               <button
                 type="button"
-                onClick={() => onOpenEpic(epicId)}
+                onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId) return; onOpenEpic(epicId); }}
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
                 <FolderKanban className="size-4 shrink-0 text-slate-700" />
@@ -1231,14 +1231,14 @@ export function BacklogPlanningPanel({
                     <input
                       value={editingParentTitle.value}
                       onChange={(event) => setEditingParentTitle({ kind: "epic", id: epicId, value: event.target.value })}
-                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                       autoFocus
                     />
                     <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                     <button type="button" onClick={() => void confirmParentTitleEdit("epic", epicId, epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
-                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
+                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                     <span className="truncate">{epicTitle}</span>
                     <button
                       type="button"
@@ -1268,23 +1268,23 @@ export function BacklogPlanningPanel({
                 <Plus className="size-3.5 text-slate-600" />
               </button>
             </div>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">
               {quarterLabelOrUnscheduled(quarterFromMonth(epicRows[0]?.monthNum ?? null))}
             </span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>
-            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>
+            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
               {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
             </span>
-            <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">
+            <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">
               {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
                 <span className="inline-flex items-center gap-1">
                   <input
                     value={editingParentAssignee.value}
                     onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                     placeholder="Unassigned"
-                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
                   <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                   <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -1303,13 +1303,13 @@ export function BacklogPlanningPanel({
               )}
             </span>
             <span
-              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
               title="Auto-summed from child user stories"
             >
               Σ {estimated}d
             </span>
             <span
-              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
               title="Auto-summed from child user stories"
             >
               Σ {left}d
@@ -1323,7 +1323,7 @@ export function BacklogPlanningPanel({
                   value={createDraftTitle}
                   onChange={(event) => setCreateDraftTitle(event.target.value)}
                   placeholder="Type user story title and press Enter..."
-                  className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                  className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                   autoFocus
                 />
               </div>
@@ -1364,7 +1364,7 @@ export function BacklogPlanningPanel({
               </button>
               <button
                 type="button"
-                onClick={() => onOpenInitiative(initiativeId)}
+                onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId) return; onOpenInitiative(initiativeId); }}
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
                 <Target className="size-4 shrink-0 text-slate-700" />
@@ -1373,14 +1373,14 @@ export function BacklogPlanningPanel({
                     <input
                       value={editingParentTitle.value}
                       onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiativeId, value: event.target.value })}
-                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                      className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                       autoFocus
                     />
                     <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                     <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiativeId, initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
-                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
+                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                     <span className="truncate">{initiativeTitle}</span>
                     <button
                       type="button"
@@ -1426,21 +1426,21 @@ export function BacklogPlanningPanel({
                 <FileText className="size-3.5 text-slate-600" />
               </button>
             </div>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeYear}</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeMonthLabel}</span>
-            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiativeStatus))}>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{initiativeYear}</span>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>
+            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeStatus))}>
               {workflowStatusLabel(initiativeStatus)}
             </span>
-            <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">
+            <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
+            <span className="justify-self-center text-center text-[16px] text-slate-700">
               {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
                 <span className="inline-flex items-center gap-1">
                   <input
                     value={editingParentAssignee.value}
                     onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                     placeholder="Unassigned"
-                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
                   <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                   <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiativeId, initiativeAssignee === "Unassigned" ? null : initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -1463,13 +1463,13 @@ export function BacklogPlanningPanel({
               )}
             </span>
             <span
-              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
               title="Auto-summed from child user stories"
             >
               Σ {estimated}d
             </span>
             <span
-              className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+              className="justify-self-center text-center text-[16px] font-medium text-slate-600"
               title="Auto-summed from child user stories"
             >
               Σ {left}d
@@ -1483,7 +1483,7 @@ export function BacklogPlanningPanel({
                   value={createDraftTitle}
                   onChange={(event) => setCreateDraftTitle(event.target.value)}
                   placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
-                  className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                  className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                   autoFocus
                 />
               </div>
@@ -1492,7 +1492,7 @@ export function BacklogPlanningPanel({
                   <select
                     value={storyTargetEpicId}
                     onChange={(event) => setStoryTargetEpicId(event.target.value)}
-                    className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                    className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   >
                     {Array.from(new Map(initiativeRows.map((r) => [r.epicId, r.epicTitle])).entries()).map(([epicId, title]) => (
                       <option key={epicId} value={epicId}>{title}</option>
@@ -1608,21 +1608,21 @@ export function BacklogPlanningPanel({
                 >
                   {isInitOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
                 </button>
-                <button type="button" onClick={() => onOpenInitiative(initiative.initiativeId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <button type="button" onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId) return; onOpenInitiative(initiative.initiativeId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                   <Target className="size-4 shrink-0 text-slate-700" />
                   {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
                     <span className="flex min-w-0 items-center gap-1">
                       <input
                         value={editingParentTitle.value}
                         onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: event.target.value })}
-                        className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                        className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                         autoFocus
                       />
                       <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                       <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.initiativeId, initiative.initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                     </span>
                   ) : (
-                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
+                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                       <span className="truncate">{initiative.initiativeTitle}</span>
                       <button
                         type="button"
@@ -1668,22 +1668,22 @@ export function BacklogPlanningPanel({
                   <FileText className="size-3.5 text-slate-600" />
                 </button>
               </div>
-              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
-              <span className="justify-self-center text-center text-[15px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>
-              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>
-              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiative.initiativeStatus))}>
+              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>
+              <span className="justify-self-center text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>
+              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>
+              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiative.initiativeStatus))}>
                 {workflowStatusLabel(initiative.initiativeStatus)}
               </span>
-              <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeAssignee}</span>
-              <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">
+              <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
+              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeAssignee}</span>
+              <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                 Σ 0d
               </span>
-              <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">
+              <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                 Σ 0d
               </span>
               <div className="space-y-1">
-                <div className="flex items-center justify-between text-[12px] text-slate-600">
+                <div className="flex items-center justify-between text-[16px] text-slate-600">
                   <span>No stories</span>
                   <span>0/0 · 0%</span>
                 </div>
@@ -1697,7 +1697,7 @@ export function BacklogPlanningPanel({
                     value={createDraftTitle}
                     onChange={(event) => setCreateDraftTitle(event.target.value)}
                     placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
-                    className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                    className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                     autoFocus
                   />
                 </div>
@@ -1714,21 +1714,21 @@ export function BacklogPlanningPanel({
                     <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
                       <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
                         <span className="inline-block h-7 w-7 shrink-0" />
-                        <button type="button" onClick={() => onOpenEpic(epic.epicId)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        <button type="button" onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId) return; onOpenEpic(epic.epicId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                           <FolderKanban className="size-4 shrink-0 text-slate-700" />
                           {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
                             <span className="flex min-w-0 items-center gap-1">
                               <input
                                 value={editingParentTitle.value}
                                 onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.epicId, value: event.target.value })}
-                                className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                 autoFocus
                               />
                               <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                               <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.epicId, epic.epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                             </span>
                           ) : (
-                            <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
+                            <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                               <span className="truncate">{epic.epicTitle}</span>
                               <button
                                 type="button"
@@ -1758,16 +1758,16 @@ export function BacklogPlanningPanel({
                           <Plus className="size-3.5 text-slate-600" />
                         </button>
                       </div>
-                      <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
-                      <span className="justify-self-center text-center text-[15px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>
-                      <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicMonthLabelValue}</span>
-                      <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip("todo"))}>To do</span>
-                      <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-                      <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicAssignee}</span>
-                      <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
-                      <span className="justify-self-center text-center text-[15px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
+                      <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>
+                      <span className="justify-self-center text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>
+                      <span className="justify-self-center text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>
+                      <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip("todo"))}>To do</span>
+                      <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
+                      <span className="justify-self-center text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>
+                      <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
+                      <span className="justify-self-center text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">Σ 0d</span>
                       <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[12px] text-slate-600">
+                        <div className="flex items-center justify-between text-[16px] text-slate-600">
                           <span>No stories</span>
                           <span>0/0 · 0%</span>
                         </div>
@@ -1781,7 +1781,7 @@ export function BacklogPlanningPanel({
                             value={createDraftTitle}
                             onChange={(event) => setCreateDraftTitle(event.target.value)}
                             placeholder="Type user story title and press Enter..."
-                            className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                            className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                             autoFocus
                           />
                         </div>
@@ -2035,7 +2035,7 @@ export function BacklogPlanningPanel({
   return (
     <section className="h-full min-h-0 overflow-hidden rounded-2xl bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-xl ring-1 ring-slate-200/80">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span className="inline-flex size-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 ring-1 ring-slate-200">
             <ClipboardList className="size-4" />
           </span>
@@ -2054,7 +2054,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="mb-3 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white p-3 shadow-sm ring-1 ring-white/60">
+      <div className="mb-3 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 py-3 shadow-sm ring-1 ring-white/60">
         <div className="relative flex items-center gap-2">
           <Search className="size-4 text-slate-500" />
           <input
@@ -2146,16 +2146,26 @@ export function BacklogPlanningPanel({
             selected={assigneeFilter}
             onChange={setAssigneeFilter}
           />
-          <button
-            type="button"
-            onClick={resetAllFilters}
-            disabled={!hasAnyActiveFilter}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 ring-1 ring-slate-300/80 transition hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
-            title="This will clear all filters"
-            aria-label="Clear all filters"
-          >
-            <Eraser className="size-3.5" />
-          </button>
+          <span className="group relative inline-flex h-8 w-8 shrink-0">
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              disabled={!hasAnyActiveFilter}
+              className="relative z-0 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 ring-1 ring-slate-300/80 transition hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+              aria-label="Clear all filters"
+            >
+              <Eraser className="size-3.5" />
+            </button>
+            {!hasAnyActiveFilter ? (
+              <span className="absolute inset-0 z-10 cursor-not-allowed rounded-lg" aria-hidden />
+            ) : null}
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 inline-block w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-nowrap rounded-lg border border-slate-300/70 bg-gradient-to-b from-white to-slate-50 px-3 py-2 text-left text-[12px] font-medium leading-normal text-slate-700 opacity-0 shadow-md ring-1 ring-white/60 transition-opacity duration-100 delay-0 group-hover:opacity-100"
+            >
+              Erases all filters: search, group-by, and every filter selection.
+            </span>
+          </span>
         </div>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
@@ -2180,7 +2190,7 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white text-[15px] shadow-inner">
+      <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white text-[16px] shadow-inner">
         <>
         <div
           className="sticky top-0 z-10 grid items-center gap-3 border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-3 py-2.5 text-[13px] font-semibold tracking-[0.02em] text-slate-700 uppercase"
@@ -2271,7 +2281,7 @@ export function BacklogPlanningPanel({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onOpenInitiative(initiative.id)}
+                        onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id) return; onOpenInitiative(initiative.id); }}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
                         <Target className="size-4 shrink-0 text-slate-700" />
@@ -2280,14 +2290,14 @@ export function BacklogPlanningPanel({
                             <input
                               value={editingParentTitle.value}
                               onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.id, value: event.target.value })}
-                              className="h-7 min-w-[220px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                              className="h-7 min-w-[220px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                               autoFocus
                             />
                             <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                             <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.id, initiative.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                           </span>
                         ) : (
-                          <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
+                          <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                             <span className="truncate">{initiative.title}</span>
                             <button
                               type="button"
@@ -2323,7 +2333,7 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                           >
                             <Target className="size-3.5 text-slate-500" />
                             Add initiative
@@ -2338,7 +2348,7 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                           >
                             <FolderKanban className="size-3.5 text-slate-500" />
                             Add epic
@@ -2353,7 +2363,7 @@ export function BacklogPlanningPanel({
                                 initiativeId: initiative.id,
                               })
                             }
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                           >
                             <FileText className="size-3.5 text-slate-500" />
                             Add user story
@@ -2361,25 +2371,25 @@ export function BacklogPlanningPanel({
                         </div>
                       ) : null}
                     </div>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.year}</span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                    <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.year}</span>
+                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                       {quarterFromMonth(initiative.startMonth)}
                     </span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                       {monthLabel(initiative.startMonth)}
                     </span>
-                    <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiativeWorkflowStatus))}>
+                    <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeWorkflowStatus))}>
                       {workflowStatusLabel(initiativeWorkflowStatus)}
                     </span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                    <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
+                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                       {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiative.id ? (
                         <span className="inline-flex items-center gap-1">
                           <input
                             value={editingParentAssignee.value}
                             onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                             placeholder="Unassigned"
-                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                           />
                           <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                           <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiative.id, initiative.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -2398,19 +2408,19 @@ export function BacklogPlanningPanel({
                       )}
                     </span>
                     <span
-                      className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                      className="justify-self-center text-center text-[16px] font-medium text-slate-600"
                       title="Auto-summed from child user stories"
                     >
                       Σ {initiativeDays.estimated}d
                     </span>
                     <span
-                      className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                      className="justify-self-center text-center text-[16px] font-medium text-slate-600"
                       title="Auto-summed from child user stories"
                     >
                       Σ {initiativeDays.left}d
                     </span>
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[12px] text-slate-600">
+                      <div className="flex items-center justify-between text-[16px] text-slate-600">
                         <span>{initiativeProgress.total === 0 ? "No stories" : "Completion"}</span>
                         <span>
                           {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
@@ -2444,7 +2454,7 @@ export function BacklogPlanningPanel({
                           data-bwignore="true"
                           data-form-type="other"
                           data-protonpass-ignore="true"
-                          className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                          className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                           autoFocus
                         />
                       </div>
@@ -2493,7 +2503,7 @@ export function BacklogPlanningPanel({
                               data-bwignore="true"
                               data-form-type="other"
                               data-protonpass-ignore="true"
-                              className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                              className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                               autoFocus
                             />
                           </div>
@@ -2502,7 +2512,7 @@ export function BacklogPlanningPanel({
                               <select
                                 value={storyTargetEpicId}
                                 onChange={(event) => setStoryTargetEpicId(event.target.value)}
-                                className="h-9 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                                className="h-9 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                               >
                                 <option value="">Select epic</option>
                                 {(initiative.epics ?? []).map((epic) => (
@@ -2563,7 +2573,7 @@ export function BacklogPlanningPanel({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => onOpenEpic(epic.id)}
+                                  onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id) return; onOpenEpic(epic.id); }}
                                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                 >
                                   <span className="inline-block size-4 shrink-0" aria-hidden />
@@ -2572,14 +2582,14 @@ export function BacklogPlanningPanel({
                                       <input
                                         value={editingParentTitle.value}
                                         onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.id, value: event.target.value })}
-                                        className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                        className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                         autoFocus
                                       />
                                       <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                       <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.id, epic.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                                     </span>
                                   ) : (
-                                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-800">
+                                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-800">
                                       <span className="truncate">{epic.icon} {epic.title}</span>
                                       <button
                                         type="button"
@@ -2615,7 +2625,7 @@ export function BacklogPlanningPanel({
                                           initiativeId: initiative.id,
                                         })
                                       }
-                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
+                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                                     >
                                       <FolderKanban className="size-3.5 text-slate-500" />
                                       Add epic
@@ -2630,7 +2640,7 @@ export function BacklogPlanningPanel({
                                           epicId: epic.id,
                                         })
                                       }
-                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
+                                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                                     >
                                       <FileText className="size-3.5 text-slate-500" />
                                       Add user story
@@ -2638,25 +2648,25 @@ export function BacklogPlanningPanel({
                                   </div>
                                 ) : null}
                               </div>
-                              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.year}</span>
-                              <span className="justify-self-center text-center text-[15px] text-slate-700">
+                              <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.year}</span>
+                              <span className="justify-self-center text-center text-[16px] text-slate-700">
                                 {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
                               </span>
-                              <span className="justify-self-center text-center text-[15px] text-slate-700">
+                              <span className="justify-self-center text-center text-[16px] text-slate-700">
                                 {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
                               </span>
-                              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(epicWorkflowStatus))}>
+                              <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(epicWorkflowStatus))}>
                                 {workflowStatusLabel(epicWorkflowStatus)}
                               </span>
-                              <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
-                              <span className="justify-self-center text-center text-[15px] text-slate-700">
+                              <span className="justify-self-center text-center text-[16px] text-slate-500">-</span>
+                              <span className="justify-self-center text-center text-[16px] text-slate-700">
                                 {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epic.id ? (
                                   <span className="inline-flex items-center gap-1">
                                     <input
                                       value={editingParentAssignee.value}
                                       onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                                       placeholder="Unassigned"
-                                      className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                      className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                     />
                                     <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                     <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epic.id, epic.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -2675,19 +2685,19 @@ export function BacklogPlanningPanel({
                                 )}
                               </span>
                               <span
-                                className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                                className="justify-self-center text-center text-[16px] font-medium text-slate-600"
                                 title="Auto-summed from child user stories"
                               >
                                 Σ {epicDays.estimated}d
                               </span>
                               <span
-                                className="justify-self-center text-center text-[15px] font-medium text-slate-600"
+                                className="justify-self-center text-center text-[16px] font-medium text-slate-600"
                                 title="Auto-summed from child user stories"
                               >
                                 Σ {epicDays.left}d
                               </span>
                               <div className="space-y-1">
-                                <div className="flex items-center justify-between text-[12px] text-slate-600">
+                                <div className="flex items-center justify-between text-[16px] text-slate-600">
                                   <span>{epicProgress.total === 0 ? "No stories" : "Completion"}</span>
                                   <span>
                                     {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
@@ -2725,7 +2735,7 @@ export function BacklogPlanningPanel({
                                     data-bwignore="true"
                                     data-form-type="other"
                                     data-protonpass-ignore="true"
-                                    className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                                    className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                     autoFocus
                                   />
                                 </div>
@@ -2766,7 +2776,7 @@ export function BacklogPlanningPanel({
                                     >
                                       <button
                                         type="button"
-                                        onClick={() => onOpenStory(story.id)}
+                                        onClick={() => { if (editingStoryTitle?.id === story.id) return; onOpenStory(story.id); }}
                                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                       >
                                         <span className="inline-block size-3.5 shrink-0" aria-hidden />
@@ -2775,14 +2785,14 @@ export function BacklogPlanningPanel({
                                             <input
                                               value={editingStoryTitle.value}
                                               onChange={(event) => setEditingStoryTitle({ id: story.id, value: event.target.value })}
-                                              className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                              className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                               autoFocus
                                             />
                                             <button type="button" onClick={() => setEditingStoryTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                             <button type="button" onClick={() => void confirmStoryTitleEdit(story.id, story.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                                           </span>
                                         ) : (
-                                          <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] text-slate-800">
+                                          <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] text-slate-800">
                                             <span className="truncate">{story.icon} {story.title}</span>
                                             <button
                                               type="button"
@@ -2794,7 +2804,7 @@ export function BacklogPlanningPanel({
                                             </button>
                                           </span>
                                         )}
-                                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[12px] font-semibold text-slate-600">
+                                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[16px] font-semibold text-slate-600">
                                           #{storyRefById[story.id] ?? story.id.slice(0, 6)}
                                         </span>
                                       </button>
@@ -2821,7 +2831,7 @@ export function BacklogPlanningPanel({
                                                 epicId: epic.id,
                                               })
                                             }
-                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[14px] font-medium text-slate-700 hover:bg-slate-50"
+                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                                           >
                                             <FileText className="size-3.5 text-slate-500" />
                                             Add user story
@@ -2829,16 +2839,16 @@ export function BacklogPlanningPanel({
                                         </div>
                                       ) : null}
                                     </div>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.year}</span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                    <span className="justify-self-center text-center text-[16px] text-slate-700">{initiative.year}</span>
+                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                                       {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                                       {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
                                     <span
                                       className={cn(
-                                        "w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium",
+                                        "w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium",
                                         statusChip(story.status),
                                       )}
                                     >
@@ -2856,7 +2866,7 @@ export function BacklogPlanningPanel({
                                                 daysLeft: story.daysLeft,
                                               })
                                             }
-                                            className="w-full cursor-pointer bg-transparent text-[13px] font-medium outline-none"
+                                            className="w-full cursor-pointer bg-transparent text-[16px] font-medium outline-none"
                                           >
                                             <option value="todo">To do</option>
                                             <option value="inProgress">In progress</option>
@@ -2885,13 +2895,13 @@ export function BacklogPlanningPanel({
                                             event.preventDefault();
                                             beginStoryCellEdit(story.id, "status", story.status);
                                           }}
-                                          className="text-[13px] font-medium"
+                                          className="text-[16px] font-medium"
                                         >
                                           {story.status === "inProgress" ? "In progress" : story.status}
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "sprint" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <select
@@ -2906,7 +2916,7 @@ export function BacklogPlanningPanel({
                                                 daysLeft: story.daysLeft,
                                               })
                                             }
-                                            className="h-7 min-w-[96px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                            className="h-7 min-w-[96px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           >
                                             <option value="unscheduled">Unscheduled</option>
                                             <option value="1">Sprint 1</option>
@@ -2940,7 +2950,7 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "assignee" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <input
@@ -2956,7 +2966,7 @@ export function BacklogPlanningPanel({
                                               })
                                             }
                                             placeholder="Unassigned"
-                                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           />
                                           <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                           <button
@@ -2986,7 +2996,7 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "estimatedDays" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <input
@@ -3003,7 +3013,7 @@ export function BacklogPlanningPanel({
                                                 daysLeft: story.daysLeft,
                                               })
                                             }
-                                            className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                            className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           />
                                           <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                           <button
@@ -3033,7 +3043,7 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
-                                    <span className="justify-self-center text-center text-[15px] text-slate-700">
+                                    <span className="justify-self-center text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "daysLeft" ? (
                                         <span className="inline-flex items-center gap-1">
                                           <input
@@ -3050,7 +3060,7 @@ export function BacklogPlanningPanel({
                                                 daysLeft: story.daysLeft,
                                               })
                                             }
-                                            className="h-7 w-20 rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none"
+                                            className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           />
                                           <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                           <button
@@ -3081,7 +3091,7 @@ export function BacklogPlanningPanel({
                                       )}
                                     </span>
                                     <div className="space-y-1">
-                                      <div className="flex items-center justify-between text-[12px] text-slate-600">
+                                      <div className="flex items-center justify-between text-[16px] text-slate-600">
                                         <span>{progress.label}</span>
                                         <span>{progress.percent}%</span>
                                       </div>
@@ -3115,7 +3125,7 @@ export function BacklogPlanningPanel({
                                           data-bwignore="true"
                                           data-form-type="other"
                                           data-protonpass-ignore="true"
-                                          className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+                                          className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
                                           autoFocus
                                         />
                                       </div>
