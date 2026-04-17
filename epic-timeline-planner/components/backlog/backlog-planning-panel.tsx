@@ -142,6 +142,16 @@ function quarterFromMonth(month: number | null | undefined): string {
   return "Q4";
 }
 
+function quarterLabelOrUnscheduled(value: string | null | undefined): string {
+  return !value || value === "-" ? "Unscheduled" : value;
+}
+
+function quarterSortValue(value: string | null | undefined): string {
+  const normalized = quarterLabelOrUnscheduled(value);
+  const order = ["Q1", "Q2", "Q3", "Q4"].indexOf(normalized);
+  return String(order === -1 ? 99 : order).padStart(2, "0");
+}
+
 function monthLabel(month: number | null | undefined): string {
   if (month == null) return "-";
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
@@ -777,8 +787,8 @@ export function BacklogPlanningPanel({
   function keyForLevel(row: (typeof groupedStoryRows)[number], level: GroupLevel): { key: string; label: string; sort: string } {
     if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
     if (level === "quarter") {
-      const q = row.initiativeQuarterLabelValue;
-      return { key: q, label: q, sort: String(["Q1", "Q2", "Q3", "Q4"].indexOf(q)).padStart(2, "0") };
+      const q = quarterLabelOrUnscheduled(row.initiativeQuarterLabelValue);
+      return { key: q, label: q, sort: quarterSortValue(q) };
     }
     if (level === "month") {
       const m = row.initiativeMonthNum ?? 0;
@@ -795,8 +805,8 @@ export function BacklogPlanningPanel({
   ): { key: string; label: string; sort: string } {
     if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
     if (level === "quarter") {
-      const q = row.initiativeQuarterLabelValue;
-      return { key: q, label: q, sort: String(["Q1", "Q2", "Q3", "Q4"].indexOf(q)).padStart(2, "0") };
+      const q = quarterLabelOrUnscheduled(row.initiativeQuarterLabelValue);
+      return { key: q, label: q, sort: quarterSortValue(q) };
     }
     if (level === "month") {
       const m = row.initiativeMonthNum ?? 0;
@@ -1260,7 +1270,7 @@ export function BacklogPlanningPanel({
             </div>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>
             <span className="justify-self-center text-center text-[15px] text-slate-700">
-              {quarterFromMonth(epicRows[0]?.monthNum ?? null)}
+              {quarterLabelOrUnscheduled(quarterFromMonth(epicRows[0]?.monthNum ?? null))}
             </span>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>
             <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
@@ -1417,7 +1427,7 @@ export function BacklogPlanningPanel({
               </button>
             </div>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeYear}</span>
-            <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeQuarterLabel}</span>
+            <span className="justify-self-center text-center text-[15px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>
             <span className="justify-self-center text-center text-[15px] text-slate-700">{initiativeMonthLabel}</span>
             <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiativeStatus))}>
               {workflowStatusLabel(initiativeStatus)}
@@ -1659,7 +1669,7 @@ export function BacklogPlanningPanel({
                 </button>
               </div>
               <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
-              <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeQuarterLabelValue}</span>
+              <span className="justify-self-center text-center text-[15px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>
               <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>
               <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip(initiative.initiativeStatus))}>
                 {workflowStatusLabel(initiative.initiativeStatus)}
@@ -1749,7 +1759,7 @@ export function BacklogPlanningPanel({
                         </button>
                       </div>
                       <span className="justify-self-center text-center text-[15px] text-slate-700">{initiative.initiativeYear}</span>
-                      <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicQuarterLabelValue}</span>
+                      <span className="justify-self-center text-center text-[15px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>
                       <span className="justify-self-center text-center text-[15px] text-slate-700">{epic.epicMonthLabelValue}</span>
                       <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[13px] font-medium", statusChip("todo"))}>To do</span>
                       <span className="justify-self-center text-center text-[15px] text-slate-500">-</span>
@@ -2044,41 +2054,41 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative mb-3 flex items-center gap-2 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white p-2.5 shadow-sm ring-1 ring-white/60">
-        <Search className="size-4 text-slate-500" />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search work items..."
-          autoComplete="off"
-          onFocus={() => setShowSearchSuggestions(true)}
-          onBlur={() => {
-            window.setTimeout(() => setShowSearchSuggestions(false), 120);
-          }}
-          className="h-9 w-full rounded-lg bg-white/95 px-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-300/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
-        />
-        {showSearchSuggestions && searchSuggestions.length > 0 ? (
-          <div className="absolute left-2 right-2 top-[calc(100%+0.35rem)] z-20 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-            {searchSuggestions.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setQuery(item);
-                  setShowSearchSuggestions(false);
-                }}
-                className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-4 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white p-3 shadow-sm ring-1 ring-white/60">
-        <div className="relative" ref={groupMenuRef}>
+      <div className="mb-3 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white p-3 shadow-sm ring-1 ring-white/60">
+        <div className="relative flex items-center gap-2">
+          <Search className="size-4 text-slate-500" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search work items..."
+            autoComplete="off"
+            onFocus={() => setShowSearchSuggestions(true)}
+            onBlur={() => {
+              window.setTimeout(() => setShowSearchSuggestions(false), 120);
+            }}
+            className="h-9 w-full rounded-lg bg-white/95 px-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-300/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
+          />
+          {showSearchSuggestions && searchSuggestions.length > 0 ? (
+            <div className="absolute left-2 right-2 top-[calc(100%+0.35rem)] z-20 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+              {searchSuggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setQuery(item);
+                    setShowSearchSuggestions(false);
+                  }}
+                  className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-4">
+          <div className="relative" ref={groupMenuRef}>
           <button
             type="button"
             onClick={() => setGroupMenuOpen((prev) => !prev)}
@@ -2110,42 +2120,43 @@ export function BacklogPlanningPanel({
               })}
             </div>
           ) : null}
+          </div>
+          <div className="h-7 w-px shrink-0 bg-slate-300/80" aria-hidden />
+          <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+            <Filter className="size-3.5 text-slate-500" />
+            Filters
+          </span>
+          <MultiCheckboxFilter
+            label="Work Item"
+            options={workItemOptions}
+            selected={workItemFilter}
+            onChange={(next) =>
+              setWorkItemFilter(
+                next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
+              )
+            }
+          />
+          <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
+          <MultiCheckboxFilter label="Quarter" options={quarterOptions} selected={quarterFilter} onChange={setQuarterFilter} />
+          <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
+          <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
+          <MultiCheckboxFilter
+            label="Assignee"
+            options={assigneeOptions}
+            selected={assigneeFilter}
+            onChange={setAssigneeFilter}
+          />
+          <button
+            type="button"
+            onClick={resetAllFilters}
+            disabled={!hasAnyActiveFilter}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 ring-1 ring-slate-300/80 transition hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+            title="This will clear all filters"
+            aria-label="Clear all filters"
+          >
+            <Eraser className="size-3.5" />
+          </button>
         </div>
-        <div className="h-7 w-px shrink-0 bg-slate-300/80" aria-hidden />
-        <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-          <Filter className="size-3.5 text-slate-500" />
-          Filters
-        </span>
-        <MultiCheckboxFilter
-          label="Work Item"
-          options={workItemOptions}
-          selected={workItemFilter}
-          onChange={(next) =>
-            setWorkItemFilter(
-              next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
-            )
-          }
-        />
-        <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
-        <MultiCheckboxFilter label="Quarter" options={quarterOptions} selected={quarterFilter} onChange={setQuarterFilter} />
-        <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
-        <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
-        <MultiCheckboxFilter
-          label="Assignee"
-          options={assigneeOptions}
-          selected={assigneeFilter}
-          onChange={setAssigneeFilter}
-        />
-        <button
-          type="button"
-          onClick={resetAllFilters}
-          disabled={!hasAnyActiveFilter}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 ring-1 ring-slate-300/80 transition hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
-          title="This will clear all filters"
-          aria-label="Clear all filters"
-        >
-          <Eraser className="size-3.5" />
-        </button>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
         <form
