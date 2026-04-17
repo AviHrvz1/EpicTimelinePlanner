@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ClipboardList, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FileText, FolderKanban, Pencil, Plus, Search, Target, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ClipboardList, Eraser, FileText, Filter, FolderKanban, Layers3, Pencil, Plus, Search, Target, X } from "lucide-react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -267,14 +267,14 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[13px] ring-1 ring-slate-300/80 outline-none shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
+        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[14px] ring-1 ring-slate-300/80 outline-none shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
       >
         <span className="font-medium text-slate-700">{label}: </span>
         <span className="ml-1 truncate text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
-        <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
+        <label className="mb-1 flex items-center gap-2 text-[15px] text-slate-700">
           <input
             type="checkbox"
             checked={allSelected}
@@ -285,7 +285,7 @@ function MultiCheckboxFilter({
         </label>
         <div className="max-h-44 space-y-1 overflow-auto pr-1">
           {options.map((option) => (
-            <label key={option.id} className="flex items-center gap-2 text-[14px] text-slate-700">
+            <label key={option.id} className="flex items-center gap-2 text-[15px] text-slate-700">
               <input
                 type="checkbox"
                 checked={allSelected || selected.includes(option.id)}
@@ -346,7 +346,7 @@ export function BacklogPlanningPanel({
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>([]);
+  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["year", "quarter"]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
@@ -742,6 +742,15 @@ export function BacklogPlanningPanel({
     [fullyFiltered],
   );
   const groupSummaryLabel = groupLevels.length === 0 ? "None" : groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ");
+  const hasAnyActiveFilter =
+    yearFilter.length > 0 ||
+    quarterFilter.length > 0 ||
+    statusFilter.length > 0 ||
+    sprintFilter.length > 0 ||
+    assigneeFilter.length > 0 ||
+    workItemFilter.length > 0 ||
+    groupLevels.length > 0 ||
+    query.trim().length > 0;
 
   function toggleGroupLevel(level: GroupLevel) {
     setGroupLevels((prev) => {
@@ -751,6 +760,18 @@ export function BacklogPlanningPanel({
       }
       return GROUP_LEVEL_ORDER.slice(0, idx + 1);
     });
+  }
+
+  function resetAllFilters() {
+    setQuery("");
+    setStatusFilter([]);
+    setSprintFilter([]);
+    setYearFilter([]);
+    setQuarterFilter([]);
+    setAssigneeFilter([]);
+    setWorkItemFilter([]);
+    setGroupLevels([]);
+    setGroupMenuOpen(false);
   }
 
   function keyForLevel(row: (typeof groupedStoryRows)[number], level: GroupLevel): { key: string; label: string; sort: string } {
@@ -797,7 +818,7 @@ export function BacklogPlanningPanel({
         return (
           <div
             key={`${keyPrefix}-story-${row.storyId}`}
-            className="grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
+            className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
             style={{ gridTemplateColumns: tableGridTemplate }}
           >
             <div className="min-w-0" style={{ paddingLeft: indentPx }}>
@@ -817,12 +838,12 @@ export function BacklogPlanningPanel({
                     <button type="button" onClick={() => void confirmStoryTitleEdit(row.storyId, row.storyTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
-                  <span className="inline-flex min-w-0 items-center gap-1 truncate text-left">
+                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-left">
                     <span className="truncate">{row.storyTitle}</span>
                     <button
                       type="button"
                       onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label="Edit user story title"
                     >
                       <Pencil className="size-3.5 text-slate-500" />
@@ -1207,12 +1228,12 @@ export function BacklogPlanningPanel({
                     <button type="button" onClick={() => void confirmParentTitleEdit("epic", epicId, epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
-                  <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
                     <span className="truncate">{epicTitle}</span>
                     <button
                       type="button"
                       onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epicId, value: epicTitle }); }}
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label="Edit epic title"
                     >
                       <Pencil className="size-3.5 text-slate-500" />
@@ -1349,12 +1370,12 @@ export function BacklogPlanningPanel({
                     <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiativeId, initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
-                  <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                  <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
                     <span className="truncate">{initiativeTitle}</span>
                     <button
                       type="button"
                       onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiativeId, value: initiativeTitle }); }}
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label="Edit initiative title"
                     >
                       <Pencil className="size-3.5 text-slate-500" />
@@ -1591,12 +1612,12 @@ export function BacklogPlanningPanel({
                       <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.initiativeId, initiative.initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                     </span>
                   ) : (
-                    <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
                       <span className="truncate">{initiative.initiativeTitle}</span>
                       <button
                         type="button"
                         onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: initiative.initiativeTitle }); }}
-                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                        className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                         aria-label="Edit initiative title"
                       >
                         <Pencil className="size-3.5 text-slate-500" />
@@ -1697,12 +1718,12 @@ export function BacklogPlanningPanel({
                               <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.epicId, epic.epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                             </span>
                           ) : (
-                            <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] font-medium text-slate-900">
+                            <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
                               <span className="truncate">{epic.epicTitle}</span>
                               <button
                                 type="button"
                                 onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.epicId, value: epic.epicTitle }); }}
-                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                                 aria-label="Edit epic title"
                               >
                                 <Pencil className="size-3.5 text-slate-500" />
@@ -2061,10 +2082,13 @@ export function BacklogPlanningPanel({
           <button
             type="button"
             onClick={() => setGroupMenuOpen((prev) => !prev)}
-            className="flex h-8 min-w-[11rem] items-center justify-between rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[13px] ring-1 ring-slate-300/80 shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
+            className="flex h-8 min-w-[12rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
           >
-            <span className="font-medium text-slate-700">Group By:</span>
-            <span className="ml-1 truncate text-slate-600">{groupSummaryLabel}</span>
+            <span className="inline-flex items-center gap-1 font-semibold text-indigo-800">
+              <Layers3 className="size-3.5 text-indigo-700" />
+              Group By
+            </span>
+            <span className="ml-1 truncate text-indigo-700">{groupSummaryLabel}</span>
           </button>
           {groupMenuOpen ? (
             <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
@@ -2087,32 +2111,11 @@ export function BacklogPlanningPanel({
             </div>
           ) : null}
         </div>
-        <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
-        <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
-        <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
-        <MultiCheckboxFilter label="Quarter" options={quarterOptions} selected={quarterFilter} onChange={setQuarterFilter} />
-        <MultiCheckboxFilter
-          label="Assignee"
-          options={assigneeOptions}
-          selected={assigneeFilter}
-          onChange={setAssigneeFilter}
-        />
-        {groupLevels.length > 0 ? (
-          <button
-            type="button"
-            onClick={() =>
-              openCreateComposer({
-                anchorKey: "group-toolbar:add-initiative",
-                scope: "initiative",
-                kind: "initiative",
-              })
-            }
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gradient-to-b from-white to-slate-50 px-2.5 text-[13px] font-medium text-slate-700 ring-1 ring-slate-300/80 shadow-sm transition hover:from-slate-50 hover:to-slate-100 hover:ring-slate-400/80"
-          >
-            <Plus className="size-3.5 text-slate-600" />
-            Initiative
-          </button>
-        ) : null}
+        <div className="h-7 w-px shrink-0 bg-slate-300/80" aria-hidden />
+        <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+          <Filter className="size-3.5 text-slate-500" />
+          Filters
+        </span>
         <MultiCheckboxFilter
           label="Work Item"
           options={workItemOptions}
@@ -2123,6 +2126,26 @@ export function BacklogPlanningPanel({
             )
           }
         />
+        <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
+        <MultiCheckboxFilter label="Quarter" options={quarterOptions} selected={quarterFilter} onChange={setQuarterFilter} />
+        <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
+        <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
+        <MultiCheckboxFilter
+          label="Assignee"
+          options={assigneeOptions}
+          selected={assigneeFilter}
+          onChange={setAssigneeFilter}
+        />
+        <button
+          type="button"
+          onClick={resetAllFilters}
+          disabled={!hasAnyActiveFilter}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 ring-1 ring-slate-300/80 transition hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+          title="This will clear all filters"
+          aria-label="Clear all filters"
+        >
+          <Eraser className="size-3.5" />
+        </button>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
         <form
@@ -2146,7 +2169,7 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white shadow-inner">
+      <div className="h-[calc(100%-6.2rem)] overflow-auto rounded-xl border border-slate-200 bg-white text-[15px] shadow-inner">
         <>
         <div
           className="sticky top-0 z-10 grid items-center gap-3 border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-3 py-2.5 text-[13px] font-semibold tracking-[0.02em] text-slate-700 uppercase"
@@ -2253,12 +2276,12 @@ export function BacklogPlanningPanel({
                             <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.id, initiative.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                           </span>
                         ) : (
-                          <span className="inline-flex min-w-0 items-center gap-1 truncate text-[17px] font-medium text-slate-900">
+                          <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
                             <span className="truncate">{initiative.title}</span>
                             <button
                               type="button"
                               onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "initiative", id: initiative.id, value: initiative.title }); }}
-                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                              className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                               aria-label="Edit initiative title"
                             >
                               <Pencil className="size-3.5 text-slate-500" />
@@ -2545,12 +2568,12 @@ export function BacklogPlanningPanel({
                                       <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.id, epic.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                                     </span>
                                   ) : (
-                                    <span className="inline-flex min-w-0 items-center gap-1 truncate text-[16px] font-medium text-slate-800">
+                                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] font-medium text-slate-800">
                                       <span className="truncate">{epic.icon} {epic.title}</span>
                                       <button
                                         type="button"
                                         onClick={(event) => { event.stopPropagation(); setEditingParentTitle({ kind: "epic", id: epic.id, value: epic.title }); }}
-                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                        className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                                         aria-label="Edit epic title"
                                       >
                                         <Pencil className="size-3.5 text-slate-500" />
@@ -2748,12 +2771,12 @@ export function BacklogPlanningPanel({
                                             <button type="button" onClick={() => void confirmStoryTitleEdit(story.id, story.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                                           </span>
                                         ) : (
-                                          <span className="inline-flex min-w-0 items-center gap-1 truncate text-[15px] text-slate-800">
+                                          <span className="inline-flex w-full min-w-0 items-center gap-1 text-[13px] text-slate-800">
                                             <span className="truncate">{story.icon} {story.title}</span>
                                             <button
                                               type="button"
                                               onClick={(event) => { event.stopPropagation(); setEditingStoryTitle({ id: story.id, value: story.title }); }}
-                                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                                              className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 transition hover:bg-slate-100 group-hover:opacity-100 focus-visible:opacity-100"
                                               aria-label="Edit user story title"
                                             >
                                               <Pencil className="size-3.5 text-slate-500" />
