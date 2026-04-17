@@ -46,6 +46,7 @@ type BacklogColumnKey =
 type GroupLevel = "year" | "quarter" | "month" | "sprint";
 type WorkflowStatus = "todo" | "inProgress" | "done" | "approved";
 type InlineEditableStoryField = "status" | "sprint" | "assignee" | "estimatedDays" | "daysLeft";
+type WorkItemKindFilter = "initiative" | "epic" | "story";
 
 const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "workItem",
@@ -327,6 +328,7 @@ export function BacklogPlanningPanel({
   const [yearFilter, setYearFilter] = useState<string[]>([]);
   const [quarterFilter, setQuarterFilter] = useState<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
+  const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
   const [sortBy, setSortBy] = useState<"titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status">(
     "titleAsc",
   );
@@ -571,6 +573,11 @@ export function BacklogPlanningPanel({
     { id: "Q3", label: "Q3" },
     { id: "Q4", label: "Q4" },
   ];
+  const workItemOptions: OptionItem[] = [
+    { id: "initiative", label: "Initiative" },
+    { id: "epic", label: "Epic" },
+    { id: "story", label: "User Story" },
+  ];
 
   const fullyFiltered = useMemo(() => {
     return filteredWithControls
@@ -607,10 +614,28 @@ export function BacklogPlanningPanel({
         if (assigneeFilter.length > 0 && epics.length === 0 && !initiativeAssigneeMatch) return null;
         if (!initiativeQuarterMatch && epics.length === 0 && quarterFilter.length > 0) return null;
         if (epics.length === 0 && !initiativeQuarterMatch) return null;
-        return { ...initiative, epics };
+        const selectedKinds = new Set(workItemFilter);
+        if (selectedKinds.size === 0) {
+          return { ...initiative, epics };
+        }
+        const allowInitiative = selectedKinds.has("initiative");
+        const allowEpic = selectedKinds.has("epic");
+        const allowStory = selectedKinds.has("story");
+        const filteredEpicsByWorkItem = epics
+          .map((epic) => {
+            const stories = (epic.userStories ?? []).filter(
+              () => allowStory,
+            );
+            if (allowEpic || allowInitiative) return { ...epic, userStories: allowStory ? epic.userStories ?? [] : [] };
+            if (stories.length > 0) return { ...epic, userStories: stories };
+            return null;
+          })
+          .filter(Boolean) as typeof epics;
+        if (!allowInitiative && filteredEpicsByWorkItem.length === 0) return null;
+        return { ...initiative, epics: filteredEpicsByWorkItem };
       })
       .filter(Boolean) as typeof filteredWithControls;
-  }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter]);
+  }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter, workItemFilter]);
 
   const tableGridTemplate = useMemo(
     () => BACKLOG_COLUMN_ORDER.map((key) => `${columnWidths[key]}px`).join(" "),
@@ -1847,6 +1872,16 @@ export function BacklogPlanningPanel({
           options={assigneeOptions}
           selected={assigneeFilter}
           onChange={setAssigneeFilter}
+        />
+        <MultiCheckboxFilter
+          label="Work Item"
+          options={workItemOptions}
+          selected={workItemFilter}
+          onChange={(next) =>
+            setWorkItemFilter(
+              next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
+            )
+          }
         />
       </div>
 
