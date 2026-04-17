@@ -299,25 +299,25 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-8 min-w-[8.75rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-slate-200/55 to-sky-100/70 px-2.5 text-[14px] ring-1 ring-sky-200/75 outline-none shadow-sm shadow-sky-900/5 transition hover:from-slate-200/80 hover:to-sky-100 hover:ring-sky-300/80"
+        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] ring-1 ring-indigo-300/80 outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
       >
-        <span className="font-medium text-slate-800">{label}: </span>
-        <span className="ml-1 truncate text-slate-700">{selectedLabel}</span>
+        <span className="font-semibold text-slate-700">{label}: </span>
+        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
-        <div className="absolute z-30 mt-1 w-56 rounded-lg border border-sky-200/80 bg-gradient-to-b from-slate-50 to-sky-50/50 p-2 shadow-lg shadow-sky-900/10 ring-1 ring-sky-100/60 backdrop-blur-sm">
-        <label className="mb-1 flex items-center gap-2 text-[15px] text-slate-700">
+        <div className="absolute z-30 mt-1 w-56 rounded-lg border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 ring-1 ring-indigo-200/60 backdrop-blur-sm">
+        <label className="mb-1 flex items-center gap-2 text-[13px] text-slate-700">
           <input
             type="checkbox"
             checked={allSelected}
             onChange={() => onChange([])}
-            className="h-3.5 w-3.5 rounded border-slate-300"
+            className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
           />
           All
         </label>
         <div className="max-h-44 space-y-1 overflow-auto pr-1">
           {options.map((option) => (
-            <label key={option.id} className="flex items-center gap-2 text-[15px] text-slate-700">
+            <label key={option.id} className="flex items-center gap-2 text-[13px] text-slate-700">
               <input
                 type="checkbox"
                 checked={allSelected || selected.includes(option.id)}
@@ -329,7 +329,7 @@ function MultiCheckboxFilter({
                       : [...selected, option.id];
                   onChange(next);
                 }}
-                className="h-3.5 w-3.5 rounded border-slate-300"
+                className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
               />
               {option.label}
             </label>
@@ -2201,41 +2201,41 @@ export function BacklogPlanningPanel({
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-4">
           <div className="relative" ref={groupMenuRef}>
-          <button
-            type="button"
-            onClick={() => setGroupMenuOpen((prev) => !prev)}
-            className="flex h-8 min-w-[12rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
-          >
-            <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
-              <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
-              Group By
-            </span>
-            <span className="ml-1 truncate font-medium text-slate-600">{groupSummaryLabel}</span>
-          </button>
-          {groupMenuOpen ? (
-            <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
-              {GROUP_LEVEL_ORDER.map((level, idx) => {
-                const checked = groupLevels.includes(level);
-                const disabled = idx > 0 && !groupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
-                return (
-                  <label key={level} className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700", disabled && "opacity-50")}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={disabled && !checked}
-                      onChange={() => toggleGroupLevel(level)}
-                      className="h-3.5 w-3.5 rounded border-slate-300"
-                    />
-                    {GROUP_LEVEL_LABELS[level]}
-                  </label>
-                );
-              })}
-            </div>
-          ) : null}
+            <button
+              type="button"
+              onClick={() => setGroupMenuOpen((prev) => !prev)}
+              className="flex h-[30px] min-w-[11.5rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
+            >
+              <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+                <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
+                Group By
+              </span>
+              <span className="ml-1 truncate font-medium text-slate-600">{groupSummaryLabel}</span>
+            </button>
+            {groupMenuOpen ? (
+              <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                {GROUP_LEVEL_ORDER.map((level, idx) => {
+                  const checked = groupLevels.includes(level);
+                  const disabled = idx > 0 && !groupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
+                  return (
+                    <label key={level} className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700", disabled && "opacity-50")}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled && !checked}
+                        onChange={() => toggleGroupLevel(level)}
+                        className="h-3.5 w-3.5 rounded border-slate-300"
+                      />
+                      {GROUP_LEVEL_LABELS[level]}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
-          <div className="h-7 w-px shrink-0 bg-sky-200/70" aria-hidden />
-          <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-sky-900/55">
-            <Filter className="size-3.5 text-sky-700/75" />
+          <div className="h-7 w-px shrink-0 self-center bg-indigo-200/80" aria-hidden />
+          <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-slate-600">
+            <Filter className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
             Filters
           </span>
           <MultiCheckboxFilter
@@ -2258,15 +2258,15 @@ export function BacklogPlanningPanel({
             selected={assigneeFilter}
             onChange={setAssigneeFilter}
           />
-          <span className="group relative inline-flex h-8 w-8 shrink-0">
+          <span className="group relative inline-flex h-[30px] w-[30px] shrink-0">
             <button
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-b from-slate-200/40 to-sky-100/50 text-slate-700 ring-1 ring-sky-200/75 transition hover:from-slate-200/60 hover:to-sky-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
+              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
               aria-label="Clear all filters"
             >
-              <Eraser className="size-3.5" />
+              <Eraser className="size-3.5" strokeWidth={2} />
             </button>
             {!hasAnyActiveFilter ? (
               <span className="absolute inset-0 z-10 cursor-not-allowed rounded-lg" aria-hidden />
