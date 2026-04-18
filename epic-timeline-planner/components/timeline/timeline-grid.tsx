@@ -642,7 +642,12 @@ export function TimelineGrid({
       ) : null}
       {activeMonth ? (
         <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
-          <div className="flex min-h-[56rem] flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5">
+          <div
+            className={cn(
+              "flex flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5",
+              activeSprintTab === "kanban" ? "min-h-[56rem]" : "min-h-0",
+            )}
+          >
             {activeSprintTab === "kanban" ? (
               <div className="flex-1">
                 <SprintKanbanBoard

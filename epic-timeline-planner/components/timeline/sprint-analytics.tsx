@@ -44,8 +44,16 @@ const CFD_FLOW_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
 
-/** Same fixed plot height for pie + burndown on md+ so the two widgets align (Recharts needs explicit height). */
-const SPRINT_TOP_CHART_BOX = "min-h-56 h-56 w-full md:h-80 md:min-h-80";
+/**
+ * Compact plot height so two rows of charts fit without excess scrolling (uses dynamic viewport height).
+ * Matches pie, burndown, cumulative flow, and caps workload list beside pie.
+ */
+const SPRINT_CHART_BOX =
+  "min-h-40 h-40 w-full md:min-h-40 md:h-[clamp(10.5rem,27dvh,14.5rem)] md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
+/** Keep legend beside pie from growing taller than the pie plot on md+. */
+const PIE_LEGEND_CAP = "md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-1";
+const WORKLOAD_LIST_MAX =
+  "max-h-[min(12rem,30dvh)] overflow-y-auto overflow-x-hidden overscroll-contain md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
 
 type SprintAnalyticsProps = {
   initiatives: InitiativeItem[];
@@ -69,7 +77,7 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
   }: {
     payload?: ReadonlyArray<{ color?: string; value?: string }>;
   }) => (
-    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[14px] text-slate-700">
+    <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[12px] text-slate-700">
       {(payload ?? []).map((entry) => (
         <span key={`${entry.value}-${entry.color}`} className="inline-flex items-center gap-1.5">
           <span
@@ -82,8 +90,8 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
     </div>
   );
   return (
-    <section className="mb-4 flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-stretch">
+    <section className="mb-2 flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
         <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <PieChartIcon className="size-4 text-slate-600" />
@@ -91,7 +99,7 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
         </h3>
         <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
           <div
-            className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_TOP_CHART_BOX}`}
+            className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
           >
             <div className="absolute inset-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -107,8 +115,8 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  innerRadius={56}
-                  outerRadius={84}
+                  innerRadius="38%"
+                  outerRadius="68%"
                   paddingAngle={3}
                   cornerRadius={8}
                   stroke="#ffffff"
@@ -138,7 +146,7 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
               </div>
             </div>
           </div>
-          <div className="space-y-1.5 md:max-h-80 md:overflow-y-auto md:pr-1">
+          <div className={`space-y-1.5 ${PIE_LEGEND_CAP}`}>
             {pieData.map((slice) => {
               const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
               return (
@@ -195,10 +203,10 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
             </button>
           </div>
         </div>
-        <div className={`relative min-w-0 flex-1 ${SPRINT_TOP_CHART_BOX}`}>
+        <div className={`relative min-w-0 flex-1 ${SPRINT_CHART_BOX}`}>
           <div className="absolute inset-0">
             <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={analytics.burndown} margin={{ top: 4, right: 8, left: 0, bottom: 28 }}>
+            <LineChart data={analytics.burndown} margin={{ top: 2, right: 6, left: 0, bottom: 22 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="labelShort"
@@ -222,9 +230,9 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
                     </text>
                   );
                 }}
-                height={40}
+                height={34}
               />
-              <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 11 }} width={46} />
+              <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 10 }} width={44} />
               <Tooltip
                 formatter={(value, name) => [
                   metric === "storyCount" && typeof value === "number" ? Math.round(value) : value,
@@ -241,13 +249,13 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
       </article>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <article className="min-w-0 p-1 lg:col-span-1">
-        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
+        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <ChartNoAxesCombined className="size-4 text-slate-600" />
           Workload balance
         </h3>
-        <div className="mb-3 grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] leading-tight text-slate-600 sm:text-[11px]">
+        <div className="mb-2 grid shrink-0 grid-cols-2 gap-x-2 gap-y-1 text-[10px] leading-tight text-slate-600 sm:text-[11px]">
           {WORKLOAD_BAR_SEGMENTS.map((s) => (
             <span key={s.key} className="inline-flex min-w-0 items-center gap-1">
               <span className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-black/10" style={{ backgroundColor: s.color }} />
@@ -255,7 +263,7 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
             </span>
           ))}
         </div>
-        <div className="space-y-2.5">
+        <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
           {analytics.workloadByAssignee.length > 0 ? (
             analytics.workloadByAssignee.map((item) => {
               const { storiesByStatus: st } = item;
@@ -304,22 +312,22 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
             <p className="text-[12px] text-slate-500">No open workload found for this sprint.</p>
           )}
         </div>
-        <p className="mt-2 text-[12px] text-slate-600">
+        <p className="mt-2 shrink-0 text-[12px] text-slate-600">
           {analytics.openStories} open stories, <span className="text-amber-700">{analytics.atRiskStories} at risk</span>
           .
         </p>
       </article>
 
-      <article className="min-w-0 p-1 lg:col-span-2">
-        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2">
+        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
-        <div className={`relative min-w-0 ${SPRINT_TOP_CHART_BOX}`}>
+        <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
           {analytics.flowSprintTrendData.length > 0 ? (
             <div className="absolute inset-0">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 8, right: 10, left: 8, bottom: 36 }}>
+              <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 4, right: 8, left: 6, bottom: 28 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis
                   dataKey="labelShort"
@@ -343,8 +351,8 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
                       </text>
                     );
                   }}
-                  tickMargin={4}
-                  height={44}
+                  tickMargin={2}
+                  height={36}
                 />
                 <YAxis
                   allowDecimals={false}
