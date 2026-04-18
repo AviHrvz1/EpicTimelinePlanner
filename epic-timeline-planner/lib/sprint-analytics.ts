@@ -46,7 +46,6 @@ export type SprintAnalyticsData = {
     done: number;
     approved: number;
   }>;
-  doneLast7d: number;
   openStories: number;
   atRiskStories: number;
   totalStories: number;
@@ -430,16 +429,7 @@ function buildFlowTrend(
           };
         });
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(today.getDate() - 7);
-  const doneLast7d = sprintStories.filter((story) => {
-    if (!(story.status === "done" || story.status === "approved")) return false;
-    const updatedAt = new Date(story.updatedAt);
-    return updatedAt.getTime() >= sevenDaysAgo.getTime();
-  }).length;
-  return { flowSprintTrendData, doneLast7d };
+  return { flowSprintTrendData };
 }
 
 export function buildSprintAnalytics(

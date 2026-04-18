@@ -44,6 +44,9 @@ const CFD_FLOW_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
 
+/** Same fixed plot height for pie + burndown on md+ so the two widgets align (Recharts needs explicit height). */
+const SPRINT_TOP_CHART_BOX = "min-h-56 h-56 w-full md:h-80 md:min-h-80";
+
 type SprintAnalyticsProps = {
   initiatives: InitiativeItem[];
   month: number;
@@ -80,15 +83,18 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
   );
   return (
     <section className="mb-4 flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <article className="min-w-0 p-1 lg:col-span-1">
-        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-stretch">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
+        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <PieChartIcon className="size-4 text-slate-600" />
           User stories status
         </h3>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-center">
-          <div className="relative h-56 rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80">
-            <ResponsiveContainer width="100%" height="100%">
+        <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
+          <div
+            className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_TOP_CHART_BOX}`}
+          >
+            <div className="absolute inset-0">
+              <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <defs>
                   <filter id="sprintPieShadow">
@@ -123,7 +129,8 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
                   ]}
                 />
               </PieChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            </div>
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="rounded-full bg-white/90 px-4 py-2.5 text-center shadow-sm">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
@@ -131,7 +138,7 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
               </div>
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 md:max-h-80 md:overflow-y-auto md:pr-1">
             {pieData.map((slice) => {
               const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
               return (
@@ -161,13 +168,13 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
         </div>
       </article>
 
-      <article className="min-w-0 p-1 lg:col-span-2">
-        <div className="mb-2 flex items-center justify-between">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
-          <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+          <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
             <button
               type="button"
               onClick={() => setMetric("daysLeft")}
@@ -188,8 +195,9 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
             </button>
           </div>
         </div>
-        <div className="h-56 min-h-56 w-full min-w-0">
-          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+        <div className={`relative min-w-0 flex-1 ${SPRINT_TOP_CHART_BOX}`}>
+          <div className="absolute inset-0">
+            <ResponsiveContainer width="100%" height="100%">
             <LineChart data={analytics.burndown} margin={{ top: 4, right: 8, left: 0, bottom: 28 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
@@ -227,7 +235,8 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
               <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
               <Line type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2} name="Actual" />
             </LineChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
         </div>
       </article>
       </div>
@@ -306,10 +315,11 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
-        <div className="h-56 min-h-56 w-full min-w-0 rounded-lg bg-white p-2 ring-1 ring-slate-200/60">
+        <div className={`relative min-w-0 ${SPRINT_TOP_CHART_BOX}`}>
           {analytics.flowSprintTrendData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-              <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 8, right: 10, left: 4, bottom: 36 }}>
+            <div className="absolute inset-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 8, right: 10, left: 8, bottom: 36 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis
                   dataKey="labelShort"
@@ -339,11 +349,17 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
                 <YAxis
                   allowDecimals={false}
                   tick={{ fontSize: 10, fill: "#64748b" }}
-                  width={36}
-                  label={{ value: "Assignees", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 10 }}
+                  width={40}
+                  label={{
+                    value: "Unique people",
+                    angle: -90,
+                    position: "insideLeft",
+                    fill: "#64748b",
+                    fontSize: 10,
+                  }}
                 />
                 <Tooltip
-                  formatter={(value, name) => [`${value} in this band`, name]}
+                  formatter={(value, name) => [`${value} unique people`, name]}
                   labelFormatter={(_, payload) => {
                     const row = payload?.[0]?.payload as
                       | { dayInSprint?: number; labelShort?: string; todo?: number; inProgress?: number; done?: number; approved?: number }
@@ -366,20 +382,19 @@ export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: Sp
                     stackId="cfd"
                     stroke={color}
                     fill={color}
-                    fillOpacity={0.88}
-                    strokeWidth={1}
+                    fillOpacity={0.38}
+                    strokeOpacity={1}
+                    strokeWidth={1.5}
                     isAnimationActive={false}
                   />
                 ))}
               </AreaChart>
             </ResponsiveContainer>
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center text-[12px] text-slate-500">No sprint days to chart.</div>
           )}
         </div>
-        <p className="mt-2 text-[12px] text-slate-600">
-          {analytics.doneLast7d} stories moved to done/approved in the last 7 days.
-        </p>
       </article>
       </div>
     </section>
