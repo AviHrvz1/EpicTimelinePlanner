@@ -4,6 +4,17 @@ import { InitiativeItem, UserStoryItem } from "@/lib/types";
 
 export type BurndownMetric = "daysLeft" | "storyCount";
 
+export type WorkloadCapacityRow = {
+  assignee: string;
+  /** Sum of estimated days (fallback days left) on open sprint stories for this assignee. */
+  estimatedTotal: number;
+  /** Sum of days left on open sprint stories. */
+  daysLeftTotal: number;
+  /** `daysLeftTotal / sprint calendar days left` × 100 when sprint days left > 0. */
+  utilizationPct: number;
+  isOverCapacity: boolean;
+};
+
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 function flowChartDayLabel(dayDate: Date): string {
@@ -49,6 +60,9 @@ export type SprintAnalyticsData = {
   openStories: number;
   atRiskStories: number;
   totalStories: number;
+  workloadCapacityByAssignee: WorkloadCapacityRow[];
+  /** Calendar days remaining in the sprint from today (0 if the sprint has ended). */
+  workloadSprintCalendarDaysLeft: number;
 };
 
 function collectMonthStories(initiatives: InitiativeItem[], month: number): UserStoryItem[] {
@@ -231,6 +245,53 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
   };
 }
 
+function buildWorkloadCapacityByAssignee(
+  stories: UserStoryItem[],
+  month: number,
+  yearSprint: number,
+  planYear: number,
+): { workloadCapacityByAssignee: WorkloadCapacityRow[]; workloadSprintCalendarDaysLeft: number } {
+  const workloadSprintCalendarDaysLeft = sprintCalendarDaysRemaining(planYear, month, yearSprint);
+  const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
+  const byAssignee = new Map<string, { estimatedTotal: number; daysLeftTotal: number }>();
+  for (const story of sprintStories) {
+    if (story.status !== "todo" && story.status !== "inProgress") continue;
+    const assignee = story.assignee?.trim() || "Unassigned";
+    const row = byAssignee.get(assignee) ?? { estimatedTotal: 0, daysLeftTotal: 0 };
+    const estPiece = story.estimatedDays ?? story.daysLeft ?? 0;
+    row.estimatedTotal += Math.max(0, estPiece);
+    row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
+    byAssignee.set(assignee, row);
+  }
+  const workloadCapacityByAssignee = [...byAssignee.entries()]
+    .map(([assignee, v]) => {
+      const utilizationPct =
+        workloadSprintCalendarDaysLeft > 0
+          ? (v.daysLeftTotal / workloadSprintCalendarDaysLeft) * 100
+          : v.daysLeftTotal > 0
+            ? 999
+            : 0;
+      const isOverCapacity =
+        workloadSprintCalendarDaysLeft > 0
+          ? v.daysLeftTotal > workloadSprintCalendarDaysLeft
+          : v.daysLeftTotal > 0;
+      return {
+        assignee,
+        estimatedTotal: v.estimatedTotal,
+        daysLeftTotal: v.daysLeftTotal,
+        utilizationPct,
+        isOverCapacity,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.utilizationPct - a.utilizationPct ||
+        b.daysLeftTotal - a.daysLeftTotal ||
+        a.assignee.localeCompare(b.assignee),
+    );
+  return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft };
+}
+
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -386,6 +447,23 @@ function sprintDayDates(planYear: number, month: number, yearSprint: number): Da
   return out;
 }
 
+/** Count of calendar days from the start of today through the end of the sprint (inclusive), or 0 if the sprint has ended. */
+function sprintCalendarDaysRemaining(planYear: number, month: number, yearSprint: number): number {
+  const dayDates = sprintDayDates(planYear, month, yearSprint);
+  if (dayDates.length === 0) return 0;
+  const today = startOfDay(new Date());
+  const first = startOfDay(dayDates[0]);
+  const lastEnd = endOfDay(dayDates[dayDates.length - 1]);
+  const t = today.getTime();
+  if (t > lastEnd.getTime()) return 0;
+  if (t < first.getTime()) return dayDates.length;
+  let n = 0;
+  for (const d of dayDates) {
+    if (startOfDay(d).getTime() >= t) n += 1;
+  }
+  return n;
+}
+
 function buildFlowTrend(
   stories: UserStoryItem[],
   month: number,
@@ -442,11 +520,13 @@ export function buildSprintAnalytics(
 ): SprintAnalyticsData {
   const stories = collectMonthStories(initiatives, month);
   const workload = buildWorkloadByAssignee(stories, month, yearSprint);
+  const capacity = buildWorkloadCapacityByAssignee(stories, month, yearSprint, planYear);
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);
   return {
     statusPie: buildStatusPie(stories, month, yearSprint),
     burndown: buildBurndown(stories, month, yearSprint, metric, planYear),
     ...workload,
+    ...capacity,
     ...flow,
     totalStories: stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint)).length,
   };
