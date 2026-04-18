@@ -697,9 +697,23 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ sprint: null }),
           });
-          if (!response.ok) throw new Error("Failed to update story");
+          if (!response.ok) {
+            const body = await response.text().catch(() => "");
+            console.error("[story-move] unschedule PATCH failed", {
+              storyId,
+              httpStatus: response.status,
+              responseBody: body || undefined,
+              patch: { sprint: null },
+            });
+            throw new Error(`Failed to update story: ${response.status}`);
+          }
           toast.success("Story moved to unscheduled");
-        } catch {
+        } catch (err) {
+          console.error("[story-move] unschedule drop failed", {
+            storyId,
+            overId,
+            cause: err instanceof Error ? err.message : String(err),
+          });
           await refresh();
           toast.error("Failed to clear sprint on story");
         }
@@ -709,7 +723,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       const kanbanMatch = /^kanban:(\d+):(todo|inProgress|done|approved)$/.exec(overId);
       if (!kanbanMatch) return;
       const sprint = clampYearSprint(Number(kanbanMatch[1]));
-      const status = kanbanMatch[3] as StoryStatus;
+      // Group 1 = year sprint; group 2 = status (there is no third capture).
+      const status = kanbanMatch[2] as StoryStatus;
       const nextStatus = status;
 
       flushSync(() => {
@@ -726,14 +741,32 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         );
       });
       try {
+        const patchBody = { status: nextStatus, sprint };
         const response = await fetch(`/api/stories/${storyId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: nextStatus, sprint }),
+          body: JSON.stringify(patchBody),
         });
-        if (!response.ok) throw new Error("Failed to update story");
+        if (!response.ok) {
+          const body = await response.text().catch(() => "");
+          console.error("[story-move] kanban PATCH failed", {
+            storyId,
+            httpStatus: response.status,
+            responseBody: body || undefined,
+            patch: patchBody,
+            overId,
+          });
+          throw new Error(`Failed to update story: ${response.status}`);
+        }
         toast.success("Story updated");
-      } catch {
+      } catch (err) {
+        console.error("[story-move] kanban drop failed", {
+          storyId,
+          nextStatus,
+          sprint,
+          overId,
+          cause: err instanceof Error ? err.message : String(err),
+        });
         await refresh();
         toast.error("Failed to move story");
       }

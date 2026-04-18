@@ -657,6 +657,7 @@ export function TimelineGrid({
                 initiatives={initiatives}
                 month={activeMonth}
                 yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+                planYear={currentYear}
               />
             )}
           </div>

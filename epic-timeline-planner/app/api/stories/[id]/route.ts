@@ -3,13 +3,15 @@ import { StoryStatus } from "@/lib/generated/prisma";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { YEAR_SPRINT_MAX, YEAR_SPRINT_MIN } from "@/lib/year-sprint";
 
 const updateStorySchema = z.object({
   title: z.string().trim().min(2).max(160).optional(),
   icon: z.string().trim().min(1).max(4).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   assignee: z.string().trim().max(120).optional().nullable(),
-  sprint: z.number().int().min(1).max(2).optional().nullable(),
+  /** Year sprint 1–24, or legacy 1–2 (month lane) per `resolveStoryYearSprint`. */
+  sprint: z.number().int().min(YEAR_SPRINT_MIN).max(YEAR_SPRINT_MAX).optional().nullable(),
   estimatedDays: z.number().int().min(0).max(3650).optional().nullable(),
   daysLeft: z.number().int().min(0).max(3650).optional().nullable(),
   status: z.nativeEnum(StoryStatus).optional(),
