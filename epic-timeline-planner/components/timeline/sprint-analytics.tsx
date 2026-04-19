@@ -62,14 +62,21 @@ type SprintAnalyticsProps = {
   month: number;
   yearSprint: number;
   planYear: number;
+  filterEpicTeamId?: string | null;
 };
 
-export function SprintAnalytics({ initiatives, month, yearSprint, planYear }: SprintAnalyticsProps) {
+export function SprintAnalytics({
+  initiatives,
+  month,
+  yearSprint,
+  planYear,
+  filterEpicTeamId = null,
+}: SprintAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
   const analytics = useMemo(
-    () => buildSprintAnalytics(initiatives, month, yearSprint, metric, planYear),
-    [initiatives, month, yearSprint, metric, planYear],
+    () => buildSprintAnalytics(initiatives, month, yearSprint, metric, planYear, filterEpicTeamId),
+    [initiatives, month, yearSprint, metric, planYear, filterEpicTeamId],
   );
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);

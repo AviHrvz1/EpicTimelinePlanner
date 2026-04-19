@@ -211,15 +211,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeYearSprint, setActiveYearSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
-  const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("team-queue");
+  const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("epic-gantt");
   /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
   const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
-  /** Quarter team-assignment drill: title, breadcrumb, and left-panel epic list span `months`. */
-  const [teamTriageQuarterContext, setTeamTriageQuarterContext] = useState<{
-    label: string;
-    month: number;
-    months: number[];
-  } | null>(null);
   const [monthTeamBoardByKey, setMonthTeamBoardByKey] = useState<Record<string, MonthTeamBoardPersisted>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -346,10 +340,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       setActiveSprintTab(sprintViewRaw);
     }
     const planTabRaw = params.get("planTab");
-    let hydratedMonthPlanTab: MonthPlanSurfaceTab = "team-queue";
+    let hydratedMonthPlanTab: MonthPlanSurfaceTab = "epic-gantt";
     if (hydratedMonth != null) {
       if (planTabRaw === "team") {
         hydratedMonthPlanTab = "team-queue";
+      } else if (planTabRaw === "epic") {
+        hydratedMonthPlanTab = "epic-gantt";
       } else if (planTabRaw === "sprintBoard") {
         hydratedMonthPlanTab = "sprint-kanban";
       } else if (planTabRaw === "sprintInsights") {
@@ -357,10 +353,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       } else if (params.get("sprint") != null) {
         hydratedMonthPlanTab = sprintViewRaw === "status" ? "sprint-status" : "sprint-kanban";
       } else {
-        hydratedMonthPlanTab = "team-queue";
+        hydratedMonthPlanTab = "epic-gantt";
       }
       setActiveMonthPlanTab(hydratedMonthPlanTab);
-      if (hydratedMonthPlanTab === "sprint-kanban") {
+      if (hydratedMonthPlanTab === "sprint-kanban" || hydratedMonthPlanTab === "sprint-status") {
         const sprintTeamRaw = params.get("sprintTeam");
         if (sprintTeamRaw && MONTH_TEAM_IDS.includes(sprintTeamRaw)) {
           setSprintStoryBoardTeamId(sprintTeamRaw);
@@ -397,20 +393,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (prevTimelineMonthRef.current !== activeTimelineMonth) {
       prevTimelineMonthRef.current = activeTimelineMonth;
       if (activeTimelineMonth != null) {
-        setActiveMonthPlanTab("team-queue");
+        setActiveMonthPlanTab("epic-gantt");
         setSprintStoryBoardTeamId(null);
       }
     }
   }, [activeTimelineMonth]);
-
-  useEffect(() => {
-    setTeamTriageQuarterContext((prev) => {
-      if (prev == null) return null;
-      if (activeMonthPlanTab !== "team-queue") return null;
-      if (activeTimelineMonth == null || !prev.months.includes(activeTimelineMonth)) return null;
-      return prev;
-    });
-  }, [activeMonthPlanTab, activeTimelineMonth]);
 
   useEffect(() => {
     try {
@@ -429,14 +416,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
     if (activeTimelineMonth != null) {
       params.set("month", String(activeTimelineMonth));
-      if (activeMonthPlanTab === "team-queue") params.set("planTab", "team");
+      if (activeMonthPlanTab === "epic-gantt") params.set("planTab", "epic");
+      else if (activeMonthPlanTab === "team-queue") params.set("planTab", "team");
       else if (activeMonthPlanTab === "sprint-kanban") params.set("planTab", "sprintBoard");
       else params.set("planTab", "sprintInsights");
     }
     if (activeYearSprint != null) params.set("sprint", String(activeYearSprint));
     if (activeYearSprint != null) params.set("sprintView", activeSprintTab);
     if (
-      activeMonthPlanTab === "sprint-kanban" &&
+      (activeMonthPlanTab === "sprint-kanban" || activeMonthPlanTab === "sprint-status") &&
       isKnownEpicTeamId(sprintStoryBoardTeamId)
     ) {
       params.set("sprintTeam", sprintStoryBoardTeamId);
@@ -486,7 +474,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setActiveMonthPlanTab(tab);
     if (tab === "sprint-kanban") setActiveSprintTab("kanban");
     if (tab === "sprint-status") setActiveSprintTab("status");
-    if (tab === "team-queue" || tab === "sprint-status") {
+    if (tab === "epic-gantt" || tab === "team-queue" || tab === "sprint-status") {
       setSprintStoryBoardTeamId(null);
     }
   }, []);
@@ -688,8 +676,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (!response.ok) {
       let message = `Could not save (${response.status})`;
       try {
-        const body = (await response.json()) as { message?: string };
+        const body = (await response.json()) as {
+          message?: string;
+          issues?: { fieldErrors?: Record<string, string[] | undefined> };
+        };
         if (typeof body?.message === "string") message = body.message;
+        const details = Object.entries(body?.issues?.fieldErrors ?? {})
+          .flatMap(([field, errs]) => (errs ?? []).map((err) => `${field}: ${err}`))
+          .join("; ");
+        if (details) message = `${message} (${details})`;
       } catch {
         /* ignore */
       }
@@ -709,8 +704,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (!response.ok) {
       let message = `Could not save (${response.status})`;
       try {
-        const body = (await response.json()) as { message?: string };
+        const body = (await response.json()) as {
+          message?: string;
+          issues?: { fieldErrors?: Record<string, string[] | undefined> };
+        };
         if (typeof body?.message === "string") message = body.message;
+        const details = Object.entries(body?.issues?.fieldErrors ?? {})
+          .flatMap(([field, errs]) => (errs ?? []).map((err) => `${field}: ${err}`))
+          .join("; ");
+        if (details) message = `${message} (${details})`;
       } catch {
         /* ignore */
       }
@@ -1121,13 +1123,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
 
       let month: number;
-      let planSprint: number;
+      let planSprint: 1 | 2;
       let dropLaneIndex: number | undefined;
       const epicCell = /^epic-plan:(\d+):([12])$/.exec(overId);
       if (epicCell) {
         month = Number(epicCell[1]);
         const lane = Number(epicCell[2]) as 1 | 2;
-        planSprint = globalSprintFromMonthLane(month, lane);
+        planSprint = lane;
         dropLaneIndex = undefined;
       } else if (overId.startsWith("month:")) {
         const parsed = parseMonthDropTarget(overId);
@@ -1136,7 +1138,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           return;
         }
         month = parsed.month;
-        planSprint = globalSprintFromMonthLane(month, 1);
+        planSprint = 1;
         dropLaneIndex = parsed.laneIndex;
         console.log("[gantt-drop] epic month drop parsed", { month, dropLaneIndex });
       } else {
@@ -1555,22 +1557,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   }
                 }}
                 epicBacklogOrderByMonth={epicBacklogOrderByMonth}
-                epicPanelQuarterMonths={
-                  teamTriageQuarterContext &&
-                  activeMonthPlanTab === "team-queue" &&
-                  activeTimelineMonth != null &&
-                  teamTriageQuarterContext.months.includes(activeTimelineMonth)
-                    ? teamTriageQuarterContext.months
-                    : null
-                }
-                epicPanelQuarterLabel={
-                  teamTriageQuarterContext &&
-                  activeMonthPlanTab === "team-queue" &&
-                  activeTimelineMonth != null &&
-                  teamTriageQuarterContext.months.includes(activeTimelineMonth)
-                    ? teamTriageQuarterContext.label
-                    : null
-                }
                 monthEpicTeamFilterId={
                   activeTimelineMonth != null &&
                   activeMonthPlanTab === "sprint-kanban" &&
@@ -1605,9 +1591,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setActiveTimelineMonth(null);
                   setActiveYearSprint(null);
                   setActiveSprintTab("kanban");
-                  setActiveMonthPlanTab("team-queue");
+                  setActiveMonthPlanTab("epic-gantt");
                   setSprintStoryBoardTeamId(null);
-                  setTeamTriageQuarterContext(null);
                 }}
                 focusedQuarterLabel={focusedQuarterLabel}
                 focusedMonthExternal={activeTimelineMonth}
@@ -1618,31 +1603,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 monthTeamBoardByKey={monthTeamBoardByKey}
                 onEnterSprintStoryBoard={openSprintStoryBoard}
                 sprintStoryBoardTeamId={sprintStoryBoardTeamId}
-                teamTriageHeadingPrimaryOverride={
-                  teamTriageQuarterContext &&
-                  activeMonthPlanTab === "team-queue" &&
-                  activeTimelineMonth != null &&
-                  teamTriageQuarterContext.months.includes(activeTimelineMonth)
-                    ? teamTriageQuarterContext.label
-                    : null
-                }
-                onEnterQuarterTeamTriage={(quarterLabel, anchorMonth) => {
-                  const months = [
-                    ...(QUARTERS.find((q) => q.label === quarterLabel)?.months ?? [anchorMonth]),
-                  ];
-                  setSprintStoryBoardTeamId(null);
-                  setActiveTimelineMonth(anchorMonth);
-                  setActiveMonthPlanTab("team-queue");
-                  setTeamTriageQuarterContext({ label: quarterLabel, month: anchorMonth, months });
-                }}
-                teamAssignmentBreadcrumb={
-                  Boolean(
-                    teamTriageQuarterContext &&
-                      activeMonthPlanTab === "team-queue" &&
-                      activeTimelineMonth != null &&
-                      teamTriageQuarterContext.months.includes(activeTimelineMonth),
-                  )
-                }
+                onSprintStoryBoardTeamChange={setSprintStoryBoardTeamId}
                 onFocusedQuarterChange={setFocusedQuarterLabel}
                 onSprintTabChange={setActiveSprintTab}
                 onOpenEpic={(epicId) => {

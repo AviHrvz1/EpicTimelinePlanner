@@ -2,9 +2,9 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
+import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
@@ -13,11 +13,12 @@ import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import {
+  MONTH_TEAM_COLUMNS,
   isKnownEpicTeamId,
   monthTeamLabelForId,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
-import { InitiativeItem } from "@/lib/types";
+import { EpicItem, InitiativeItem } from "@/lib/types";
 import { clampYearSprint, firstGlobalSprintForMonth, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
 
@@ -110,7 +111,70 @@ function GanttLaneRow({
   );
 }
 
-export type MonthPlanSurfaceTab = "team-queue" | "sprint-kanban" | "sprint-status";
+function epicPlanOverlapsMonth(epic: EpicItem, month: number): boolean {
+  if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
+  return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
+
+type EpicGanttLaneRowProps = {
+  epic: EpicItem;
+  initiative: InitiativeItem;
+  gridStyle: CSSProperties;
+  onOpenEpic: (epicId: string) => void;
+  ganttLaneSortIndex: number;
+};
+
+function formatDayMonthYearShort(date: Date): string {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+}
+
+function sprintDateRangeText(year: number, month: number, lane: 1 | 2): string {
+  const lastDay = new Date(year, month, 0).getDate();
+  const startDay = lane === 1 ? 1 : 16;
+  const endDay = lane === 1 ? 15 : lastDay;
+  const start = new Date(year, month - 1, startDay);
+  const end = new Date(year, month - 1, endDay);
+  return `${formatDayMonthYearShort(start)}-${formatDayMonthYearShort(end)}`;
+}
+
+function EpicGanttLaneRow({ epic, initiative, gridStyle, onOpenEpic, ganttLaneSortIndex }: EpicGanttLaneRowProps) {
+  const stories = epic.userStories ?? [];
+  const totalStories = stories.length;
+  const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+  const barColor = epic.color?.trim() ? epic.color : initiative.color;
+
+  return (
+    <div
+      className="relative min-w-0"
+      data-gantt-lane-index={ganttLaneSortIndex}
+    >
+      <p className="mb-1 truncate text-[11px] font-medium text-slate-500">{initiative.title}</p>
+      <div className="relative grid min-w-0 gap-2" style={gridStyle}>
+        <div
+          className="relative z-20 min-w-0 pt-0.5 pb-0.5"
+          style={{ gridColumn: "1 / span 1", gridRow: 1 }}
+        >
+          <EpicPlanTimelineBar
+            id={epic.id}
+            title={epic.title}
+            color={barColor}
+            progressPercent={completionPercent}
+            progressLabel={
+              totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+            }
+            onClick={() => onOpenEpic(epic.id)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export type MonthPlanSurfaceTab = "epic-gantt" | "team-queue" | "sprint-kanban" | "sprint-status";
 
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
@@ -137,6 +201,8 @@ type TimelineGridProps = {
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
   /** Delivery team id when sprint story board was opened from a team lane (breadcrumbs + left epic list). */
   sprintStoryBoardTeamId?: string | null;
+  /** Sprint view team filter selector (null = all teams). */
+  onSprintStoryBoardTeamChange?: (teamId: string | null) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
@@ -144,12 +210,6 @@ type TimelineGridProps = {
   onOpenInitiative: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
-  /** When opening team assignment from quarter drill, show this label instead of the calendar month in the board title. */
-  teamTriageHeadingPrimaryOverride?: string | null;
-  /** Quarter Gantt: jump to team assignment for this quarter’s first roadmap month (title uses quarter, not month). */
-  onEnterQuarterTeamTriage?: (quarterLabel: string, anchorMonth: number) => void;
-  /** Month drill from quarter “Epic Assignment -> Teams”: last breadcrumb shows Team assignment, not the month. */
-  teamAssignmentBreadcrumb?: boolean;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -190,15 +250,66 @@ function QuarterYearProgressIcon({
 }
 
 
-/** Minimal hit target under each month label; no dashed lane stack. */
-function MonthDropCell({ month }: { month: number }) {
+/** Drop strip under month header (quarter + month epic plan). */
+function MonthDropCell({
+  month,
+  variant = "compact",
+}: {
+  month: number;
+  variant?: "compact" | "prominent";
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `month:${month}` });
+  const isProminent = variant === "prominent";
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "w-full shrink-0 rounded-lg transition",
+        isProminent
+          ? "mt-2 flex min-h-11 items-center justify-center border border-dashed border-slate-200/90 bg-slate-50/50 px-3 text-center"
+          : "h-2",
+        isOver
+          ? isProminent
+            ? "border-primary/35 bg-primary/10 ring-2 ring-primary/15"
+            : "h-2.5 bg-primary/25 ring-1 ring-primary/20"
+          : isProminent && "hover:border-slate-300/80 hover:bg-slate-50/90",
+      )}
+      aria-hidden={!isProminent}
+    >
+      {isProminent ? (
+        <span
+          className={cn(
+            "text-[11px] font-semibold tracking-tight text-slate-500 transition",
+            isOver && "text-primary",
+          )}
+        >
+          {isOver ? `Release to place epic in ${MONTHS[month - 1]}` : `Drop epic here to plan in ${MONTHS[month - 1]}`}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function MonthEpicDropArea({
+  month,
+  children,
+}: {
+  month: number;
+  children: ReactNode;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: `month:${month}` });
   return (
     <div
       ref={setNodeRef}
-      className={cn("h-2 w-full shrink-0 rounded-sm transition", isOver && "bg-primary/25")}
-      aria-hidden
-    />
+      className={cn(
+        "min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100/90 p-3 transition ring-1 sm:p-4",
+        isOver
+          ? "border-primary/35 bg-primary/10 ring-primary/20"
+          : "bg-slate-50/35 ring-slate-100/80",
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -219,14 +330,12 @@ export function TimelineGrid({
   onOpenInitiative,
   onOpenStory,
   onResizeInitiativeRange,
-  monthPlanTab = "team-queue",
+  monthPlanTab = "epic-gantt",
   onMonthPlanTabChange,
   monthTeamBoardByKey = {},
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
-  teamTriageHeadingPrimaryOverride = null,
-  onEnterQuarterTeamTriage,
-  teamAssignmentBreadcrumb = false,
+  onSprintStoryBoardTeamChange,
 }: TimelineGridProps) {
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
@@ -337,9 +446,31 @@ export function TimelineGrid({
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
 
+  const monthEpicGanttRows = useMemo(() => {
+    if (activeMonth == null) return [];
+    const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+    for (const initiative of scheduledInitiatives) {
+      const sm = initiative.startMonth ?? 1;
+      const em = initiative.endMonth ?? sm;
+      if (em < activeMonth || sm > activeMonth) continue;
+      for (const epic of initiative.epics ?? []) {
+        if (!epicPlanOverlapsMonth(epic, activeMonth)) continue;
+        rows.push({ epic, initiative });
+      }
+    }
+    return rows.sort((a, b) => {
+      const ir = a.initiative.timelineRow - b.initiative.timelineRow;
+      if (ir !== 0) return ir;
+      return a.epic.title.localeCompare(b.epic.title);
+    });
+  }, [scheduledInitiatives, activeMonth]);
+  const epicMonthGridStyle = useMemo((): CSSProperties => ({ gridTemplateColumns: "repeat(1, minmax(0, 1fr))" }), []);
+
   const quarterLabelByMonth = new Map<number, string>(
     QUARTERS.flatMap((quarter) => quarter.months.map((month) => [month, quarter.label] as const)),
   );
+  const activeMonthQuarterLabel =
+    activeMonth != null ? (quarterLabelByMonth.get(activeMonth) ?? null) : null;
   const quarterTone: Record<string, { active: string; idle: string }> = {
     Q1: {
       active:
@@ -378,6 +509,12 @@ export function TimelineGrid({
     Q3: "bg-emerald-50/45 ring-emerald-100",
     Q4: "bg-violet-50/45 ring-violet-100",
   };
+  const quarterBadgeTone: Record<string, string> = {
+    Q1: "bg-blue-500/15 text-blue-900 ring-1 ring-blue-200/70",
+    Q2: "bg-cyan-500/15 text-cyan-900 ring-1 ring-cyan-200/70",
+    Q3: "bg-emerald-500/15 text-emerald-900 ring-1 ring-emerald-200/70",
+    Q4: "bg-violet-500/15 text-violet-900 ring-1 ring-violet-200/70",
+  };
   const gridStyle: CSSProperties = {
     gridTemplateColumns: focusedQuarter
       ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
@@ -411,7 +548,7 @@ export function TimelineGrid({
       prevActiveMonthRef.current = activeMonth;
       if (hadPreviousMonth && activeMonth != null) {
         setActiveSprint(firstGlobalSprintForMonth(activeMonth));
-        onMonthPlanTabChange?.("team-queue");
+        onMonthPlanTabChange?.("epic-gantt");
         setActiveSprintTab("kanban");
       }
     }
@@ -472,20 +609,15 @@ export function TimelineGrid({
       });
     }
     breadcrumbItems.push({
-      label: teamAssignmentBreadcrumb ? "Team assignment" : MONTHS[activeMonth - 1],
-      onClick: teamAssignmentBreadcrumb
-        ? null
-        : () => {
-            setActiveSprint(null);
-            onMonthPlanTabChange?.("team-queue");
-          },
-      ...(teamAssignmentBreadcrumb ? { currentTone: "sprint" as const } : {}),
+      label: MONTHS[activeMonth - 1],
+      onClick: () => {
+        setActiveSprint(null);
+        onMonthPlanTabChange?.("epic-gantt");
+      },
     });
     if (activeSprint != null && monthPlanTab === "sprint-kanban") {
-      const teamLabel = monthTeamLabelForId(sprintStoryBoardTeamId);
-      const sprintTitle = teamLabel ? `Team ${teamLabel} - Sprint ${activeSprint}` : `Sprint ${activeSprint}`;
       breadcrumbItems.push({
-        label: sprintTitle,
+        label: `Sprint ${activeSprint}`,
         onClick: null,
         currentTone: "sprint",
       });
@@ -511,6 +643,10 @@ export function TimelineGrid({
   }
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
+  const showSprintTeamPicker =
+    activeMonth != null &&
+    activeSprint != null &&
+    (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status");
 
   return (
     <div className="h-full min-h-0 w-full overflow-x-hidden overflow-y-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
@@ -551,6 +687,30 @@ export function TimelineGrid({
                 ) : null}
               </div>
             ))}
+            {showSprintTeamPicker ? (
+              <>
+                <ChevronRight className="size-4 text-slate-400" aria-hidden />
+                <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/90 px-2 py-1 shadow-sm">
+                  <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <select
+                    value={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : "all"}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      onSprintStoryBoardTeamChange?.(next === "all" ? null : next);
+                    }}
+                    className="h-7 min-w-[9.25rem] cursor-pointer rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                    aria-label="Filter sprint views by team"
+                  >
+                    <option value="all">All teams</option>
+                    {MONTH_TEAM_COLUMNS.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : null}
           </div>
         ) : null}
         {!focusedQuarter && !activeMonth ? (
@@ -597,18 +757,32 @@ export function TimelineGrid({
             ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="inline-flex min-w-0 shrink-0 flex-col gap-2 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm sm:flex-row sm:items-center">
-            <div className="inline-flex min-w-0 flex-1 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+          <div className="inline-flex min-w-0 shrink-0 flex-col gap-2 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white via-white to-slate-50/90 px-2 py-2 shadow-md ring-1 ring-slate-200/55 backdrop-blur-sm sm:flex-row sm:items-center">
+            <div className="inline-flex min-w-0 flex-1 rounded-xl bg-slate-100/90 p-1 ring-1 ring-slate-200/80">
+              <button
+                type="button"
+                onClick={() => {
+                  onMonthPlanTabChange?.("epic-gantt");
+                }}
+                className={cn(
+                  "min-w-0 shrink rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
+                  monthPlanTab === "epic-gantt"
+                    ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-300/90"
+                    : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
+                )}
+              >
+                Epic plan
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   onMonthPlanTabChange?.("team-queue");
                 }}
                 className={cn(
-                  "min-w-0 shrink rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition sm:px-3 sm:text-[13px]",
+                  "min-w-0 shrink rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
                   monthPlanTab === "team-queue"
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                    : "text-slate-600 hover:text-slate-800",
+                    ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-300/90"
+                    : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
                 )}
               >
                 Team queue
@@ -620,10 +794,10 @@ export function TimelineGrid({
                   setActiveSprintTab("status");
                 }}
                 className={cn(
-                  "min-w-0 shrink rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition sm:px-3 sm:text-[13px]",
+                  "min-w-0 shrink rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
                   monthPlanTab === "sprint-status"
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                    : "text-slate-600 hover:text-slate-800",
+                    ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-300/90"
+                    : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
                 )}
               >
                 Sprint insights
@@ -665,78 +839,134 @@ export function TimelineGrid({
       </div>
       {!activeMonth && !(focusedQuarter && quarterViewTab === "status") ? (
         <div className="mb-4 grid min-w-0 gap-2" style={gridStyle}>
-          {visibleQuarterHeaders.map((quarter) =>
-            focusedQuarter ? (
-              <div
-                key={quarter.label}
-                className="flex min-w-0 items-stretch justify-between gap-2"
-                style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFocusedMonth(null);
-                    onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
-                  }}
-                  className={cn(
-                    "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
-                    focusedQuarterLabel === quarter.label
-                      ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
-                      : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
-                  )}
-                >
-                  <QuarterYearProgressIcon quarterLabel={quarter.label} />
-                  <span>{quarter.label}</span>
-                </button>
-                {quarterViewTab === "gantt" && onEnterQuarterTeamTriage ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isPostDragClickSuppressed()) return;
-                      const anchorMonth = quarter.months[0] ?? 1;
-                      onEnterQuarterTeamTriage(quarter.label, anchorMonth);
-                      setFocusedMonth(anchorMonth);
-                      onMonthPlanTabChange?.("team-queue");
-                    }}
-                    className="inline-flex shrink-0 items-center justify-center self-stretch rounded-xl border border-sky-200/90 bg-gradient-to-b from-sky-50 to-white px-3 py-2 text-center text-[11px] font-bold leading-tight tracking-wide text-sky-900 shadow-sm ring-1 ring-sky-200/60 transition hover:border-sky-300 hover:from-sky-100 hover:to-white sm:max-w-[11rem] sm:text-[12px]"
-                  >
-                    {"Epic Assignment -> Teams"}
-                  </button>
-                ) : null}
-              </div>
-            ) : (
-              <button
-                key={quarter.label}
-                type="button"
-                onClick={() => {
-                  setFocusedMonth(null);
-                  onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
-                }}
-                className={cn(
-                  "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
-                  focusedQuarterLabel === quarter.label
-                    ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
-                    : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
-                )}
-                style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
-              >
-                <QuarterYearProgressIcon quarterLabel={quarter.label} />
-                <span>{quarter.label}</span>
-              </button>
-            ),
-          )}
+          {visibleQuarterHeaders.map((quarter) => (
+            <button
+              key={quarter.label}
+              type="button"
+              onClick={() => {
+                setFocusedMonth(null);
+                onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
+              }}
+              className={cn(
+                "flex w-full min-w-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
+                focusedQuarterLabel === quarter.label
+                  ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
+                  : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
+              )}
+              style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
+            >
+              <QuarterYearProgressIcon quarterLabel={quarter.label} />
+              <span>{quarter.label}</span>
+            </button>
+          ))}
         </div>
       ) : null}
       {activeMonth ? (
-        <div className="mb-4 space-y-3 rounded-xl bg-slate-50/60 p-3">
+        <div
+          className={cn(
+            "mb-4 rounded-2xl p-1.5 shadow-lg ring-1",
+            activeMonthQuarterLabel && quarterPanelTone[activeMonthQuarterLabel]
+              ? quarterPanelTone[activeMonthQuarterLabel]
+              : "bg-slate-100/70 ring-slate-200/90",
+          )}
+        >
           <div
             className={cn(
-              "flex flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5",
-              monthPlanTab === "team-queue" || monthPlanTab === "sprint-kanban" ? "min-h-[56rem]" : "min-h-0",
+              "flex flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
+              monthPlanTab === "epic-gantt" ||
+              monthPlanTab === "team-queue" ||
+              monthPlanTab === "sprint-kanban"
+                ? "min-h-[56rem]"
+                : "min-h-0",
             )}
           >
-            {monthPlanTab === "team-queue" ? (
-              <div className="flex-1">
+            {monthPlanTab === "epic-gantt" && activeMonth != null ? (
+              <div className="flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
+                <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
+                  <div
+                    className={cn(
+                      "overflow-hidden rounded-2xl border border-slate-200/55 p-4 shadow-sm ring-1 ring-black/[0.03]",
+                      activeMonthQuarterLabel === "Q1" && "bg-gradient-to-br from-blue-50/95 via-white to-white",
+                      activeMonthQuarterLabel === "Q2" && "bg-gradient-to-br from-cyan-50/95 via-white to-white",
+                      activeMonthQuarterLabel === "Q3" && "bg-gradient-to-br from-emerald-50/95 via-white to-white",
+                      activeMonthQuarterLabel === "Q4" && "bg-gradient-to-br from-violet-50/95 via-white to-white",
+                      !activeMonthQuarterLabel && "bg-gradient-to-br from-slate-50/90 via-white to-white",
+                    )}
+                  >
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Timeline</p>
+                        <div className="mt-1 flex flex-wrap items-baseline gap-2.5">
+                          <h3 className="text-[20px] font-bold tracking-tight text-slate-900 sm:text-[22px]">
+                            {MONTHS[activeMonth - 1]}
+                          </h3>
+                          <span className="rounded-md bg-white/80 px-2 py-0.5 text-[13px] font-semibold tabular-nums text-slate-500 shadow-sm ring-1 ring-slate-200/80">
+                            {currentYear}
+                          </span>
+                        </div>
+                      </div>
+                      {activeMonthQuarterLabel ? (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider shadow-sm",
+                            quarterBadgeTone[activeMonthQuarterLabel] ??
+                              "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+                          )}
+                        >
+                          {activeMonthQuarterLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        title={`Open sprint ${globalSprintFromMonthLane(activeMonth, 1)} board`}
+                        onClick={() => {
+                          if (isPostDragClickSuppressed()) return;
+                          onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 1), null);
+                        }}
+                        className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                      >
+                        {`Sprint ${globalSprintFromMonthLane(activeMonth, 1)} (${sprintDateRangeText(currentYear, activeMonth, 1)})`}
+                      </button>
+                      <button
+                        type="button"
+                        title={`Open sprint ${globalSprintFromMonthLane(activeMonth, 2)} board`}
+                        onClick={() => {
+                          if (isPostDragClickSuppressed()) return;
+                          onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 2), null);
+                        }}
+                        className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                      >
+                        {`Sprint ${globalSprintFromMonthLane(activeMonth, 2)} (${sprintDateRangeText(currentYear, activeMonth, 2)})`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <MonthEpicDropArea month={activeMonth}>
+                  <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
+                  {monthEpicGanttRows.length === 0 ? (
+                    <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
+                      No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag one from the left panel into the drop
+                      area below.
+                    </div>
+                  ) : (
+                    monthEpicGanttRows.map(({ epic, initiative }, rowIndex) => (
+                      <EpicGanttLaneRow
+                        key={epic.id}
+                        epic={epic}
+                        initiative={initiative}
+                        gridStyle={epicMonthGridStyle}
+                        onOpenEpic={onOpenEpic}
+                        ganttLaneSortIndex={rowIndex}
+                      />
+                    ))
+                  )}
+                  </div>
+                </MonthEpicDropArea>
+              </div>
+            ) : monthPlanTab === "team-queue" ? (
+              <div className="flex-1 p-3 sm:p-5">
                 <MonthTeamKanbanBoard
                   initiatives={initiatives}
                   month={activeMonth}
@@ -746,11 +976,10 @@ export function TimelineGrid({
                   onOpenSprintKanban={(yearSprint, teamId) => {
                     onEnterSprintStoryBoard?.(yearSprint, teamId);
                   }}
-                  teamTriageHeadingPrimaryOverride={teamTriageHeadingPrimaryOverride}
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
-              <div className="flex-1">
+              <div className="flex-1 p-3 sm:p-5">
                 <SprintKanbanBoard
                   initiatives={initiatives}
                   month={activeMonth}
@@ -760,12 +989,15 @@ export function TimelineGrid({
                 />
               </div>
             ) : (
-              <SprintAnalytics
-                initiatives={initiatives}
-                month={activeMonth}
-                yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
-                planYear={currentYear}
-              />
+              <div className="p-3 sm:p-5">
+                <SprintAnalytics
+                  initiatives={initiatives}
+                  month={activeMonth}
+                  yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+                  planYear={currentYear}
+                  filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -774,25 +1006,28 @@ export function TimelineGrid({
           {focusedQuarter && quarterViewTab === "gantt" ? (
             <div className="mb-4 grid min-w-0 gap-2" style={gridStyle}>
               {visibleMonths.map((month) => (
-                <div key={month} className="space-y-2">
+                <div
+                  key={month}
+                  className="space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 p-2.5 shadow-sm ring-1 ring-black/[0.03]"
+                >
                   <button
                     type="button"
                     className={cn(
-                      "w-full rounded-lg py-2 text-center text-[13px] font-medium transition",
+                      "w-full rounded-xl py-2.5 text-center text-[13px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
                       activeMonth === month
-                        ? "bg-blue-100 text-blue-800 shadow-sm ring-1 ring-blue-200"
+                        ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
                         : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
-                            "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                            "bg-slate-100 text-slate-700 ring-slate-200/80 hover:-translate-y-px hover:shadow-md",
                     )}
                     onClick={() => {
                       if (isPostDragClickSuppressed()) return;
                       setFocusedMonth(month);
-                      onMonthPlanTabChange?.("team-queue");
+                      onMonthPlanTabChange?.("epic-gantt");
                     }}
                   >
                     {MONTHS[month - 1]}
                   </button>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
                       title={`Sprint ${globalSprintFromMonthLane(month, 1)}`}
@@ -801,9 +1036,10 @@ export function TimelineGrid({
                         setFocusedMonth(month);
                         onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                       }}
-                      className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                      className="flex min-h-[2.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/75 bg-white/90 py-1.5 text-[10px] font-bold text-slate-700 shadow-sm ring-1 ring-black/[0.03] transition hover:-translate-y-px hover:border-slate-300 hover:shadow-md"
                     >
-                      {globalSprintFromMonthLane(month, 1)}
+                      <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-400">Sprint</span>
+                      <span className="tabular-nums">{globalSprintFromMonthLane(month, 1)}</span>
                     </button>
                     <button
                       type="button"
@@ -813,9 +1049,10 @@ export function TimelineGrid({
                         setFocusedMonth(month);
                         onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                       }}
-                      className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                      className="flex min-h-[2.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/75 bg-white/90 py-1.5 text-[10px] font-bold text-slate-700 shadow-sm ring-1 ring-black/[0.03] transition hover:-translate-y-px hover:border-slate-300 hover:shadow-md"
                     >
-                      {globalSprintFromMonthLane(month, 2)}
+                      <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-400">Sprint</span>
+                      <span className="tabular-nums">{globalSprintFromMonthLane(month, 2)}</span>
                     </button>
                   </div>
                   <MonthDropCell month={month} />
@@ -841,7 +1078,7 @@ export function TimelineGrid({
                           onClick={() => {
                             if (isPostDragClickSuppressed()) return;
                             setFocusedMonth(month);
-                            onMonthPlanTabChange?.("team-queue");
+                            onMonthPlanTabChange?.("epic-gantt");
                           }}
                         >
                           {MONTHS[month - 1]}

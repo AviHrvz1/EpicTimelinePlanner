@@ -65,12 +65,17 @@ export type SprintAnalyticsData = {
   workloadSprintCalendarDaysLeft: number;
 };
 
-function collectMonthStories(initiatives: InitiativeItem[], month: number): UserStoryItem[] {
+function collectMonthStories(
+  initiatives: InitiativeItem[],
+  month: number,
+  filterEpicTeamId?: string | null,
+): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
       rows.push(...(epic.userStories ?? []));
     }
   }
@@ -517,8 +522,9 @@ export function buildSprintAnalytics(
   metric: BurndownMetric,
   /** Calendar year for the roadmap view (must match the timeline year, not arbitrary initiative order). */
   planYear: number,
+  filterEpicTeamId?: string | null,
 ): SprintAnalyticsData {
-  const stories = collectMonthStories(initiatives, month);
+  const stories = collectMonthStories(initiatives, month, filterEpicTeamId);
   const workload = buildWorkloadByAssignee(stories, month, yearSprint);
   const capacity = buildWorkloadCapacityByAssignee(stories, month, yearSprint, planYear);
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);
