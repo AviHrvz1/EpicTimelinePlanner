@@ -144,6 +144,12 @@ type TimelineGridProps = {
   onOpenInitiative: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
+  /** When opening team assignment from quarter drill, show this label instead of the calendar month in the board title. */
+  teamTriageHeadingPrimaryOverride?: string | null;
+  /** Quarter Gantt: jump to team assignment for this quarter’s first roadmap month (title uses quarter, not month). */
+  onEnterQuarterTeamTriage?: (quarterLabel: string, anchorMonth: number) => void;
+  /** Month drill from quarter “Epic Assignment -> Teams”: last breadcrumb shows Team assignment, not the month. */
+  teamAssignmentBreadcrumb?: boolean;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -218,6 +224,9 @@ export function TimelineGrid({
   monthTeamBoardByKey = {},
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
+  teamTriageHeadingPrimaryOverride = null,
+  onEnterQuarterTeamTriage,
+  teamAssignmentBreadcrumb = false,
 }: TimelineGridProps) {
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
@@ -463,15 +472,18 @@ export function TimelineGrid({
       });
     }
     breadcrumbItems.push({
-      label: MONTHS[activeMonth - 1],
-      onClick: () => {
-        setActiveSprint(null);
-        onMonthPlanTabChange?.("team-queue");
-      },
+      label: teamAssignmentBreadcrumb ? "Team assignment" : MONTHS[activeMonth - 1],
+      onClick: teamAssignmentBreadcrumb
+        ? null
+        : () => {
+            setActiveSprint(null);
+            onMonthPlanTabChange?.("team-queue");
+          },
+      ...(teamAssignmentBreadcrumb ? { currentTone: "sprint" as const } : {}),
     });
     if (activeSprint != null && monthPlanTab === "sprint-kanban") {
       const teamLabel = monthTeamLabelForId(sprintStoryBoardTeamId);
-      const sprintTitle = teamLabel ? `${teamLabel} - Sprint ${activeSprint}` : `Sprint ${activeSprint}`;
+      const sprintTitle = teamLabel ? `Team ${teamLabel} - Sprint ${activeSprint}` : `Sprint ${activeSprint}`;
       breadcrumbItems.push({
         label: sprintTitle,
         onClick: null,
@@ -653,26 +665,66 @@ export function TimelineGrid({
       </div>
       {!activeMonth && !(focusedQuarter && quarterViewTab === "status") ? (
         <div className="mb-4 grid min-w-0 gap-2" style={gridStyle}>
-          {visibleQuarterHeaders.map((quarter) => (
-            <button
-              key={quarter.label}
-              type="button"
-              onClick={() => {
-                setFocusedMonth(null);
-                onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
-              }}
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
-                focusedQuarterLabel === quarter.label
-                  ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
-                  : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
-              )}
-              style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
-            >
-              <QuarterYearProgressIcon quarterLabel={quarter.label} />
-              <span>{quarter.label}</span>
-            </button>
-          ))}
+          {visibleQuarterHeaders.map((quarter) =>
+            focusedQuarter ? (
+              <div
+                key={quarter.label}
+                className="flex min-w-0 items-stretch justify-between gap-2"
+                style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFocusedMonth(null);
+                    onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
+                  }}
+                  className={cn(
+                    "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
+                    focusedQuarterLabel === quarter.label
+                      ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
+                      : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
+                  )}
+                >
+                  <QuarterYearProgressIcon quarterLabel={quarter.label} />
+                  <span>{quarter.label}</span>
+                </button>
+                {quarterViewTab === "gantt" && onEnterQuarterTeamTriage ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isPostDragClickSuppressed()) return;
+                      const anchorMonth = quarter.months[0] ?? 1;
+                      onEnterQuarterTeamTriage(quarter.label, anchorMonth);
+                      setFocusedMonth(anchorMonth);
+                      onMonthPlanTabChange?.("team-queue");
+                    }}
+                    className="inline-flex shrink-0 items-center justify-center self-stretch rounded-xl border border-sky-200/90 bg-gradient-to-b from-sky-50 to-white px-3 py-2 text-center text-[11px] font-bold leading-tight tracking-wide text-sky-900 shadow-sm ring-1 ring-sky-200/60 transition hover:border-sky-300 hover:from-sky-100 hover:to-white sm:max-w-[11rem] sm:text-[12px]"
+                  >
+                    {"Epic Assignment -> Teams"}
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <button
+                key={quarter.label}
+                type="button"
+                onClick={() => {
+                  setFocusedMonth(null);
+                  onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
+                  focusedQuarterLabel === quarter.label
+                    ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
+                    : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
+                )}
+                style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
+              >
+                <QuarterYearProgressIcon quarterLabel={quarter.label} />
+                <span>{quarter.label}</span>
+              </button>
+            ),
+          )}
         </div>
       ) : null}
       {activeMonth ? (
@@ -694,6 +746,7 @@ export function TimelineGrid({
                   onOpenSprintKanban={(yearSprint, teamId) => {
                     onEnterSprintStoryBoard?.(yearSprint, teamId);
                   }}
+                  teamTriageHeadingPrimaryOverride={teamTriageHeadingPrimaryOverride}
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (

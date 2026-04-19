@@ -150,7 +150,17 @@ function TeamColumn({
             <Users className="size-4" strokeWidth={2} aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <h4 className="text-[13px] font-bold tracking-wide text-slate-800 uppercase">{team.label}</h4>
+            <h4 className="flex w-full min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
+              <span className="shrink-0 text-[12px] font-semibold tracking-tight text-slate-600">Team :</span>
+              <span
+                className={cn(
+                  "min-w-0 max-w-full truncate rounded-md px-2 py-0.5 text-[12px] font-bold tracking-tight",
+                  team.priorityBadgeClass,
+                )}
+              >
+                {team.label}
+              </span>
+            </h4>
             <p className="mt-0.5 text-[11px] leading-snug text-slate-600">{team.subtitle}</p>
             <div className="mt-2 grid grid-cols-2 gap-1">
               <button
@@ -214,6 +224,8 @@ export type MonthTeamKanbanBoardProps = {
   onOpenEpic: (epicId: string) => void;
   /** Opens story Kanban for the global sprint; `teamId` scopes the left epic list when viewing that sprint. */
   onOpenSprintKanban: (yearSprint: number, teamId: string) => void;
+  /** When set (e.g. opened from quarter drill), replaces the calendar month in the title (e.g. show `Q1` instead of `January`). */
+  teamTriageHeadingPrimaryOverride?: string | null;
 };
 
 export function MonthTeamKanbanBoard({
@@ -223,13 +235,15 @@ export function MonthTeamKanbanBoard({
   board,
   onOpenEpic,
   onOpenSprintKanban,
+  teamTriageHeadingPrimaryOverride = null,
 }: MonthTeamKanbanBoardProps) {
   const columns = mergeMonthTeamBoardColumns(initiatives, month, board);
   const sprint1 = globalSprintFromMonthLane(month, 1);
   const sprint2 = globalSprintFromMonthLane(month, 2);
-  const triageHelp =
-    "Use the left panel to pull epics into a team. Here you only set priority within each team (P1 = next). Each lane includes this month's two sprints — click one to open that sprint's Kanban.";
+  const assignmentHelp =
+    "Use the left panel to pull epics into a team. Here you only set priority within each team (P1 = next). Each lane includes this month's two sprints — click one to open that sprint's Kanban for team stories.";
   const monthTitle = FULL_MONTH_NAMES[month - 1] ?? `Month ${month}`;
+  const headingPrimary = teamTriageHeadingPrimaryOverride?.trim() || monthTitle;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -240,13 +254,13 @@ export function MonthTeamKanbanBoard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <h2 className="text-lg font-bold tracking-tight text-slate-900">
-              <span className="text-slate-900">{monthTitle}</span>
-              <span className="font-semibold text-slate-500"> - Team triage</span>
+              <span className="text-slate-900">{headingPrimary}</span>
+              <span className="font-semibold text-slate-500"> - Team assignment</span>
             </h2>
             <button
               type="button"
-              title={triageHelp}
-              aria-label={triageHelp}
+              title={assignmentHelp}
+              aria-label={assignmentHelp}
               className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
             >
               <Info className="size-4" strokeWidth={2} aria-hidden />

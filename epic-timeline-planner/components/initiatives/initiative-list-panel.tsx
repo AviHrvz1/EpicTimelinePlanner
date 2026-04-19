@@ -114,6 +114,10 @@ type InitiativeListPanelProps = {
   epicBacklogOrderByMonth: Record<number, string[]>;
   /** When set (e.g. sprint board opened from a team lane), month epic list only shows epics assigned to this team id. */
   monthEpicTeamFilterId?: string | null;
+  /** When set (quarter team assignment), list epics for initiatives spanning any of these months (deduped). */
+  epicPanelQuarterMonths?: number[] | null;
+  /** Label for quarter-scoped list (e.g. `Q1`). */
+  epicPanelQuarterLabel?: string | null;
 };
 
 function DraggableInitiativeCard({
@@ -657,6 +661,8 @@ export function InitiativeListPanel({
   onCreateStoryQuick,
   epicBacklogOrderByMonth,
   monthEpicTeamFilterId = null,
+  epicPanelQuarterMonths = null,
+  epicPanelQuarterLabel = null,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef } = useDroppable({
     id: "initiatives:backlog-drop",
@@ -672,6 +678,24 @@ export function InitiativeListPanel({
   const [epicSearch, setEpicSearch] = useState("");
 
   const monthAssignedEpics = useMemo(() => {
+    if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
+      const byEpicId = new Map<string, { epic: EpicItem; initiative: InitiativeItem }>();
+      for (const month of epicPanelQuarterMonths) {
+        for (const initiative of initiatives) {
+          if (initiative.status !== "scheduled") continue;
+          if (initiative.startMonth == null || initiative.endMonth == null) continue;
+          if (initiative.endMonth < month || initiative.startMonth > month) continue;
+          for (const epic of initiative.epics ?? []) {
+            byEpicId.set(epic.id, { epic, initiative });
+          }
+        }
+      }
+      return [...byEpicId.values()].sort((a, b) => {
+        const byInit = a.initiative.title.localeCompare(b.initiative.title);
+        if (byInit !== 0) return byInit;
+        return a.epic.title.localeCompare(b.epic.title);
+      });
+    }
     if (activeMonth == null) return [];
     const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     for (const initiative of initiatives) {
@@ -687,16 +711,18 @@ export function InitiativeListPanel({
       if (byInit !== 0) return byInit;
       return a.epic.title.localeCompare(b.epic.title);
     });
-  }, [initiatives, activeMonth]);
+  }, [initiatives, activeMonth, epicPanelQuarterMonths]);
   /** Month list scope: all epics for the month, or only those on the selected team when viewing that team’s sprint board. */
   const monthPanelEpics = useMemo(() => {
     if (!isKnownEpicTeamId(monthEpicTeamFilterId)) return monthAssignedEpics;
     return monthAssignedEpics.filter(({ epic }) => epic.team === monthEpicTeamFilterId);
   }, [monthAssignedEpics, monthEpicTeamFilterId]);
+  const planAnchorMonth = epicPanelQuarterMonths?.[0] ?? activeMonth;
+
   const monthBacklogEpics = useMemo(() => {
-    if (activeMonth == null) return [];
-    const base = monthPanelEpics.filter(({ epic }) => !epicIsOnPlanForMonth(epic, activeMonth));
-    const order = epicBacklogOrderByMonth[activeMonth] ?? [];
+    if (planAnchorMonth == null) return [];
+    const base = monthPanelEpics.filter(({ epic }) => !epicIsOnPlanForMonth(epic, planAnchorMonth));
+    const order = epicBacklogOrderByMonth[planAnchorMonth] ?? [];
     if (order.length === 0) return base;
     const byId = new Map(base.map((row) => [row.epic.id, row]));
     const ordered: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
@@ -709,7 +735,7 @@ export function InitiativeListPanel({
     }
     const rest = [...byId.values()].sort((a, b) => a.epic.title.localeCompare(b.epic.title));
     return [...ordered, ...rest];
-  }, [monthPanelEpics, activeMonth, epicBacklogOrderByMonth]);
+  }, [monthPanelEpics, planAnchorMonth, epicBacklogOrderByMonth]);
   const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
     if (!q) return monthPanelEpics;
@@ -804,9 +830,11 @@ export function InitiativeListPanel({
             </datalist>
           </div>
           <h3 className="mt-4 mb-2 text-[14px] font-semibold tracking-[0.01em] text-slate-900">
-            {activeMonth != null
-              ? `${MONTHS[activeMonth - 1]} epics (${filteredMonthBacklogEpics.length})`
-              : `Month epics (${filteredMonthBacklogEpics.length})`}
+            {epicPanelQuarterLabel
+              ? `${epicPanelQuarterLabel} epics (${filteredMonthBacklogEpics.length})`
+              : activeMonth != null
+                ? `${MONTHS[activeMonth - 1]} epics (${filteredMonthBacklogEpics.length})`
+                : `Month epics (${filteredMonthBacklogEpics.length})`}
           </h3>
           <div
             ref={setEpicUnplanDropRef}
@@ -815,11 +843,13 @@ export function InitiativeListPanel({
               isEpicUnplanDropOver && "bg-transparent",
             )}
           >
-            {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={0} /> : null}
+            {planAnchorMonth != null ? <EpicBacklogDropSlot month={planAnchorMonth} index={0} /> : null}
             {filteredMonthBacklogEpics.length === 0 ? (
               <p className="text-[11px] text-slate-700">
                 {monthPanelEpics.length === 0
-                  ? "No epics are under initiatives scheduled in this month yet."
+                  ? epicPanelQuarterLabel
+                    ? "No epics are under initiatives scheduled in this quarter yet."
+                    : "No epics are under initiatives scheduled in this month yet."
                   : "No epics match your search."}
               </p>
             ) : (
@@ -834,10 +864,14 @@ export function InitiativeListPanel({
                     onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
                     onCreateStoryQuick={onCreateStoryQuick}
-                    backlogDropSlot={activeMonth != null ? { month: activeMonth, index: idx } : undefined}
-                    planContextMonth={activeMonth}
+                    backlogDropSlot={
+                      planAnchorMonth != null ? { month: planAnchorMonth, index: idx } : undefined
+                    }
+                    planContextMonth={planAnchorMonth}
                   />
-                  {activeMonth != null ? <EpicBacklogDropSlot month={activeMonth} index={idx + 1} /> : null}
+                  {planAnchorMonth != null ? (
+                    <EpicBacklogDropSlot month={planAnchorMonth} index={idx + 1} />
+                  ) : null}
                 </div>
               ))
             )}

@@ -214,6 +214,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("team-queue");
   /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
   const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
+  /** Quarter team-assignment drill: title, breadcrumb, and left-panel epic list span `months`. */
+  const [teamTriageQuarterContext, setTeamTriageQuarterContext] = useState<{
+    label: string;
+    month: number;
+    months: number[];
+  } | null>(null);
   const [monthTeamBoardByKey, setMonthTeamBoardByKey] = useState<Record<string, MonthTeamBoardPersisted>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -396,6 +402,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
     }
   }, [activeTimelineMonth]);
+
+  useEffect(() => {
+    setTeamTriageQuarterContext((prev) => {
+      if (prev == null) return null;
+      if (activeMonthPlanTab !== "team-queue") return null;
+      if (activeTimelineMonth == null || !prev.months.includes(activeTimelineMonth)) return null;
+      return prev;
+    });
+  }, [activeMonthPlanTab, activeTimelineMonth]);
 
   useEffect(() => {
     try {
@@ -1540,6 +1555,22 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   }
                 }}
                 epicBacklogOrderByMonth={epicBacklogOrderByMonth}
+                epicPanelQuarterMonths={
+                  teamTriageQuarterContext &&
+                  activeMonthPlanTab === "team-queue" &&
+                  activeTimelineMonth != null &&
+                  teamTriageQuarterContext.months.includes(activeTimelineMonth)
+                    ? teamTriageQuarterContext.months
+                    : null
+                }
+                epicPanelQuarterLabel={
+                  teamTriageQuarterContext &&
+                  activeMonthPlanTab === "team-queue" &&
+                  activeTimelineMonth != null &&
+                  teamTriageQuarterContext.months.includes(activeTimelineMonth)
+                    ? teamTriageQuarterContext.label
+                    : null
+                }
                 monthEpicTeamFilterId={
                   activeTimelineMonth != null &&
                   activeMonthPlanTab === "sprint-kanban" &&
@@ -1576,6 +1607,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setActiveSprintTab("kanban");
                   setActiveMonthPlanTab("team-queue");
                   setSprintStoryBoardTeamId(null);
+                  setTeamTriageQuarterContext(null);
                 }}
                 focusedQuarterLabel={focusedQuarterLabel}
                 focusedMonthExternal={activeTimelineMonth}
@@ -1586,6 +1618,31 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 monthTeamBoardByKey={monthTeamBoardByKey}
                 onEnterSprintStoryBoard={openSprintStoryBoard}
                 sprintStoryBoardTeamId={sprintStoryBoardTeamId}
+                teamTriageHeadingPrimaryOverride={
+                  teamTriageQuarterContext &&
+                  activeMonthPlanTab === "team-queue" &&
+                  activeTimelineMonth != null &&
+                  teamTriageQuarterContext.months.includes(activeTimelineMonth)
+                    ? teamTriageQuarterContext.label
+                    : null
+                }
+                onEnterQuarterTeamTriage={(quarterLabel, anchorMonth) => {
+                  const months = [
+                    ...(QUARTERS.find((q) => q.label === quarterLabel)?.months ?? [anchorMonth]),
+                  ];
+                  setSprintStoryBoardTeamId(null);
+                  setActiveTimelineMonth(anchorMonth);
+                  setActiveMonthPlanTab("team-queue");
+                  setTeamTriageQuarterContext({ label: quarterLabel, month: anchorMonth, months });
+                }}
+                teamAssignmentBreadcrumb={
+                  Boolean(
+                    teamTriageQuarterContext &&
+                      activeMonthPlanTab === "team-queue" &&
+                      activeTimelineMonth != null &&
+                      teamTriageQuarterContext.months.includes(activeTimelineMonth),
+                  )
+                }
                 onFocusedQuarterChange={setFocusedQuarterLabel}
                 onSprintTabChange={setActiveSprintTab}
                 onOpenEpic={(epicId) => {
