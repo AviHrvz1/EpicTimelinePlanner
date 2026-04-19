@@ -13,7 +13,7 @@ import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-d
 import { InitiativeListPanel } from "@/components/initiatives/initiative-list-panel";
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
 import { DragContext } from "@/components/timeline/drag-context";
-import { TimelineGrid } from "@/components/timeline/timeline-grid";
+import { TimelineGrid, type MonthPlanSurfaceTab } from "@/components/timeline/timeline-grid";
 import {
   EPICS_UNPLAN_DROP_ID,
   STORIES_UNSCHEDULE_DROP_ID,
@@ -27,11 +27,21 @@ import {
   isStoryDraggableId,
   parseStoryIdFromDraggable,
   parseMonthEpicKanbanDropId,
+  parseMonthTeamSlotDropId,
 } from "@/lib/epic-dnd-ids";
 import {
   clientYCenterFromDragEnd,
   inferGanttLaneInsertIndexFromClientY,
 } from "@/lib/gantt-lane-from-pointer";
+import {
+  applyEpicTeamQueueMove,
+  collectMonthEpicsForTeamBoard,
+  isKnownEpicTeamId,
+  monthTeamBoardStorageKey,
+  MONTH_TEAM_IDS,
+  sanitizeMonthTeamBoardPersisted,
+  type MonthTeamBoardPersisted,
+} from "@/lib/month-team-board";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -47,6 +57,23 @@ async function parseJson<T>(response: Response): Promise<T> {
     throw new Error("Request failed");
   }
   return (await response.json()) as T;
+}
+
+/** Avoid infinite `router.replace` loops when the browser serializes query params in a different order than `URLSearchParams#toString()`. */
+function queryParamsEquivalent(searchA: string, searchB: string): boolean {
+  const norm = (s: string) => (s.startsWith("?") ? s.slice(1) : s);
+  const a = new URLSearchParams(norm(searchA));
+  const b = new URLSearchParams(norm(searchB));
+  const keysA = [...new Set(a.keys())].sort();
+  const keysB = [...new Set(b.keys())].sort();
+  if (keysA.length !== keysB.length) return false;
+  for (let i = 0; i < keysA.length; i++) {
+    if (keysA[i] !== keysB[i]) return false;
+  }
+  for (const k of keysA) {
+    if (a.getAll(k).join("\0") !== b.getAll(k).join("\0")) return false;
+  }
+  return true;
 }
 
 /** Insert / move one initiative at a lane index; renumber all scheduled rows0..n-1. */
@@ -184,6 +211,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeYearSprint, setActiveYearSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
+  const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("team-queue");
+  /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
+  const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
+  const [monthTeamBoardByKey, setMonthTeamBoardByKey] = useState<Record<string, MonthTeamBoardPersisted>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem("epicPlanner.monthTeamBoard.v1");
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, MonthTeamBoardPersisted>;
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
   const [topMode, setTopMode] = useState<"roadmap" | "backlog">("roadmap");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
@@ -278,9 +319,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       setFocusedQuarterLabel(q);
     }
     const monthRaw = params.get("month");
+    let hydratedMonth: number | null = null;
     if (monthRaw) {
       const month = Number(monthRaw);
       if (Number.isFinite(month) && month >= 1 && month <= 12) {
+        hydratedMonth = month;
         setActiveTimelineMonth(month);
       }
     }
@@ -295,6 +338,28 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const sprintViewRaw = params.get("sprintView");
     if (sprintViewRaw === "kanban" || sprintViewRaw === "status") {
       setActiveSprintTab(sprintViewRaw);
+    }
+    const planTabRaw = params.get("planTab");
+    let hydratedMonthPlanTab: MonthPlanSurfaceTab = "team-queue";
+    if (hydratedMonth != null) {
+      if (planTabRaw === "team") {
+        hydratedMonthPlanTab = "team-queue";
+      } else if (planTabRaw === "sprintBoard") {
+        hydratedMonthPlanTab = "sprint-kanban";
+      } else if (planTabRaw === "sprintInsights") {
+        hydratedMonthPlanTab = "sprint-status";
+      } else if (params.get("sprint") != null) {
+        hydratedMonthPlanTab = sprintViewRaw === "status" ? "sprint-status" : "sprint-kanban";
+      } else {
+        hydratedMonthPlanTab = "team-queue";
+      }
+      setActiveMonthPlanTab(hydratedMonthPlanTab);
+      if (hydratedMonthPlanTab === "sprint-kanban") {
+        const sprintTeamRaw = params.get("sprintTeam");
+        if (sprintTeamRaw && MONTH_TEAM_IDS.includes(sprintTeamRaw)) {
+          setSprintStoryBoardTeamId(sprintTeamRaw);
+        }
+      }
     }
     const epicId = params.get("epic");
     if (epicId) {
@@ -317,19 +382,58 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setIsUrlHydrated(true);
   }, [initialInitiatives]);
 
+  const prevTimelineMonthRef = useRef<number | null | "init">("init");
+  useEffect(() => {
+    if (prevTimelineMonthRef.current === "init") {
+      prevTimelineMonthRef.current = activeTimelineMonth;
+      return;
+    }
+    if (prevTimelineMonthRef.current !== activeTimelineMonth) {
+      prevTimelineMonthRef.current = activeTimelineMonth;
+      if (activeTimelineMonth != null) {
+        setActiveMonthPlanTab("team-queue");
+        setSprintStoryBoardTeamId(null);
+      }
+    }
+  }, [activeTimelineMonth]);
+
+  useEffect(() => {
+    try {
+      const cleaned = Object.fromEntries(
+        Object.entries(monthTeamBoardByKey).map(([k, v]) => [k, sanitizeMonthTeamBoardPersisted(v)]),
+      );
+      localStorage.setItem("epicPlanner.monthTeamBoard.v1", JSON.stringify(cleaned));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [monthTeamBoardByKey]);
+
   useEffect(() => {
     if (!isUrlHydrated) return;
     const params = new URLSearchParams();
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
-    if (activeTimelineMonth != null) params.set("month", String(activeTimelineMonth));
+    if (activeTimelineMonth != null) {
+      params.set("month", String(activeTimelineMonth));
+      if (activeMonthPlanTab === "team-queue") params.set("planTab", "team");
+      else if (activeMonthPlanTab === "sprint-kanban") params.set("planTab", "sprintBoard");
+      else params.set("planTab", "sprintInsights");
+    }
     if (activeYearSprint != null) params.set("sprint", String(activeYearSprint));
     if (activeYearSprint != null) params.set("sprintView", activeSprintTab);
+    if (
+      activeMonthPlanTab === "sprint-kanban" &&
+      isKnownEpicTeamId(sprintStoryBoardTeamId)
+    ) {
+      params.set("sprintTeam", sprintStoryBoardTeamId);
+    }
     if (epicDialogOpen && editingEpic?.id) params.set("epic", editingEpic.id);
     if (selectedStoryId) params.set("story", storyRefMaps.byId[selectedStoryId] ?? selectedStoryId);
     const next = params.toString();
     const target = next ? `${pathname}?${next}` : pathname;
-    const current = `${window.location.pathname}${window.location.search}`;
-    if (current !== target) {
+    const targetSearch = next ? `?${next}` : "";
+    if (window.location.pathname !== pathname) {
+      router.replace(target, { scroll: false });
+    } else if (!queryParamsEquivalent(window.location.search, targetSearch)) {
       router.replace(target, { scroll: false });
     }
   }, [
@@ -338,12 +442,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     activeTimelineMonth,
     activeYearSprint,
     activeSprintTab,
+    activeMonthPlanTab,
     epicDialogOpen,
     editingEpic?.id,
     selectedStoryId,
     storyRefMaps.byId,
     router,
     pathname,
+    sprintStoryBoardTeamId,
   ]);
 
   const handleSprintModeChange = useCallback(
@@ -351,12 +457,31 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       setIsSprintModeActive(active);
       setActiveTimelineMonth(month);
       setActiveYearSprint(yearSprint == null ? null : clampYearSprint(yearSprint));
+      if (!active || month == null) {
+        setSprintStoryBoardTeamId(null);
+      }
       if (yearSprint == null) {
         setActiveSprintTab("kanban");
       }
     },
     [],
   );
+
+  const handleMonthPlanTabChange = useCallback((tab: MonthPlanSurfaceTab) => {
+    setActiveMonthPlanTab(tab);
+    if (tab === "sprint-kanban") setActiveSprintTab("kanban");
+    if (tab === "sprint-status") setActiveSprintTab("status");
+    if (tab === "team-queue" || tab === "sprint-status") {
+      setSprintStoryBoardTeamId(null);
+    }
+  }, []);
+
+  const openSprintStoryBoard = useCallback((yearSprint: number, teamId: string | null) => {
+    setActiveYearSprint(clampYearSprint(yearSprint));
+    setActiveSprintTab("kanban");
+    setActiveMonthPlanTab("sprint-kanban");
+    setSprintStoryBoardTeamId(teamId?.trim() ? teamId.trim() : null);
+  }, []);
 
   async function refresh(targetYear = selectedYear) {
     const data = await parseJson<InitiativeItem[]>(
@@ -403,6 +528,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     assignee: string;
     color: string;
     initiativeId: string;
+    team: string | null;
   }) {
     const request = editingEpic
       ? fetch(`/api/epics/${editingEpic.id}`, {
@@ -780,6 +906,51 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         return;
       }
       console.log("[gantt-drop] epic branch", { epicId, overId });
+
+      const teamSlot = parseMonthTeamSlotDropId(overId);
+      if (teamSlot) {
+        if (teamSlot.year !== selectedYear) {
+          toast.message("Switch the roadmap year to update that month’s team board.");
+          return;
+        }
+        const inMonth = collectMonthEpicsForTeamBoard(initiatives, teamSlot.month).some((c) => c.epic.id === epicId);
+        if (!inMonth) {
+          toast.message("Only epics tied to this month can be queued for a team.");
+          return;
+        }
+        const key = monthTeamBoardStorageKey(teamSlot.year, teamSlot.month);
+        setMonthTeamBoardByKey((prev) => {
+          const cur = prev[key] ?? { queues: {} };
+          return { ...prev, [key]: applyEpicTeamQueueMove(cur, epicId, teamSlot.teamId, teamSlot.index) };
+        });
+        flushSync(() => {
+          setInitiatives((prev) =>
+            prev.map((i) => ({
+              ...i,
+              epics: (i.epics ?? []).map((e) =>
+                e.id === epicId ? { ...e, team: teamSlot.teamId } : e,
+              ),
+            })),
+          );
+        });
+        try {
+          const response = await fetch(`/api/epics/${epicId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: teamSlot.teamId }),
+          });
+          if (!response.ok) {
+            const text = await response.text().catch(() => "");
+            throw new Error(text || `HTTP ${response.status}`);
+          }
+          toast.success("Team updated");
+        } catch (err) {
+          await refresh();
+          const description = err instanceof Error ? err.message : undefined;
+          toast.error("Failed to save team", description ? { description } : undefined);
+        }
+        return;
+      }
 
       const monthEpicBoard = parseMonthEpicKanbanDropId(overId);
       if (monthEpicBoard && monthEpicBoard.status === "todo") {
@@ -1369,6 +1540,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   }
                 }}
                 epicBacklogOrderByMonth={epicBacklogOrderByMonth}
+                monthEpicTeamFilterId={
+                  activeTimelineMonth != null &&
+                  activeMonthPlanTab === "sprint-kanban" &&
+                  isKnownEpicTeamId(sprintStoryBoardTeamId)
+                    ? sprintStoryBoardTeamId
+                    : null
+                }
               />
               <div
                 className="group relative flex cursor-col-resize items-stretch justify-center"
@@ -1396,11 +1574,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setActiveTimelineMonth(null);
                   setActiveYearSprint(null);
                   setActiveSprintTab("kanban");
+                  setActiveMonthPlanTab("team-queue");
+                  setSprintStoryBoardTeamId(null);
                 }}
                 focusedQuarterLabel={focusedQuarterLabel}
                 focusedMonthExternal={activeTimelineMonth}
                 activeSprintExternal={activeYearSprint}
                 activeSprintTabExternal={activeSprintTab}
+                monthPlanTab={activeMonthPlanTab}
+                onMonthPlanTabChange={handleMonthPlanTabChange}
+                monthTeamBoardByKey={monthTeamBoardByKey}
+                onEnterSprintStoryBoard={openSprintStoryBoard}
+                sprintStoryBoardTeamId={sprintStoryBoardTeamId}
                 onFocusedQuarterChange={setFocusedQuarterLabel}
                 onSprintTabChange={setActiveSprintTab}
                 onOpenEpic={(epicId) => {

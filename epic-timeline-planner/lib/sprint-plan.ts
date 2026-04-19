@@ -52,12 +52,15 @@ export function collectStoriesForSprintBoard(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
+  /** When set (e.g. sprint opened from a team lane), only stories under epics assigned to this team. */
+  filterEpicTeamId?: string | null,
 ): BoardStoryRow[] {
   const out: BoardStoryRow[] = [];
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
       for (const story of epic.userStories ?? []) {
         if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
         out.push({ story, epic, initiative });

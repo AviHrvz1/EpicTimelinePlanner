@@ -77,6 +77,8 @@ export type EpicItem = {
   planSprint: number | null;
   planStartMonth: number | null;
   planEndMonth: number | null;
+  /** Month team board lane id, when assigned. */
+  team: string | null;
   userStories: UserStoryItem[];
   comments: EpicCommentItem[];
   history: EpicHistoryItem[];

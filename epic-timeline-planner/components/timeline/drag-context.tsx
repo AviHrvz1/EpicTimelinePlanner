@@ -21,6 +21,7 @@ import {
   STORIES_UNSCHEDULE_DROP_ID,
   parseBacklogSlotDropId,
   parseEpicBacklogSlotDropId,
+  parseMonthTeamSlotDropId,
   isEpicPlanDraggableId,
   isInitiativeDraggableId,
   isStoryDraggableId,
@@ -53,25 +54,30 @@ const initiativeCollision: CollisionDetection = (args) => {
 const epicPlanCollision: CollisionDetection = (args) => {
   /** Roadmap month cells use `month:` — same targets as initiatives so epics can land on quarter months. */
   const isKanbanTodoDrop = (id: string) => /^kanban:(\d+):todo$/.test(id);
+  const isEpicKanbanDrop = (id: string) => /^epic-kanban:\d+:(todo|inProgress|done|approved)$/.test(id);
+  const isMonthTeamSlotDrop = (id: string) => parseMonthTeamSlotDropId(id) != null;
   const isDropTarget = (id: string) =>
     id.startsWith("epic-plan:") ||
     id.startsWith("month:") ||
     id === EPICS_UNPLAN_DROP_ID ||
     parseEpicBacklogSlotDropId(id) != null ||
-    isKanbanTodoDrop(id);
-  const isEpicBacklogSlot = (id: string) => parseEpicBacklogSlotDropId(id) != null;
+    isKanbanTodoDrop(id) ||
+    isEpicKanbanDrop(id) ||
+    isMonthTeamSlotDrop(id);
+  /** Thin insert zones (month epic list + team queue) should win when the pointer is over them. */
+  const isNarrowSlot = (id: string) => parseEpicBacklogSlotDropId(id) != null || isMonthTeamSlotDrop(id);
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
-  const pointerSlotHits = pointerHits.filter((c) => isEpicBacklogSlot(String(c.id)));
+  const pointerSlotHits = pointerHits.filter((c) => isNarrowSlot(String(c.id)));
   if (pointerSlotHits.length > 0) return pointerSlotHits;
   if (pointerHits.length > 0) return pointerHits;
 
   const rectHits = rectIntersection(args).filter((c) => isDropTarget(String(c.id)));
-  const rectSlotHits = rectHits.filter((c) => isEpicBacklogSlot(String(c.id)));
+  const rectSlotHits = rectHits.filter((c) => isNarrowSlot(String(c.id)));
   if (rectSlotHits.length > 0) return rectSlotHits;
   if (rectHits.length > 0) return rectHits;
 
   const centerHits = closestCenter(args).filter((c) => isDropTarget(String(c.id)));
-  const centerSlotHits = centerHits.filter((c) => isEpicBacklogSlot(String(c.id)));
+  const centerSlotHits = centerHits.filter((c) => isNarrowSlot(String(c.id)));
   if (centerSlotHits.length > 0) return centerSlotHits;
   return centerHits;
 };

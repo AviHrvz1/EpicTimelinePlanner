@@ -72,6 +72,8 @@ model Epic {
   planSprint     Int?
   planStartMonth Int?
   planEndMonth   Int?
+  /** Delivery team id when assigned on the month team board (`platform` | `experience` | `data`). */
+  team           String?
   userStories    UserStory[]
   comments       EpicComment[]
   history        EpicHistory[]

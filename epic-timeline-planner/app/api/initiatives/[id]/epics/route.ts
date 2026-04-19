@@ -3,12 +3,15 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 
+const epicTeamIdSchema = z.enum(["platform", "experience", "data"]);
+
 const createEpicSchema = z.object({
   title: z.string().trim().min(2).max(120),
   icon: z.string().trim().min(1).max(4).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
   assignee: z.string().trim().max(120).optional().nullable(),
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
+  team: epicTeamIdSchema.optional().nullable(),
 });
 
 function quarterFromMonth(month: number | null | undefined): number | null {
@@ -49,6 +52,7 @@ export async function POST(
       description: parsed.data.description || null,
       assignee: parsed.data.assignee || null,
       color: parsed.data.color ?? "#3B82F6",
+      team: parsed.data.team ?? null,
       initiativeId: id,
       planYear: initiative.year,
       planQuarter: quarterFromMonth(initiative.startMonth),

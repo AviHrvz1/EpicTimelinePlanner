@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 
+const epicTeamIdSchema = z.enum(["platform", "experience", "data"]);
+
 const updateEpicSchema = z.object({
   title: z.string().trim().min(2).max(120).optional(),
   icon: z.string().trim().min(1).max(4).optional(),
@@ -13,6 +15,7 @@ const updateEpicSchema = z.object({
   planSprint: z.union([z.literal(1), z.literal(2)]).optional().nullable(),
   planStartMonth: z.number().int().min(1).max(12).optional().nullable(),
   planEndMonth: z.number().int().min(1).max(12).optional().nullable(),
+  team: epicTeamIdSchema.optional().nullable(),
 });
 
 function quarterFromMonth(month: number | null | undefined): number | null {
@@ -53,6 +56,7 @@ export async function PATCH(
         planSprint: true,
         planStartMonth: true,
         planEndMonth: true,
+        team: true,
       },
     });
     if (!existing) {
@@ -75,6 +79,7 @@ export async function PATCH(
       changes.push("Quarter plan start month updated");
     if (patch.planEndMonth !== undefined && patch.planEndMonth !== existing.planEndMonth)
       changes.push("Quarter plan end month updated");
+    if (patch.team !== undefined && patch.team !== existing.team) changes.push("Delivery team updated");
 
     const nextInitiativeId = patch.initiativeId ?? existing.initiativeId;
     const initiative = await db.initiative.findUnique({
@@ -97,6 +102,7 @@ export async function PATCH(
         ...(patch.planSprint !== undefined ? { planSprint: patch.planSprint } : {}),
         ...(patch.planStartMonth !== undefined ? { planStartMonth: patch.planStartMonth } : {}),
         ...(patch.planEndMonth !== undefined ? { planEndMonth: patch.planEndMonth } : {}),
+        ...(patch.team !== undefined ? { team: patch.team } : {}),
         planYear: nextPlanYear,
         planQuarter: nextPlanQuarter,
         ...(changes.length > 0

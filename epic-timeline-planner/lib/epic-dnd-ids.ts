@@ -141,3 +141,34 @@ export function parseMonthEpicKanbanDropId(overId: string): { month: number; sta
   if (!Number.isFinite(month) || month < 1 || month > 12) return null;
   return { month, status: m[2] };
 }
+
+const MONTH_TEAM_SLOT_PREFIX = "month-team-slot:";
+
+/** Insert epic into a team column before this index (0 = top of column). */
+export function monthTeamSlotDropId(year: number, month: number, teamId: string, index: number): string {
+  return `${MONTH_TEAM_SLOT_PREFIX}${year}:${month}:${teamId}:${index}`;
+}
+
+export function parseMonthTeamSlotDropId(
+  overId: string,
+): { year: number; month: number; teamId: string; index: number } | null {
+  if (!overId.startsWith(MONTH_TEAM_SLOT_PREFIX)) return null;
+  const rest = overId.slice(MONTH_TEAM_SLOT_PREFIX.length);
+  const lastColon = rest.lastIndexOf(":");
+  if (lastColon <= 0) return null;
+  const indexRaw = rest.slice(lastColon + 1);
+  const head = rest.slice(0, lastColon);
+  const headColon = head.lastIndexOf(":");
+  if (headColon <= 0) return null;
+  const teamId = head.slice(headColon + 1);
+  const ym = head.slice(0, headColon);
+  const ymColon = ym.lastIndexOf(":");
+  if (ymColon <= 0) return null;
+  const year = Number(ym.slice(0, ymColon));
+  const month = Number(ym.slice(ymColon + 1));
+  const index = Number(indexRaw);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  if (!Number.isFinite(index) || index < 0) return null;
+  if (!teamId) return null;
+  return { year, month, teamId, index };
+}

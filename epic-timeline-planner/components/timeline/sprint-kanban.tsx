@@ -122,11 +122,19 @@ type SprintKanbanProps = {
   initiatives: InitiativeItem[];
   month: number;
   yearSprint: number;
+  /** When set, only stories for epics on this delivery team (same as left panel filter). */
+  filterEpicTeamId?: string | null;
   onOpenStory: (storyId: string) => void;
 };
 
-export function SprintKanbanBoard({ initiatives, month, yearSprint, onOpenStory }: SprintKanbanProps) {
-  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint);
+export function SprintKanbanBoard({
+  initiatives,
+  month,
+  yearSprint,
+  filterEpicTeamId = null,
+  onOpenStory,
+}: SprintKanbanProps) {
+  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId);
   const byStatus = new Map<StoryStatus, BoardStoryRow[]>();
   for (const col of KANBAN_COLUMNS) {
     byStatus.set(col.status, []);

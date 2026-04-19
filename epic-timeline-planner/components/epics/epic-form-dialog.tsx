@@ -4,6 +4,7 @@ import { FileText, History, MessageSquare, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ type EpicFormDialogProps = {
     assignee: string;
     color: string;
     initiativeId: string;
+    team: string | null;
   }) => Promise<void> | void;
   onDelete?: (epicId: string) => Promise<void> | void;
   storyRefById?: Record<string, string>;
@@ -51,6 +53,8 @@ export function EpicFormDialog({
   const [assignee, setAssignee] = useState(epic?.assignee ?? "");
   const [color, setColor] = useState(epic?.color ?? "#3B82F6");
   const [initiativeId, setInitiativeId] = useState(epic?.initiativeId ?? lockInitiativeId ?? "");
+  const [teamDraft, setTeamDraft] = useState("");
+  const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [isSaving, setIsSaving] = useState(false);
@@ -66,6 +70,10 @@ export function EpicFormDialog({
     setAssignee(epic?.assignee ?? "");
     setColor(epic?.color ?? "#3B82F6");
     setInitiativeId(epic?.initiativeId ?? lockInitiativeId ?? initiatives[0]?.id ?? "");
+    setForceTeamFieldEdit(false);
+    setTeamDraft(
+      epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : "",
+    );
     setCommentBody("");
     setActivityTab("comments");
   }, [epic, open, lockInitiativeId, initiatives]);
@@ -89,6 +97,10 @@ export function EpicFormDialog({
   const { visible, leaving } = useDialogPresence(open, onExitComplete);
 
   if (!visible) return null;
+
+  const persistedTeam =
+    epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : null;
+  const showTeamSelect = !persistedTeam || forceTeamFieldEdit;
 
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
@@ -116,6 +128,7 @@ export function EpicFormDialog({
         assignee,
         color,
         initiativeId,
+        team: teamDraft === "" ? null : teamDraft,
       });
       onClose();
     } finally {
@@ -269,6 +282,50 @@ export function EpicFormDialog({
               onChange={(event) => setColor(event.target.value)}
             />
           </label>
+          {showTeamSelect ? (
+            <label className="space-y-1 md:col-span-2">
+              <p className="text-sm font-medium text-slate-600">Delivery team</p>
+              <select
+                className="w-full rounded-md border bg-background px-3 py-2 text-base"
+                value={teamDraft}
+                onChange={(event) => setTeamDraft(event.target.value)}
+              >
+                <option value="">Not set</option>
+                {MONTH_TEAM_COLUMNS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[12px] leading-snug text-slate-500">
+                Optional. You can also assign by dragging the epic onto a team lane on the month board.
+              </p>
+            </label>
+          ) : (
+            <div className="space-y-1 md:col-span-2">
+              <p className="text-sm font-medium text-slate-600">Delivery team</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md border border-slate-200 bg-muted/40 px-3 py-2 text-base text-slate-800">
+                  {MONTH_TEAM_COLUMNS.find((t) => t.id === persistedTeam)?.label ?? persistedTeam}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="text-[13px]"
+                  onClick={() => {
+                    setForceTeamFieldEdit(true);
+                    setTeamDraft("");
+                  }}
+                >
+                  Clear team
+                </Button>
+              </div>
+              <p className="text-[12px] leading-snug text-slate-500">
+                Team is set from the board or here. Clear to remove from team lanes, then save.
+              </p>
+            </div>
+          )}
           <div className="space-y-1">
             <p className="text-sm font-medium text-slate-600">Epic ID</p>
             <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-base text-slate-600">

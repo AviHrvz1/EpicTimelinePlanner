@@ -7,10 +7,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
+import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
+import {
+  isKnownEpicTeamId,
+  monthTeamLabelForId,
+  type MonthTeamBoardPersisted,
+} from "@/lib/month-team-board";
 import { InitiativeItem } from "@/lib/types";
 import { clampYearSprint, firstGlobalSprintForMonth, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
@@ -104,6 +110,8 @@ function GanttLaneRow({
   );
 }
 
+export type MonthPlanSurfaceTab = "team-queue" | "sprint-kanban" | "sprint-status";
+
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
   zoom: number;
@@ -120,6 +128,15 @@ type TimelineGridProps = {
   focusedMonthExternal?: number | null;
   activeSprintExternal?: number | null;
   activeSprintTabExternal?: "kanban" | "status";
+  /** Month drill: team allocation vs sprint tools (controlled from parent for URL sync). */
+  monthPlanTab?: MonthPlanSurfaceTab;
+  onMonthPlanTabChange?: (tab: MonthPlanSurfaceTab) => void;
+  /** Persisted team queues keyed by `year:month` (see monthTeamBoardStorageKey). */
+  monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
+  /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
+  onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
+  /** Delivery team id when sprint story board was opened from a team lane (breadcrumbs + left epic list). */
+  sprintStoryBoardTeamId?: string | null;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
@@ -211,6 +228,11 @@ export function TimelineGrid({
   onOpenInitiative,
   onOpenStory,
   onResizeInitiativeRange,
+  monthPlanTab = "team-queue",
+  onMonthPlanTabChange,
+  monthTeamBoardByKey = {},
+  onEnterSprintStoryBoard,
+  sprintStoryBoardTeamId = null,
 }: TimelineGridProps) {
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
@@ -385,15 +407,21 @@ export function TimelineGrid({
   }, [activeSprintTabExternal]);
 
   useEffect(() => {
+    if (monthPlanTab === "sprint-kanban") setActiveSprintTab("kanban");
+    else if (monthPlanTab === "sprint-status") setActiveSprintTab("status");
+  }, [monthPlanTab]);
+
+  useEffect(() => {
     if (prevActiveMonthRef.current !== activeMonth) {
       const hadPreviousMonth = prevActiveMonthRef.current != null;
       prevActiveMonthRef.current = activeMonth;
       if (hadPreviousMonth && activeMonth != null) {
         setActiveSprint(firstGlobalSprintForMonth(activeMonth));
+        onMonthPlanTabChange?.("team-queue");
         setActiveSprintTab("kanban");
       }
     }
-  }, [activeMonth]);
+  }, [activeMonth, onMonthPlanTabChange]);
 
   useEffect(() => {
     if (activeMonth != null && activeSprint == null) {
@@ -451,11 +479,19 @@ export function TimelineGrid({
       label: MONTHS[activeMonth - 1],
       onClick: () => {
         setActiveSprint(null);
+        onMonthPlanTabChange?.("team-queue");
       },
     });
-    if (activeSprint != null) {
+    if (activeSprint != null && monthPlanTab === "sprint-kanban") {
+      const teamLabel = monthTeamLabelForId(sprintStoryBoardTeamId);
+      const sprintTitle = teamLabel ? `${teamLabel} - Sprint ${activeSprint}` : `Sprint ${activeSprint}`;
       breadcrumbItems.push({
-        label: `Sprint ${activeSprint}`,
+        label: sprintTitle,
+        onClick: null,
+      });
+    } else if (activeSprint != null && monthPlanTab === "sprint-status") {
+      breadcrumbItems.push({
+        label: `Sprint ${activeSprint} · insights`,
         onClick: null,
       });
     }
@@ -555,31 +591,36 @@ export function TimelineGrid({
             ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
-            <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+          <div className="inline-flex min-w-0 shrink-0 flex-col gap-2 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm sm:flex-row sm:items-center">
+            <div className="inline-flex min-w-0 flex-1 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
               <button
                 type="button"
-                onClick={() => setActiveSprintTab("kanban")}
+                onClick={() => {
+                  onMonthPlanTabChange?.("team-queue");
+                }}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                  activeSprintTab === "kanban"
+                  "min-w-0 shrink rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition sm:px-3 sm:text-[13px]",
+                  monthPlanTab === "team-queue"
                     ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
                     : "text-slate-600 hover:text-slate-800",
                 )}
               >
-                Kanban
+                Team queue
               </button>
               <button
                 type="button"
-                onClick={() => setActiveSprintTab("status")}
+                onClick={() => {
+                  onMonthPlanTabChange?.("sprint-status");
+                  setActiveSprintTab("status");
+                }}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                  activeSprintTab === "status"
+                  "min-w-0 shrink rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition sm:px-3 sm:text-[13px]",
+                  monthPlanTab === "sprint-status"
                     ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
                     : "text-slate-600 hover:text-slate-800",
                 )}
               >
-                Sprint status
+                Sprint insights
               </button>
             </div>
           </div>
@@ -645,15 +686,29 @@ export function TimelineGrid({
           <div
             className={cn(
               "flex flex-col rounded-lg bg-white p-4 shadow-sm ring-1 ring-black/5",
-              activeSprintTab === "kanban" ? "min-h-[56rem]" : "min-h-0",
+              monthPlanTab === "team-queue" || monthPlanTab === "sprint-kanban" ? "min-h-[56rem]" : "min-h-0",
             )}
           >
-            {activeSprintTab === "kanban" ? (
+            {monthPlanTab === "team-queue" ? (
+              <div className="flex-1">
+                <MonthTeamKanbanBoard
+                  initiatives={initiatives}
+                  month={activeMonth}
+                  year={currentYear}
+                  board={monthTeamBoardByKey[`${currentYear}:${activeMonth}`]}
+                  onOpenEpic={onOpenEpic}
+                  onOpenSprintKanban={(yearSprint, teamId) => {
+                    onEnterSprintStoryBoard?.(yearSprint, teamId);
+                  }}
+                />
+              </div>
+            ) : monthPlanTab === "sprint-kanban" ? (
               <div className="flex-1">
                 <SprintKanbanBoard
                   initiatives={initiatives}
                   month={activeMonth}
                   yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+                  filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                   onOpenStory={onOpenStory ?? (() => {})}
                 />
               </div>
@@ -685,6 +740,7 @@ export function TimelineGrid({
                     onClick={() => {
                       if (isPostDragClickSuppressed()) return;
                       setFocusedMonth(month);
+                      onMonthPlanTabChange?.("team-queue");
                     }}
                   >
                     {MONTHS[month - 1]}
@@ -696,8 +752,7 @@ export function TimelineGrid({
                       onClick={() => {
                         if (isPostDragClickSuppressed()) return;
                         setFocusedMonth(month);
-                        setActiveSprint(globalSprintFromMonthLane(month, 1));
-                        setActiveSprintTab("kanban");
+                        onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                       }}
                       className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                     >
@@ -709,8 +764,7 @@ export function TimelineGrid({
                       onClick={() => {
                         if (isPostDragClickSuppressed()) return;
                         setFocusedMonth(month);
-                        setActiveSprint(globalSprintFromMonthLane(month, 2));
-                        setActiveSprintTab("kanban");
+                        onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                       }}
                       className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                     >
@@ -740,6 +794,7 @@ export function TimelineGrid({
                           onClick={() => {
                             if (isPostDragClickSuppressed()) return;
                             setFocusedMonth(month);
+                            onMonthPlanTabChange?.("team-queue");
                           }}
                         >
                           {MONTHS[month - 1]}
@@ -751,8 +806,7 @@ export function TimelineGrid({
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
-                              setActiveSprint(globalSprintFromMonthLane(month, 1));
-                              setActiveSprintTab("kanban");
+                              onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
                             className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                           >
@@ -764,8 +818,7 @@ export function TimelineGrid({
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
-                              setActiveSprint(globalSprintFromMonthLane(month, 2));
-                              setActiveSprintTab("kanban");
+                              onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
                             className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                           >

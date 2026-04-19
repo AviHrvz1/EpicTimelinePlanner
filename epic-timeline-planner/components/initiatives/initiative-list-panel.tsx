@@ -16,7 +16,7 @@ import {
   storyListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
-import { epicPlanMatchesYearSprint, storyMatchesYearSprint } from "@/lib/sprint-plan";
+import { isKnownEpicTeamId } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
@@ -112,6 +112,8 @@ type InitiativeListPanelProps = {
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   epicBacklogOrderByMonth: Record<number, string[]>;
+  /** When set (e.g. sprint board opened from a team lane), month epic list only shows epics assigned to this team id. */
+  monthEpicTeamFilterId?: string | null;
 };
 
 function DraggableInitiativeCard({
@@ -654,6 +656,7 @@ export function InitiativeListPanel({
   onCreateEpicQuick,
   onCreateStoryQuick,
   epicBacklogOrderByMonth,
+  monthEpicTeamFilterId = null,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef } = useDroppable({
     id: "initiatives:backlog-drop",
@@ -685,9 +688,14 @@ export function InitiativeListPanel({
       return a.epic.title.localeCompare(b.epic.title);
     });
   }, [initiatives, activeMonth]);
+  /** Month list scope: all epics for the month, or only those on the selected team when viewing that team’s sprint board. */
+  const monthPanelEpics = useMemo(() => {
+    if (!isKnownEpicTeamId(monthEpicTeamFilterId)) return monthAssignedEpics;
+    return monthAssignedEpics.filter(({ epic }) => epic.team === monthEpicTeamFilterId);
+  }, [monthAssignedEpics, monthEpicTeamFilterId]);
   const monthBacklogEpics = useMemo(() => {
     if (activeMonth == null) return [];
-    const base = monthAssignedEpics.filter(({ epic }) => !epicIsOnPlanForMonth(epic, activeMonth));
+    const base = monthPanelEpics.filter(({ epic }) => !epicIsOnPlanForMonth(epic, activeMonth));
     const order = epicBacklogOrderByMonth[activeMonth] ?? [];
     if (order.length === 0) return base;
     const byId = new Map(base.map((row) => [row.epic.id, row]));
@@ -701,21 +709,7 @@ export function InitiativeListPanel({
     }
     const rest = [...byId.values()].sort((a, b) => a.epic.title.localeCompare(b.epic.title));
     return [...ordered, ...rest];
-  }, [monthAssignedEpics, activeMonth, epicBacklogOrderByMonth]);
-  const sprintEpics = useMemo(() => {
-    if (activeMonth == null || activeYearSprint == null) return [];
-    return monthAssignedEpics.filter(({ epic }) => {
-      const hasStoryInSprint = (epic.userStories ?? []).some((story) =>
-        storyMatchesYearSprint(story, activeMonth, activeYearSprint),
-      );
-      const plannedForSprint =
-        epicIsOnPlanForMonth(epic, activeMonth) &&
-        epic.planSprint != null &&
-        epicPlanMatchesYearSprint(epic, activeMonth, activeYearSprint);
-      return plannedForSprint || hasStoryInSprint;
-    });
-  }, [monthAssignedEpics, activeMonth, activeYearSprint]);
-  const monthPanelEpics = isSprintModeActive ? sprintEpics : monthAssignedEpics;
+  }, [monthPanelEpics, activeMonth, epicBacklogOrderByMonth]);
   const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
     if (!q) return monthPanelEpics;
@@ -810,8 +804,8 @@ export function InitiativeListPanel({
             </datalist>
           </div>
           <h3 className="mt-4 mb-2 text-[14px] font-semibold tracking-[0.01em] text-slate-900">
-            {isSprintModeActive && activeYearSprint != null
-              ? `Sprint ${activeYearSprint} epics (${filteredMonthBacklogEpics.length})`
+            {activeMonth != null
+              ? `${MONTHS[activeMonth - 1]} epics (${filteredMonthBacklogEpics.length})`
               : `Month epics (${filteredMonthBacklogEpics.length})`}
           </h3>
           <div
@@ -825,9 +819,7 @@ export function InitiativeListPanel({
             {filteredMonthBacklogEpics.length === 0 ? (
               <p className="text-[11px] text-slate-700">
                 {monthPanelEpics.length === 0
-                  ? isSprintModeActive && activeYearSprint != null
-                    ? `No epics or stories are assigned to Sprint ${activeYearSprint} for this month yet.`
-                    : "No epics are assigned to this month yet."
+                  ? "No epics are under initiatives scheduled in this month yet."
                   : "No epics match your search."}
               </p>
             ) : (
