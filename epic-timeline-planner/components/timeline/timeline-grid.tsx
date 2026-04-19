@@ -201,28 +201,24 @@ function GanttTodayLine({ leftPercent }: { leftPercent: number | null }) {
   );
 }
 
-function GanttTodayBadge({ leftPercent }: { leftPercent: number | null }) {
+/** In-flow row directly under sprint / month header UI so the pill sits beneath those panels. */
+function GanttTodayBadgeBelowSprints({ leftPercent }: { leftPercent: number | null }) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
   const x = Math.min(100, Math.max(0, leftPercent));
   return (
-    <div
-      className="pointer-events-none absolute bottom-1 z-[41] rounded border border-emerald-200/90 bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 shadow-sm"
-      style={{ left: `${x}%`, transform: "translateX(-50%)" }}
-      aria-hidden
-    >
-      Today
+    <div className="pointer-events-none relative z-[41] mb-1 mt-0.5 h-6 w-full shrink-0" aria-hidden>
+      <div
+        className="absolute top-0.5 rounded border border-emerald-200/90 bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 shadow-sm"
+        style={{ left: `${x}%`, transform: "translateX(-50%)" }}
+      >
+        Today
+      </div>
     </div>
   );
 }
 
 function GanttTodayOverlay({ leftPercent }: { leftPercent: number | null }) {
-  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
-  return (
-    <>
-      <GanttTodayLine leftPercent={leftPercent} />
-      <GanttTodayBadge leftPercent={leftPercent} />
-    </>
-  );
+  return <GanttTodayLine leftPercent={leftPercent} />;
 }
 
 function EpicGanttLaneRow({ epic, initiative, gridStyle, onOpenEpic, ganttLaneSortIndex }: EpicGanttLaneRowProps) {
@@ -962,6 +958,7 @@ export function TimelineGrid({
             </button>
           ))}
           </div>
+          <GanttTodayBadgeBelowSprints leftPercent={roadmapLaneTodayLeft} />
         </div>
       ) : null}
       {activeMonth ? (
@@ -1048,8 +1045,8 @@ export function TimelineGrid({
                     </div>
                   </div>
                 </div>
+                <GanttTodayBadgeBelowSprints leftPercent={monthEpicGanttTodayLeft} />
                 <MonthEpicDropArea month={activeMonth}>
-                  <GanttTodayBadge leftPercent={monthEpicGanttTodayLeft} />
                   <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
                   {monthEpicGanttRows.length === 0 ? (
                     <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
@@ -1167,6 +1164,7 @@ export function TimelineGrid({
                     </div>
                   ))}
                 </div>
+                <GanttTodayBadgeBelowSprints leftPercent={roadmapLaneTodayLeft} />
                 {visibleScheduledLanes.length === 0 ? (
                   <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
                     Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled
@@ -1303,6 +1301,7 @@ export function TimelineGrid({
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : (
           <div className="relative w-full">
             <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+            <GanttTodayBadgeBelowSprints leftPercent={roadmapLaneTodayLeft} />
             <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
             {scheduledInitiatives.map((initiative, rowIndex) => {
               const start = initiative.startMonth ?? 1;

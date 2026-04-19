@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-/** Match `epic-dialog-backdrop--exit` / `epic-dialog-panel--exit` duration in globals.css */
-export const DIALOG_EXIT_DURATION_MS = 280;
+/** Match the longer of backdrop / panel exit animations in globals.css */
+export const DIALOG_EXIT_DURATION_MS = 460;
 
 /**
  * Keeps the dialog mounted briefly after `open` becomes false so exit CSS animations can run.

@@ -126,25 +126,22 @@
   }
 }
 
+/** Panel only slides: starts off-screen to the right, moves left into place (no fade/blur). */
 @keyframes epic-dialog-panel-in {
   from {
-    opacity: 0;
-    filter: blur(1px);
-    transform: translateX(1.25rem);
+    transform: translateX(100%);
   }
   to {
-    opacity: 1;
-    filter: blur(0);
     transform: translateX(0);
   }
 }
 
 .epic-dialog-backdrop {
-  animation: epic-dialog-backdrop-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: epic-dialog-backdrop-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .epic-dialog-panel-entrance {
-  animation: epic-dialog-panel-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: epic-dialog-panel-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 @keyframes epic-dialog-backdrop-out {
@@ -158,23 +155,19 @@
 
 @keyframes epic-dialog-panel-out {
   from {
-    opacity: 1;
-    filter: blur(0);
     transform: translateX(0);
   }
   to {
-    opacity: 0;
-    filter: blur(1px);
-    transform: translateX(1rem);
+    transform: translateX(100%);
   }
 }
 
 .epic-dialog-backdrop--exit {
-  animation: epic-dialog-backdrop-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: epic-dialog-backdrop-out 0.28s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .epic-dialog-panel--exit {
-  animation: epic-dialog-panel-out 0.28s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: epic-dialog-panel-out 0.45s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
