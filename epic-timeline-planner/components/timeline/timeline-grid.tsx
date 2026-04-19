@@ -153,21 +153,6 @@ const QUARTER_PROGRESS_STEPS: Record<string, number> = {
   Q4: 4,
 };
 
-const FULL_MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-] as const;
-
 function QuarterYearProgressIcon({
   quarterLabel,
   className,
@@ -453,6 +438,8 @@ export function TimelineGrid({
   const breadcrumbItems: Array<{
     label: string;
     onClick: (() => void) | null;
+    /** Softer pill for sprint views (avoids heavy black current-page chip). */
+    currentTone?: "default" | "sprint";
   }> = [];
 
   if (activeMonth) {
@@ -488,11 +475,13 @@ export function TimelineGrid({
       breadcrumbItems.push({
         label: sprintTitle,
         onClick: null,
+        currentTone: "sprint",
       });
     } else if (activeSprint != null && monthPlanTab === "sprint-status") {
       breadcrumbItems.push({
         label: `Sprint ${activeSprint} · insights`,
         onClick: null,
+        currentTone: "sprint",
       });
     }
   } else if (focusedQuarter) {
@@ -535,7 +524,12 @@ export function TimelineGrid({
                 ) : (
                   <span
                     aria-current="page"
-                    className="rounded-lg bg-slate-800 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-white shadow-sm ring-1 ring-slate-900/10"
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] shadow-sm ring-1",
+                      item.currentTone === "sprint"
+                        ? "bg-gradient-to-r from-sky-50 via-indigo-50/90 to-violet-50 text-slate-800 ring-sky-200/75"
+                        : "bg-slate-800 text-white ring-slate-900/10",
+                    )}
                   >
                     {item.label}
                   </span>

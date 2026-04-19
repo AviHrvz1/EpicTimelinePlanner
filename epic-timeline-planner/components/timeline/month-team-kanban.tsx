@@ -5,6 +5,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { Folder, Info, Users } from "lucide-react";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { epicTimelineDraggableId, monthTeamSlotDropId } from "@/lib/epic-dnd-ids";
+import { FULL_MONTH_NAMES } from "@/lib/timeline";
 import {
   mergeMonthTeamBoardColumns,
   type MergedTeamColumn,
@@ -228,6 +229,7 @@ export function MonthTeamKanbanBoard({
   const sprint2 = globalSprintFromMonthLane(month, 2);
   const triageHelp =
     "Use the left panel to pull epics into a team. Here you only set priority within each team (P1 = next). Each lane includes this month's two sprints — click one to open that sprint's Kanban.";
+  const monthTitle = FULL_MONTH_NAMES[month - 1] ?? `Month ${month}`;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -236,8 +238,11 @@ export function MonthTeamKanbanBoard({
           <Users className="size-[18px]" strokeWidth={2} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-lg font-bold tracking-tight text-slate-900">Team triage</h2>
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <h2 className="text-lg font-bold tracking-tight text-slate-900">
+              <span className="text-slate-900">{monthTitle}</span>
+              <span className="font-semibold text-slate-500"> - Team triage</span>
+            </h2>
             <button
               type="button"
               title={triageHelp}
