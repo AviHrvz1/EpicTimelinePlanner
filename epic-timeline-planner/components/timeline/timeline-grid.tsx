@@ -1036,10 +1036,9 @@ export function TimelineGrid({
                         setFocusedMonth(month);
                         onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                       }}
-                      className="flex min-h-[2.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/75 bg-white/90 py-1.5 text-[10px] font-bold text-slate-700 shadow-sm ring-1 ring-black/[0.03] transition hover:-translate-y-px hover:border-slate-300 hover:shadow-md"
+                      className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                     >
-                      <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-400">Sprint</span>
-                      <span className="tabular-nums">{globalSprintFromMonthLane(month, 1)}</span>
+                      {`Sprint ${globalSprintFromMonthLane(month, 1)} (${sprintDateRangeText(currentYear, month, 1)})`}
                     </button>
                     <button
                       type="button"
@@ -1049,10 +1048,9 @@ export function TimelineGrid({
                         setFocusedMonth(month);
                         onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                       }}
-                      className="flex min-h-[2.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/75 bg-white/90 py-1.5 text-[10px] font-bold text-slate-700 shadow-sm ring-1 ring-black/[0.03] transition hover:-translate-y-px hover:border-slate-300 hover:shadow-md"
+                      className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                     >
-                      <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-400">Sprint</span>
-                      <span className="tabular-nums">{globalSprintFromMonthLane(month, 2)}</span>
+                      {`Sprint ${globalSprintFromMonthLane(month, 2)} (${sprintDateRangeText(currentYear, month, 2)})`}
                     </button>
                   </div>
                   <MonthDropCell month={month} />

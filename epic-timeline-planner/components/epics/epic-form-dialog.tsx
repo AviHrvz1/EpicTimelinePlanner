@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
+import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { cn } from "@/lib/utils";
@@ -101,6 +102,14 @@ export function EpicFormDialog({
   const persistedTeam =
     epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : null;
   const showTeamSelect = !persistedTeam || forceTeamFieldEdit;
+  const planningQuarter = epic?.planQuarter != null ? `Q${epic.planQuarter}` : "Not set";
+  const planningMonth =
+    epic?.planStartMonth == null
+      ? "Not set"
+      : epic.planEndMonth != null && epic.planEndMonth !== epic.planStartMonth
+        ? `${MONTHS[epic.planStartMonth - 1]}-${MONTHS[epic.planEndMonth - 1]}`
+        : MONTHS[epic.planStartMonth - 1];
+  const planningYear = epic?.planYear ?? "Not set";
 
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
@@ -330,6 +339,29 @@ export function EpicFormDialog({
             <p className="text-sm font-medium text-slate-600">Epic ID</p>
             <div className="h-10 rounded-md border bg-muted/40 px-3 py-2 text-base text-slate-600">
               {epic?.id ?? "Will be created on save"}
+            </div>
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <p className="text-sm font-medium text-slate-600">Planning context</p>
+            <div className="grid gap-2 sm:grid-cols-4">
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Team</p>
+                <p className="font-medium">
+                  {persistedTeam ? (MONTH_TEAM_COLUMNS.find((t) => t.id === persistedTeam)?.label ?? persistedTeam) : "Not set"}
+                </p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Quarter</p>
+                <p className="font-medium">{planningQuarter}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Month</p>
+                <p className="font-medium">{planningMonth}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Year</p>
+                <p className="font-medium">{planningYear}</p>
+              </div>
             </div>
           </div>
         </div>

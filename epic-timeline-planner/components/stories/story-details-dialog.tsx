@@ -5,12 +5,22 @@ import { History, MessageSquare, Plus, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 
 import { Button } from "@/components/ui/button";
+import { monthTeamLabelForId } from "@/lib/month-team-board";
+import { MONTHS } from "@/lib/timeline";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { cn } from "@/lib/utils";
 import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type StoryWithEpic = UserStoryItem & { epicTitle: string };
+
+function quarterLabelFromMonth(month: number | null | undefined): string | null {
+  if (month == null) return null;
+  if (month <= 3) return "Q1";
+  if (month <= 6) return "Q2";
+  if (month <= 9) return "Q3";
+  return "Q4";
+}
 
 type StoryDetailsDialogProps = {
   open: boolean;
@@ -93,6 +103,25 @@ export function StoryDetailsDialog({
   );
 
   const firstEpicId = allEpics[0]?.id ?? "";
+  const selectedEpicMeta = useMemo(() => {
+    if (!epicId) return null;
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        if (epic.id !== epicId) continue;
+        const team = monthTeamLabelForId(epic.team) ?? "Not set";
+        const quarter = epic.planQuarter != null ? `Q${epic.planQuarter}` : quarterLabelFromMonth(epic.planStartMonth);
+        const month =
+          epic.planStartMonth == null
+            ? null
+            : epic.planEndMonth != null && epic.planEndMonth !== epic.planStartMonth
+              ? `${MONTHS[epic.planStartMonth - 1]}-${MONTHS[epic.planEndMonth - 1]}`
+              : MONTHS[epic.planStartMonth - 1];
+        const year = epic.planYear ?? initiative.year ?? null;
+        return { team, quarter, month, year };
+      }
+    }
+    return null;
+  }, [initiatives, epicId]);
 
   useEffect(() => {
     if (story) {
@@ -302,6 +331,27 @@ export function StoryDetailsDialog({
               ))}
             </select>
           </label>
+          <div className="space-y-1 md:col-span-2">
+            <p className="text-sm font-medium text-slate-600">Planning context</p>
+            <div className="grid gap-2 sm:grid-cols-4">
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Team</p>
+                <p className="font-medium">{selectedEpicMeta?.team ?? "Not set"}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Quarter</p>
+                <p className="font-medium">{selectedEpicMeta?.quarter ?? "Not set"}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Month</p>
+                <p className="font-medium">{selectedEpicMeta?.month ?? "Not set"}</p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-slate-700">
+                <p className="text-[11px] text-slate-500">Year</p>
+                <p className="font-medium">{selectedEpicMeta?.year ?? "Not set"}</p>
+              </div>
+            </div>
+          </div>
           <label className="space-y-1">
             <p className="text-sm font-medium text-slate-600">Sprint</p>
             <select

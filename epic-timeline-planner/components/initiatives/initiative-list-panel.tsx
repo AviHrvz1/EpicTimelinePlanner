@@ -464,6 +464,16 @@ function SprintEpicCard({
     disabled: !backlogDropSlot,
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+  const epicPlanLabel =
+    epic.planStartMonth != null
+      ? {
+          quarter: quarterFromMonth(epic.planStartMonth),
+          month:
+            epic.planEndMonth != null && epic.planEndMonth !== epic.planStartMonth
+              ? `${MONTHS[epic.planStartMonth - 1]}-${MONTHS[epic.planEndMonth - 1]}`
+              : MONTHS[epic.planStartMonth - 1],
+        }
+      : null;
   const [isOpen, setIsOpen] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
@@ -525,6 +535,16 @@ function SprintEpicCard({
                 <span className="truncate">{epic.title}</span>
               </p>
               <p className="truncate text-[11px] text-slate-500">{initiative.title}</p>
+              {epicPlanLabel ? (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold tracking-wide">
+                  <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">
+                    Quarter {epicPlanLabel.quarter}
+                  </span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
+                    {epicPlanLabel.month}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </button>
         </div>
