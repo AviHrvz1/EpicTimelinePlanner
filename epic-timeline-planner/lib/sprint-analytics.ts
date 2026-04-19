@@ -264,8 +264,9 @@ function buildWorkloadCapacityByAssignee(
     const assignee = story.assignee?.trim() || "Unassigned";
     const row = byAssignee.get(assignee) ?? { estimatedTotal: 0, daysLeftTotal: 0 };
     const estPiece = story.estimatedDays ?? story.daysLeft ?? 0;
+    const daysLeftPiece = story.daysLeft ?? story.estimatedDays ?? 0;
     row.estimatedTotal += Math.max(0, estPiece);
-    row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
+    row.daysLeftTotal += Math.max(0, daysLeftPiece);
     byAssignee.set(assignee, row);
   }
   const workloadCapacityByAssignee = [...byAssignee.entries()]

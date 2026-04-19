@@ -129,13 +129,13 @@
 @keyframes epic-dialog-panel-in {
   from {
     opacity: 0;
-    filter: blur(2px);
-    transform: translateY(0.625rem) scale(0.96);
+    filter: blur(1px);
+    transform: translateX(1.25rem);
   }
   to {
     opacity: 1;
     filter: blur(0);
-    transform: translateY(0) scale(1);
+    transform: translateX(0);
   }
 }
 
@@ -160,12 +160,12 @@
   from {
     opacity: 1;
     filter: blur(0);
-    transform: translateY(0) scale(1);
+    transform: translateX(0);
   }
   to {
     opacity: 0;
-    filter: blur(2px);
-    transform: translateY(0.5rem) scale(0.96);
+    filter: blur(1px);
+    transform: translateX(1rem);
   }
 }
 

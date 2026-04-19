@@ -103,7 +103,7 @@ export function InitiativeFormDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[1px]",
+        "fixed inset-0 z-40 flex items-start justify-end bg-slate-900/30 p-4 pb-6 pl-6 pr-4 pt-6 backdrop-blur-[1px] md:pr-12",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
         leaving && "pointer-events-none",
@@ -111,7 +111,7 @@ export function InitiativeFormDialog({
     >
       <div
         className={cn(
-          "w-full max-w-5xl",
+          "w-full max-w-5xl shrink-0",
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
         )}
       >

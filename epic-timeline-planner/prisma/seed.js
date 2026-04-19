@@ -62,6 +62,8 @@ async function main() {
         epic("Signup Flow Refresh", "Maya", "#2563eb", 1, 1, 1, [
           story("New signup stepper UI", "Liam", 1, "inProgress", 6, 3, 1),
           story("Inline validation hints", "Ava", 1, "todo", 4, 4, 1),
+          story("Progressive profiling prompts", "Zoe", 1, "todo", 5, null, 1),
+          story("Activation welcome email tweaks", "Ben", 1, "inProgress", 3, 2, 1),
           story("Accessibility keyboard pass", "Liam", 1, "done", 2, 0, 1),
         ]),
         epic("Profile Completion Nudge", "Noah", "#1d4ed8", 2, 2, 2, [
@@ -84,6 +86,7 @@ async function main() {
           story("Retry policy for flaky tests", "Ethan", 1, "todo", 4, 4, 2),
           story("Cache test artifacts", "Liam", 1, "done", 3, 0, 2),
           story("Shard balancing", "Noah", 1, "inProgress", 5, 2, 2),
+          story("Nightly quarantine dashboard", "Iris", 1, "todo", 2, null, 2),
         ]),
         epic("Release Gate Automation", "Ava", "#0369a1", 3, 3, 2, [
           story("Rollback checklist", "Ava", 2, "todo", 4, 4, 3),
@@ -104,6 +107,7 @@ async function main() {
         epic("Executive Dashboard v2", "Ava", "#7c3aed", 4, 4, 1, [
           story("KPI trend chart", "Mia", 1, "inProgress", 5, 3, 4),
           story("Regional split widgets", "Liam", 1, "todo", 4, 4, 4),
+          story("Scorecard export polish", "Omar", 1, "todo", 2, 1, 4),
           story("Revenue drill-down", "Ava", 1, "done", 4, 0, 4),
         ]),
         epic("Weekly Digest Builder", "Noah", "#6d28d9", 5, 5, 2, [
@@ -152,6 +156,7 @@ async function main() {
           story("Realtime cursor channel", "Ethan", 2, "todo", 6, 6, 8),
           story("Idle state indicator", "Noah", 2, "inProgress", 3, 2, 8),
           story("Presence fallback polling", "Maya", 2, "todo", 3, 3, 8),
+          story("Avatar stack live sync", "Zoe", 2, "inProgress", 4, null, 8),
         ]),
       ],
     },

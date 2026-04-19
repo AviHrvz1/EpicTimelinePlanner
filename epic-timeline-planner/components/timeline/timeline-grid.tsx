@@ -140,6 +140,91 @@ function sprintDateRangeText(year: number, month: number, lane: 1 | 2): string {
   return `${formatDayMonthYearShort(start)}-${formatDayMonthYearShort(end)}`;
 }
 
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+/** Horizontal position 0–100% for “today” across the plan year (12 month columns), or null if not this year. */
+function todayLeftPercentInYear(planYear: number): number | null {
+  const t = new Date();
+  if (t.getFullYear() !== planYear) return null;
+  const m = t.getMonth() + 1;
+  const dim = daysInMonth(planYear, m);
+  const frac = (t.getDate() - 0.5) / dim;
+  return ((m - 1 + frac) / 12) * 100;
+}
+
+/** Position across a subset of months (e.g. quarter = 3 columns). */
+function todayLeftPercentInMonths(planYear: number, months: readonly number[]): number | null {
+  const t = new Date();
+  if (t.getFullYear() !== planYear) return null;
+  const m = t.getMonth() + 1;
+  if (!months.includes(m)) return null;
+  const idx = months.indexOf(m);
+  const dim = daysInMonth(planYear, m);
+  const frac = (t.getDate() - 0.5) / dim;
+  return ((idx + frac) / months.length) * 100;
+}
+
+/** Single-month epic lane (one column). */
+function todayLeftPercentInSingleMonth(planYear: number, month: number): number | null {
+  const t = new Date();
+  if (t.getFullYear() !== planYear || t.getMonth() + 1 !== month) return null;
+  const dim = daysInMonth(planYear, month);
+  return ((t.getDate() - 0.5) / dim) * 100;
+}
+
+/** Full-year / all-quarters roadmap: compact “S” + global sprint number. */
+function sprintLabelYearRoadmap(globalSprint: number): string {
+  return `S${globalSprint}`;
+}
+
+/** Quarter or month drill-in views: full word “Sprint”. */
+function sprintLabelQuarterOrMonth(globalSprint: number): string {
+  return `Sprint ${globalSprint}`;
+}
+
+/** Vertical “today” marker; full height of its positioned parent. */
+function GanttTodayLine({ leftPercent }: { leftPercent: number | null }) {
+  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
+  const x = Math.min(100, Math.max(0, leftPercent));
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 z-[40] overflow-visible [isolation:isolate]"
+      aria-hidden
+    >
+      <div
+        className="absolute top-0 bottom-0 w-0 border-l-2 border-dashed border-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.45)]"
+        style={{ left: `${x}%`, transform: "translateX(-50%)" }}
+      />
+    </div>
+  );
+}
+
+function GanttTodayBadge({ leftPercent }: { leftPercent: number | null }) {
+  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
+  const x = Math.min(100, Math.max(0, leftPercent));
+  return (
+    <div
+      className="pointer-events-none absolute bottom-1 z-[41] rounded border border-emerald-200/90 bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 shadow-sm"
+      style={{ left: `${x}%`, transform: "translateX(-50%)" }}
+      aria-hidden
+    >
+      Today
+    </div>
+  );
+}
+
+function GanttTodayOverlay({ leftPercent }: { leftPercent: number | null }) {
+  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
+  return (
+    <>
+      <GanttTodayLine leftPercent={leftPercent} />
+      <GanttTodayBadge leftPercent={leftPercent} />
+    </>
+  );
+}
+
 function EpicGanttLaneRow({ epic, initiative, gridStyle, onOpenEpic, ganttLaneSortIndex }: EpicGanttLaneRowProps) {
   const stories = epic.userStories ?? [];
   const totalStories = stories.length;
@@ -302,7 +387,7 @@ function MonthEpicDropArea({
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100/90 p-3 transition ring-1 sm:p-4",
+        "relative min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100/90 p-3 transition ring-1 sm:p-4",
         isOver
           ? "border-primary/35 bg-primary/10 ring-primary/20"
           : "bg-slate-50/35 ring-slate-100/80",
@@ -520,6 +605,21 @@ export function TimelineGrid({
       ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
       : `repeat(12, minmax(0, 1fr))`,
   };
+
+  /** Aligns with initiative timeline grid (12 or 3 equal month columns). */
+  const roadmapLaneTodayLeft = useMemo(() => {
+    if (activeMonth != null) return null;
+    if (focusedQuarter && quarterViewTab === "status") return null;
+    return focusedQuarter
+      ? todayLeftPercentInMonths(currentYear, focusedQuarter.months)
+      : todayLeftPercentInYear(currentYear);
+  }, [activeMonth, currentYear, focusedQuarter, quarterViewTab]);
+
+  const monthEpicGanttTodayLeft = useMemo(() => {
+    if (activeMonth == null) return null;
+    if (monthPlanTab !== "epic-gantt") return null;
+    return todayLeftPercentInSingleMonth(currentYear, activeMonth);
+  }, [activeMonth, currentYear, monthPlanTab]);
 
   const prevActiveMonthRef = useRef<number | null>(null);
   useEffect(() => {
@@ -838,7 +938,9 @@ export function TimelineGrid({
         )}
       </div>
       {!activeMonth && !(focusedQuarter && quarterViewTab === "status") ? (
-        <div className="mb-4 grid min-w-0 gap-2" style={gridStyle}>
+        <div className="relative mb-4 w-full">
+          <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+          <div className="relative z-[1] grid min-w-0 gap-2" style={gridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
               key={quarter.label}
@@ -859,6 +961,7 @@ export function TimelineGrid({
               <span>{quarter.label}</span>
             </button>
           ))}
+          </div>
         </div>
       ) : null}
       {activeMonth ? (
@@ -881,7 +984,9 @@ export function TimelineGrid({
             )}
           >
             {monthPlanTab === "epic-gantt" && activeMonth != null ? (
-              <div className="flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
+              <div className="relative flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
+                <GanttTodayLine leftPercent={monthEpicGanttTodayLeft} />
+                <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
                   <div
                     className={cn(
@@ -917,34 +1022,35 @@ export function TimelineGrid({
                         </span>
                       ) : null}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
-                        title={`Open sprint ${globalSprintFromMonthLane(activeMonth, 1)} board`}
+                        title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))} board`}
                         onClick={() => {
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 1), null);
                         }}
-                        className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
-                        {`Sprint ${globalSprintFromMonthLane(activeMonth, 1)} (${sprintDateRangeText(currentYear, activeMonth, 1)})`}
+                        {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))} (${sprintDateRangeText(currentYear, activeMonth, 1)})`}
                       </button>
                       <button
                         type="button"
-                        title={`Open sprint ${globalSprintFromMonthLane(activeMonth, 2)} board`}
+                        title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))} board`}
                         onClick={() => {
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 2), null);
                         }}
-                        className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
-                        {`Sprint ${globalSprintFromMonthLane(activeMonth, 2)} (${sprintDateRangeText(currentYear, activeMonth, 2)})`}
+                        {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))} (${sprintDateRangeText(currentYear, activeMonth, 2)})`}
                       </button>
                     </div>
                   </div>
                 </div>
                 <MonthEpicDropArea month={activeMonth}>
-                  <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
+                  <GanttTodayBadge leftPercent={monthEpicGanttTodayLeft} />
+                  <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
                   {monthEpicGanttRows.length === 0 ? (
                     <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
                       No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag one from the left panel into the drop
@@ -964,6 +1070,7 @@ export function TimelineGrid({
                   )}
                   </div>
                 </MonthEpicDropArea>
+                </div>
               </div>
             ) : monthPlanTab === "team-queue" ? (
               <div className="flex-1 p-3 sm:p-5">
@@ -1004,61 +1111,125 @@ export function TimelineGrid({
       ) : (
         <>
           {focusedQuarter && quarterViewTab === "gantt" ? (
-            <div className="mb-4 grid min-w-0 gap-2" style={gridStyle}>
-              {visibleMonths.map((month) => (
-                <div
-                  key={month}
-                  className="space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 p-2.5 shadow-sm ring-1 ring-black/[0.03]"
-                >
-                  <button
-                    type="button"
-                    className={cn(
-                      "w-full rounded-xl py-2.5 text-center text-[13px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
-                      activeMonth === month
-                        ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
-                        : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
-                            "bg-slate-100 text-slate-700 ring-slate-200/80 hover:-translate-y-px hover:shadow-md",
-                    )}
-                    onClick={() => {
-                      if (isPostDragClickSuppressed()) return;
-                      setFocusedMonth(month);
-                      onMonthPlanTabChange?.("epic-gantt");
-                    }}
-                  >
-                    {MONTHS[month - 1]}
-                  </button>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      title={`Sprint ${globalSprintFromMonthLane(month, 1)}`}
-                      onClick={() => {
-                        if (isPostDragClickSuppressed()) return;
-                        setFocusedMonth(month);
-                        onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
-                      }}
-                      className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+            <div className="relative mb-4 w-full space-y-4">
+              <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+              <div className="relative z-[1] space-y-4">
+                <div className="grid min-w-0 gap-2" style={gridStyle}>
+                  {visibleMonths.map((month) => (
+                    <div
+                      key={month}
+                      className="space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 p-2.5 shadow-sm ring-1 ring-black/[0.03]"
                     >
-                      {`Sprint ${globalSprintFromMonthLane(month, 1)} (${sprintDateRangeText(currentYear, month, 1)})`}
-                    </button>
-                    <button
-                      type="button"
-                      title={`Sprint ${globalSprintFromMonthLane(month, 2)}`}
-                      onClick={() => {
-                        if (isPostDragClickSuppressed()) return;
-                        setFocusedMonth(month);
-                        onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
-                      }}
-                      className="flex min-h-[2rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
-                    >
-                      {`Sprint ${globalSprintFromMonthLane(month, 2)} (${sprintDateRangeText(currentYear, month, 2)})`}
-                    </button>
-                  </div>
-                  <MonthDropCell month={month} />
+                      <button
+                        type="button"
+                        className={cn(
+                          "w-full rounded-xl py-2.5 text-center text-[13px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
+                          activeMonth === month
+                            ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
+                            : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
+                                "bg-slate-100 text-slate-700 ring-slate-200/80 hover:-translate-y-px hover:shadow-md",
+                        )}
+                        onClick={() => {
+                          if (isPostDragClickSuppressed()) return;
+                          setFocusedMonth(month);
+                          onMonthPlanTabChange?.("epic-gantt");
+                        }}
+                      >
+                        {MONTHS[month - 1]}
+                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          title={sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
+                          onClick={() => {
+                            if (isPostDragClickSuppressed()) return;
+                            setFocusedMonth(month);
+                            onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
+                          }}
+                          className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        >
+                          {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateRangeText(currentYear, month, 1)})`}
+                        </button>
+                        <button
+                          type="button"
+                          title={sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
+                          onClick={() => {
+                            if (isPostDragClickSuppressed()) return;
+                            setFocusedMonth(month);
+                            onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
+                          }}
+                          className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        >
+                          {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))} (${sprintDateRangeText(currentYear, month, 2)})`}
+                        </button>
+                      </div>
+                      <MonthDropCell month={month} />
+                    </div>
+                  ))}
                 </div>
-              ))}
+                {visibleScheduledLanes.length === 0 ? (
+                  <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
+                    Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled
+                    bar along the timeline.
+                  </p>
+                ) : (
+                  <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
+                    {visibleScheduledLanes.map((initiative) => {
+                      const start = initiative.startMonth ?? 1;
+                      const end = initiative.endMonth ?? start;
+                      const quarterStart = focusedQuarter.months[0];
+                      const quarterEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+                      const visibleStart = Math.max(start, quarterStart);
+                      const visibleEnd = Math.min(end, quarterEnd);
+                      const span = Math.max(visibleEnd - visibleStart + 1, 1);
+                      const columnStart = visibleStart - quarterStart + 1;
+                      const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
+                      let previewColumnStart = columnStart;
+                      let previewSpan = span;
+                      if (rz) {
+                        if (rz.side === "right") {
+                          const newEnd = Math.min(12, Math.max(start, end + rz.deltaMonths));
+                          const qStart = focusedQuarter.months[0];
+                          const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+                          const visEnd = Math.min(newEnd, qEnd);
+                          const visStart = Math.max(start, qStart);
+                          previewSpan = Math.max(visEnd - visStart + 1, 1);
+                        } else {
+                          const newStart = Math.max(1, Math.min(end, start + rz.deltaMonths));
+                          const qStart = focusedQuarter.months[0];
+                          const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+                          const visStart = Math.max(newStart, qStart);
+                          const visEnd = Math.min(end, qEnd);
+                          previewColumnStart = visStart - qStart + 1;
+                          previewSpan = Math.max(visEnd - visStart + 1, 1);
+                        }
+                      }
+                      return (
+                        <GanttLaneRow
+                          key={initiative.id}
+                          initiative={initiative}
+                          gridStyle={gridStyle}
+                          previewColumnStart={previewColumnStart}
+                          previewSpan={previewSpan}
+                          rz={rz}
+                          handleResizePointerDown={handleResizePointerDown}
+                          onResizeInitiativeRange={onResizeInitiativeRange}
+                          onOpenInitiative={onOpenInitiative}
+                          barElsRef={barElsRef}
+                          ganttLaneSortIndex={Math.max(
+                            0,
+                            scheduledInitiatives.findIndex((x) => x.id === initiative.id),
+                          )}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           ) : !focusedQuarter ? (
-            <div className="mb-4 grid min-w-0 grid-cols-4 gap-2">
+            <div className="mb-4 w-full">
+              <div className="grid min-w-0 grid-cols-4 gap-2">
               {QUARTERS.map((quarter) => (
                 <section
                   key={quarter.label}
@@ -1081,30 +1252,30 @@ export function TimelineGrid({
                         >
                           {MONTHS[month - 1]}
                         </button>
-                        <div className="grid grid-cols-2 gap-1">
+                        <div className="grid grid-cols-2 gap-1.5">
                           <button
                             type="button"
-                            title={`Sprint ${globalSprintFromMonthLane(month, 1)}`}
+                            title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 1))}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                            className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                           >
-                            {globalSprintFromMonthLane(month, 1)}
+                            {sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 1))}
                           </button>
                           <button
                             type="button"
-                            title={`Sprint ${globalSprintFromMonthLane(month, 2)}`}
+                            title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex h-5 items-center justify-center rounded bg-white/75 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                            className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
                           >
-                            {globalSprintFromMonthLane(month, 2)}
+                            {sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
                           </button>
                         </div>
                         <MonthDropCell month={month} />
@@ -1113,6 +1284,7 @@ export function TimelineGrid({
                   </div>
                 </section>
               ))}
+              </div>
             </div>
           ) : null}
         </>
@@ -1122,64 +1294,16 @@ export function TimelineGrid({
         {activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
           <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
         ) : visibleScheduledLanes.length === 0 ? (
-          <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
-            Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
-            along the timeline.
-          </p>
-        ) : focusedQuarter ? (
-          <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
-            {visibleScheduledLanes.map((initiative) => {
-              const start = initiative.startMonth ?? 1;
-              const end = initiative.endMonth ?? start;
-              const quarterStart = focusedQuarter.months[0];
-              const quarterEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-              const visibleStart = Math.max(start, quarterStart);
-              const visibleEnd = Math.min(end, quarterEnd);
-              const span = Math.max(visibleEnd - visibleStart + 1, 1);
-              const columnStart = visibleStart - quarterStart + 1;
-              const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
-              let previewColumnStart = columnStart;
-              let previewSpan = span;
-              if (rz) {
-                if (rz.side === "right") {
-                  const newEnd = Math.min(12, Math.max(start, end + rz.deltaMonths));
-                  const qStart = focusedQuarter.months[0];
-                  const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-                  const visEnd = Math.min(newEnd, qEnd);
-                  const visStart = Math.max(start, qStart);
-                  previewSpan = Math.max(visEnd - visStart + 1, 1);
-                } else {
-                  const newStart = Math.max(1, Math.min(end, start + rz.deltaMonths));
-                  const qStart = focusedQuarter.months[0];
-                  const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-                  const visStart = Math.max(newStart, qStart);
-                  const visEnd = Math.min(end, qEnd);
-                  previewColumnStart = visStart - qStart + 1;
-                  previewSpan = Math.max(visEnd - visStart + 1, 1);
-                }
-              }
-              return (
-                <GanttLaneRow
-                  key={initiative.id}
-                  initiative={initiative}
-                  gridStyle={gridStyle}
-                  previewColumnStart={previewColumnStart}
-                  previewSpan={previewSpan}
-                  rz={rz}
-                  handleResizePointerDown={handleResizePointerDown}
-                  onResizeInitiativeRange={onResizeInitiativeRange}
-                  onOpenInitiative={onOpenInitiative}
-                  barElsRef={barElsRef}
-                  ganttLaneSortIndex={Math.max(
-                    0,
-                    scheduledInitiatives.findIndex((x) => x.id === initiative.id),
-                  )}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
+          focusedQuarter && quarterViewTab === "gantt" ? null : (
+            <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
+              Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
+              along the timeline.
+            </p>
+          )
+        ) : focusedQuarter && quarterViewTab === "gantt" ? null : (
+          <div className="relative w-full">
+            <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+            <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
             {scheduledInitiatives.map((initiative, rowIndex) => {
               const start = initiative.startMonth ?? 1;
               const end = initiative.endMonth ?? start;
@@ -1214,6 +1338,7 @@ export function TimelineGrid({
                 />
               );
             })}
+            </div>
           </div>
         )}
       </div>

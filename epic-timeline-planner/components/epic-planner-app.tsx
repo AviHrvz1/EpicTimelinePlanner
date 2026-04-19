@@ -2,6 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
+import { Archive, Map } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
@@ -1447,6 +1448,52 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     };
   }, [isResizingPanel]);
 
+  const modeNavTooltipClass =
+    "pointer-events-none absolute left-full top-1/2 z-[200] ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100";
+
+  const modeSwitchMenu = (
+    <aside className="relative z-20 flex min-h-0 items-start overflow-visible">
+      <nav className="mt-1 flex w-full flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+        <div className="group relative w-full overflow-visible">
+          <button
+            type="button"
+            onClick={() => setTopMode("roadmap")}
+            aria-label="Roadmap planning"
+            className={cn(
+              "inline-flex h-10 w-full items-center justify-center rounded-md transition",
+              topMode === "roadmap"
+                ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+            )}
+          >
+            <Map className="size-4" aria-hidden />
+          </button>
+          <span role="tooltip" className={modeNavTooltipClass}>
+            Roadmap planning
+          </span>
+        </div>
+        <div className="group relative w-full overflow-visible">
+          <button
+            type="button"
+            onClick={() => setTopMode("backlog")}
+            aria-label="Backlog workspace"
+            className={cn(
+              "inline-flex h-10 w-full items-center justify-center rounded-md transition",
+              topMode === "backlog"
+                ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+            )}
+          >
+            <Archive className="size-4" aria-hidden />
+          </button>
+          <span role="tooltip" className={modeNavTooltipClass}>
+            Backlog workspace
+          </span>
+        </div>
+      </nav>
+    </aside>
+  );
+
   return (
     <DragContext onDragEnd={onDragEnd}>
       <main className="h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8">
@@ -1462,34 +1509,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   />
                 </div>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-3">
-                <div className="inline-flex gap-0.5 rounded-lg border border-indigo-200/70 bg-gradient-to-b from-indigo-50/50 to-violet-50/40 p-0.5 shadow-sm ring-1 ring-indigo-100/80">
-                  <button
-                    type="button"
-                    onClick={() => setTopMode("roadmap")}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                      topMode === "roadmap"
-                        ? "bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-800 shadow-sm ring-1 ring-indigo-300/80"
-                        : "text-slate-600 hover:bg-indigo-100/45 hover:text-slate-900",
-                    )}
-                  >
-                    Roadmap planning
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTopMode("backlog")}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                      topMode === "backlog"
-                        ? "bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-800 shadow-sm ring-1 ring-indigo-300/80"
-                        : "text-slate-600 hover:bg-indigo-100/45 hover:text-slate-900",
-                    )}
-                  >
-                    Backlog
-                  </button>
-                </div>
-              </div>
+              <div className="shrink-0" />
             </div>
           </div>
 
@@ -1497,8 +1517,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             <div
               ref={layoutRef}
               className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
-              style={{ gridTemplateColumns: `${panelWidth}px 14px minmax(0, 1fr)` }}
+              style={{ gridTemplateColumns: `54px ${panelWidth}px 14px minmax(0, 1fr)` }}
             >
+              {modeSwitchMenu}
               <InitiativeListPanel
                 initiatives={initiatives}
                 activeMonth={activeTimelineMonth}
@@ -1645,94 +1666,97 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               />
             </div>
           ) : (
-            <BacklogPlanningPanel
-              initiatives={initiatives}
-              storyRefById={storyRefMaps.byId}
-              onOpenInitiative={(initiativeId) => {
-                const initiative = initiatives.find((item) => item.id === initiativeId);
-                if (!initiative) return;
-                setEditingInitiative(initiative);
-                setInitiativeDialogOpen(true);
-              }}
-              onOpenEpic={(epicId) => {
-                for (const initiative of initiatives) {
-                  const epic = (initiative.epics ?? []).find((item) => item.id === epicId);
-                  if (!epic) continue;
-                  setEditingEpic(epic);
-                  setEditingEpicInitiativeId(initiative.id);
-                  setEpicDialogOpen(true);
-                  return;
-                }
-              }}
-              onOpenStory={(storyId) => {
-                setSelectedStoryId(storyId);
-              }}
-              onCreateInitiativeQuick={async (title) => {
-                try {
-                  await createInitiativeQuick(title);
-                  toast.success("Initiative added");
-                } catch {
-                  toast.error("Failed to add initiative");
-                }
-              }}
-              onCreateEpicQuick={async (initiativeId, title) => {
-                try {
-                  await createEpicQuick(initiativeId, title);
-                  toast.success("Epic added");
-                } catch {
-                  toast.error("Failed to add epic");
-                }
-              }}
-              onCreateStoryQuick={async (epicId, title) => {
-                try {
-                  await createStoryQuick(epicId, title);
-                  toast.success("User story added");
-                } catch {
-                  toast.error("Failed to add user story");
-                }
-              }}
-              onPatchStoryQuick={async (storyId, patch) => {
-                try {
-                  const response = await fetch(`/api/stories/${storyId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch),
-                  });
-                  if (!response.ok) {
-                    throw new Error("Failed to patch story");
+            <div className="grid min-h-0 flex-1 items-stretch gap-3" style={{ gridTemplateColumns: "54px minmax(0, 1fr)" }}>
+              {modeSwitchMenu}
+              <BacklogPlanningPanel
+                initiatives={initiatives}
+                storyRefById={storyRefMaps.byId}
+                onOpenInitiative={(initiativeId) => {
+                  const initiative = initiatives.find((item) => item.id === initiativeId);
+                  if (!initiative) return;
+                  setEditingInitiative(initiative);
+                  setInitiativeDialogOpen(true);
+                }}
+                onOpenEpic={(epicId) => {
+                  for (const initiative of initiatives) {
+                    const epic = (initiative.epics ?? []).find((item) => item.id === epicId);
+                    if (!epic) continue;
+                    setEditingEpic(epic);
+                    setEditingEpicInitiativeId(initiative.id);
+                    setEpicDialogOpen(true);
+                    return;
                   }
-                  await refresh();
-                } catch {
-                  toast.error("Failed to update story");
-                }
-              }}
-              onPatchInitiativeQuick={async (initiativeId, patch) => {
-                try {
-                  const response = await fetch(`/api/initiatives/${initiativeId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch),
-                  });
-                  if (!response.ok) throw new Error("Failed to patch initiative");
-                  await refresh();
-                } catch {
-                  toast.error("Failed to update initiative");
-                }
-              }}
-              onPatchEpicQuick={async (epicId, patch) => {
-                try {
-                  const response = await fetch(`/api/epics/${epicId}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(patch),
-                  });
-                  if (!response.ok) throw new Error("Failed to patch epic");
-                  await refresh();
-                } catch {
-                  toast.error("Failed to update epic");
-                }
-              }}
-            />
+                }}
+                onOpenStory={(storyId) => {
+                  setSelectedStoryId(storyId);
+                }}
+                onCreateInitiativeQuick={async (title) => {
+                  try {
+                    await createInitiativeQuick(title);
+                    toast.success("Initiative added");
+                  } catch {
+                    toast.error("Failed to add initiative");
+                  }
+                }}
+                onCreateEpicQuick={async (initiativeId, title) => {
+                  try {
+                    await createEpicQuick(initiativeId, title);
+                    toast.success("Epic added");
+                  } catch {
+                    toast.error("Failed to add epic");
+                  }
+                }}
+                onCreateStoryQuick={async (epicId, title) => {
+                  try {
+                    await createStoryQuick(epicId, title);
+                    toast.success("User story added");
+                  } catch {
+                    toast.error("Failed to add user story");
+                  }
+                }}
+                onPatchStoryQuick={async (storyId, patch) => {
+                  try {
+                    const response = await fetch(`/api/stories/${storyId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(patch),
+                    });
+                    if (!response.ok) {
+                      throw new Error("Failed to patch story");
+                    }
+                    await refresh();
+                  } catch {
+                    toast.error("Failed to update story");
+                  }
+                }}
+                onPatchInitiativeQuick={async (initiativeId, patch) => {
+                  try {
+                    const response = await fetch(`/api/initiatives/${initiativeId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(patch),
+                    });
+                    if (!response.ok) throw new Error("Failed to patch initiative");
+                    await refresh();
+                  } catch {
+                    toast.error("Failed to update initiative");
+                  }
+                }}
+                onPatchEpicQuick={async (epicId, patch) => {
+                  try {
+                    const response = await fetch(`/api/epics/${epicId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(patch),
+                    });
+                    if (!response.ok) throw new Error("Failed to patch epic");
+                    await refresh();
+                  } catch {
+                    toast.error("Failed to update epic");
+                  }
+                }}
+              />
+            </div>
           )}
         </div>
       </main>

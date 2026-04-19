@@ -258,7 +258,7 @@ export function SprintAnalytics({
       </article>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
@@ -297,13 +297,7 @@ export function SprintAnalytics({
               </span>
             ))}
           </div>
-        ) : (
-          <p className="mb-2 shrink-0 text-[10px] leading-snug text-slate-600 sm:text-[11px]">
-            Each row shows <span className="font-medium text-slate-700">% of sprint capacity</span> (work left divided by
-            calendar days left in the sprint). Example: <span className="font-medium text-slate-700">120%</span> means 20% more
-            work days than sprint days remaining.
-          </p>
-        )}
+        ) : null}
         <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
           {workloadView === "stories" ? (
             analytics.workloadByAssignee.length > 0 ? (
@@ -359,46 +353,36 @@ export function SprintAnalytics({
               const pct = row.utilizationPct;
               const barW = sprintD > 0 ? Math.min(pct, 100) : row.daysLeftTotal > 0 ? 100 : 0;
               const pctRounded = Math.round(pct);
-              const capacityPctLabel =
-                sprintD > 0 ? `${pctRounded}%` : row.daysLeftTotal > 0 ? "∞%" : "0%";
+              const rightMetaLabel = `${row.estimatedTotal}d est · ${row.daysLeftTotal}d left${
+                sprintD > 0 ? ` · ${sprintD}d left in sprint` : " · sprint ended"
+              }`;
+              const overByPct = Math.max(0, pctRounded - 100);
               return (
                 <div key={row.assignee}>
-                  <div className="mb-1 flex items-start justify-between gap-2">
-                    <span className="min-w-0 truncate text-[12px] font-medium text-slate-800">{row.assignee}</span>
-                    <div className="shrink-0 text-right leading-tight">
+                  <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
+                    <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
+                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ring-slate-200/80">
                       <div
                         className={cn(
-                          "text-[15px] font-bold tabular-nums tracking-tight",
-                          row.isOverCapacity ? "text-red-600" : "text-slate-900",
+                          "h-full rounded-full transition-colors",
+                          row.isOverCapacity ? "bg-red-600" : "bg-emerald-500",
                         )}
-                      >
-                        {capacityPctLabel}
-                      </div>
-                      <div className="text-[10px] font-medium text-slate-500">of sprint capacity</div>
+                        style={{ width: `${barW}%` }}
+                        role="presentation"
+                      />
                     </div>
-                  </div>
-                  <p className="mb-0.5 text-[11px] tabular-nums text-slate-600">
-                    {row.estimatedTotal}d est · {row.daysLeftTotal}d work left
-                    {sprintD > 0 ? ` · ${sprintD}d left in sprint` : " · sprint ended"}
-                  </p>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-colors",
-                        row.isOverCapacity ? "bg-red-600" : "bg-blue-500",
-                      )}
-                      style={{ width: `${barW}%` }}
-                      role="presentation"
-                    />
+                    <span className="shrink-0 text-[11px] tabular-nums text-slate-600">
+                      {rightMetaLabel}
+                    </span>
                   </div>
                   {sprintD > 0 && pct > 100 ? (
                     <p className="mt-0.5 text-[11px] font-medium tabular-nums text-red-600">
-                      {pctRounded}% occupied — {pctRounded - 100}% beyond sprint time
+                      Overloaded by {overByPct}%
                     </p>
                   ) : sprintD > 0 && pct <= 100 ? (
-                    <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">{pctRounded}% of sprint time used</p>
-                  ) : row.daysLeftTotal > 0 ? (
-                    <p className="mt-0.5 text-[11px] font-medium text-red-600">Open work remains after sprint end</p>
+                    <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
+                      {pctRounded}% of sprint time used
+                    </p>
                   ) : null}
                 </div>
               );
@@ -413,12 +397,12 @@ export function SprintAnalytics({
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-1 flex-col p-1 lg:col-span-2">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2">
         <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
-        <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {analytics.flowSprintTrendData.length > 0 ? (
               <div className="absolute inset-0">
