@@ -1,12 +1,17 @@
 "use client";
 
 import { Folder, History, MessageSquare, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type RefObject, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { InitiativeItem } from "@/lib/types";
 import { MONTHS } from "@/lib/timeline";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
+import {
+  isUsablePlanningSurfaceRect,
+  planningDetailPanelAnchorStyle,
+  usePlanningSurfaceRect,
+} from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
 
 type InitiativeFormDialogProps = {
@@ -27,6 +32,7 @@ type InitiativeFormDialogProps = {
   onAddComment?: (initiativeId: string, body: string) => Promise<void>;
   /** Called after exit animation; use to clear selected entity in parent. */
   onExitComplete?: () => void;
+  surfaceAnchorRef?: RefObject<HTMLElement | null>;
 };
 
 export function InitiativeFormDialog({
@@ -38,9 +44,10 @@ export function InitiativeFormDialog({
   onOpenEpic,
   onRequestCreateEpic,
   onAddComment,
+  surfaceAnchorRef,
 }: InitiativeFormDialogProps) {
   const [title, setTitle] = useState(initiative?.title ?? "");
-  const [icon, setIcon] = useState(initiative?.icon ?? "🎯");
+  const [icon, setIcon] = useState(initiative?.icon === "🎯" ? "" : (initiative?.icon ?? ""));
   const [description, setDescription] = useState(initiative?.description ?? "");
   const [assignee, setAssignee] = useState(initiative?.assignee ?? "");
   const [assignedMonth, setAssignedMonth] = useState(initiative?.startMonth ? String(initiative.startMonth) : "");
@@ -52,7 +59,7 @@ export function InitiativeFormDialog({
 
   useEffect(() => {
     setTitle(initiative?.title ?? "");
-    setIcon(initiative?.icon ?? "🎯");
+    setIcon(initiative?.icon === "🎯" ? "" : (initiative?.icon ?? ""));
     setDescription(initiative?.description ?? "");
     setAssignee(initiative?.assignee ?? "");
     setAssignedMonth(initiative?.startMonth ? String(initiative.startMonth) : "");
@@ -62,6 +69,8 @@ export function InitiativeFormDialog({
   }, [initiative, open]);
 
   const { visible, leaving } = useDialogPresence(open, onExitComplete);
+  const surfaceRect = usePlanningSurfaceRect(surfaceAnchorRef, visible);
+  const anchored = isUsablePlanningSurfaceRect(surfaceRect);
 
   if (!visible) return null;
 
@@ -74,7 +83,7 @@ export function InitiativeFormDialog({
       const month = assignedMonth ? Number(assignedMonth) : null;
       await onSubmit({
         title: normalizedTitle,
-        icon: icon.trim() || "🎯",
+        icon: icon.trim(),
         description,
         assignee,
         color,
@@ -103,7 +112,8 @@ export function InitiativeFormDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-40 flex items-start justify-end bg-slate-900/30 p-4 pb-6 pl-6 pr-4 pt-6 backdrop-blur-[1px] md:pr-12",
+        "fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[1px]",
+        !anchored && "flex items-start justify-end p-4 pb-6 pl-6 pr-4 pt-6 md:pr-12",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
         leaving && "pointer-events-none",
@@ -111,11 +121,19 @@ export function InitiativeFormDialog({
     >
       <div
         className={cn(
-          "w-full max-w-5xl shrink-0",
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
+          anchored
+            ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-card shadow-2xl ring-1 ring-black/[0.06]"
+            : "w-full max-w-[31.36rem] shrink-0",
         )}
+        style={anchored ? planningDetailPanelAnchorStyle(surfaceRect) : undefined}
       >
-        <div className="max-h-[88vh] w-full overflow-y-auto rounded-2xl border bg-card p-5 shadow-xl">
+        <div
+          className={cn(
+            "w-full overflow-y-auto p-5",
+            anchored ? "h-full min-h-0 flex-1 shadow-none" : "max-h-[88vh] rounded-2xl border bg-card shadow-xl",
+          )}
+        >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-slate-900">
             {initiative ? "Initiative details" : "Create initiative"}
@@ -134,6 +152,9 @@ export function InitiativeFormDialog({
                 maxLength={2}
                 value={icon}
                 onChange={(event) => setIcon(event.target.value)}
+                placeholder="⚡"
+                title="Emoji icon, or leave empty for lightning bolt"
+                aria-label="Initiative icon emoji"
               />
               <input
                 className="w-full rounded-md border bg-background px-3 py-2 text-base"

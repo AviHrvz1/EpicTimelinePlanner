@@ -60,7 +60,7 @@ function GanttLaneRow({
   const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
 
   return (
-    <div className="relative min-w-0" data-gantt-lane-index={ganttLaneSortIndex}>
+    <div className="relative z-10 min-w-0" data-gantt-lane-index={ganttLaneSortIndex}>
       <div className="relative grid min-w-0 gap-2" style={gridStyle}>
           <div
             ref={(node) => {
@@ -185,31 +185,57 @@ function sprintLabelQuarterOrMonth(globalSprint: number): string {
 }
 
 /** Vertical “today” marker; full height of its positioned parent. */
-function GanttTodayLine({ leftPercent }: { leftPercent: number | null }) {
+function GanttTodayLine({
+  leftPercent,
+  /** Bleed top/bottom past the track box so the dash meets the outer padded panel border (parent uses py-3 sm:py-4). */
+  bleedToPaddedPanel,
+}: {
+  leftPercent: number | null;
+  bleedToPaddedPanel?: boolean;
+}) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
   const x = Math.min(100, Math.max(0, leftPercent));
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-[40] overflow-visible [isolation:isolate]"
+      className={cn(
+        "pointer-events-none absolute inset-x-0 z-0 overflow-visible [isolation:isolate]",
+        bleedToPaddedPanel ? "-top-3 -bottom-3 sm:-top-4 sm:-bottom-4" : "inset-y-0",
+      )}
       aria-hidden
     >
+      {/* Downward arrow at line start (same x as dashed line). */}
       <div
-        className="absolute top-0 bottom-0 w-0 border-l-2 border-dashed border-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.45)]"
+        className="absolute top-0 z-[1] h-0 w-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500 drop-shadow-[0_0_6px_rgba(16,185,129,0.4)]"
+        style={{ left: `${x}%`, transform: "translateX(-50%)" }}
+      />
+      <div
+        className="absolute top-0 bottom-0 w-0 border-l border-dashed border-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.35)]"
         style={{ left: `${x}%`, transform: "translateX(-50%)" }}
       />
     </div>
   );
 }
 
-/** In-flow row directly under sprint / month header UI so the pill sits beneath those panels. */
+/** Single Today pill under sprint/month headers; nudged left so it can sit past the timeline card edge toward the initiative column. */
 function GanttTodayBadgeBelowSprints({ leftPercent }: { leftPercent: number | null }) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
   const x = Math.min(100, Math.max(0, leftPercent));
+  /** Shift left from line center so the label clears the timeline panel edge (toward initiative side). */
+  const nudgeTowardInitiative = "0.5rem";
+  /** Extra nudge vs dashed line: down and forward (timeline direction). */
+  const nudgeDownPx = 15;
+  const nudgeForwardPx = 4;
   return (
-    <div className="pointer-events-none relative z-[41] mb-1 mt-0.5 h-6 w-full shrink-0" aria-hidden>
+    <div
+      className="pointer-events-none relative z-[60] mb-0 mt-0 h-4 w-full shrink-0 overflow-visible"
+      aria-hidden
+    >
       <div
-        className="absolute top-0.5 rounded border border-emerald-200/90 bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 shadow-sm"
-        style={{ left: `${x}%`, transform: "translateX(-50%)" }}
+        className="absolute top-0 rounded border border-emerald-200/80 bg-white/95 px-1 py-px text-[10px] font-semibold leading-none text-emerald-800 shadow-sm ring-1 ring-emerald-100/60"
+        style={{
+          left: `${x}%`,
+          transform: `translateX(calc(-50% - ${nudgeTowardInitiative} + ${nudgeForwardPx}px)) translateY(calc(-0.45rem + ${nudgeDownPx}px))`,
+        }}
       >
         Today
       </div>
@@ -230,7 +256,7 @@ function EpicGanttLaneRow({ epic, initiative, gridStyle, onOpenEpic, ganttLaneSo
 
   return (
     <div
-      className="relative min-w-0"
+      className="relative z-10 min-w-0"
       data-gantt-lane-index={ganttLaneSortIndex}
     >
       <p className="mb-1 truncate text-[11px] font-medium text-slate-500">{initiative.title}</p>
@@ -374,19 +400,22 @@ function MonthDropCell({
 function MonthEpicDropArea({
   month,
   children,
+  className,
 }: {
   month: number;
   children: ReactNode;
+  className?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `month:${month}` });
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "relative min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100/90 p-3 transition ring-1 sm:p-4",
+        "relative isolate min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100/90 p-3 transition ring-1 sm:p-4",
         isOver
           ? "border-primary/35 bg-primary/10 ring-primary/20"
           : "bg-slate-50/35 ring-slate-100/80",
+        className,
       )}
     >
       {children}
@@ -745,7 +774,7 @@ export function TimelineGrid({
     (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status");
 
   return (
-    <div className="h-full min-h-0 w-full overflow-x-hidden overflow-y-auto rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+    <div className="h-full min-h-0 w-full overflow-y-auto overflow-x-visible rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
           "mb-4 flex items-center gap-3",
@@ -934,9 +963,8 @@ export function TimelineGrid({
         )}
       </div>
       {!activeMonth && !(focusedQuarter && quarterViewTab === "status") ? (
-        <div className="relative mb-4 w-full">
-          <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
-          <div className="relative z-[1] grid min-w-0 gap-2" style={gridStyle}>
+        <div className="mb-4 w-full">
+          <div className="grid min-w-0 gap-2" style={gridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
               key={quarter.label}
@@ -958,7 +986,6 @@ export function TimelineGrid({
             </button>
           ))}
           </div>
-          <GanttTodayBadgeBelowSprints leftPercent={roadmapLaneTodayLeft} />
         </div>
       ) : null}
       {activeMonth ? (
@@ -982,12 +1009,11 @@ export function TimelineGrid({
           >
             {monthPlanTab === "epic-gantt" && activeMonth != null ? (
               <div className="relative flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
-                <GanttTodayLine leftPercent={monthEpicGanttTodayLeft} />
                 <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
                   <div
                     className={cn(
-                      "overflow-hidden rounded-2xl border border-slate-200/55 p-4 shadow-sm ring-1 ring-black/[0.03]",
+                      "overflow-hidden rounded-2xl border border-slate-200/55 px-4 pt-4 pb-0 shadow-sm ring-1 ring-black/[0.03]",
                       activeMonthQuarterLabel === "Q1" && "bg-gradient-to-br from-blue-50/95 via-white to-white",
                       activeMonthQuarterLabel === "Q2" && "bg-gradient-to-br from-cyan-50/95 via-white to-white",
                       activeMonthQuarterLabel === "Q3" && "bg-gradient-to-br from-emerald-50/95 via-white to-white",
@@ -1043,10 +1069,12 @@ export function TimelineGrid({
                         {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))} (${sprintDateRangeText(currentYear, activeMonth, 2)})`}
                       </button>
                     </div>
+                    <GanttTodayBadgeBelowSprints leftPercent={monthEpicGanttTodayLeft} />
+                    <MonthDropCell month={activeMonth} />
                   </div>
                 </div>
-                <GanttTodayBadgeBelowSprints leftPercent={monthEpicGanttTodayLeft} />
                 <MonthEpicDropArea month={activeMonth}>
+                  <GanttTodayLine leftPercent={monthEpicGanttTodayLeft} />
                   <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
                   {monthEpicGanttRows.length === 0 ? (
                     <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
@@ -1108,70 +1136,73 @@ export function TimelineGrid({
       ) : (
         <>
           {focusedQuarter && quarterViewTab === "gantt" ? (
-            <div className="relative mb-4 w-full space-y-4">
-              <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+            <div className="mb-4 w-full space-y-4">
               <div className="relative z-[1] space-y-4">
-                <div className="grid min-w-0 gap-2" style={gridStyle}>
-                  {visibleMonths.map((month) => (
-                    <div
-                      key={month}
-                      className="space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 p-2.5 shadow-sm ring-1 ring-black/[0.03]"
-                    >
-                      <button
-                        type="button"
-                        className={cn(
-                          "w-full rounded-xl py-2.5 text-center text-[13px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
-                          activeMonth === month
-                            ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
-                            : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
-                                "bg-slate-100 text-slate-700 ring-slate-200/80 hover:-translate-y-px hover:shadow-md",
-                        )}
-                        onClick={() => {
-                          if (isPostDragClickSuppressed()) return;
-                          setFocusedMonth(month);
-                          onMonthPlanTabChange?.("epic-gantt");
-                        }}
+                <div className="space-y-0.5">
+                  <div className="grid min-w-0 gap-2" style={gridStyle}>
+                    {visibleMonths.map((month) => (
+                      <div
+                        key={month}
+                        className="space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-2.5 pb-0 shadow-sm ring-1 ring-black/[0.03]"
                       >
-                        {MONTHS[month - 1]}
-                      </button>
-                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          title={sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
+                          className={cn(
+                            "w-full rounded-xl py-2.5 text-center text-[13px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
+                            activeMonth === month
+                              ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
+                              : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
+                                  "bg-slate-100 text-slate-700 ring-slate-200/80 hover:-translate-y-px hover:shadow-md",
+                          )}
                           onClick={() => {
                             if (isPostDragClickSuppressed()) return;
                             setFocusedMonth(month);
-                            onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
+                            onMonthPlanTabChange?.("epic-gantt");
                           }}
-                          className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                         >
-                          {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateRangeText(currentYear, month, 1)})`}
+                          {MONTHS[month - 1]}
                         </button>
-                        <button
-                          type="button"
-                          title={sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
-                          onClick={() => {
-                            if (isPostDragClickSuppressed()) return;
-                            setFocusedMonth(month);
-                            onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
-                          }}
-                          className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
-                        >
-                          {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))} (${sprintDateRangeText(currentYear, month, 2)})`}
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            title={sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
+                            onClick={() => {
+                              if (isPostDragClickSuppressed()) return;
+                              setFocusedMonth(month);
+                              onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
+                            }}
+                            className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                          >
+                            {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateRangeText(currentYear, month, 1)})`}
+                          </button>
+                          <button
+                            type="button"
+                            title={sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
+                            onClick={() => {
+                              if (isPostDragClickSuppressed()) return;
+                              setFocusedMonth(month);
+                              onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
+                            }}
+                            className="flex min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200/80 bg-white py-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                          >
+                            {`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))} (${sprintDateRangeText(currentYear, month, 2)})`}
+                          </button>
+                        </div>
+                        <GanttTodayBadgeBelowSprints leftPercent={todayLeftPercentInSingleMonth(currentYear, month)} />
+                        <MonthDropCell month={month} />
                       </div>
-                      <MonthDropCell month={month} />
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-                <GanttTodayBadgeBelowSprints leftPercent={roadmapLaneTodayLeft} />
-                {visibleScheduledLanes.length === 0 ? (
-                  <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
-                    Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled
-                    bar along the timeline.
-                  </p>
-                ) : (
-                  <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="space-y-2">
+                <div className="relative w-full">
+                  <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+                  {visibleScheduledLanes.length === 0 ? (
+                    <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
+                      Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled
+                      bar along the timeline.
+                    </p>
+                  ) : (
+                    <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
                     {visibleScheduledLanes.map((initiative) => {
                       const start = initiative.startMonth ?? 1;
                       const end = initiative.endMonth ?? start;
@@ -1222,7 +1253,8 @@ export function TimelineGrid({
                       );
                     })}
                   </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           ) : !focusedQuarter ? (
@@ -1231,7 +1263,7 @@ export function TimelineGrid({
               {QUARTERS.map((quarter) => (
                 <section
                   key={quarter.label}
-                  className={cn("rounded-lg p-2 ring-1", quarterPanelTone[quarter.label] ?? "bg-slate-50 ring-slate-200")}
+                  className={cn("rounded-lg px-2 pt-2 pb-0 ring-1", quarterPanelTone[quarter.label] ?? "bg-slate-50 ring-slate-200")}
                 >
                   <div className="grid grid-cols-3 gap-2">
                     {quarter.months.map((month) => (
@@ -1276,6 +1308,7 @@ export function TimelineGrid({
                             {sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
                           </button>
                         </div>
+                        <GanttTodayBadgeBelowSprints leftPercent={todayLeftPercentInSingleMonth(currentYear, month)} />
                         <MonthDropCell month={month} />
                       </div>
                     ))}
@@ -1301,7 +1334,6 @@ export function TimelineGrid({
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : (
           <div className="relative w-full">
             <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
-            <GanttTodayBadgeBelowSprints leftPercent={roadmapLaneTodayLeft} />
             <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
             {scheduledInitiatives.map((initiative, rowIndex) => {
               const start = initiative.startMonth ?? 1;

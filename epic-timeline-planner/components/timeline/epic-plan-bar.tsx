@@ -1,18 +1,38 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import { Folder } from "lucide-react";
+import { Folder, Zap } from "lucide-react";
 
 import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
 
-function EpicBarIcon({ icon }: { icon?: string | null }) {
+/** Emoji or Lucide bolt; legacy DB default 🎯 (target) maps to bolt, not the target emoji. */
+export function InitiativePlanBarIcon({ icon, className }: { icon?: string | null; className?: string }) {
   const raw = icon?.trim();
-  if (raw && raw !== "📁") {
-    return <span className="mr-1">{raw}</span>;
+  if (raw && raw !== "🎯") {
+    return <span className={cn("mr-1 inline-block leading-none", className)}>{raw}</span>;
   }
   return (
-    <span className="mr-1 inline-flex size-4 shrink-0 items-center justify-center text-white/95" aria-hidden>
+    <span
+      className={cn("mr-1 inline-flex size-4 shrink-0 items-center justify-center text-amber-600", className)}
+      aria-hidden
+    >
+      <Zap className="size-3.5" strokeWidth={2} />
+    </span>
+  );
+}
+
+/** Emoji or default folder glyph for epic rows (timeline, backlog, etc.). */
+export function EpicPlanBarIcon({ icon, className }: { icon?: string | null; className?: string }) {
+  const raw = icon?.trim();
+  if (raw && raw !== "📁") {
+    return <span className={cn("mr-1 inline-block leading-none", className)}>{raw}</span>;
+  }
+  return (
+    <span
+      className={cn("mr-1 inline-flex size-4 shrink-0 items-center justify-center text-white/95", className)}
+      aria-hidden
+    >
       <Folder className="size-3.5" strokeWidth={2} />
     </span>
   );
@@ -51,7 +71,7 @@ export function EpicPlanBar({ id, title, icon, color, onClick }: EpicPlanBarProp
       }}
     >
       <span className="min-w-0 flex-1 truncate px-2.5 text-center">
-        <EpicBarIcon icon={icon} />
+        <EpicPlanBarIcon icon={icon} />
         {title}
       </span>
     </div>

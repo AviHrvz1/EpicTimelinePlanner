@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
+import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import {
   EPICS_UNPLAN_DROP_ID,
   backlogSlotDropId,
@@ -162,7 +163,12 @@ function DraggableInitiativeCard({
         </button>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
-            <p className="min-w-0 text-[15px] leading-5 font-normal text-slate-900">{initiative.title}</p>
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
+                <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-amber-600" />
+              </span>
+              <p className="min-w-0 truncate text-[15px] leading-5 font-normal text-slate-900">{initiative.title}</p>
+            </div>
             <div className="flex shrink-0 gap-1">
               <EditRowIconButton label="Edit initiative" onClick={() => onEdit(initiative)} />
             </div>
@@ -399,7 +405,7 @@ function InitiativeTreeCard({
           <DragHandleIcon size="sm" />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="group/init flex items-start justify-between gap-2">
+          <div className="group/init flex items-start justify-between gap-1">
             <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2 text-left">
               <ChevronRight
                 className={cn(
@@ -407,20 +413,27 @@ function InitiativeTreeCard({
                   isOpen && "rotate-90",
                 )}
               />
-              <div className="min-w-0">
-                <p className="min-w-0 text-[16px] leading-6 font-normal text-slate-900">{initiative.title}</p>
-                {initiative.status === "scheduled" && initiative.startMonth != null ? (
-                  <div className="mt-1 flex items-center gap-1">
-                    <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] font-normal text-violet-700">
-                      Quarter {quarterFromMonth(initiative.startMonth)}
+              <div className="min-w-0 flex-1 text-left">
+                <div className="flex w-full min-w-0 items-center gap-1">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
+                      <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-amber-600" />
                     </span>
-                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[11px] font-normal text-blue-700">
-                      {initiative.endMonth != null && initiative.endMonth !== initiative.startMonth
-                        ? `${MONTHS[initiative.startMonth - 1]}-${MONTHS[initiative.endMonth - 1]}`
-                        : MONTHS[initiative.startMonth - 1]}
-                    </span>
+                    <p className="min-w-0 truncate text-[16px] leading-6 font-normal text-slate-900">{initiative.title}</p>
                   </div>
-                ) : null}
+                  {initiative.status === "scheduled" && initiative.startMonth != null ? (
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pl-1 pr-0.5">
+                      <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] font-normal text-violet-700">
+                        Quarter {quarterFromMonth(initiative.startMonth)}
+                      </span>
+                      <span className="rounded bg-blue-100 px-2 py-0.5 text-[11px] font-normal text-blue-700">
+                        {initiative.endMonth != null && initiative.endMonth !== initiative.startMonth
+                          ? `${MONTHS[initiative.startMonth - 1]}-${MONTHS[initiative.endMonth - 1]}`
+                          : MONTHS[initiative.startMonth - 1]}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
                 {initiative.description ? (
                   <p className="line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
                 ) : null}
@@ -597,23 +610,35 @@ function SprintEpicCard({
           <button
             type="button"
             onClick={() => setIsOpen((prev) => !prev)}
-            className="flex min-w-0 items-center gap-1.5 text-left"
+            className="flex min-w-0 items-start gap-1.5 text-left"
             aria-expanded={isOpen}
           >
-            <ChevronRight className={cn("size-4 shrink-0 text-slate-500 transition-transform", isOpen && "rotate-90")} />
-            <div className="min-w-0">
-              <p className="min-w-0 truncate text-[15px] font-normal leading-5 text-slate-900">{epic.title}</p>
-              <p className="truncate text-[11px] font-normal text-slate-500">{initiative.title}</p>
-              {epicPlanLabel ? (
-                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-normal tracking-wide">
-                  <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">
-                    Quarter {epicPlanLabel.quarter}
+            <ChevronRight
+              className={cn(
+                "mt-0.5 size-4 shrink-0 text-slate-500 transition-transform",
+                isOpen && "rotate-90",
+              )}
+            />
+            <div className="min-w-0 flex-1 text-left">
+              <div className="flex w-full min-w-0 items-center gap-1">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
+                    <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                   </span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
-                    {epicPlanLabel.month}
-                  </span>
+                  <p className="min-w-0 truncate text-[15px] font-normal leading-5 text-slate-900">{epic.title}</p>
                 </div>
-              ) : null}
+                {epicPlanLabel ? (
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pl-1 pr-0.5 text-[10px] font-normal tracking-wide">
+                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">
+                      Quarter {epicPlanLabel.quarter}
+                    </span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
+                      {epicPlanLabel.month}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+              <p className="truncate text-[11px] font-normal text-slate-500">{initiative.title}</p>
             </div>
           </button>
         </div>
@@ -877,9 +902,6 @@ export function InitiativeListPanel({
               </>
             )}
           </h2>
-          {isSprintModeActive ? null : inMonthView ? (
-            null
-          ) : null}
         </div>
         {showNewButton ? (
           <Button

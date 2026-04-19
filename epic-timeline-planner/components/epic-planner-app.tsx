@@ -235,6 +235,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
+  const planningRightSurfaceRef = useRef<HTMLDivElement | null>(null);
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
   const hasHydratedFromUrlRef = useRef(false);
 
@@ -1599,7 +1600,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
                 <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
               </div>
-              <TimelineGrid
+              <div
+                ref={planningRightSurfaceRef}
+                className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"
+              >
+                <TimelineGrid
                 initiatives={initiatives}
                 zoom={1}
                 currentYear={selectedYear}
@@ -1664,11 +1669,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 }}
                 onSprintModeChange={handleSprintModeChange}
               />
+              </div>
             </div>
           ) : (
             <div className="grid min-h-0 flex-1 items-stretch gap-3" style={{ gridTemplateColumns: "54px minmax(0, 1fr)" }}>
               {modeSwitchMenu}
-              <BacklogPlanningPanel
+              <div
+                ref={planningRightSurfaceRef}
+                className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"
+              >
+                <BacklogPlanningPanel
                 initiatives={initiatives}
                 storyRefById={storyRefMaps.byId}
                 onOpenInitiative={(initiativeId) => {
@@ -1756,6 +1766,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   }
                 }}
               />
+              </div>
             </div>
           )}
         </div>
@@ -1794,6 +1805,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           setEditingInitiative(undefined);
         }}
         onSubmit={handleUpsertInitiative}
+        surfaceAnchorRef={planningRightSurfaceRef}
       />
       <EpicFormDialog
         open={epicDialogOpen}
@@ -1833,6 +1845,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             toast.error("Failed to delete epic");
           }
         }}
+        surfaceAnchorRef={planningRightSurfaceRef}
       />
       <StoryDetailsDialog
         open={storyDialogOpen}
@@ -1879,6 +1892,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           }
         }}
         storyRef={selectedStoryId ? storyRefMaps.byId[selectedStoryId] : undefined}
+        surfaceAnchorRef={planningRightSurfaceRef}
       />
     </DragContext>
   );

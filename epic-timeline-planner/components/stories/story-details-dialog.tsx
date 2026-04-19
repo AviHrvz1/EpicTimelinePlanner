@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { History, MessageSquare, Plus, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 
@@ -9,6 +9,11 @@ import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
+import {
+  isUsablePlanningSurfaceRect,
+  planningDetailPanelAnchorStyle,
+  usePlanningSurfaceRect,
+} from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
 import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
@@ -58,6 +63,8 @@ type StoryDetailsDialogProps = {
   storyRef?: string;
   /** Called after exit animation; use to clear selection in parent without remounting mid-close. */
   onExitComplete?: () => void;
+  /** When set, the panel matches this element (e.g. right timeline column). */
+  surfaceAnchorRef?: RefObject<HTMLElement | null>;
 };
 
 export function StoryDetailsDialog({
@@ -72,6 +79,7 @@ export function StoryDetailsDialog({
   onDelete,
   onAddComment,
   storyRef,
+  surfaceAnchorRef,
 }: StoryDetailsDialogProps) {
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState("📄");
@@ -158,6 +166,8 @@ export function StoryDetailsDialog({
   }, [open]);
 
   const { visible, leaving } = useDialogPresence(open, onExitComplete);
+  const surfaceRect = usePlanningSurfaceRect(surfaceAnchorRef, visible);
+  const anchored = isUsablePlanningSurfaceRect(surfaceRect);
 
   if (!visible) return null;
 
@@ -246,7 +256,8 @@ export function StoryDetailsDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-start justify-end bg-slate-900/30 p-4 pb-6 pl-6 pr-4 pt-6 backdrop-blur-[1px] md:pr-12",
+        "fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-[1px]",
+        !anchored && "flex items-start justify-end p-4 pb-6 pl-6 pr-4 pt-6 md:pr-12",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
         leaving && "pointer-events-none",
@@ -254,13 +265,19 @@ export function StoryDetailsDialog({
     >
       <div
         className={cn(
-          "w-full max-w-5xl shrink-0",
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
+          anchored
+            ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06]"
+            : "w-full max-w-[31.36rem] shrink-0",
         )}
+        style={anchored ? planningDetailPanelAnchorStyle(surfaceRect) : undefined}
       >
         <div
           className={cn(
-            "max-h-[88vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl",
+            "w-full overflow-y-auto p-5",
+            anchored
+              ? "h-full min-h-0 flex-1 shadow-none ring-0"
+              : "max-h-[88vh] rounded-2xl border border-slate-200 bg-white shadow-2xl",
             isDraggingDialog && "select-none",
           )}
           style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}

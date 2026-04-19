@@ -27,7 +27,7 @@ const INITIATIVE_INCLUDE = {
 
 const createInitiativeSchema = z.object({
   title: z.string().trim().min(2).max(120),
-  icon: z.string().trim().min(1).max(4).optional(),
+  icon: z.string().trim().max(4).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
   assignee: z.string().trim().max(120).optional().nullable(),
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   const initiative = await db.initiative.create({
     data: {
       title: parsed.data.title,
-      icon: parsed.data.icon ?? "🎯",
+      icon: parsed.data.icon ?? "",
       description: parsed.data.description || null,
       assignee: parsed.data.assignee || null,
       color: parsed.data.color ?? "#3B82F6",

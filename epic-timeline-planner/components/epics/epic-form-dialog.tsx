@@ -1,13 +1,18 @@
 "use client";
 
 import { FileText, History, MessageSquare, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
+import {
+  isUsablePlanningSurfaceRect,
+  planningDetailPanelAnchorStyle,
+  usePlanningSurfaceRect,
+} from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
 
 type EpicFormDialogProps = {
@@ -32,6 +37,7 @@ type EpicFormDialogProps = {
   onAddComment?: (epicId: string, body: string) => Promise<void>;
   /** Called after exit animation; use to clear selected entity in parent. */
   onExitComplete?: () => void;
+  surfaceAnchorRef?: RefObject<HTMLElement | null>;
 };
 
 export function EpicFormDialog({
@@ -47,6 +53,7 @@ export function EpicFormDialog({
   onRequestCreateStory,
   onOpenStory,
   onAddComment,
+  surfaceAnchorRef,
 }: EpicFormDialogProps) {
   const [title, setTitle] = useState(epic?.title ?? "");
   const [icon, setIcon] = useState(epic?.icon ?? "📁");
@@ -96,6 +103,8 @@ export function EpicFormDialog({
   );
 
   const { visible, leaving } = useDialogPresence(open, onExitComplete);
+  const surfaceRect = usePlanningSurfaceRect(surfaceAnchorRef, visible);
+  const anchored = isUsablePlanningSurfaceRect(surfaceRect);
 
   if (!visible) return null;
 
@@ -199,7 +208,8 @@ export function EpicFormDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-40 flex items-start justify-end bg-slate-900/30 p-4 pb-6 pl-6 pr-4 pt-6 backdrop-blur-[1px] md:pr-12",
+        "fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[1px]",
+        !anchored && "flex items-start justify-end p-4 pb-6 pl-6 pr-4 pt-6 md:pr-12",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
         leaving && "pointer-events-none",
@@ -207,13 +217,19 @@ export function EpicFormDialog({
     >
       <div
         className={cn(
-          "w-full max-w-5xl shrink-0",
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
+          anchored
+            ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06]"
+            : "w-full max-w-[31.36rem] shrink-0",
         )}
+        style={anchored ? planningDetailPanelAnchorStyle(surfaceRect) : undefined}
       >
         <div
           className={cn(
-            "max-h-[88vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl",
+            "w-full overflow-y-auto p-5",
+            anchored
+              ? "h-full min-h-0 flex-1 shadow-none ring-0"
+              : "max-h-[88vh] rounded-2xl border border-slate-200 bg-white shadow-2xl",
             isDraggingDialog && "select-none",
           )}
           style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}

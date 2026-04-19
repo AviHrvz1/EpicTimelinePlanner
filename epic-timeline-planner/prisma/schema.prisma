@@ -24,7 +24,7 @@ enum StoryStatus {
 model Initiative {
   id          String              @id @default(uuid())
   title       String
-  icon        String              @default("🎯")
+  icon        String              @default("")
   description String?
   assignee    String?
   color       String              @default("#3B82F6")

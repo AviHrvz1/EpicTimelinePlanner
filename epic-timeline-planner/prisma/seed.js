@@ -271,7 +271,7 @@ async function main() {
     await prisma.initiative.create({
       data: {
         title: init.title,
-        icon: "🎯",
+        icon: "",
         assignee: init.assignee,
         color: init.color,
         status: init.status,
