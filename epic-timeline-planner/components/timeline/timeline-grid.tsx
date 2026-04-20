@@ -896,8 +896,8 @@ export function TimelineGrid({
         )}
       </div>
       {activeMonth ? (
-        <div className="relative h-0">
-          <div className="inline-flex min-w-[10.5rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+        <div className="relative z-30 h-0">
+          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
             {activeSprint != null && (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status") ? (
               <>
                 <button
@@ -906,14 +906,16 @@ export function TimelineGrid({
                     onMonthPlanTabChange?.("sprint-kanban");
                     setActiveSprintTab("kanban");
                   }}
+                  title="Sprint board"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
                     monthPlanTab === "sprint-kanban"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
-                  Sprint board
+                  <MapIcon className="size-4" aria-hidden />
+                  <span className="sr-only">Sprint board</span>
                 </button>
                 <button
                   type="button"
@@ -921,14 +923,16 @@ export function TimelineGrid({
                     onMonthPlanTabChange?.("sprint-status");
                     setActiveSprintTab("status");
                   }}
+                  title="Sprint insights"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
                     monthPlanTab === "sprint-status"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
-                  Sprint insights
+                  <BarChart3 className="size-4" aria-hidden />
+                  <span className="sr-only">Sprint insights</span>
                 </button>
               </>
             ) : (
@@ -936,46 +940,52 @@ export function TimelineGrid({
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("epic-gantt")}
+                  title="Epic plan"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
                     monthPlanTab === "epic-gantt"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
-                  Epic plan
+                  <MapIcon className="size-4" aria-hidden />
+                  <span className="sr-only">Epic plan</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("team-queue")}
+                  title="Team queue"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
                     monthPlanTab === "team-queue"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
-                  Team queue
+                  <BarChart3 className="size-4" aria-hidden />
+                  <span className="sr-only">Team queue</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-status")}
+                  title="Month insights"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
                     monthPlanTab === "month-status"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
-                  Month insights
+                  <BarChart3 className="size-4" aria-hidden />
+                  <span className="sr-only">Month insights</span>
                 </button>
               </>
             )}
           </div>
         </div>
       ) : focusedQuarter ? (
-        <div className="relative h-0">
-          <div className="inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+        <div className="relative z-30 h-0">
+          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
             <button
               type="button"
               onClick={() => setQuarterViewTab("gantt")}
