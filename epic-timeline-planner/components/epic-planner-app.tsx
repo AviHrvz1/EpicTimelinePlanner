@@ -46,7 +46,7 @@ import {
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { clampYearSprint, globalSprintFromMonthLane } from "@/lib/year-sprint";
+import { clampYearSprint, globalSprintFromMonthLane, yearSprintRangeFromMonthRange } from "@/lib/year-sprint";
 
 type PlannerProps = {
   initialInitiatives: InitiativeItem[];
@@ -103,6 +103,7 @@ function computeInitiativeMonthLanePlacement(
     status: InitiativeStatus.scheduled,
     startMonth: month,
     endMonth: month,
+    ...yearSprintRangeFromMonthRange(month, month),
   };
 
   let insertAt: number;
@@ -134,7 +135,14 @@ function computeInitiativeMonthLanePlacement(
     if (rowById.has(i.id)) {
       const r = rowById.get(i.id)!;
       if (i.id === initiativeId) {
-        return { ...i, status: InitiativeStatus.scheduled, startMonth: month, endMonth: month, timelineRow: r };
+        return {
+          ...i,
+          status: InitiativeStatus.scheduled,
+          startMonth: month,
+          endMonth: month,
+          ...yearSprintRangeFromMonthRange(month, month),
+          timelineRow: r,
+        };
       }
       return { ...i, timelineRow: r };
     }
@@ -598,10 +606,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   }
 
   async function scheduleInitiative(initiativeId: string, month: number, timelineRow?: number) {
-    const payload: { year: number; startMonth: number; endMonth: number; timelineRow?: number } = {
+    const payload: {
+      year: number;
+      startMonth: number;
+      endMonth: number;
+      startYearSprint: number;
+      endYearSprint: number;
+      timelineRow?: number;
+    } = {
       year: selectedYear,
       startMonth: month,
       endMonth: month,
+      ...yearSprintRangeFromMonthRange(month, month),
     };
     if (timelineRow !== undefined) payload.timelineRow = timelineRow;
     console.log("[gantt-drop] fetch PATCH schedule", { initiativeId, payload });
@@ -657,14 +673,39 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }
 
-  async function patchInitiativeScheduleRange(initiativeId: string, startMonth: number, endMonth: number) {
+  async function patchInitiativeScheduleRange(
+    initiativeId: string,
+    startMonth: number,
+    endMonth: number,
+    sprintBounds?: { startYearSprint: number; endYearSprint: number },
+    planYear: number = selectedYear,
+  ) {
+    const bounds = sprintBounds ?? yearSprintRangeFromMonthRange(startMonth, endMonth);
     const response = await fetch(`/api/initiatives/${initiativeId}/schedule`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year: selectedYear, startMonth, endMonth }),
+      body: JSON.stringify({
+        year: planYear,
+        startMonth,
+        endMonth,
+        startYearSprint: bounds.startYearSprint,
+        endYearSprint: bounds.endYearSprint,
+      }),
     });
     if (!response.ok) {
-      throw new Error("Failed to resize initiative");
+      const raw = await response.text().catch(() => "");
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const body = JSON.parse(raw) as { message?: string; issues?: unknown };
+        if (typeof body?.message === "string") {
+          detail = body.message;
+          if (body.issues) console.error("[patch schedule] issues", initiativeId, body.issues);
+        } else if (raw) detail = `${detail}: ${raw.slice(0, 400)}`;
+      } catch {
+        if (raw) detail = `${detail}: ${raw.slice(0, 400)}`;
+      }
+      console.error("[patch schedule] failed", initiativeId, detail);
+      throw new Error(detail);
     }
   }
 
@@ -1203,6 +1244,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 status: InitiativeStatus.scheduled,
                 startMonth: nextStart,
                 endMonth: nextEnd,
+                ...yearSprintRangeFromMonthRange(nextStart, nextEnd),
                 timelineRow: L,
                 epics: (i.epics ?? []).map((e) =>
                   e.id === epicId
@@ -1234,6 +1276,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               status: InitiativeStatus.scheduled,
               startMonth: nextStart,
               endMonth: nextEnd,
+              ...yearSprintRangeFromMonthRange(nextStart, nextEnd),
               ...(wasUnscheduled && nextRow !== undefined ? { timelineRow: nextRow } : {}),
               epics: (i.epics ?? []).map((e) =>
                 e.id === epicId
@@ -1261,7 +1304,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           await scheduleInitiative(initiative.id, planMonth, dropLaneIndex);
         } else if (rangeChanged) {
           console.log("[gantt-drop] epic → patchInitiativeScheduleRange", { nextStart, nextEnd });
-          await patchInitiativeScheduleRange(initiative.id, nextStart, nextEnd);
+          await patchInitiativeScheduleRange(initiative.id, nextStart, nextEnd, undefined, initiative.year);
         }
         await patchEpicQuarterPlan(epicId, {
           planSprint,
@@ -1312,6 +1355,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   status: InitiativeStatus.backlog,
                   startMonth: null,
                   endMonth: null,
+                  startYearSprint: null,
+                  endYearSprint: null,
                   timelineRow: rowById.get(i.id)!,
                 }
               : i,
@@ -1406,7 +1451,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           initiativeId,
           month,
         });
-        await patchInitiativeScheduleRange(initiativeId, month, month);
+        await patchInitiativeScheduleRange(
+          initiativeId,
+          month,
+          month,
+          undefined,
+          initiativeBefore.year,
+        );
         await persistOrderedTimelineRows(orderedScheduledIds);
         toast.success("Initiative moved");
         if (focusedQuarterLabel != null) {
@@ -1652,19 +1703,38 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setEditingInitiative(initiative);
                   setInitiativeDialogOpen(true);
                 }}
-                onResizeInitiativeRange={async (initiativeId, nextStart, nextEnd) => {
+                onResizeInitiativeRange={async (initiativeId, range) => {
+                  const planYear =
+                    initiatives.find((i) => i.id === initiativeId)?.year ?? selectedYear;
                   setInitiatives((prev) =>
                     prev.map((i) =>
                       i.id === initiativeId
-                        ? { ...i, startMonth: nextStart, endMonth: nextEnd }
+                        ? {
+                            ...i,
+                            startMonth: range.startMonth,
+                            endMonth: range.endMonth,
+                            startYearSprint: range.startYearSprint,
+                            endYearSprint: range.endYearSprint,
+                          }
                         : i,
                     ),
                   );
                   try {
-                    await patchInitiativeScheduleRange(initiativeId, nextStart, nextEnd);
-                  } catch {
+                    await patchInitiativeScheduleRange(
+                      initiativeId,
+                      range.startMonth,
+                      range.endMonth,
+                      {
+                        startYearSprint: range.startYearSprint,
+                        endYearSprint: range.endYearSprint,
+                      },
+                      planYear,
+                    );
+                  } catch (err) {
+                    console.error("[onResizeInitiativeRange]", err);
                     await refresh();
-                    toast.error("Failed to resize initiative");
+                    const description = err instanceof Error ? err.message : undefined;
+                    toast.error("Failed to resize initiative", description ? { description } : undefined);
                   }
                 }}
                 onOpenStory={(storyId) => {

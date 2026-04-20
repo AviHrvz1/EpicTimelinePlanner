@@ -18,7 +18,7 @@ import {
 } from "recharts";
 
 import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
-import { InitiativeItem, UserStoryItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type BurndownMetric = "daysLeft" | "storyCount";
@@ -278,7 +278,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
           planQuarter: null,
           planStartMonth: month,
           planEndMonth: month,
-        })),
+        })) as EpicItem[],
         "individual",
         metric,
         [month],

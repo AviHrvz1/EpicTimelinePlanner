@@ -96,6 +96,8 @@ export type InitiativeItem = {
   status: InitiativeStatus;
   startMonth: number | null;
   endMonth: number | null;
+  startYearSprint: number | null;
+  endYearSprint: number | null;
   timelineRow: number;
   year: number;
   epics: EpicItem[];

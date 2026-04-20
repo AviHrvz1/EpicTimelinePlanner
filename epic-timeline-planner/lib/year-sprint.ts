@@ -45,3 +45,46 @@ export function resolveEpicPlanYearSprint(epic: EpicItem): number | null {
 export function clampYearSprint(n: number): number {
   return Math.min(YEAR_SPRINT_MAX, Math.max(YEAR_SPRINT_MIN, Math.round(n)));
 }
+
+/** Full-month envelope: first sprint of start month through second sprint of end month. */
+export function yearSprintRangeFromMonthRange(startMonth: number, endMonth: number): {
+  startYearSprint: number;
+  endYearSprint: number;
+} {
+  return {
+    startYearSprint: firstGlobalSprintForMonth(startMonth),
+    endYearSprint: globalSprintFromMonthLane(endMonth, 2),
+  };
+}
+
+export function monthRangeFromYearSprintRange(
+  startYearSprint: number,
+  endYearSprint: number,
+): { startMonth: number; endMonth: number } {
+  const a = clampYearSprint(startYearSprint);
+  const b = clampYearSprint(endYearSprint);
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  return {
+    startMonth: monthLaneFromGlobalSprint(lo).month,
+    endMonth: monthLaneFromGlobalSprint(hi).month,
+  };
+}
+
+/** Sprint bounds for Gantt; falls back to full-month span when sprint fields are unset. */
+export function resolvedInitiativeYearSprintBounds(initiative: {
+  startMonth: number | null;
+  endMonth: number | null;
+  startYearSprint?: number | null;
+  endYearSprint?: number | null;
+}): { startYearSprint: number; endYearSprint: number } | null {
+  if (initiative.startMonth == null || initiative.endMonth == null) return null;
+  const sm = initiative.startMonth;
+  const em = initiative.endMonth;
+  const startYS = initiative.startYearSprint ?? firstGlobalSprintForMonth(sm);
+  const endYS = initiative.endYearSprint ?? globalSprintFromMonthLane(em, 2);
+  const a = clampYearSprint(startYS);
+  const b = clampYearSprint(endYS);
+  if (a <= b) return { startYearSprint: a, endYearSprint: b };
+  return { startYearSprint: b, endYearSprint: a };
+}

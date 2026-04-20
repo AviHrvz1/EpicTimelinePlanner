@@ -20,21 +20,34 @@ import {
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem } from "@/lib/types";
-import { clampYearSprint, firstGlobalSprintForMonth, globalSprintFromMonthLane } from "@/lib/year-sprint";
+import {
+  clampYearSprint,
+  firstGlobalSprintForMonth,
+  globalSprintFromMonthLane,
+  monthRangeFromYearSprintRange,
+  resolvedInitiativeYearSprintBounds,
+} from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
+
+export type InitiativeScheduleRangePatch = {
+  startMonth: number;
+  endMonth: number;
+  startYearSprint: number;
+  endYearSprint: number;
+};
 
 type GanttLaneRowProps = {
   initiative: InitiativeItem;
   gridStyle: CSSProperties;
   previewColumnStart: number;
   previewSpan: number;
-  rz: { initiativeId: string; side: "left" | "right"; deltaMonths: number } | null;
+  rz: { initiativeId: string; side: "left" | "right"; deltaSteps: number } | null;
   handleResizePointerDown: (
     initiativeId: string,
     side: "left" | "right",
     event: React.PointerEvent<HTMLDivElement>,
   ) => void;
-  onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
+  onResizeInitiativeRange?: (initiativeId: string, range: InitiativeScheduleRangePatch) => void;
   onOpenInitiative: (initiativeId: string) => void;
   barElsRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
   /** Sort index among scheduled initiatives (for pointer-based lane drop). */
@@ -145,14 +158,15 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-/** Horizontal position 0–100% for “today” across the plan year (12 month columns), or null if not this year. */
-function todayLeftPercentInYear(planYear: number): number | null {
+/** Today across 24 year-sprint columns (aligns with full-year Gantt lanes). */
+function todayLeftPercentInYearSprints(planYear: number): number | null {
   const t = new Date();
   if (t.getFullYear() !== planYear) return null;
   const m = t.getMonth() + 1;
-  const dim = daysInMonth(planYear, m);
-  const frac = (t.getDate() - 0.5) / dim;
-  return ((m - 1 + frac) / 12) * 100;
+  const d = t.getDate();
+  const lane: 1 | 2 = d <= 15 ? 1 : 2;
+  const g = globalSprintFromMonthLane(m, lane);
+  return ((g - 0.5) / 24) * 100;
 }
 
 /** Position across a subset of months (e.g. quarter = 3 columns). */
@@ -317,7 +331,7 @@ type TimelineGridProps = {
   onOpenEpic: (epicId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
-  onResizeInitiativeRange?: (initiativeId: string, startMonth: number, endMonth: number) => void;
+  onResizeInitiativeRange?: (initiativeId: string, range: InitiativeScheduleRangePatch) => void;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -457,78 +471,8 @@ export function TimelineGrid({
   const [resizePreview, setResizePreview] = useState<{
     initiativeId: string;
     side: "left" | "right";
-    deltaMonths: number;
+    deltaSteps: number;
   } | null>(null);
-
-  const handleResizePointerDown = useCallback(
-    (initiativeId: string, side: "left" | "right", event: React.PointerEvent<HTMLDivElement>) => {
-      if (!onResizeInitiativeRange) return;
-      const commitResize = onResizeInitiativeRange;
-      const barEl = barElsRef.current.get(initiativeId);
-      if (!barEl) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      const initiative = initiatives.find((i) => i.id === initiativeId);
-      if (!initiative || initiative.startMonth == null || initiative.endMonth == null) return;
-
-      const handle = event.currentTarget;
-      const pointerId = event.pointerId;
-      handle.setPointerCapture(pointerId);
-
-      const startX = event.clientX;
-      const barWidth = barEl.getBoundingClientRect().width;
-      const span = Math.max(initiative.endMonth - initiative.startMonth + 1, 1);
-      const monthWidthPx = barWidth / span;
-      const startMonth = initiative.startMonth;
-      const endMonth = initiative.endMonth;
-
-      setResizePreview({ initiativeId, side, deltaMonths: 0 });
-
-      function onPointerMove(e: PointerEvent) {
-        if (e.pointerId !== pointerId) return;
-        e.preventDefault();
-        const deltaPx = e.clientX - startX;
-        const snapped = Math.round(deltaPx / monthWidthPx);
-        setResizePreview((prev) => {
-          if (prev && prev.deltaMonths === snapped) return prev;
-          return { initiativeId, side, deltaMonths: snapped };
-        });
-      }
-
-      function onPointerUp(e: PointerEvent) {
-        if (e.pointerId !== pointerId) return;
-        handle.removeEventListener("pointermove", onPointerMove);
-        handle.removeEventListener("pointerup", onPointerUp);
-        handle.removeEventListener("pointercancel", onPointerUp);
-
-        const deltaPx = e.clientX - startX;
-        const deltaMonths = Math.round(deltaPx / monthWidthPx);
-
-        if (deltaMonths !== 0) {
-          if (side === "right") {
-            const nextEnd = Math.min(12, Math.max(startMonth, endMonth + deltaMonths));
-            if (nextEnd !== endMonth) {
-              commitResize(initiativeId, startMonth, nextEnd);
-            }
-          } else {
-            const nextStart = Math.max(1, Math.min(endMonth, startMonth + deltaMonths));
-            if (nextStart !== startMonth) {
-              commitResize(initiativeId, nextStart, endMonth);
-            }
-          }
-        }
-
-        setResizePreview(null);
-      }
-
-      handle.addEventListener("pointermove", onPointerMove);
-      handle.addEventListener("pointerup", onPointerUp);
-      handle.addEventListener("pointercancel", onPointerUp);
-    },
-    [initiatives, onResizeInitiativeRange],
-  );
 
   const focusedQuarter = useMemo(
     () => QUARTERS.find((quarter) => quarter.label === focusedQuarterLabel) ?? null,
@@ -556,6 +500,128 @@ export function TimelineGrid({
   const visibleQuarterHeaders = focusedQuarter ? [focusedQuarter] : QUARTERS;
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
+
+  const handleResizePointerDown = useCallback(
+    (initiativeId: string, side: "left" | "right", event: React.PointerEvent<HTMLDivElement>) => {
+      if (!onResizeInitiativeRange) return;
+      const commitResize = onResizeInitiativeRange;
+      const barEl = barElsRef.current.get(initiativeId);
+      if (!barEl) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const initiative = initiatives.find((i) => i.id === initiativeId);
+      if (!initiative) return;
+      const sm0 = initiative.startMonth;
+      const em0 = initiative.endMonth;
+      if (sm0 == null || em0 == null) return;
+      const startMonth = sm0;
+      const endMonth = em0;
+      const inv = initiative;
+
+      const handle = event.currentTarget;
+      const pointerId = event.pointerId;
+      handle.setPointerCapture(pointerId);
+
+      const startX = event.clientX;
+      const barWidth = barEl.getBoundingClientRect().width;
+      const useSprintResize = focusedQuarter == null && activeMonth == null;
+      const sprintBounds = resolvedInitiativeYearSprintBounds(inv);
+      const spanSteps = useSprintResize
+        ? Math.max((sprintBounds?.endYearSprint ?? 1) - (sprintBounds?.startYearSprint ?? 1) + 1, 1)
+        : Math.max(endMonth - startMonth + 1, 1);
+      const stepWidthPx = barWidth / spanSteps;
+
+      setResizePreview({ initiativeId, side, deltaSteps: 0 });
+
+      function onPointerMove(e: PointerEvent) {
+        if (e.pointerId !== pointerId) return;
+        e.preventDefault();
+        const deltaPx = e.clientX - startX;
+        const snapped = Math.round(deltaPx / stepWidthPx);
+        setResizePreview((prev) => {
+          if (prev && prev.deltaSteps === snapped) return prev;
+          return { initiativeId, side, deltaSteps: snapped };
+        });
+      }
+
+      function onPointerUp(e: PointerEvent) {
+        if (e.pointerId !== pointerId) return;
+        handle.removeEventListener("pointermove", onPointerMove);
+        handle.removeEventListener("pointerup", onPointerUp);
+        handle.removeEventListener("pointercancel", onPointerUp);
+
+        const deltaPx = e.clientX - startX;
+        const deltaSteps = Math.round(deltaPx / stepWidthPx);
+
+        if (deltaSteps !== 0) {
+          if (useSprintResize && sprintBounds) {
+            const ss = sprintBounds.startYearSprint;
+            const es = sprintBounds.endYearSprint;
+            if (side === "right") {
+              const nextEndSprint = Math.min(24, Math.max(ss, es + deltaSteps));
+              if (nextEndSprint !== es) {
+                const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(ss, nextEndSprint);
+                commitResize(initiativeId, {
+                  startMonth: sm,
+                  endMonth: em,
+                  startYearSprint: ss,
+                  endYearSprint: nextEndSprint,
+                });
+              }
+            } else {
+              const nextStartSprint = Math.max(1, Math.min(es, ss + deltaSteps));
+              if (nextStartSprint !== ss) {
+                const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(nextStartSprint, es);
+                commitResize(initiativeId, {
+                  startMonth: sm,
+                  endMonth: em,
+                  startYearSprint: nextStartSprint,
+                  endYearSprint: es,
+                });
+              }
+            }
+          } else if (side === "right") {
+            const nextEnd = Math.min(12, Math.max(startMonth, endMonth + deltaSteps));
+            if (nextEnd !== endMonth) {
+              const nextEndSprint = globalSprintFromMonthLane(nextEnd, 2);
+              const ss =
+                inv.startYearSprint != null ? inv.startYearSprint : firstGlobalSprintForMonth(startMonth);
+              const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(ss, nextEndSprint);
+              commitResize(initiativeId, {
+                startMonth: sm,
+                endMonth: em,
+                startYearSprint: ss,
+                endYearSprint: nextEndSprint,
+              });
+            }
+          } else {
+            const nextStart = Math.max(1, Math.min(endMonth, startMonth + deltaSteps));
+            if (nextStart !== startMonth) {
+              const nextStartSprint = firstGlobalSprintForMonth(nextStart);
+              const ee =
+                inv.endYearSprint != null ? inv.endYearSprint : globalSprintFromMonthLane(endMonth, 2);
+              const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(nextStartSprint, ee);
+              commitResize(initiativeId, {
+                startMonth: sm,
+                endMonth: em,
+                startYearSprint: nextStartSprint,
+                endYearSprint: ee,
+              });
+            }
+          }
+        }
+
+        setResizePreview(null);
+      }
+
+      handle.addEventListener("pointermove", onPointerMove);
+      handle.addEventListener("pointerup", onPointerUp);
+      handle.addEventListener("pointercancel", onPointerUp);
+    },
+    [initiatives, onResizeInitiativeRange, focusedQuarter, activeMonth],
+  );
 
   const monthEpicGanttRows = useMemo(() => {
     if (activeMonth == null) return [];
@@ -626,10 +692,16 @@ export function TimelineGrid({
     Q3: "bg-emerald-500/15 text-emerald-900 ring-1 ring-emerald-200/70",
     Q4: "bg-violet-500/15 text-violet-900 ring-1 ring-violet-200/70",
   };
-  const gridStyle: CSSProperties = {
+  /** Initiative rows: quarter = month columns; full-year roadmap = 24 sprint columns. */
+  const ganttLaneGridStyle: CSSProperties = {
     gridTemplateColumns: focusedQuarter
       ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
-      : `repeat(12, minmax(0, 1fr))`,
+      : `repeat(24, minmax(0, 1fr))`,
+  };
+
+  /** Quarter title row uses 12 month-width columns (each quarter spans 3). */
+  const yearQuarterHeaderGridStyle: CSSProperties = {
+    gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
   };
 
   /** Aligns with initiative timeline grid (12 or 3 equal month columns). */
@@ -638,7 +710,7 @@ export function TimelineGrid({
     if (focusedQuarter && quarterViewTab === "status") return null;
     return focusedQuarter
       ? todayLeftPercentInMonths(currentYear, focusedQuarter.months)
-      : todayLeftPercentInYear(currentYear);
+      : todayLeftPercentInYearSprints(currentYear);
   }, [activeMonth, currentYear, focusedQuarter, quarterViewTab]);
 
   const monthEpicGanttTodayLeft = useMemo(() => {
@@ -1019,7 +1091,7 @@ export function TimelineGrid({
       ) : null}
       {!activeMonth && !focusedQuarter ? (
         <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
-          <div className="grid min-w-0 gap-2" style={gridStyle}>
+          <div className="grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
               key={quarter.label}
@@ -1204,7 +1276,7 @@ export function TimelineGrid({
             <div className={cn("mb-4 w-full space-y-4", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
               <div className="relative z-[1] space-y-4">
                 <div className="space-y-0.5">
-                  <div className="grid min-w-0 gap-2" style={gridStyle}>
+                  <div className="grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                     {visibleMonths.map((month) => (
                       <div
                         key={month}
@@ -1282,14 +1354,14 @@ export function TimelineGrid({
                       let previewSpan = span;
                       if (rz) {
                         if (rz.side === "right") {
-                          const newEnd = Math.min(12, Math.max(start, end + rz.deltaMonths));
+                          const newEnd = Math.min(12, Math.max(start, end + rz.deltaSteps));
                           const qStart = focusedQuarter.months[0];
                           const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
                           const visEnd = Math.min(newEnd, qEnd);
                           const visStart = Math.max(start, qStart);
                           previewSpan = Math.max(visEnd - visStart + 1, 1);
                         } else {
-                          const newStart = Math.max(1, Math.min(end, start + rz.deltaMonths));
+                          const newStart = Math.max(1, Math.min(end, start + rz.deltaSteps));
                           const qStart = focusedQuarter.months[0];
                           const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
                           const visStart = Math.max(newStart, qStart);
@@ -1302,7 +1374,7 @@ export function TimelineGrid({
                         <GanttLaneRow
                           key={initiative.id}
                           initiative={initiative}
-                          gridStyle={gridStyle}
+                          gridStyle={ganttLaneGridStyle}
                           previewColumnStart={previewColumnStart}
                           previewSpan={previewSpan}
                           rz={rz}
@@ -1401,28 +1473,31 @@ export function TimelineGrid({
             <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
             <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
             {scheduledInitiatives.map((initiative, rowIndex) => {
-              const start = initiative.startMonth ?? 1;
-              const end = initiative.endMonth ?? start;
-              const span = Math.max(end - start + 1, 1);
-              const columnStart = start;
+              const sm = initiative.startMonth ?? 1;
+              const em = initiative.endMonth ?? sm;
+              const spr = resolvedInitiativeYearSprintBounds(initiative);
+              const startS = spr?.startYearSprint ?? firstGlobalSprintForMonth(sm);
+              const endS = spr?.endYearSprint ?? globalSprintFromMonthLane(em, 2);
+              const span = Math.max(endS - startS + 1, 1);
+              const columnStart = startS;
               const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
               let previewColumnStart = columnStart;
               let previewSpan = span;
               if (rz) {
                 if (rz.side === "right") {
-                  const newEnd = Math.min(12, Math.max(start, end + rz.deltaMonths));
-                  previewSpan = Math.max(newEnd - start + 1, 1);
+                  const newEndSprint = Math.min(24, Math.max(startS, endS + rz.deltaSteps));
+                  previewSpan = Math.max(newEndSprint - startS + 1, 1);
                 } else {
-                  const newStart = Math.max(1, Math.min(end, start + rz.deltaMonths));
-                  previewColumnStart = newStart;
-                  previewSpan = Math.max(end - newStart + 1, 1);
+                  const newStartSprint = Math.max(1, Math.min(endS, startS + rz.deltaSteps));
+                  previewColumnStart = newStartSprint;
+                  previewSpan = Math.max(endS - newStartSprint + 1, 1);
                 }
               }
               return (
                 <GanttLaneRow
                   key={initiative.id}
                   initiative={initiative}
-                  gridStyle={gridStyle}
+                  gridStyle={ganttLaneGridStyle}
                   previewColumnStart={previewColumnStart}
                   previewSpan={previewSpan}
                   rz={rz}

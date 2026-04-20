@@ -31,6 +31,9 @@ model Initiative {
   status      InitiativeStatus    @default(backlog)
   startMonth  Int?
   endMonth    Int?
+  /** Inclusive global year sprint 1–24 (two per month); null when unscheduled. Finer bounds than months on full-year Gantt. */
+  startYearSprint Int?
+  endYearSprint   Int?
   /** Vertical order in full-roadmap Gantt (lower = higher on screen). Preserved when moving months. */
   timelineRow Int              @default(0)
   year        Int
