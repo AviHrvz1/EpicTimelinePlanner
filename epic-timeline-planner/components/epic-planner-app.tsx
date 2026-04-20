@@ -1730,6 +1730,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       },
                       planYear,
                     );
+                    toast.success("Approved", {
+                      description: "The initiative timeline was adjusted and saved.",
+                    });
                   } catch (err) {
                     console.error("[onResizeInitiativeRange]", err);
                     await refresh();

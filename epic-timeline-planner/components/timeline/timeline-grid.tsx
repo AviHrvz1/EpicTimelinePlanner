@@ -99,8 +99,8 @@ function GanttLaneRow({
               <>
                 <div
                   role="slider"
-                  aria-label="Resize initiative start month"
-                  title="Drag to change start month"
+                  aria-label="Resize initiative start (sprint step)"
+                  title="Drag to change start sprint"
                   className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
                   onPointerDown={(e) => {
                     e.stopPropagation();
@@ -109,8 +109,8 @@ function GanttLaneRow({
                 />
                 <div
                   role="slider"
-                  aria-label="Resize initiative end month"
-                  title="Drag to change end month"
+                  aria-label="Resize initiative end (sprint step)"
+                  title="Drag to change end sprint"
                   className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
                   onPointerDown={(e) => {
                     e.stopPropagation();
@@ -169,16 +169,20 @@ function todayLeftPercentInYearSprints(planYear: number): number | null {
   return ((g - 0.5) / 24) * 100;
 }
 
-/** Position across a subset of months (e.g. quarter = 3 columns). */
-function todayLeftPercentInMonths(planYear: number, months: readonly number[]): number | null {
+/** Today within a quarter’s sprint columns (6 for a standard quarter). */
+function todayLeftPercentInQuarterSprints(planYear: number, quarterMonths: readonly number[]): number | null {
   const t = new Date();
   if (t.getFullYear() !== planYear) return null;
   const m = t.getMonth() + 1;
-  if (!months.includes(m)) return null;
-  const idx = months.indexOf(m);
-  const dim = daysInMonth(planYear, m);
-  const frac = (t.getDate() - 0.5) / dim;
-  return ((idx + frac) / months.length) * 100;
+  if (!quarterMonths.includes(m)) return null;
+  const d = t.getDate();
+  const lane: 1 | 2 = d <= 15 ? 1 : 2;
+  const g = globalSprintFromMonthLane(m, lane);
+  const qLo = firstGlobalSprintForMonth(quarterMonths[0]);
+  const qHi = globalSprintFromMonthLane(quarterMonths[quarterMonths.length - 1], 2);
+  if (g < qLo || g > qHi) return null;
+  const n = qHi - qLo + 1;
+  return ((g - qLo + 0.5) / n) * 100;
 }
 
 /** Single-month epic lane (one column). */
@@ -516,9 +520,23 @@ export function TimelineGrid({
       const sm0 = initiative.startMonth;
       const em0 = initiative.endMonth;
       if (sm0 == null || em0 == null) return;
-      const startMonth = sm0;
-      const endMonth = em0;
       const inv = initiative;
+
+      const sprintBounds = resolvedInitiativeYearSprintBounds(inv);
+      if (!sprintBounds || activeMonth != null) return;
+
+      const qLo =
+        focusedQuarter != null ? firstGlobalSprintForMonth(focusedQuarter.months[0]) : 1;
+      const qHi =
+        focusedQuarter != null
+          ? globalSprintFromMonthLane(focusedQuarter.months[focusedQuarter.months.length - 1], 2)
+          : 24;
+
+      const ss0 = sprintBounds.startYearSprint;
+      const es0 = sprintBounds.endYearSprint;
+      const visS = Math.max(ss0, qLo);
+      const visE = Math.min(es0, qHi);
+      const spanSteps = Math.max(visE - visS + 1, 1);
 
       const handle = event.currentTarget;
       const pointerId = event.pointerId;
@@ -526,11 +544,6 @@ export function TimelineGrid({
 
       const startX = event.clientX;
       const barWidth = barEl.getBoundingClientRect().width;
-      const useSprintResize = focusedQuarter == null && activeMonth == null;
-      const sprintBounds = resolvedInitiativeYearSprintBounds(inv);
-      const spanSteps = useSprintResize
-        ? Math.max((sprintBounds?.endYearSprint ?? 1) - (sprintBounds?.startYearSprint ?? 1) + 1, 1)
-        : Math.max(endMonth - startMonth + 1, 1);
       const stepWidthPx = barWidth / spanSteps;
 
       setResizePreview({ initiativeId, side, deltaSteps: 0 });
@@ -556,38 +569,11 @@ export function TimelineGrid({
         const deltaSteps = Math.round(deltaPx / stepWidthPx);
 
         if (deltaSteps !== 0) {
-          if (useSprintResize && sprintBounds) {
-            const ss = sprintBounds.startYearSprint;
-            const es = sprintBounds.endYearSprint;
-            if (side === "right") {
-              const nextEndSprint = Math.min(24, Math.max(ss, es + deltaSteps));
-              if (nextEndSprint !== es) {
-                const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(ss, nextEndSprint);
-                commitResize(initiativeId, {
-                  startMonth: sm,
-                  endMonth: em,
-                  startYearSprint: ss,
-                  endYearSprint: nextEndSprint,
-                });
-              }
-            } else {
-              const nextStartSprint = Math.max(1, Math.min(es, ss + deltaSteps));
-              if (nextStartSprint !== ss) {
-                const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(nextStartSprint, es);
-                commitResize(initiativeId, {
-                  startMonth: sm,
-                  endMonth: em,
-                  startYearSprint: nextStartSprint,
-                  endYearSprint: es,
-                });
-              }
-            }
-          } else if (side === "right") {
-            const nextEnd = Math.min(12, Math.max(startMonth, endMonth + deltaSteps));
-            if (nextEnd !== endMonth) {
-              const nextEndSprint = globalSprintFromMonthLane(nextEnd, 2);
-              const ss =
-                inv.startYearSprint != null ? inv.startYearSprint : firstGlobalSprintForMonth(startMonth);
+          const ss = ss0;
+          const es = es0;
+          if (side === "right") {
+            const nextEndSprint = Math.min(qHi, Math.max(ss, es + deltaSteps));
+            if (nextEndSprint !== es) {
               const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(ss, nextEndSprint);
               commitResize(initiativeId, {
                 startMonth: sm,
@@ -597,17 +583,14 @@ export function TimelineGrid({
               });
             }
           } else {
-            const nextStart = Math.max(1, Math.min(endMonth, startMonth + deltaSteps));
-            if (nextStart !== startMonth) {
-              const nextStartSprint = firstGlobalSprintForMonth(nextStart);
-              const ee =
-                inv.endYearSprint != null ? inv.endYearSprint : globalSprintFromMonthLane(endMonth, 2);
-              const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(nextStartSprint, ee);
+            const nextStartSprint = Math.max(qLo, Math.min(es, ss + deltaSteps));
+            if (nextStartSprint !== ss) {
+              const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(nextStartSprint, es);
               commitResize(initiativeId, {
                 startMonth: sm,
                 endMonth: em,
                 startYearSprint: nextStartSprint,
-                endYearSprint: ee,
+                endYearSprint: es,
               });
             }
           }
@@ -692,10 +675,10 @@ export function TimelineGrid({
     Q3: "bg-emerald-500/15 text-emerald-900 ring-1 ring-emerald-200/70",
     Q4: "bg-violet-500/15 text-violet-900 ring-1 ring-violet-200/70",
   };
-  /** Initiative rows: quarter = month columns; full-year roadmap = 24 sprint columns. */
+  /** Initiative rows + quarter headers: 2 sprint columns per month; full-year = 24 sprints. */
   const ganttLaneGridStyle: CSSProperties = {
     gridTemplateColumns: focusedQuarter
-      ? `repeat(${visibleMonths.length}, minmax(0, 1fr))`
+      ? `repeat(${visibleMonths.length * 2}, minmax(0, 1fr))`
       : `repeat(24, minmax(0, 1fr))`,
   };
 
@@ -704,12 +687,12 @@ export function TimelineGrid({
     gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
   };
 
-  /** Aligns with initiative timeline grid (12 or 3 equal month columns). */
+  /** Today line over initiative lanes (sprint resolution). */
   const roadmapLaneTodayLeft = useMemo(() => {
     if (activeMonth != null) return null;
     if (focusedQuarter && quarterViewTab === "status") return null;
     return focusedQuarter
-      ? todayLeftPercentInMonths(currentYear, focusedQuarter.months)
+      ? todayLeftPercentInQuarterSprints(currentYear, focusedQuarter.months)
       : todayLeftPercentInYearSprints(currentYear);
   }, [activeMonth, currentYear, focusedQuarter, quarterViewTab]);
 
@@ -1280,6 +1263,7 @@ export function TimelineGrid({
                     {visibleMonths.map((month) => (
                       <div
                         key={month}
+                        style={{ gridColumn: "span 2" }}
                         className="space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-2.5 pb-0 shadow-sm ring-1 ring-black/[0.03]"
                       >
                         <button
@@ -1341,33 +1325,33 @@ export function TimelineGrid({
                   ) : (
                     <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
                     {visibleScheduledLanes.map((initiative) => {
-                      const start = initiative.startMonth ?? 1;
-                      const end = initiative.endMonth ?? start;
-                      const quarterStart = focusedQuarter.months[0];
-                      const quarterEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-                      const visibleStart = Math.max(start, quarterStart);
-                      const visibleEnd = Math.min(end, quarterEnd);
-                      const span = Math.max(visibleEnd - visibleStart + 1, 1);
-                      const columnStart = visibleStart - quarterStart + 1;
+                      const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
+                      const qHi = globalSprintFromMonthLane(
+                        focusedQuarter.months[focusedQuarter.months.length - 1],
+                        2,
+                      );
+                      const spr = resolvedInitiativeYearSprintBounds(initiative);
+                      const ss = spr?.startYearSprint ?? qLo;
+                      const es = spr?.endYearSprint ?? qHi;
+                      const visS = Math.max(ss, qLo);
+                      const visE = Math.min(es, qHi);
+                      const span = Math.max(visE - visS + 1, 1);
+                      const columnStart = visS - qLo + 1;
                       const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
                       let previewColumnStart = columnStart;
                       let previewSpan = span;
                       if (rz) {
                         if (rz.side === "right") {
-                          const newEnd = Math.min(12, Math.max(start, end + rz.deltaSteps));
-                          const qStart = focusedQuarter.months[0];
-                          const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-                          const visEnd = Math.min(newEnd, qEnd);
-                          const visStart = Math.max(start, qStart);
-                          previewSpan = Math.max(visEnd - visStart + 1, 1);
+                          const newEndSprint = Math.min(qHi, Math.max(ss, es + rz.deltaSteps));
+                          const nVisE = Math.min(newEndSprint, qHi);
+                          const nVisS = Math.max(ss, qLo);
+                          previewSpan = Math.max(nVisE - nVisS + 1, 1);
                         } else {
-                          const newStart = Math.max(1, Math.min(end, start + rz.deltaSteps));
-                          const qStart = focusedQuarter.months[0];
-                          const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-                          const visStart = Math.max(newStart, qStart);
-                          const visEnd = Math.min(end, qEnd);
-                          previewColumnStart = visStart - qStart + 1;
-                          previewSpan = Math.max(visEnd - visStart + 1, 1);
+                          const newStartSprint = Math.max(qLo, Math.min(es, ss + rz.deltaSteps));
+                          const nVisS = Math.max(newStartSprint, qLo);
+                          const nVisE = Math.min(es, qHi);
+                          previewColumnStart = nVisS - qLo + 1;
+                          previewSpan = Math.max(nVisE - nVisS + 1, 1);
                         }
                       }
                       return (
