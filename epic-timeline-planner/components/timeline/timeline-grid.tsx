@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
+import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
@@ -281,7 +282,7 @@ function EpicGanttLaneRow({ epic, initiative, gridStyle, onOpenEpic, ganttLaneSo
   );
 }
 
-export type MonthPlanSurfaceTab = "epic-gantt" | "team-queue" | "sprint-kanban" | "sprint-status";
+export type MonthPlanSurfaceTab = "epic-gantt" | "team-queue" | "month-status" | "sprint-kanban" | "sprint-status";
 
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
@@ -752,6 +753,11 @@ export function TimelineGrid({
         onClick: null,
         currentTone: "sprint",
       });
+    } else if (monthPlanTab === "month-status") {
+      breadcrumbItems.push({
+        label: "Month insights",
+        onClick: null,
+      });
     }
   } else if (focusedQuarter) {
     breadcrumbItems.push({
@@ -768,10 +774,10 @@ export function TimelineGrid({
   }
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
+  const isSprintInsightsContext = monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status";
   const showSprintTeamPicker =
     activeMonth != null &&
-    activeSprint != null &&
-    (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status");
+    (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "month-status");
 
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto overflow-x-visible rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
@@ -915,17 +921,17 @@ export function TimelineGrid({
               <button
                 type="button"
                 onClick={() => {
-                  onMonthPlanTabChange?.("sprint-status");
-                  setActiveSprintTab("status");
+                  onMonthPlanTabChange?.(isSprintInsightsContext ? "sprint-status" : "month-status");
+                  if (isSprintInsightsContext) setActiveSprintTab("status");
                 }}
                 className={cn(
                   "min-w-0 shrink rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
-                  monthPlanTab === "sprint-status"
+                  (isSprintInsightsContext ? monthPlanTab === "sprint-status" : monthPlanTab === "month-status")
                     ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-300/90"
                     : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
                 )}
               >
-                Sprint insights
+                {isSprintInsightsContext ? "Sprint insights" : "Month insights"}
               </button>
             </div>
           </div>
@@ -1118,6 +1124,15 @@ export function TimelineGrid({
                   yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                   onOpenStory={onOpenStory ?? (() => {})}
+                />
+              </div>
+            ) : monthPlanTab === "month-status" ? (
+              <div className="p-3 sm:p-5">
+                <MonthAnalytics
+                  initiatives={initiatives}
+                  month={activeMonth}
+                  planYear={currentYear}
+                  filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                 />
               </div>
             ) : (

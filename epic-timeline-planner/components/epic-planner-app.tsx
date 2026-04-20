@@ -348,10 +348,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         hydratedMonthPlanTab = "team-queue";
       } else if (planTabRaw === "epic") {
         hydratedMonthPlanTab = "epic-gantt";
+      } else if (planTabRaw === "monthInsights") {
+        hydratedMonthPlanTab = "month-status";
       } else if (planTabRaw === "sprintBoard") {
         hydratedMonthPlanTab = "sprint-kanban";
       } else if (planTabRaw === "sprintInsights") {
-        hydratedMonthPlanTab = "sprint-status";
+        hydratedMonthPlanTab = params.get("sprint") != null ? "sprint-status" : "month-status";
       } else if (params.get("sprint") != null) {
         hydratedMonthPlanTab = sprintViewRaw === "status" ? "sprint-status" : "sprint-kanban";
       } else {
@@ -420,6 +422,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       params.set("month", String(activeTimelineMonth));
       if (activeMonthPlanTab === "epic-gantt") params.set("planTab", "epic");
       else if (activeMonthPlanTab === "team-queue") params.set("planTab", "team");
+      else if (activeMonthPlanTab === "month-status") params.set("planTab", "monthInsights");
       else if (activeMonthPlanTab === "sprint-kanban") params.set("planTab", "sprintBoard");
       else params.set("planTab", "sprintInsights");
     }
@@ -476,7 +479,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setActiveMonthPlanTab(tab);
     if (tab === "sprint-kanban") setActiveSprintTab("kanban");
     if (tab === "sprint-status") setActiveSprintTab("status");
-    if (tab === "epic-gantt" || tab === "team-queue" || tab === "sprint-status") {
+    if (tab === "epic-gantt" || tab === "team-queue" || tab === "month-status" || tab === "sprint-status") {
       setSprintStoryBoardTeamId(null);
     }
   }, []);
