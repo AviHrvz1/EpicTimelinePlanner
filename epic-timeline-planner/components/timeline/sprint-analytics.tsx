@@ -83,9 +83,9 @@ export function SprintAnalytics({
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const topSlice = pieData[0] ?? null;
 
-  const chartLegendColumnClass = `space-y-1.5 ${PIE_LEGEND_CAP}`;
+  const chartLegendColumnClass = `space-y-1.5 md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-0`;
   const legendRowClass =
-    "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-2 py-1.5 text-[12px] font-medium text-slate-700";
+    "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
 
   return (
     <section className="mb-2 flex flex-col gap-4">
@@ -95,7 +95,7 @@ export function SprintAnalytics({
           <PieChartIcon className="size-4 text-slate-600" />
           User stories status
         </h3>
-        <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
+        <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div
             className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
           >
@@ -201,11 +201,11 @@ export function SprintAnalytics({
             </button>
           </div>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
+        <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             <div className="absolute inset-0">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics.burndown} margin={{ top: 2, right: 4, left: 0, bottom: 22 }}>
+                <LineChart data={analytics.burndown} margin={{ top: 2, right: 4, left: 18, bottom: 22 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="labelShort"
@@ -289,7 +289,7 @@ export function SprintAnalytics({
           </div>
         </div>
         {workloadView === "stories" ? (
-          <div className="mb-2 grid shrink-0 grid-cols-2 gap-x-2 gap-y-1 text-[10px] leading-tight text-slate-600 sm:text-[11px]">
+          <div className="mb-2 flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto text-[10px] leading-tight whitespace-nowrap text-slate-600 sm:text-[11px]">
             {WORKLOAD_BAR_SEGMENTS.map((s) => (
               <span key={s.key} className="inline-flex min-w-0 items-center gap-1">
                 <span className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-black/10" style={{ backgroundColor: s.color }} />
@@ -314,13 +314,9 @@ export function SprintAnalytics({
                   .join(", ");
                 return (
                   <div key={item.assignee}>
-                    <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px] text-slate-700">
-                      <span className="truncate font-medium">{item.assignee}</span>
-                      <span className="shrink-0 tabular-nums text-slate-600">
-                        {item.daysLeftTotal}d left · {item.openCount} open
-                      </span>
-                    </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
+                  <div className="flex items-center gap-2 text-[12px] text-slate-700">
+                    <span className="w-16 shrink-0 truncate font-medium">{item.assignee}</span>
+                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
                       <div
                         className="flex h-full min-w-0 overflow-hidden rounded-full shadow-sm ring-1 ring-slate-300/40"
                         style={{ width: `${barWidthPct}%` }}
@@ -340,6 +336,10 @@ export function SprintAnalytics({
                           );
                         })}
                       </div>
+                    </div>
+                    <span className="shrink-0 tabular-nums text-slate-600">
+                      {item.daysLeftTotal}d left · {item.openCount} open
+                    </span>
                     </div>
                   </div>
                 );
@@ -402,12 +402,12 @@ export function SprintAnalytics({
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {analytics.flowSprintTrendData.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 4, right: 4, left: 6, bottom: 28 }}>
+                  <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 4, right: 4, left: 18, bottom: 28 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="labelShort"
