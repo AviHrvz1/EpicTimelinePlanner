@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, Map as MapIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -774,7 +774,7 @@ export function TimelineGrid({
   }
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
-  const isSprintInsightsContext = monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status";
+  const hasContextSideMenu = activeMonth != null || focusedQuarter != null;
   const showSprintTeamPicker =
     activeMonth != null &&
     (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "month-status");
@@ -888,88 +888,127 @@ export function TimelineGrid({
             ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="inline-flex min-w-0 shrink-0 flex-col gap-2 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white via-white to-slate-50/90 px-2 py-2 shadow-md ring-1 ring-slate-200/55 backdrop-blur-sm sm:flex-row sm:items-center">
-            <div className="inline-flex min-w-0 flex-1 rounded-xl bg-slate-100/90 p-1 ring-1 ring-slate-200/80">
-              <button
-                type="button"
-                onClick={() => {
-                  onMonthPlanTabChange?.("epic-gantt");
-                }}
-                className={cn(
-                  "min-w-0 shrink rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
-                  monthPlanTab === "epic-gantt"
-                    ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-300/90"
-                    : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
-                )}
-              >
-                Epic plan
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onMonthPlanTabChange?.("team-queue");
-                }}
-                className={cn(
-                  "min-w-0 shrink rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
-                  monthPlanTab === "team-queue"
-                    ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-300/90"
-                    : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
-                )}
-              >
-                Team queue
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onMonthPlanTabChange?.(isSprintInsightsContext ? "sprint-status" : "month-status");
-                  if (isSprintInsightsContext) setActiveSprintTab("status");
-                }}
-                className={cn(
-                  "min-w-0 shrink rounded-lg px-3 py-2 text-[12px] font-semibold transition sm:text-[13px]",
-                  (isSprintInsightsContext ? monthPlanTab === "sprint-status" : monthPlanTab === "month-status")
-                    ? "bg-white text-slate-900 shadow-md ring-1 ring-slate-300/90"
-                    : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
-                )}
-              >
-                {isSprintInsightsContext ? "Sprint insights" : "Month insights"}
-              </button>
-            </div>
-          </div>
+          <div className="flex items-center gap-2" />
         ) : focusedQuarter ? (
-          <div className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
-            <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-              <button
-                type="button"
-                onClick={() => setQuarterViewTab("gantt")}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                  quarterViewTab === "gantt"
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                    : "text-slate-600 hover:text-slate-800",
-                )}
-              >
-                Gantt
-              </button>
-              <button
-                type="button"
-                onClick={() => setQuarterViewTab("status")}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
-                  quarterViewTab === "status"
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
-                    : "text-slate-600 hover:text-slate-800",
-                )}
-              >
-                Quarter status
-              </button>
-            </div>
-          </div>
+          <div className="flex items-center gap-2" />
         ) : (
           <div className="flex items-center gap-2" />
         )}
       </div>
-      {!activeMonth && !(focusedQuarter && quarterViewTab === "status") ? (
-        <div className="mb-4 w-full">
+      {activeMonth ? (
+        <div className="relative h-0">
+          <div className="inline-flex min-w-[10.5rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+            {activeSprint != null && (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status") ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMonthPlanTabChange?.("sprint-kanban");
+                    setActiveSprintTab("kanban");
+                  }}
+                  className={cn(
+                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    monthPlanTab === "sprint-kanban"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  Sprint board
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMonthPlanTabChange?.("sprint-status");
+                    setActiveSprintTab("status");
+                  }}
+                  className={cn(
+                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    monthPlanTab === "sprint-status"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  Sprint insights
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onMonthPlanTabChange?.("epic-gantt")}
+                  className={cn(
+                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    monthPlanTab === "epic-gantt"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  Epic plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMonthPlanTabChange?.("team-queue")}
+                  className={cn(
+                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    monthPlanTab === "team-queue"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  Team queue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMonthPlanTabChange?.("month-status")}
+                  className={cn(
+                    "inline-flex h-9 w-full items-center justify-start rounded-md px-3 text-[12px] font-semibold transition",
+                    monthPlanTab === "month-status"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  Month insights
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : focusedQuarter ? (
+        <div className="relative h-0">
+          <div className="inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("gantt")}
+              title="Gantt"
+              className={cn(
+                "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                quarterViewTab === "gantt"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <MapIcon className="size-4" aria-hidden />
+              <span className="sr-only">Gantt</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("status")}
+              title="Quarter status"
+              className={cn(
+                "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                quarterViewTab === "status"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <BarChart3 className="size-4" aria-hidden />
+              <span className="sr-only">Quarter status</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {!activeMonth && !focusedQuarter ? (
+        <div className={cn("mb-4 w-full", hasContextSideMenu && "ml-[4rem]")}>
           <div className="grid min-w-0 gap-2" style={gridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
@@ -998,6 +1037,7 @@ export function TimelineGrid({
         <div
           className={cn(
             "mb-4 rounded-2xl p-1.5 shadow-lg ring-1",
+            hasContextSideMenu && "ml-[4rem]",
             activeMonthQuarterLabel && quarterPanelTone[activeMonthQuarterLabel]
               ? quarterPanelTone[activeMonthQuarterLabel]
               : "bg-slate-100/70 ring-slate-200/90",
@@ -1151,7 +1191,7 @@ export function TimelineGrid({
       ) : (
         <>
           {focusedQuarter && quarterViewTab === "gantt" ? (
-            <div className="mb-4 w-full space-y-4">
+            <div className={cn("mb-4 w-full space-y-4", hasContextSideMenu && "ml-[4rem]")}>
               <div className="relative z-[1] space-y-4">
                 <div className="space-y-0.5">
                   <div className="grid min-w-0 gap-2" style={gridStyle}>
@@ -1336,7 +1376,7 @@ export function TimelineGrid({
         </>
       )}
 
-      <div className="space-y-2">
+      <div className={cn("space-y-2", hasContextSideMenu && "ml-[4rem]")}>
         {activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
           <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
         ) : visibleScheduledLanes.length === 0 ? (
