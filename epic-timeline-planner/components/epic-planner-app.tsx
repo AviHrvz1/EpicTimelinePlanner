@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { Archive, Map } from "lucide-react";
+import { Archive, Map as MapIcon } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
@@ -1470,7 +1470,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
             )}
           >
-            <Map className="size-4" aria-hidden />
+            <MapIcon className="size-4" aria-hidden />
           </button>
           <span role="tooltip" className={modeNavTooltipClass}>
             Roadmap planning
