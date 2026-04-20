@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,7 @@ const PIE_LEGEND_CAP = "md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-au
 const WORKLOAD_LIST_MAX =
   "max-h-[min(12rem,30dvh)] overflow-y-auto overflow-x-hidden overscroll-contain md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
 
 type MonthAnalyticsProps = {
   initiatives: InitiativeItem[];
@@ -81,6 +83,26 @@ function collectMonthStories(
     }
   }
   return rows;
+}
+
+function collectMonthEpics(initiatives: InitiativeItem[], month: number, filterEpicTeamId?: string | null) {
+  const rows: Array<{ id: string; title: string; userStories: UserStoryItem[] }> = [];
+  for (const initiative of initiatives) {
+    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
+    if (initiative.endMonth < month || initiative.startMonth > month) continue;
+    for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+      if (epic.planStartMonth != null && epic.planEndMonth != null && (epic.planEndMonth < month || epic.planStartMonth > month)) {
+        continue;
+      }
+      rows.push({
+        id: epic.id,
+        title: epic.title,
+        userStories: epic.userStories ?? [],
+      });
+    }
+  }
+  return rows.sort((a, b) => a.title.localeCompare(b.title));
 }
 
 export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId = null }: MonthAnalyticsProps) {
@@ -237,6 +259,33 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const topSlice = pieData[0] ?? null;
+  const monthEpics = useMemo(
+    () => collectMonthEpics(initiatives, month, filterEpicTeamId),
+    [initiatives, month, filterEpicTeamId],
+  );
+  const monthBurndown = useMemo(
+    () =>
+      buildQuarterBurndownSeries(
+        monthEpics.map((epic) => ({
+          id: epic.id,
+          title: epic.title,
+          userStories: epic.userStories,
+          color: "#2563eb",
+          assignee: "",
+          team: null,
+          planSprint: null,
+          planYear,
+          planQuarter: null,
+          planStartMonth: month,
+          planEndMonth: month,
+        })),
+        "individual",
+        metric,
+        [month],
+        planYear,
+      ),
+    [monthEpics, metric, month, planYear],
+  );
 
   const chartLegendColumnClass = `space-y-1.5 ${PIE_LEGEND_CAP}`;
   const legendRowClass =
@@ -353,40 +402,65 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         </div>
         <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_14rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
-            <div className="absolute inset-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics.burndown} margin={{ top: 2, right: 4, left: 0, bottom: 22 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="labelShort"
-                    interval="preserveStartEnd"
-                    tick={{ fontSize: 11, fill: "#64748b" }}
-                    angle={-28}
-                    textAnchor="end"
-                    height={34}
-                  />
-                  <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 10 }} width={44} />
-                  <Tooltip
-                    formatter={(value, name) => [
-                      metric === "storyCount" && typeof value === "number" ? Math.round(value) : value,
-                      name,
-                    ]}
-                  />
-                  <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
-                  <Line type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2} name="Actual" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {monthEpics.length > 0 ? (
+              <div className="absolute inset-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={monthBurndown} margin={{ top: 2, right: 4, left: 0, bottom: 22 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="axisLabel"
+                      interval="preserveStartEnd"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      angle={-28}
+                      textAnchor="end"
+                      height={34}
+                    />
+                    <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 10 }} width={44} />
+                    <Tooltip
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.dayLabel ?? ""}
+                      formatter={(value, name) => [
+                        metric === "storyCount" && typeof value === "number" ? Math.round(value) : value,
+                        name,
+                      ]}
+                    />
+                    <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
+                    {monthEpics.map((epic, idx) => (
+                      <Line
+                        key={epic.id}
+                        type="monotone"
+                        dataKey={epic.id}
+                        stroke={LINE_PALETTE[idx % LINE_PALETTE.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        name={epic.title}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-[12px] text-slate-500">
+                No epics found for this team in the selected month.
+              </div>
+            )}
           </div>
           <div className={chartLegendColumnClass}>
             <div className={legendRowClass}>
               <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#94a3b8]" />
               Ideal
             </div>
-            <div className={legendRowClass}>
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#2563eb]" />
-              Actual
-            </div>
+            {monthEpics.slice(0, 6).map((epic, idx) => (
+              <div key={epic.id} className={legendRowClass}>
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: LINE_PALETTE[idx % LINE_PALETTE.length] }}
+                />
+                <span className="truncate">{epic.title}</span>
+              </div>
+            ))}
+            {monthEpics.length > 6 ? (
+              <p className="text-[11px] text-slate-500">+{monthEpics.length - 6} more epics</p>
+            ) : null}
           </div>
         </div>
       </article>
