@@ -780,7 +780,7 @@ export function TimelineGrid({
     (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "month-status");
 
   return (
-    <div className="h-full min-h-0 w-full overflow-y-auto overflow-x-visible rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+    <div className="h-full min-h-0 w-full overflow-y-auto overflow-x-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
           "mb-4 flex items-center gap-3",
@@ -1008,7 +1008,7 @@ export function TimelineGrid({
         </div>
       ) : null}
       {!activeMonth && !focusedQuarter ? (
-        <div className={cn("mb-4 w-full", hasContextSideMenu && "ml-[4rem]")}>
+        <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
           <div className="grid min-w-0 gap-2" style={gridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
@@ -1037,7 +1037,7 @@ export function TimelineGrid({
         <div
           className={cn(
             "mb-4 rounded-2xl p-1.5 shadow-lg ring-1",
-            hasContextSideMenu && "ml-[4rem]",
+            hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
             activeMonthQuarterLabel && quarterPanelTone[activeMonthQuarterLabel]
               ? quarterPanelTone[activeMonthQuarterLabel]
               : "bg-slate-100/70 ring-slate-200/90",
@@ -1191,7 +1191,7 @@ export function TimelineGrid({
       ) : (
         <>
           {focusedQuarter && quarterViewTab === "gantt" ? (
-            <div className={cn("mb-4 w-full space-y-4", hasContextSideMenu && "ml-[4rem]")}>
+            <div className={cn("mb-4 w-full space-y-4", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
               <div className="relative z-[1] space-y-4">
                 <div className="space-y-0.5">
                   <div className="grid min-w-0 gap-2" style={gridStyle}>
@@ -1376,7 +1376,7 @@ export function TimelineGrid({
         </>
       )}
 
-      <div className={cn("space-y-2", hasContextSideMenu && "ml-[4rem]")}>
+      <div className={cn("space-y-2", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
         {activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
           <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
         ) : visibleScheduledLanes.length === 0 ? (
