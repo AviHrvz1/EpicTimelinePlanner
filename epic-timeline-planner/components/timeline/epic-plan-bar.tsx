@@ -6,7 +6,7 @@ import { Folder, Zap } from "lucide-react";
 import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
 
-/** Emoji or Lucide bolt; legacy DB default 🎯 (target) maps to bolt, not the target emoji. */
+/** Emoji or Lucide bolt; legacy DB default 🎯 (target) maps to bolt. */
 export function InitiativePlanBarIcon({ icon, className }: { icon?: string | null; className?: string }) {
   const raw = icon?.trim();
   if (raw && raw !== "🎯") {
@@ -14,10 +14,10 @@ export function InitiativePlanBarIcon({ icon, className }: { icon?: string | nul
   }
   return (
     <span
-      className={cn("mr-1 inline-flex size-4 shrink-0 items-center justify-center text-amber-600", className)}
+      className={cn("mr-1 inline-flex size-4 shrink-0 items-center justify-center text-blue-600", className)}
       aria-hidden
     >
-      <Zap className="size-3.5" strokeWidth={2} />
+      <Zap className="size-3.5" strokeWidth={1.9} />
     </span>
   );
 }

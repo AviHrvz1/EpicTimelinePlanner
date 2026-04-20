@@ -1,9 +1,10 @@
 "use client";
 
-import { FileText, History, MessageSquare, Plus, X } from "lucide-react";
+import { History, MessageSquare, Plus, X } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
@@ -437,7 +438,10 @@ export function EpicFormDialog({
                                 <span className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
                                   {storyRefById?.[story.id] ?? "--"}
                                 </span>
-                                <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 align-middle mr-1" aria-hidden><FileText className="size-2.5" strokeWidth={2} /></span>{story.title}
+                                <span className="mr-1 inline-flex h-4 w-4 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 align-middle" aria-hidden>
+                                  <UserStoryIcon className="size-3" />
+                                </span>
+                                {story.title}
                               </p>
                               {story.sprint ? (
                                 <p className="mt-0.5 text-[11px] text-slate-500">Sprint {story.sprint}</p>

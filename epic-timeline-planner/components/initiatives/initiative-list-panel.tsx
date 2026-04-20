@@ -1,12 +1,13 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ChevronRight, FileText, Folder, Plus, Zap } from "lucide-react";
+import { ChevronRight, Folder, Plus, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import {
   EPICS_UNPLAN_DROP_ID,
@@ -38,6 +39,8 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
   sprintLabel: string | null;
   statusLabel: string;
   statusClassName: string;
+  /** Hide redundant “Unscheduled” chips when every backlog story looks the same (Linear/Notion-style). */
+  showStatusBadge: boolean;
 } {
   const resolved =
     story.sprint == null
@@ -54,34 +57,43 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
     return {
       sprintLabel: null,
       statusLabel: "Unscheduled",
-      statusClassName: "bg-slate-100 text-slate-600",
+      statusClassName: "text-muted-foreground",
+      showStatusBadge: false,
     };
   }
   if (story.status === "inProgress") {
     return {
       sprintLabel,
       statusLabel: "In progress",
-      statusClassName: "bg-blue-100 text-blue-700",
+      statusClassName:
+        "border border-blue-200/70 bg-blue-50/80 px-1.5 py-0.5 text-[10px] font-medium text-blue-800",
+      showStatusBadge: true,
     };
   }
   if (story.status === "done") {
     return {
       sprintLabel,
       statusLabel: "Done",
-      statusClassName: "bg-emerald-100 text-emerald-700",
+      statusClassName:
+        "border border-emerald-200/70 bg-emerald-50/80 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800",
+      showStatusBadge: true,
     };
   }
   if (story.status === "approved") {
     return {
       sprintLabel,
       statusLabel: "Approved",
-      statusClassName: "bg-violet-100 text-violet-700",
+      statusClassName:
+        "border border-violet-200/70 bg-violet-50/80 px-1.5 py-0.5 text-[10px] font-medium text-violet-800",
+      showStatusBadge: true,
     };
   }
   return {
     sprintLabel,
     statusLabel: "To do",
-    statusClassName: "bg-amber-100 text-amber-700",
+    statusClassName:
+      "border border-amber-200/70 bg-amber-50/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-900",
+    showStatusBadge: true,
   };
 }
 
@@ -95,6 +107,54 @@ function epicCompletionMeta(epic: EpicItem): {
   const finished = stories.filter((story) => story.status === "done" || story.status === "approved").length;
   const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
   return { total, finished, percent };
+}
+
+function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: string } {
+  const isPlanned = epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  if (!isPlanned) {
+    return {
+      label: "Unscheduled",
+      className: "border border-slate-200/90 bg-slate-100 text-slate-600",
+    };
+  }
+
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) {
+    return {
+      label: "To Do",
+      className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+    };
+  }
+
+  const total = stories.length;
+  const approved = stories.filter((s) => s.status === "approved").length;
+  const doneOrApproved = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+  const progressed = stories.some(
+    (s) => s.status === "inProgress" || s.status === "done" || s.status === "approved",
+  );
+
+  if (approved === total) {
+    return {
+      label: "Approved",
+      className: "border border-violet-200/90 bg-violet-50 text-violet-800",
+    };
+  }
+  if (doneOrApproved === total) {
+    return {
+      label: "DONE",
+      className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800",
+    };
+  }
+  if (progressed) {
+    return {
+      label: "In Progress",
+      className: "border border-blue-200/90 bg-blue-50 text-blue-800",
+    };
+  }
+  return {
+    label: "To Do",
+    className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+  };
 }
 
 type InitiativeListPanelProps = {
@@ -165,7 +225,7 @@ function DraggableInitiativeCard({
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
               <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-amber-600" />
+                <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
               </span>
               <p className="min-w-0 truncate text-[15px] leading-5 font-normal text-slate-900">{initiative.title}</p>
             </div>
@@ -212,28 +272,25 @@ function InitiativeTreeEpicRow({
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const completion = epicCompletionMeta(epic);
-  const stripeColor = epic.color?.trim() ? epic.color : initiative.color;
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5",
+        "rounded-md py-2.5 pl-0.5 pr-0.5 font-sans transition-colors hover:bg-white/70",
         isDragging && "opacity-60",
       )}
       style={{
-        borderLeftColor: stripeColor,
-        borderLeftWidth: 4,
         transform: !isDragging && transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         zIndex: isDragging ? 60 : undefined,
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-2">
         {epicPlanDragEnabled ? (
           <button
             type="button"
-            className="mt-0.5 shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="mt-0.5 shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
@@ -246,73 +303,92 @@ function InitiativeTreeEpicRow({
             <button
               type="button"
               onClick={onToggleEpic}
-              className="flex min-w-0 flex-1 items-start gap-2 text-left"
+              className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
               aria-expanded={isEpicOpen}
             >
               <ChevronRight
                 className={cn(
-                  "mt-1 size-4 shrink-0 text-slate-500 transition-transform",
+                  "mt-0.5 size-3.5 shrink-0 text-slate-400 transition-transform",
                   isEpicOpen && "rotate-90",
                 )}
               />
               <div className="min-w-0">
-                <p className="min-w-0 text-[15px] leading-5 font-normal text-slate-900">{epic.title}</p>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="inline-flex shrink-0 text-[15px] leading-none text-slate-700">
+                    <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
+                  </span>
+                  <p className="min-w-0 truncate text-[15px] font-normal leading-snug tracking-tight text-foreground">
+                    {epic.title}
+                  </p>
+                </div>
               </div>
             </button>
             <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover/epic:opacity-100 group-focus-within/epic:opacity-100">
               <EditRowIconButton label="Edit epic" onClick={() => onOpenEpic(epic, initiative)} />
             </div>
           </div>
-          <div className="mt-1.5 space-y-1">
-            <div className="flex items-center justify-between text-[11px] font-normal text-slate-600">
-              <span>{completion.total === 0 ? "No user stories" : null}</span>
-              <span>
-                {completion.finished}/{completion.total} · {completion.percent}%
+          <div className="mt-2 space-y-1.5">
+            <div className="flex items-baseline justify-between gap-2 text-[12px] text-muted-foreground">
+              <span className="min-w-0 truncate">
+                {completion.total === 0 ? "No stories yet" : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
               </span>
+              {completion.total > 0 ? (
+                <span className="shrink-0 tabular-nums tracking-tight text-slate-600">
+                  {completion.finished}/{completion.total} done · {completion.percent}%
+                </span>
+              ) : null}
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-1 w-full overflow-hidden rounded-full bg-slate-200/80"
+              role="progressbar"
+              aria-valuenow={completion.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${completion.finished} of ${completion.total} stories done`}
+            >
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
+                className="h-full rounded-full bg-slate-500/70 transition-[width] duration-300 ease-out"
                 style={{ width: `${completion.percent}%` }}
               />
             </div>
           </div>
           {isEpicOpen ? (
-            <div className="mt-2 space-y-1">
+            <div className="mt-3 border-l border-border/70 pl-3">
               {stories.length === 0 ? null : (
-                stories.map((story) => {
-                  const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story, planContextMonth);
-                  return (
-                    <div
-                      key={story.id}
-                      className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onOpenStory(story.id)}
-                        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] font-normal text-slate-700"
-                      >
-                        <span
-                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80"
-                          aria-hidden
-                        >
-                          <FileText className="size-3" strokeWidth={2} />
-                        </span>
-                        <span className="truncate">{story.title}</span>
-                      </button>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {sprintLabel ? (
-                          <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-normal text-slate-600">
-                            {sprintLabel}
+                <ul className="space-y-0.5">
+                  {stories.map((story) => {
+                    const meta = storyStatusMeta(story, planContextMonth);
+                    const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
+                    const a11y = [story.title, statusLabel, sprintLabel].filter(Boolean).join(", ");
+                    return (
+                      <li key={story.id}>
+                        <div className="group/story flex min-h-[28px] w-full items-center gap-2 rounded-md py-0.5 pr-0.5 pl-0 transition-colors hover:bg-white/90">
+                          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                            <UserStoryIcon />
                           </span>
-                        ) : null}
-                        <span className={cn("rounded px-2 py-0.5 text-[11px] font-normal", statusClassName)}>
-                          {statusLabel}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
+                          <button
+                            type="button"
+                            onClick={() => onOpenStory(story.id)}
+                            aria-label={a11y}
+                            className="min-w-0 flex-1 truncate text-left text-[14px] font-normal text-slate-700 antialiased hover:text-foreground"
+                          >
+                            {story.title}
+                          </button>
+                          <div className="flex max-w-[55%] shrink-0 items-center justify-end gap-1">
+                            {sprintLabel ? (
+                              <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                {sprintLabel}
+                              </span>
+                            ) : null}
+                            {showStatusBadge ? (
+                              <span className={cn("shrink-0 tabular-nums", statusClassName)}>{statusLabel}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
           ) : null}
@@ -380,7 +456,7 @@ function InitiativeTreeCard({
         setDropRef(node);
       }}
       className={cn(
-        "rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5",
+        "rounded-xl border border-slate-200/90 bg-white p-3 font-sans antialiased shadow-sm ring-1 ring-black/5",
         isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
@@ -417,9 +493,11 @@ function InitiativeTreeCard({
                 <div className="flex w-full min-w-0 items-center gap-1">
                   <div className="flex min-w-0 flex-1 items-center gap-1.5">
                     <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                      <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-amber-600" />
+                      <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
                     </span>
-                    <p className="min-w-0 truncate text-[16px] leading-6 font-normal text-slate-900">{initiative.title}</p>
+                  <p className="min-w-0 truncate text-[17px] font-normal leading-6 tracking-tight text-slate-900">
+                      {initiative.title}
+                    </p>
                   </div>
                   {initiative.status === "scheduled" && initiative.startMonth != null ? (
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pl-1 pr-0.5">
@@ -435,7 +513,7 @@ function InitiativeTreeCard({
                   ) : null}
                 </div>
                 {initiative.description ? (
-                  <p className="line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
+                  <p className="line-clamp-2 text-[13px] leading-5 text-slate-600">{initiative.description}</p>
                 ) : null}
               </div>
             </button>
@@ -445,67 +523,72 @@ function InitiativeTreeCard({
           </div>
 
           {isOpen ? (
-            <div className="mt-3 ml-2 space-y-2">
-              {epics.length === 0 ? (
-                <p className="rounded-lg bg-slate-100/80 px-3 py-2 text-[12px] leading-4 text-slate-600">
-                  No epics yet.
-                </p>
-              ) : (
-                epics.map((epic) => {
-                  const isEpicOpen = openEpicIds[epic.id] ?? false;
-                  return (
-                    <InitiativeTreeEpicRow
-                      key={epic.id}
-                      epic={epic}
-                      initiative={initiative}
-                      isEpicOpen={isEpicOpen}
-                      onToggleEpic={() =>
-                        setOpenEpicIds((prev) => ({
-                          ...prev,
-                          [epic.id]: !(prev[epic.id] ?? false),
-                        }))
+            <div className="mt-3 border-t border-border/80 pt-3 font-sans antialiased">
+              <div className="rounded-lg border border-border/70 bg-gradient-to-b from-white/80 via-white/45 to-muted/35 p-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)] backdrop-blur-[1px]">
+                {epics.length === 0 ? (
+                  <p className="px-1.5 py-2 text-[12px] leading-relaxed text-muted-foreground">
+                    No epics yet.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border/55">
+                    {epics.map((epic) => {
+                      const isEpicOpen = openEpicIds[epic.id] ?? false;
+                      return (
+                        <InitiativeTreeEpicRow
+                          key={epic.id}
+                          epic={epic}
+                          initiative={initiative}
+                          isEpicOpen={isEpicOpen}
+                          onToggleEpic={() =>
+                            setOpenEpicIds((prev) => ({
+                              ...prev,
+                              [epic.id]: !(prev[epic.id] ?? false),
+                            }))
+                          }
+                          planContextMonth={planContextMonth}
+                          epicPlanDragEnabled={epicPlanDragEnabled}
+                          onOpenEpic={onOpenEpic}
+                          onOpenStory={onOpenStory}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="mt-2 flex items-center gap-1.5 border-t border-border/50 pt-2">
+                  <input
+                    type="text"
+                    name={`init-${initiative.id}-quick-item`}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    inputMode="text"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
+                    data-protonpass-ignore="true"
+                    value={epicTitle}
+                    onChange={(event) => setEpicTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleAddEpic();
                       }
-                      planContextMonth={planContextMonth}
-                      epicPlanDragEnabled={epicPlanDragEnabled}
-                      onOpenEpic={onOpenEpic}
-                      onOpenStory={onOpenStory}
-                    />
-                  );
-                })
-              )}
-              <div className="mt-2 flex items-center gap-1 rounded-lg bg-slate-50/70 p-1 ring-1 ring-slate-200/80">
-                <input
-                  type="text"
-                  name={`init-${initiative.id}-quick-item`}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  inputMode="text"
-                  spellCheck={false}
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  data-bwignore="true"
-                  data-form-type="other"
-                  data-protonpass-ignore="true"
-                  value={epicTitle}
-                  onChange={(event) => setEpicTitle(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleAddEpic();
-                    }
-                  }}
-                  placeholder="Add epic"
-                  className="h-8 w-full rounded-md bg-white px-2 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                />
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  disabled={isAddingEpic || epicTitle.trim().length === 0}
-                  onClick={() => void handleAddEpic()}
-                >
-                  <Plus />
-                </Button>
+                    }}
+                    placeholder="Add epic"
+                    className="h-8 w-full rounded-md border border-border/80 bg-background px-2.5 text-[13px] text-foreground shadow-sm outline-none transition-[box-shadow,border-color] placeholder:text-muted-foreground focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
+                  />
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
+                    className="shrink-0 border-border/80 bg-background shadow-sm"
+                    disabled={isAddingEpic || epicTitle.trim().length === 0}
+                    onClick={() => void handleAddEpic()}
+                  >
+                    <Plus />
+                  </Button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -547,16 +630,7 @@ function SprintEpicCard({
     disabled: !backlogDropSlot,
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
-  const epicPlanLabel =
-    epic.planStartMonth != null
-      ? {
-          quarter: quarterFromMonth(epic.planStartMonth),
-          month:
-            epic.planEndMonth != null && epic.planEndMonth !== epic.planStartMonth
-              ? `${MONTHS[epic.planStartMonth - 1]}-${MONTHS[epic.planEndMonth - 1]}`
-              : MONTHS[epic.planStartMonth - 1],
-        }
-      : null;
+  const epicStatus = epicPlanningStatusMeta(epic);
   const [isOpen, setIsOpen] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
@@ -625,20 +699,15 @@ function SprintEpicCard({
                   <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                   </span>
-                  <p className="min-w-0 truncate text-[15px] font-normal leading-5 text-slate-900">{epic.title}</p>
+                  <p className="min-w-0 truncate text-[16px] font-normal leading-6 text-slate-900">{epic.title}</p>
                 </div>
-                {epicPlanLabel ? (
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pl-1 pr-0.5 text-[10px] font-normal tracking-wide">
-                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-800">
-                      Quarter {epicPlanLabel.quarter}
-                    </span>
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
-                      {epicPlanLabel.month}
-                    </span>
-                  </div>
-                ) : null}
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pl-1 pr-0.5">
+                  <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicStatus.className)}>
+                    {epicStatus.label}
+                  </span>
+                </div>
               </div>
-              <p className="truncate text-[11px] font-normal text-slate-500">{initiative.title}</p>
+              <p className="truncate text-[12px] font-normal text-slate-500">{initiative.title}</p>
             </div>
           </button>
         </div>
@@ -647,43 +716,44 @@ function SprintEpicCard({
         </div>
       </div>
       {isOpen ? (
-        <div className="mt-2 ml-8 space-y-1">
+        <div className="mt-2 ml-8 space-y-1 font-sans">
           {stories.length === 0 ? (
-            <p className="text-[11px] text-slate-500">No user stories.</p>
+            <p className="text-[11px] text-muted-foreground">No user stories.</p>
           ) : (
-            stories.map((story) => (
-              (() => {
-                const { sprintLabel, statusLabel, statusClassName } = storyStatusMeta(story, planContextMonth);
-                return (
-              <div
-                key={story.id}
-                className="flex w-full items-center gap-1 rounded-md border border-transparent bg-white/70 px-1.5 py-1 transition hover:border-slate-200 hover:bg-white"
-              >
-                {storyDragEnabled ? <StoryDragHandle storyId={story.id} /> : null}
-                <button
-                  type="button"
-                  onClick={() => onOpenStory(story.id)}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13px] font-normal text-slate-700"
+            stories.map((story) => {
+              const meta = storyStatusMeta(story, planContextMonth);
+              const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
+              const a11y = [story.title, statusLabel, sprintLabel].filter(Boolean).join(", ");
+              return (
+                <div
+                  key={story.id}
+                  className="group/story flex min-h-[28px] w-full items-center gap-1.5 rounded-md py-0.5 pr-0.5 transition-colors hover:bg-muted/40"
                 >
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80" aria-hidden>
-                    <FileText className="size-3" strokeWidth={2} />
+                  {storyDragEnabled ? <StoryDragHandle storyId={story.id} /> : null}
+                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                    <UserStoryIcon />
                   </span>
-                  <span className="truncate">{story.title}</span>
-                </button>
-                <div className="flex shrink-0 items-center gap-1">
-                  {sprintLabel ? (
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-normal text-slate-600">
-                      {sprintLabel}
-                    </span>
-                  ) : null}
-                  <span className={cn("rounded px-2 py-0.5 text-[11px] font-normal", statusClassName)}>
-                    {statusLabel}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenStory(story.id)}
+                    aria-label={a11y}
+                    className="min-w-0 flex-1 truncate rounded-md px-0.5 text-left text-[14px] font-normal text-slate-700 hover:text-foreground"
+                  >
+                    {story.title}
+                  </button>
+                  <div className="flex max-w-[55%] shrink-0 items-center justify-end gap-1">
+                    {sprintLabel ? (
+                      <span className="truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {sprintLabel}
+                      </span>
+                    ) : null}
+                    {showStatusBadge ? (
+                      <span className={cn("shrink-0 tabular-nums", statusClassName)}>{statusLabel}</span>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-                );
-              })()
-            ))
+              );
+            })
           )}
           <div className="mt-1 flex items-center gap-1">
             <input
@@ -897,7 +967,7 @@ export function InitiativeListPanel({
               </>
             ) : (
               <>
-                <Zap className="size-6 shrink-0 text-amber-500" strokeWidth={2} aria-hidden />
+                <Zap className="size-6 shrink-0 text-blue-600" strokeWidth={1.9} aria-hidden />
                 Initiatives
               </>
             )}
@@ -906,7 +976,7 @@ export function InitiativeListPanel({
         {showNewButton ? (
           <Button
             size="sm"
-            className="h-8 px-3 text-[13px] font-medium"
+            className="h-8 px-3 text-[13px] font-bold"
             onClick={inMonthView ? onCreateEpic : onCreateInitiative}
           >
             <Plus className="size-3.5" />

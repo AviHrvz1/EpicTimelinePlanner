@@ -3,13 +3,14 @@
 import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LucideIcon } from "lucide-react";
-import { BadgeCheck, CheckCircle2, FileText, ListTodo, PlayCircle } from "lucide-react";
+import { BadgeCheck, CheckCircle2, ListTodo, PlayCircle } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
 const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: LucideIcon }[] = [
   { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", Icon: ListTodo },
@@ -96,7 +97,7 @@ function KanbanStoryCard({
         >
           <p className="min-w-0 text-[15px] font-semibold leading-snug text-slate-900">
             <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 align-middle" aria-hidden>
-              <FileText className="size-3" strokeWidth={2} />
+              <UserStoryIcon className="size-3.5" />
             </span>
             {story.title}
           </p>

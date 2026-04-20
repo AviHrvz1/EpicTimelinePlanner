@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Eraser, FileText, Filter, Folder, Layers3, ListTodo, Plus, Search, TableProperties, X, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Eraser, Filter, Folder, Layers3, ListTodo, Plus, Search, TableProperties, X, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
@@ -278,7 +279,9 @@ function rollupWorkflowStatusFromGroupedRows(rows: Array<{ storyStatus: string }
 
 function workflowStatusLabel(status: WorkflowStatus): string {
   if (status === "inProgress") return "In progress";
-  if (status === "todo") return "To do";
+  if (status === "todo") return "To Do";
+  if (status === "done") return "Done";
+  if (status === "approved") return "Approved";
   return status;
 }
 
@@ -907,8 +910,8 @@ export function BacklogPlanningPanel({
               workItem: (
                 <div className="min-w-0" style={{ paddingLeft: indentPx }}>
                   <div className="flex min-w-0 items-center gap-2 truncate text-left text-slate-800">
-                    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600 ring-1 ring-slate-200/80" aria-hidden>
-                      <FileText className="size-3.5" strokeWidth={2} />
+                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                      <UserStoryIcon />
                     </span>
                     {editingStoryTitle?.id === row.storyId ? (
                       <span className="flex min-w-0 items-center gap-1">
@@ -989,7 +992,7 @@ export function BacklogPlanningPanel({
                   }}
                   className="text-[16px] font-medium"
                 >
-                  {row.storyStatus === "inProgress" ? "In progress" : row.storyStatus}
+                  {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
                 </button>
               )}
             </span>
@@ -1472,7 +1475,7 @@ export function BacklogPlanningPanel({
                     onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId) return; onOpenInitiative(initiativeId); }}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    <Zap className="size-4 shrink-0 text-amber-500" strokeWidth={2} />
+                    <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
                     {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
                       <span className="flex min-w-0 items-center gap-1">
                         <input
@@ -1705,7 +1708,7 @@ export function BacklogPlanningPanel({
                       {isInitOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
                     </button>
                     <button type="button" onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId) return; onOpenInitiative(initiative.initiativeId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                      <Zap className="size-4 shrink-0 text-amber-500" strokeWidth={2} />
+                      <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
                       {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
                         <span className="flex min-w-0 items-center gap-1">
                           <input
@@ -2584,7 +2587,7 @@ export function BacklogPlanningPanel({
                             onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id) return; onOpenInitiative(initiative.id); }}
                             className="flex min-w-0 flex-1 items-center gap-2 text-left"
                           >
-                            <Zap className="size-4 shrink-0 text-amber-500" strokeWidth={2} />
+                            <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
                             {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id ? (
                               <span className="flex min-w-0 items-center gap-1">
                                 <input
@@ -2638,7 +2641,7 @@ export function BacklogPlanningPanel({
                                 }
                                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                               >
-                                <Zap className="size-3.5 text-amber-500" strokeWidth={2} />
+                                <Zap className="size-3.5 text-blue-600" strokeWidth={1.9} />
                                 Add initiative
                               </button>
                               <button
@@ -2668,7 +2671,7 @@ export function BacklogPlanningPanel({
                                 }
                                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                               >
-                                <FileText className="size-3.5 text-slate-600" strokeWidth={2} aria-hidden />
+                                <UserStoryIcon />
                                 Add user story
                               </button>
                             </div>
@@ -2952,7 +2955,7 @@ export function BacklogPlanningPanel({
                                           }
                                           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                                         >
-                                          <FileText className="size-3.5 text-slate-600" strokeWidth={2} aria-hidden />
+                                          <UserStoryIcon />
                                           Add user story
                                         </button>
                                       </div>
@@ -3158,7 +3161,7 @@ export function BacklogPlanningPanel({
                                             }
                                             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
                                           >
-                                            <FileText className="size-3.5 text-slate-600" strokeWidth={2} aria-hidden />
+                                            <UserStoryIcon />
                                             Add user story
                                           </button>
                                         </div>
@@ -3228,7 +3231,7 @@ export function BacklogPlanningPanel({
                                           }}
                                           className="text-[16px] font-medium"
                                         >
-                                          {story.status === "inProgress" ? "In progress" : story.status}
+                                          {workflowStatusLabel(story.status as WorkflowStatus)}
                                         </button>
                                       )}
                                     </span>
