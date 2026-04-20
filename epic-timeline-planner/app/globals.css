@@ -170,7 +170,51 @@
   animation: epic-dialog-panel-out 0.45s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
+/**
+ * Initiative / epic bar emphasis (~2s): internal glow band moves left → right, fades out — no outer shadow.
+ */
+@keyframes initiative-bar-emphasis-sheen {
+  0% {
+    background-position: 0% 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.88;
+  }
+  78% {
+    background-position: 100% 0;
+    opacity: 0.82;
+  }
+  100% {
+    background-position: 100% 0;
+    opacity: 0;
+  }
+}
+
+.animate-initiative-bar-emphasis-sheen {
+  background-image: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 28%,
+    rgba(255, 255, 255, 0.35) 42%,
+    rgba(186, 230, 253, 0.65) 50%,
+    rgba(233, 213, 255, 0.6) 58%,
+    rgba(250, 232, 255, 0.45) 65%,
+    transparent 78%,
+    transparent 100%
+  );
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  animation: initiative-bar-emphasis-sheen 2s cubic-bezier(0.38, 0.02, 0.22, 1) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .animate-initiative-bar-emphasis-sheen {
+    animation: none;
+    background: none;
+    opacity: 0;
+  }
+
   .epic-dialog-backdrop,
   .epic-dialog-panel-entrance,
   .epic-dialog-backdrop--exit,

@@ -179,6 +179,8 @@ type InitiativeListPanelProps = {
   epicPanelQuarterMonths?: number[] | null;
   /** Label for quarter-scoped list (e.g. `Q1`). */
   epicPanelQuarterLabel?: string | null;
+  /** Fires when an initiative accordion opens or closes (initiative list mode). */
+  onInitiativeAccordionChange?: (initiativeId: string, isOpen: boolean) => void;
 };
 
 function DraggableInitiativeCard({
@@ -339,7 +341,7 @@ function InitiativeTreeEpicRow({
               ) : null}
             </div>
             <div
-              className="h-1 w-full overflow-hidden rounded-full bg-slate-200/80"
+              className="h-1.5 w-full overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80"
               role="progressbar"
               aria-valuenow={completion.percent}
               aria-valuemin={0}
@@ -347,7 +349,7 @@ function InitiativeTreeEpicRow({
               aria-label={`${completion.finished} of ${completion.total} stories done`}
             >
               <div
-                className="h-full rounded-full bg-slate-500/70 transition-[width] duration-300 ease-out"
+                className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
                 style={{ width: `${completion.percent}%` }}
               />
             </div>
@@ -433,6 +435,13 @@ function InitiativeTreeCard({
     disabled: backlogDropIndex == null,
   });
   const epics = [...(initiative.epics ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+  const initiativeStories = epics.flatMap((e) => e.userStories ?? []);
+  const initiativeStoryTotal = initiativeStories.length;
+  const initiativeStoryDone = initiativeStories.filter(
+    (s) => s.status === "done" || s.status === "approved",
+  ).length;
+  const initiativeProgressPct =
+    initiativeStoryTotal > 0 ? Math.round((initiativeStoryDone / initiativeStoryTotal) * 100) : 0;
   const [epicTitle, setEpicTitle] = useState("");
   const [isAddingEpic, setIsAddingEpic] = useState(false);
   const [openEpicIds, setOpenEpicIds] = useState<Record<string, boolean>>({});
@@ -515,6 +524,37 @@ function InitiativeTreeCard({
                 {initiative.description ? (
                   <p className="line-clamp-2 text-[13px] leading-5 text-slate-600">{initiative.description}</p>
                 ) : null}
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span className="min-w-0 truncate">
+                      {initiativeStoryTotal === 0
+                        ? "No user stories"
+                        : `${initiativeStoryTotal} user stor${initiativeStoryTotal === 1 ? "y" : "ies"}`}
+                    </span>
+                    {initiativeStoryTotal > 0 ? (
+                      <span className="shrink-0 tabular-nums text-slate-600">
+                        {initiativeStoryDone}/{initiativeStoryTotal} done · {initiativeProgressPct}%
+                      </span>
+                    ) : null}
+                  </div>
+                  <div
+                    className="h-1.5 w-full overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80"
+                    role="progressbar"
+                    aria-valuenow={initiativeProgressPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={
+                      initiativeStoryTotal > 0
+                        ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories done or approved`
+                        : "No user stories"
+                    }
+                  >
+                    <div
+                      className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
+                      style={{ width: `${initiativeProgressPct}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </button>
             <div className="flex shrink-0 gap-1 opacity-0 transition-opacity duration-150 group-hover/init:opacity-100 group-focus-within/init:opacity-100">
@@ -631,6 +671,7 @@ function SprintEpicCard({
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const epicStatus = epicPlanningStatusMeta(epic);
+  const completion = epicCompletionMeta(epic);
   const [isOpen, setIsOpen] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
@@ -708,6 +749,37 @@ function SprintEpicCard({
                 </div>
               </div>
               <p className="truncate text-[12px] font-normal text-slate-500">{initiative.title}</p>
+              <div className="mt-2 space-y-1">
+                <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
+                  <span className="min-w-0 truncate">
+                    {completion.total === 0
+                      ? "No stories yet"
+                      : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
+                  </span>
+                  {completion.total > 0 ? (
+                    <span className="shrink-0 tabular-nums tracking-tight text-slate-600">
+                      {completion.finished}/{completion.total} done · {completion.percent}%
+                    </span>
+                  ) : null}
+                </div>
+                <div
+                  className="h-1.5 w-full overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80"
+                  role="progressbar"
+                  aria-valuenow={completion.percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={
+                    completion.total > 0
+                      ? `${completion.finished} of ${completion.total} stories done or approved`
+                      : "No user stories"
+                  }
+                >
+                  <div
+                    className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
+                    style={{ width: `${completion.percent}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </button>
         </div>
@@ -847,6 +919,7 @@ export function InitiativeListPanel({
   monthEpicTeamFilterId = null,
   epicPanelQuarterMonths = null,
   epicPanelQuarterLabel = null,
+  onInitiativeAccordionChange,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef } = useDroppable({
     id: "initiatives:backlog-drop",
@@ -1095,12 +1168,11 @@ export function InitiativeListPanel({
                     backlogDropIndex={idx}
                     planContextMonth={activeMonth}
                     epicPlanDragEnabled={epicPlanDragEnabled}
-                    onToggle={() =>
-                      setOpenInitiativeIds((prev) => ({
-                        ...prev,
-                        [initiative.id]: !(prev[initiative.id] ?? false),
-                      }))
-                    }
+                    onToggle={() => {
+                      const next = !(openInitiativeIds[initiative.id] ?? false);
+                      setOpenInitiativeIds((prev) => ({ ...prev, [initiative.id]: next }));
+                      onInitiativeAccordionChange?.(initiative.id, next);
+                    }}
                     onEditInitiative={onEditInitiative}
                     onDeleteInitiative={onDeleteInitiative}
                     onOpenEpic={onOpenEpic}

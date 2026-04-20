@@ -46,7 +46,12 @@ import {
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { clampYearSprint, globalSprintFromMonthLane, yearSprintRangeFromMonthRange } from "@/lib/year-sprint";
+import {
+  clampYearSprint,
+  globalSprintFromMonthLane,
+  monthLaneFromGlobalSprint,
+  yearSprintRangeFromMonthRange,
+} from "@/lib/year-sprint";
 
 type PlannerProps = {
   initialInitiatives: InitiativeItem[];
@@ -77,6 +82,27 @@ function queryParamsEquivalent(searchA: string, searchB: string): boolean {
   return true;
 }
 
+/** Drop month becomes the new start month; preserve span when rescheduling a multi-month initiative. */
+function monthRangeForInitiativeDrop(
+  initiative: InitiativeItem,
+  dropMonth: number,
+  isFirstSchedule: boolean,
+): { startMonth: number; endMonth: number } {
+  if (isFirstSchedule || initiative.startMonth == null || initiative.endMonth == null) {
+    return { startMonth: dropMonth, endMonth: dropMonth };
+  }
+  const span = initiative.endMonth - initiative.startMonth + 1;
+  let startMonth = dropMonth;
+  let endMonth = dropMonth + span - 1;
+  if (endMonth > 12) {
+    endMonth = 12;
+    startMonth = Math.max(1, endMonth - span + 1);
+  }
+  startMonth = Math.max(1, Math.min(12, startMonth));
+  endMonth = Math.max(startMonth, Math.min(12, endMonth));
+  return { startMonth, endMonth };
+}
+
 /** Insert / move one initiative at a lane index; renumber all scheduled rows0..n-1. */
 function computeInitiativeMonthLanePlacement(
   prev: InitiativeItem[],
@@ -98,12 +124,14 @@ function computeInitiativeMonthLanePlacement(
   const current = prev.find((i) => i.id === initiativeId);
   if (!current) return { next: prev, orderedScheduledIds: [] };
 
+  const { startMonth: sm, endMonth: em } = monthRangeForInitiativeDrop(current, month, isFirstSchedule);
+
   const placedBase: InitiativeItem = {
     ...current,
     status: InitiativeStatus.scheduled,
-    startMonth: month,
-    endMonth: month,
-    ...yearSprintRangeFromMonthRange(month, month),
+    startMonth: sm,
+    endMonth: em,
+    ...yearSprintRangeFromMonthRange(sm, em),
   };
 
   let insertAt: number;
@@ -138,9 +166,9 @@ function computeInitiativeMonthLanePlacement(
         return {
           ...i,
           status: InitiativeStatus.scheduled,
-          startMonth: month,
-          endMonth: month,
-          ...yearSprintRangeFromMonthRange(month, month),
+          startMonth: sm,
+          endMonth: em,
+          ...yearSprintRangeFromMonthRange(sm, em),
           timelineRow: r,
         };
       }
@@ -244,8 +272,99 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const planningRightSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const ganttEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ganttEmphasisTickRef = useRef(0);
+  const [ganttEmphasis, setGanttEmphasis] = useState<{ initiativeId: string; tick: number } | null>(null);
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
   const hasHydratedFromUrlRef = useRef(false);
+
+  const handleInitiativeAccordionChange = useCallback(
+    (initiativeId: string, isOpen: boolean) => {
+      if (!isOpen) return;
+      const inv = initiatives.find((i) => i.id === initiativeId);
+      if (
+        !inv ||
+        inv.status !== InitiativeStatus.scheduled ||
+        inv.startMonth == null ||
+        inv.endMonth == null
+      ) {
+        return;
+      }
+      const sm = inv.startMonth;
+      const em = inv.endMonth;
+      const overlappingQuarter =
+        QUARTERS.find((q) => {
+          const qs = q.months[0];
+          const qe = q.months[q.months.length - 1];
+          return !(em < qs || sm > qe);
+        }) ?? null;
+
+      if (overlappingQuarter != null && focusedQuarterLabel != null) {
+        const current = QUARTERS.find((q) => q.label === focusedQuarterLabel);
+        if (current) {
+          const cqs = current.months[0];
+          const cqe = current.months[current.months.length - 1];
+          const overlapsCurrent = !(em < cqs || sm > cqe);
+          if (!overlapsCurrent) {
+            setFocusedQuarterLabel(overlappingQuarter.label);
+          }
+        }
+      }
+
+      ganttEmphasisTickRef.current += 1;
+      const tick = ganttEmphasisTickRef.current;
+      setGanttEmphasis({ initiativeId, tick });
+      if (ganttEmphasisTimeoutRef.current) {
+        clearTimeout(ganttEmphasisTimeoutRef.current);
+        ganttEmphasisTimeoutRef.current = null;
+      }
+      ganttEmphasisTimeoutRef.current = setTimeout(() => {
+        setGanttEmphasis(null);
+        ganttEmphasisTimeoutRef.current = null;
+      }, 2000);
+    },
+    [initiatives, focusedQuarterLabel],
+  );
+
+  useEffect(
+    () => () => {
+      if (ganttEmphasisTimeoutRef.current) {
+        clearTimeout(ganttEmphasisTimeoutRef.current);
+        ganttEmphasisTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const ganttEpicEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ganttEpicEmphasisTickRef = useRef(0);
+  const [ganttEpicEmphasis, setGanttEpicEmphasis] = useState<{ epicId: string; tick: number } | null>(
+    null,
+  );
+
+  const flashGanttEpicEmphasis = useCallback((epicId: string) => {
+    ganttEpicEmphasisTickRef.current += 1;
+    const tick = ganttEpicEmphasisTickRef.current;
+    setGanttEpicEmphasis({ epicId, tick });
+    if (ganttEpicEmphasisTimeoutRef.current) {
+      clearTimeout(ganttEpicEmphasisTimeoutRef.current);
+      ganttEpicEmphasisTimeoutRef.current = null;
+    }
+    ganttEpicEmphasisTimeoutRef.current = setTimeout(() => {
+      setGanttEpicEmphasis(null);
+      ganttEpicEmphasisTimeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (ganttEpicEmphasisTimeoutRef.current) {
+        clearTimeout(ganttEpicEmphasisTimeoutRef.current);
+        ganttEpicEmphasisTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
 
   const roadmapSummary = useMemo(() => {
     const scheduled = initiatives.filter((i) => i.status === "scheduled");
@@ -405,11 +524,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (prevTimelineMonthRef.current !== activeTimelineMonth) {
       prevTimelineMonthRef.current = activeTimelineMonth;
       if (activeTimelineMonth != null) {
-        setActiveMonthPlanTab("epic-gantt");
-        setSprintStoryBoardTeamId(null);
+        const onSprintSurface =
+          activeMonthPlanTab === "sprint-kanban" || activeMonthPlanTab === "sprint-status";
+        /** Opening sprint from the roadmap sets month + sprint tab in one update; don't clobber back to epic Gantt. */
+        if (!onSprintSurface) {
+          setActiveMonthPlanTab("epic-gantt");
+          setSprintStoryBoardTeamId(null);
+        }
       }
     }
-  }, [activeTimelineMonth]);
+  }, [activeTimelineMonth, activeMonthPlanTab]);
 
   useEffect(() => {
     try {
@@ -493,7 +617,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   }, []);
 
   const openSprintStoryBoard = useCallback((yearSprint: number, teamId: string | null) => {
-    setActiveYearSprint(clampYearSprint(yearSprint));
+    const clamped = clampYearSprint(yearSprint);
+    const { month } = monthLaneFromGlobalSprint(clamped);
+    setActiveTimelineMonth(month);
+    setIsSprintModeActive(true);
+    setActiveYearSprint(clamped);
     setActiveSprintTab("kanban");
     setActiveMonthPlanTab("sprint-kanban");
     setSprintStoryBoardTeamId(teamId?.trim() ? teamId.trim() : null);
@@ -1312,6 +1440,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           planEndMonth: planMonth,
         });
         toast.success("Epic placed on the plan");
+        flashGanttEpicEmphasis(epicId);
       } catch (err) {
         await refresh();
         const description = err instanceof Error ? err.message : undefined;
@@ -1447,14 +1576,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           });
         }
       } else {
+        const range = monthRangeForInitiativeDrop(initiativeBefore, month, isFirstSchedule);
         console.log("[gantt-drop] initiative reschedule → patch range + persist rows", {
           initiativeId,
-          month,
+          ...range,
         });
         await patchInitiativeScheduleRange(
           initiativeId,
-          month,
-          month,
+          range.startMonth,
+          range.endMonth,
           undefined,
           initiativeBefore.year,
         );
@@ -1640,6 +1770,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     ? sprintStoryBoardTeamId
                     : null
                 }
+                onInitiativeAccordionChange={handleInitiativeAccordionChange}
               />
               <div
                 className="group relative flex cursor-col-resize items-stretch justify-center"
@@ -1703,6 +1834,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setEditingInitiative(initiative);
                   setInitiativeDialogOpen(true);
                 }}
+                ganttEmphasis={ganttEmphasis}
+                ganttEpicEmphasis={ganttEpicEmphasis}
                 onResizeInitiativeRange={async (initiativeId, range) => {
                   const planYear =
                     initiatives.find((i) => i.id === initiativeId)?.year ?? selectedYear;

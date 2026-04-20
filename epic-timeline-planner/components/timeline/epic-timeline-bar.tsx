@@ -13,6 +13,9 @@ type InitiativeTimelineBarProps = {
   progressLabel?: string;
   isResizing?: boolean;
   onClick?: () => void;
+  /** Brief neon highlight (left accordion → Gantt); `emphasizeTick` restarts CSS when re-triggered. */
+  emphasizeFlash?: boolean;
+  emphasizeTick?: number;
 };
 
 export function InitiativeTimelineBar({
@@ -23,6 +26,8 @@ export function InitiativeTimelineBar({
   progressLabel,
   isResizing,
   onClick,
+  emphasizeFlash = false,
+  emphasizeTick = 0,
 }: InitiativeTimelineBarProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: initiativeTimelineDraggableId(id),
@@ -54,12 +59,29 @@ export function InitiativeTimelineBar({
     >
       <div
         className={cn(
-          "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-lg ring-1 ring-black/15 active:cursor-grabbing",
+          "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white active:cursor-grabbing",
+          emphasizeFlash
+            ? "ring-1 ring-white/20"
+            : "shadow-lg ring-1 ring-black/15",
           isResizing && "cursor-ew-resize",
         )}
         style={{ backgroundColor: color }}
       >
-        <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-center">{title}</span>
+        {emphasizeFlash ? (
+          <div
+            key={emphasizeTick}
+            className="pointer-events-none absolute inset-0 z-[5] rounded-[inherit] animate-initiative-bar-emphasis-sheen"
+            aria-hidden
+          />
+        ) : null}
+        <span
+          className={cn(
+            "relative z-10 min-w-0 flex-1 truncate px-3 text-center antialiased",
+            emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
+          )}
+        >
+          {title}
+        </span>
       </div>
       <div className="mt-0.5 flex items-center gap-1.5 px-2">
         <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
@@ -88,6 +110,8 @@ type EpicPlanTimelineBarProps = {
   progressLabel?: string;
   isResizing?: boolean;
   onClick?: () => void;
+  emphasizeFlash?: boolean;
+  emphasizeTick?: number;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -99,6 +123,8 @@ export function EpicPlanTimelineBar({
   progressLabel,
   isResizing,
   onClick,
+  emphasizeFlash = false,
+  emphasizeTick = 0,
 }: EpicPlanTimelineBarProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(id),
@@ -130,12 +156,29 @@ export function EpicPlanTimelineBar({
     >
       <div
         className={cn(
-          "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-lg ring-1 ring-black/15 active:cursor-grabbing",
+          "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white active:cursor-grabbing",
+          emphasizeFlash
+            ? "ring-1 ring-white/20"
+            : "shadow-lg ring-1 ring-black/15",
           isResizing && "cursor-ew-resize",
         )}
         style={{ backgroundColor: color }}
       >
-        <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-center">{title}</span>
+        {emphasizeFlash ? (
+          <div
+            key={emphasizeTick}
+            className="pointer-events-none absolute inset-0 z-[5] rounded-[inherit] animate-initiative-bar-emphasis-sheen"
+            aria-hidden
+          />
+        ) : null}
+        <span
+          className={cn(
+            "relative z-10 min-w-0 flex-1 truncate px-3 text-center antialiased",
+            emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
+          )}
+        >
+          {title}
+        </span>
       </div>
       <div className="mt-0.5 flex items-center gap-1.5 px-2">
         <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
