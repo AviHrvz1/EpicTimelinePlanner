@@ -7,6 +7,8 @@ import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
 import { defaultMembersForTeam, type SprintCapacityBoard as SprintCapacityBoardState } from "@/lib/sprint-capacity";
+import { MONTH_TEAM_COLUMNS, isKnownEpicTeamId } from "@/lib/month-team-board";
+import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
 type SprintCapacityBoardProps = {
@@ -300,12 +302,30 @@ export function SprintCapacityBoard({
   );
   const members = defaultMembersForTeam(selectedTeamId);
   const teamKey = selectedTeamId ?? "all";
+  const teamLabel =
+    selectedTeamId && isKnownEpicTeamId(selectedTeamId)
+      ? MONTH_TEAM_COLUMNS.find((t) => t.id === selectedTeamId)?.label ?? "Team"
+      : "All teams (combined)";
+  const gradientKey = teamKey.replace(/[^a-zA-Z0-9]+/g, "-");
+
+  let teamTotalCapacity = 0;
+  let teamTotalAssigned = 0;
+  for (const member of members) {
+    const cap = Number(capacityBoard.capacities[member] ?? 6);
+    teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
+    const assignedIds = capacityBoard.assignments[member] ?? [];
+    const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
+    teamTotalAssigned += cards.reduce((sum, card) => sum + card.estimatedDays, 0);
+  }
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 text-[13px] font-medium text-slate-600">
-        Drag user stories from the left panel into a developer bucket. Bucket fill and warnings update from planned vs available days.
-      </div>
+      <TeamLoadSummary
+        teamLabel={teamLabel}
+        gradientKey={`sprint-${gradientKey}`}
+        totalAssigned={teamTotalAssigned}
+        totalCapacity={teamTotalCapacity}
+      />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
         {members.map((member, idx) => {
           const assignedIds = capacityBoard.assignments[member] ?? [];

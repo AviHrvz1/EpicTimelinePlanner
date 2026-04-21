@@ -4,6 +4,7 @@ import { AlertTriangle, Users, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { monthTeamCapacityBucketDropId, epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { MONTH_TEAM_COLUMNS, collectMonthEpicsForTeamBoard } from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
@@ -106,12 +107,29 @@ export function MonthTeamCapacityBoard({
   onRemoveEpicFromCapacity,
 }: MonthTeamCapacityProps) {
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
+  const gradientKey = `month-${year}-${month}`.replace(/[^a-zA-Z0-9]+/g, "-");
+
+  let teamTotalCapacity = 0;
+  let teamTotalAssigned = 0;
+  for (const team of MONTH_TEAM_COLUMNS) {
+    const cap = Number(capacityBoard.capacities[team.id] ?? 20);
+    teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
+    const cards = rows.filter((row) => row.epic.team === team.id);
+    teamTotalAssigned += cards.reduce(
+      (sum, row) =>
+        sum + (row.epic.userStories ?? []).reduce((s, story) => s + Number(story.estimatedDays ?? 0), 0),
+      0,
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 text-[13px] font-medium text-slate-600">
-        Drag epics into team buckets to plan monthly load. Team utilization is based on total estimated story days in assigned epics.
-      </div>
+      <TeamLoadSummary
+        teamLabel="All teams (combined)"
+        gradientKey={gradientKey}
+        totalAssigned={teamTotalAssigned}
+        totalCapacity={teamTotalCapacity}
+      />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {MONTH_TEAM_COLUMNS.map((team) => {
           const cards = rows
