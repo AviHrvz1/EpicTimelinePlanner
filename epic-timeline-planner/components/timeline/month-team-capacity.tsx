@@ -43,7 +43,7 @@ export function MonthTeamCapacityBoard({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6 pb-6">
       <TeamLoadSummary
         teamLabel="All teams (combined)"
         gradientKey={gradientKey}
@@ -65,6 +65,7 @@ export function MonthTeamCapacityBoard({
             <TeamCapacityBucket
               key={team.id}
               team={team}
+              teamLabelPrefix="Team:"
               cards={cards}
               capacity={Number(capacityBoard.capacities[team.id] ?? 20)}
               onCapacityChange={(days) => onCapacityChange(team.id, days)}

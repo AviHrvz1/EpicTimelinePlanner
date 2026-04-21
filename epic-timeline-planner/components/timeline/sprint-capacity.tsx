@@ -320,7 +320,7 @@ export function SprintCapacityBoard({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6 pb-6">
       <TeamLoadSummary
         teamLabel={teamLabel}
         gradientKey={`sprint-${gradientKey}`}

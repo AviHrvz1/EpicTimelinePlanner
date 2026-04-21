@@ -57,7 +57,7 @@ export function QuarterTeamCapacityBoard({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6 pb-6">
       <TeamLoadSummary
         teamLabel="All teams (combined)"
         gradientKey={gradientKey}
@@ -80,6 +80,7 @@ export function QuarterTeamCapacityBoard({
             <TeamCapacityBucket
               key={team.id}
               team={team}
+              teamLabelPrefix="Team:"
               cards={cards}
               capacity={capacity}
               onCapacityChange={(days) => onCapacityChange(team.id, days)}

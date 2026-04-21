@@ -86,6 +86,7 @@ export function TeamEpicCard({
 
 export function TeamCapacityBucket({
   team,
+  teamLabelPrefix,
   cards,
   capacity,
   onCapacityChange,
@@ -96,6 +97,8 @@ export function TeamCapacityBucket({
   capacityInputMax,
 }: {
   team: (typeof MONTH_TEAM_COLUMNS)[number];
+  /** e.g. "Team:" — shown before `team.label` (quarter capacity). */
+  teamLabelPrefix?: string;
   cards: Array<{
     epicId: string;
     icon: string;
@@ -137,7 +140,13 @@ export function TeamCapacityBucket({
           <span className="mr-1.5 inline-flex align-middle text-slate-600">
             <Users className="size-4" />
           </span>
-          {team.label}
+          {teamLabelPrefix ? (
+            <>
+              <span className="font-semibold text-slate-600">{teamLabelPrefix}</span> {team.label}
+            </>
+          ) : (
+            team.label
+          )}
         </p>
         <label className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
           Capacity
