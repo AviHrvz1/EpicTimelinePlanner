@@ -42,6 +42,7 @@ import {
   isKnownEpicTeamId,
   monthTeamBoardStorageKey,
   MONTH_TEAM_IDS,
+  removeEpicFromMonthTeamBoardQueues,
   sanitizeMonthTeamBoardPersisted,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
@@ -724,6 +725,38 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       });
     },
     [activeMonthTeamCapacityKey],
+  );
+
+  const removeEpicFromMonthTeamCapacity = useCallback(
+    async (epicId: string) => {
+      if (activeTimelineMonth == null) return;
+      const boardKey = monthTeamBoardStorageKey(selectedYear, activeTimelineMonth);
+      setMonthTeamBoardByKey((prev) => {
+        const cur = prev[boardKey] ?? { queues: {} };
+        return { ...prev, [boardKey]: removeEpicFromMonthTeamBoardQueues(cur, epicId) };
+      });
+      flushSync(() => {
+        setInitiatives((prev) =>
+          prev.map((i) => ({
+            ...i,
+            epics: (i.epics ?? []).map((e) => (e.id === epicId ? { ...e, team: null } : e)),
+          })),
+        );
+      });
+      try {
+        const response = await fetch(`/api/epics/${epicId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ team: null }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        toast.success("Removed from team capacity");
+      } catch {
+        await refresh();
+        toast.error("Failed to clear team on epic");
+      }
+    },
+    [activeTimelineMonth, selectedYear],
   );
 
   const openSprintStoryBoard = useCallback((yearSprint: number, teamId: string | null) => {
@@ -2121,6 +2154,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 monthTeamBoardByKey={monthTeamBoardByKey}
                 monthTeamCapacityBoard={activeMonthTeamCapacityBoard}
                 onMonthTeamCapacityChange={updateMonthTeamCapacity}
+                onMonthTeamCapacityEpicRemove={removeEpicFromMonthTeamCapacity}
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}

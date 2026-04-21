@@ -71,6 +71,6 @@
 
   <!-- Max fill indicator -->
   <line x1="226" y1="350" x2="574" y2="350" stroke="#e24656" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
-  <rect x="572" y="331" width="154" height="38" rx="19" fill="#fff4f6" stroke="#f2a3ae" stroke-width="2"/>
-  <text x="649" y="357" text-anchor="middle" fill="#cb3444" font-size="20" font-family="Inter, Arial, sans-serif" font-weight="700">MAX FILL</text>
+  <rect x="558" y="324" width="198" height="48" rx="24" fill="#fff4f6" stroke="#f2a3ae" stroke-width="2"/>
+  <text x="657" y="358" text-anchor="middle" fill="#cb3444" font-size="26" font-family="Inter, Arial, sans-serif" font-weight="700">MAX FILL</text>
 </svg>

@@ -163,3 +163,15 @@ export function applyEpicTeamQueueMove(
   queues[targetTeamId] = nextList;
   return { queues };
 }
+
+/** Remove an epic id from every team queue (e.g. leaving month team capacity). */
+export function removeEpicFromMonthTeamBoardQueues(
+  prev: MonthTeamBoardPersisted,
+  epicId: string,
+): MonthTeamBoardPersisted {
+  const stripped: Record<string, string[]> = {};
+  for (const [key, list] of Object.entries(prev.queues)) {
+    stripped[key] = list.filter((x) => x !== epicId);
+  }
+  return sanitizeMonthTeamBoardPersisted({ queues: stripped });
+}

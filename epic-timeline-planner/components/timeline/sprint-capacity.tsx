@@ -49,7 +49,7 @@ function CapacityStoryCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "h-[var(--bucket-row-h)] rounded-lg border border-slate-200/90 bg-white/95 px-2 py-1 shadow-sm",
+        "h-[var(--bucket-row-h)] rounded-none border border-slate-200/90 bg-white/95 px-2 py-1 shadow-sm",
         isDragging && "opacity-60",
       )}
       style={{
@@ -172,14 +172,14 @@ function CapacityBucket({
           ref={setNodeRef}
           style={{ ["--bucket-row-h" as string]: "calc((23rem - 1rem) / 10)" }}
           className={cn(
-            "relative min-h-[23rem] overflow-hidden rounded-2xl border border-slate-300/80 bg-white p-2 transition",
+            "relative flex h-[23rem] flex-col overflow-hidden rounded-2xl border border-slate-300/80 bg-white p-2 transition",
             isOver && "border-primary ring-2 ring-primary/20",
           )}
         >
           <img
             src="/images/sprint-capacity-bucket.svg"
             alt="Capacity bucket"
-            className="pointer-events-none absolute top-1 left-1/2 h-[88%] w-[92%] -translate-x-1/2 object-contain opacity-30"
+            className="pointer-events-none absolute top-1 left-1/2 h-[88%] w-[98%] -translate-x-1/2 object-contain opacity-30"
           />
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] transition-all"
@@ -188,19 +188,25 @@ function CapacityBucket({
               background: bucketFill,
             }}
           />
-          <div className="relative z-20 flex h-full max-h-full flex-col-reverse gap-2 overflow-y-auto">
-            {cards.map((card) => (
-              <CapacityStoryCard
-                key={card.id}
-                card={card}
-                onEstimateChange={onEstimateChange}
-                onUnscheduleStory={onUnscheduleStory}
-                onOpenStory={onOpenStory}
-              />
-            ))}
+          <div className="capacity-bucket-scroll relative z-20 flex min-h-0 flex-1 flex-col-reverse gap-2 overflow-y-auto">
+            {cards.length === 0 ? (
+              <p className="rounded-md border border-dashed border-slate-200 bg-white/75 p-3 text-center text-[12px] font-medium text-slate-500">
+                Drop story here
+              </p>
+            ) : (
+              cards.map((card) => (
+                <CapacityStoryCard
+                  key={card.id}
+                  card={card}
+                  onEstimateChange={onEstimateChange}
+                  onUnscheduleStory={onUnscheduleStory}
+                  onOpenStory={onOpenStory}
+                />
+              ))
+            )}
           </div>
         </div>
-        <div className="flex min-h-[23rem] flex-col items-center rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
+        <div className="flex h-[23rem] flex-col items-center rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">

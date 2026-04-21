@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertTriangle, Users } from "lucide-react";
+import { AlertTriangle, Users, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
+import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { monthTeamCapacityBucketDropId, epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { MONTH_TEAM_COLUMNS, collectMonthEpicsForTeamBoard } from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
@@ -16,20 +17,25 @@ type MonthTeamCapacityProps = {
   capacityBoard: MonthTeamCapacityBoard;
   onCapacityChange: (teamId: string, days: number) => void;
   onOpenEpic: (epicId: string) => void;
+  onRemoveEpicFromCapacity: (epicId: string) => void;
 };
 
 function TeamEpicCard({
   epicId,
+  icon,
   title,
   initiativeTitle,
   loadDays,
   onOpenEpic,
+  onRemoveEpicFromCapacity,
 }: {
   epicId: string;
+  icon: string;
   title: string;
   initiativeTitle: string;
   loadDays: number;
   onOpenEpic: (epicId: string) => void;
+  onRemoveEpicFromCapacity: (epicId: string) => void;
 }) {
   const { setNodeRef, attributes, listeners, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(epicId),
@@ -39,7 +45,7 @@ function TeamEpicCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "rounded-lg border border-slate-200/90 bg-white/95 p-2 shadow-sm",
+        "min-h-[4.05rem] rounded-none border border-slate-200/90 bg-white/95 px-2 py-1.5 shadow-sm",
         isDragging && "opacity-60",
       )}
       style={{
@@ -47,29 +53,44 @@ function TeamEpicCard({
         zIndex: isDragging ? 30 : undefined,
       }}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-1.5">
         <button
           type="button"
-          className="mt-0.5 cursor-grab rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 active:cursor-grabbing"
+          className="mt-0.5 shrink-0 cursor-grab rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 active:cursor-grabbing"
           aria-label="Drag epic card"
           {...attributes}
           {...listeners}
         >
           ::
         </button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pr-1">
           <button
             type="button"
             onClick={() => onOpenEpic(epicId)}
-            className="block w-full truncate text-left text-[13px] font-semibold text-slate-900 hover:text-blue-700"
+            className="block w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
           >
+            <span className="mr-1.5 inline-flex align-middle text-slate-600">
+              <EpicPlanBarIcon icon={icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
+            </span>
             {title}
           </button>
-          <p className="truncate text-[11px] text-slate-500">{initiativeTitle}</p>
+          <p className="truncate text-[11px] leading-snug text-slate-500">{initiativeTitle}</p>
         </div>
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
-          {loadDays.toFixed(1)}d
-        </span>
+        <div className="flex shrink-0 items-center gap-1 self-center">
+          <span className="text-[11px] font-semibold text-slate-600">Est</span>
+          <span className="inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded border border-slate-200 bg-slate-50 px-1 text-[11px] font-medium text-slate-800 tabular-nums">
+            {Math.round(loadDays)}
+          </span>
+          <button
+            type="button"
+            onClick={() => onRemoveEpicFromCapacity(epicId)}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Remove epic from team capacity bucket"
+            title="Clear team assignment"
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </div>
       </div>
     </article>
   );
@@ -82,6 +103,7 @@ export function MonthTeamCapacityBoard({
   capacityBoard,
   onCapacityChange,
   onOpenEpic,
+  onRemoveEpicFromCapacity,
 }: MonthTeamCapacityProps) {
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
 
@@ -96,6 +118,7 @@ export function MonthTeamCapacityBoard({
             .filter((row) => row.epic.team === team.id)
             .map((row) => ({
               epicId: row.epic.id,
+              icon: row.epic.icon,
               title: row.epic.title,
               initiativeTitle: row.initiative.title,
               loadDays: (row.epic.userStories ?? []).reduce((sum, s) => sum + Number(s.estimatedDays ?? 0), 0),
@@ -110,6 +133,7 @@ export function MonthTeamCapacityBoard({
               capacity={Number(capacityBoard.capacities[team.id] ?? 20)}
               onCapacityChange={(days) => onCapacityChange(team.id, days)}
               onOpenEpic={onOpenEpic}
+              onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
             />
           );
         })}
@@ -126,14 +150,22 @@ function TeamCapacityBucket({
   capacity,
   onCapacityChange,
   onOpenEpic,
+  onRemoveEpicFromCapacity,
 }: {
   team: (typeof MONTH_TEAM_COLUMNS)[number];
   year: number;
   month: number;
-  cards: Array<{ epicId: string; title: string; initiativeTitle: string; loadDays: number }>;
+  cards: Array<{
+    epicId: string;
+    icon: string;
+    title: string;
+    initiativeTitle: string;
+    loadDays: number;
+  }>;
   capacity: number;
   onCapacityChange: (days: number) => void;
   onOpenEpic: (epicId: string) => void;
+  onRemoveEpicFromCapacity: (epicId: string) => void;
 }) {
   const assignedTotal = cards.reduce((sum, c) => sum + c.loadDays, 0);
   const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
@@ -179,30 +211,37 @@ function TeamCapacityBucket({
         <div
           ref={setNodeRef}
           className={cn(
-            "relative min-h-[21rem] overflow-hidden rounded-2xl border border-slate-300/80 bg-white p-2 transition",
+            "relative flex h-[24rem] flex-col overflow-hidden rounded-2xl border border-slate-300/80 bg-white p-2 transition",
             isOver && "border-primary ring-2 ring-primary/20",
           )}
         >
           <img
             src="/images/sprint-capacity-bucket.svg"
             alt="Team capacity bucket"
-            className="pointer-events-none absolute top-1 left-1/2 h-[88%] w-[92%] -translate-x-1/2 object-contain opacity-30"
+            className="pointer-events-none absolute top-1 left-1/2 h-[88%] w-[98%] -translate-x-1/2 object-contain opacity-30"
           />
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] transition-all"
             style={{ height: `${fillPct}%`, background: bucketFill }}
           />
-          <div className="relative z-20 flex h-full max-h-full flex-col-reverse gap-2 overflow-y-auto">
+          <div className="relative z-20 flex min-h-0 flex-1 flex-col-reverse gap-2.5 overflow-y-auto pb-2 pt-1">
             {cards.length === 0 ? (
               <p className="rounded-md border border-dashed border-slate-200 bg-white/75 p-3 text-center text-[12px] font-medium text-slate-500">
                 Drop epic here
               </p>
             ) : (
-              cards.map((card) => <TeamEpicCard key={card.epicId} {...card} onOpenEpic={onOpenEpic} />)
+              cards.map((card) => (
+                <TeamEpicCard
+                  key={card.epicId}
+                  {...card}
+                  onOpenEpic={onOpenEpic}
+                  onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+                />
+              ))
             )}
           </div>
         </div>
-        <div className="flex min-h-[21rem] flex-col items-center rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
+        <div className="flex h-[24rem] flex-col items-center rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">{Math.round(utilization)}%</p>

@@ -393,6 +393,7 @@ type TimelineGridProps = {
   monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
   monthTeamCapacityBoard?: { capacities: Record<string, number> };
   onMonthTeamCapacityChange?: (teamId: string, days: number) => void;
+  onMonthTeamCapacityEpicRemove?: (epicId: string) => void;
   /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
   /** Delivery team id when sprint story board was opened from a team lane (breadcrumbs + left epic list). */
@@ -545,6 +546,7 @@ export function TimelineGrid({
   monthTeamBoardByKey = {},
   monthTeamCapacityBoard = { capacities: {} },
   onMonthTeamCapacityChange,
+  onMonthTeamCapacityEpicRemove,
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
   onSprintStoryBoardTeamChange,
@@ -1447,6 +1449,7 @@ export function TimelineGrid({
                   capacityBoard={monthTeamCapacityBoard}
                   onCapacityChange={(teamId, days) => onMonthTeamCapacityChange?.(teamId, days)}
                   onOpenEpic={onOpenEpic}
+                  onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
