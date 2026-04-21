@@ -510,7 +510,7 @@ function MonthEpicDropArea({
     <div
       ref={setNodeRef}
       className={cn(
-        "relative isolate min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100/90 p-3 transition ring-1 sm:p-4",
+        "relative isolate flex min-h-0 flex-1 flex-col rounded-xl border border-slate-100/90 transition ring-1",
         isOver
           ? "border-primary/35 bg-primary/10 ring-primary/20"
           : "bg-slate-50/35 ring-slate-100/80",
@@ -1466,39 +1466,51 @@ export function TimelineGrid({
                   </div>
                 </div>
                 <MonthEpicDropArea month={activeMonth}>
-                  <GanttTodayMarker leftPercent={monthEpicGanttTodayLeft} showBadge badgePlacement="above" />
-                  <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
-                  {monthEpicGanttRows.length === 0 ? (
-                    <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
-                      No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag one from the left panel into the drop
-                      area below.
+                  <div
+                    className={cn(
+                      "flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4",
+                      monthEpicGanttTodayLeft != null && "pt-5 sm:pt-6",
+                    )}
+                  >
+                    <div className="relative flex min-h-0 w-full flex-1 flex-col">
+                      <GanttTodayMarker leftPercent={monthEpicGanttTodayLeft} showBadge badgePlacement="above" />
+                      <div
+                        id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                        className="relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto"
+                      >
+                        {monthEpicGanttRows.length === 0 ? (
+                          <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
+                            No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag one from the left panel into the
+                            drop area below.
+                          </div>
+                        ) : (
+                          monthEpicGanttRows.map(({ epic, initiative }, rowIndex) => {
+                            const isInitiativeEmphasis =
+                              ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
+                            const isEpicEmphasis =
+                              ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === epic.id;
+                            const emphasize = isInitiativeEmphasis || isEpicEmphasis;
+                            const emphasizeTick = isEpicEmphasis
+                              ? ganttEpicEmphasis!.tick
+                              : isInitiativeEmphasis
+                                ? ganttEmphasis!.tick
+                                : 0;
+                            return (
+                              <EpicGanttLaneRow
+                                key={epic.id}
+                                epic={epic}
+                                initiative={initiative}
+                                gridStyle={epicMonthGridStyle}
+                                onOpenEpic={onOpenEpic}
+                                ganttLaneSortIndex={rowIndex}
+                                emphasize={emphasize}
+                                emphasizeTick={emphasizeTick}
+                              />
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    monthEpicGanttRows.map(({ epic, initiative }, rowIndex) => {
-                      const isInitiativeEmphasis =
-                        ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
-                      const isEpicEmphasis =
-                        ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === epic.id;
-                      const emphasize = isInitiativeEmphasis || isEpicEmphasis;
-                      const emphasizeTick = isEpicEmphasis
-                        ? ganttEpicEmphasis!.tick
-                        : isInitiativeEmphasis
-                          ? ganttEmphasis!.tick
-                          : 0;
-                      return (
-                        <EpicGanttLaneRow
-                          key={epic.id}
-                          epic={epic}
-                          initiative={initiative}
-                          gridStyle={epicMonthGridStyle}
-                          onOpenEpic={onOpenEpic}
-                          ganttLaneSortIndex={rowIndex}
-                          emphasize={emphasize}
-                          emphasizeTick={emphasizeTick}
-                        />
-                      );
-                    })
-                  )}
                   </div>
                 </MonthEpicDropArea>
                 </div>
