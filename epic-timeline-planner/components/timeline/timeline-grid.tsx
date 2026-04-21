@@ -260,13 +260,19 @@ function sprintLabelQuarterOrMonth(globalSprint: number): string {
   return `Sprint ${globalSprint}`;
 }
 
-/** Vertical “today” marker; full height of its positioned parent. */
-function GanttTodayLine({
+type TodayBadgePlacement = "above" | "inside";
+
+/** “Today” badge + vertical dashed marker, always aligned (same parent coordinate space). */
+function GanttTodayMarker({
   leftPercent,
+  showBadge = true,
+  badgePlacement = "above",
   /** Bleed top/bottom past the track box so the dash meets the outer padded panel border (parent uses py-3 sm:py-4). */
   bleedToPaddedPanel,
 }: {
   leftPercent: number | null;
+  showBadge?: boolean;
+  badgePlacement?: TodayBadgePlacement;
   bleedToPaddedPanel?: boolean;
 }) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
@@ -279,6 +285,18 @@ function GanttTodayLine({
       )}
       aria-hidden
     >
+      {showBadge ? (
+        <div
+          className={cn(
+            "absolute left-0 rounded border border-emerald-200/80 bg-white/95 px-1 py-px text-[10px] font-semibold leading-none text-emerald-800 shadow-sm ring-1 ring-emerald-100/60",
+            badgePlacement === "inside" ? "top-1.5" : "-top-5 sm:-top-6",
+          )}
+          style={{ left: `${x}%`, transform: "translateX(-50%)" }}
+        >
+          Today
+        </div>
+      ) : null}
+
       {/* Downward arrow at line start (same x as dashed line). */}
       <div
         className="absolute top-0 z-[1] h-0 w-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500 drop-shadow-[0_0_6px_rgba(16,185,129,0.4)]"
@@ -290,32 +308,6 @@ function GanttTodayLine({
       />
     </div>
   );
-}
-
-/** Single Today pill under sprint/month headers; centered on the same horizontal % as `GanttTodayLine` (translateX(-50%)). */
-function GanttTodayBadgeBelowSprints({ leftPercent }: { leftPercent: number | null }) {
-  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
-  const x = Math.min(100, Math.max(0, leftPercent));
-  return (
-    <div
-      className="pointer-events-none relative z-[60] mb-0 mt-0 h-4 w-full shrink-0 overflow-visible"
-      aria-hidden
-    >
-      <div
-        className="absolute top-0 rounded border border-emerald-200/80 bg-white/95 px-1 py-px text-[10px] font-semibold leading-none text-emerald-800 shadow-sm ring-1 ring-emerald-100/60"
-        style={{
-          left: `${x}%`,
-          transform: "translateX(-50%)",
-        }}
-      >
-        Today
-      </div>
-    </div>
-  );
-}
-
-function GanttTodayOverlay({ leftPercent }: { leftPercent: number | null }) {
-  return <GanttTodayLine leftPercent={leftPercent} />;
 }
 
 function EpicGanttLaneRow({
@@ -1424,12 +1416,11 @@ export function TimelineGrid({
                         </span>
                       </button>
                     </div>
-                    <GanttTodayBadgeBelowSprints leftPercent={monthEpicGanttTodayLeft} />
                     <MonthDropCell month={activeMonth} />
                   </div>
                 </div>
                 <MonthEpicDropArea month={activeMonth}>
-                  <GanttTodayLine leftPercent={monthEpicGanttTodayLeft} />
+                  <GanttTodayMarker leftPercent={monthEpicGanttTodayLeft} showBadge badgePlacement="above" />
                   <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
                   {monthEpicGanttRows.length === 0 ? (
                     <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
@@ -1605,14 +1596,13 @@ export function TimelineGrid({
                             </span>
                           </button>
                         </div>
-                        <GanttTodayBadgeBelowSprints leftPercent={todayLeftPercentInSingleMonth(currentYear, month)} />
                         <MonthDropCell month={month} />
                       </div>
                     ))}
                   </div>
                 </div>
                 <div className="relative w-full">
-                  <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+                  <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
                   {visibleScheduledLanes.length === 0 ? (
                     <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
                       Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled
@@ -1729,7 +1719,6 @@ export function TimelineGrid({
                             {sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
                           </button>
                         </div>
-                        <GanttTodayBadgeBelowSprints leftPercent={todayLeftPercentInSingleMonth(currentYear, month)} />
                         <MonthDropCell month={month} />
                       </div>
                     ))}
@@ -1767,7 +1756,7 @@ export function TimelineGrid({
           )
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : (
           <div className="relative w-full">
-            <GanttTodayOverlay leftPercent={roadmapLaneTodayLeft} />
+            <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
             <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
             {scheduledInitiatives.map((initiative, rowIndex) => {
               const sm = initiative.startMonth ?? 1;
