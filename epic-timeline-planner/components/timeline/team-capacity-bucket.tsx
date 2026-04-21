@@ -162,10 +162,11 @@ export function TeamCapacityBucket({
             isOver && "border-primary ring-2 ring-primary/20",
           )}
         >
+          {/* Bucket SVG hidden for now — remove `hidden` from className to show again */}
           <img
             src="/images/sprint-capacity-bucket.svg"
             alt="Team capacity bucket"
-            className="pointer-events-none absolute top-1 left-1/2 h-[88%] w-[98%] -translate-x-1/2 object-contain opacity-30"
+            className="pointer-events-none absolute top-1 left-1/2 hidden h-[88%] w-[98%] -translate-x-1/2 object-contain opacity-30"
           />
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] transition-all"
