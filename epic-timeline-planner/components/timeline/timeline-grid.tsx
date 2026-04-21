@@ -1394,7 +1394,7 @@ export function TimelineGrid({
                       !activeMonthQuarterLabel && "bg-gradient-to-br from-slate-50/90 via-white to-white",
                     )}
                   >
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid min-w-0 grid-cols-2 gap-2.5">
                       <button
                         type="button"
                         title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))} board (${sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})`}
@@ -1402,26 +1402,31 @@ export function TimelineGrid({
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 1), null);
                         }}
-                        className="flex min-h-[5.5rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2 py-2.5 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
-                        <span className="text-[11px] font-semibold leading-tight text-slate-800">
-                          {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))}
-                        </span>
-                        <span className="text-[10px] font-medium leading-tight text-slate-500">
-                          ({sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})
-                        </span>
-                        <span className="mt-1 grid w-full grid-cols-3 gap-1">
-                          {sprintDaysWithWeekday(currentYear, activeMonth, 1).map((dayLabel) => {
-                            return (
-                              <span
-                                key={dayLabel.key}
-                                className="flex min-h-[1.45rem] items-center justify-center rounded bg-white/80 px-0.5 text-[9px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80"
-                              >
-                                {dayLabel.weekday} {dayLabel.dayMonth}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-[13px] font-semibold leading-tight text-slate-800">
+                            {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))}
+                          </span>
+                          <span className="max-w-full px-0.5 text-[12px] font-medium leading-tight text-slate-500">
+                            ({sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})
+                          </span>
+                        </div>
+                        <div className="flex w-full min-w-0 gap-1">
+                          {sprintDaysWithWeekday(currentYear, activeMonth, 1).map((dayLabel) => (
+                            <span
+                              key={dayLabel.key}
+                              className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
+                            >
+                              <span className="w-full truncate text-[11px] font-semibold leading-none text-slate-700">
+                                {dayLabel.weekday}
                               </span>
-                            );
-                          })}
-                        </span>
+                              <span className="w-full truncate text-[10px] font-medium leading-none text-slate-500 tabular-nums">
+                                {dayLabel.dayMonth}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       </button>
                       <button
                         type="button"
@@ -1430,26 +1435,31 @@ export function TimelineGrid({
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 2), null);
                         }}
-                        className="flex min-h-[5.5rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2 py-2.5 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
-                        <span className="text-[11px] font-semibold leading-tight text-slate-800">
-                          {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))}
-                        </span>
-                        <span className="text-[10px] font-medium leading-tight text-slate-500">
-                          ({sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})
-                        </span>
-                        <span className="mt-1 grid w-full grid-cols-3 gap-1">
-                          {sprintDaysWithWeekday(currentYear, activeMonth, 2).map((dayLabel) => {
-                            return (
-                              <span
-                                key={dayLabel.key}
-                                className="flex min-h-[1.45rem] items-center justify-center rounded bg-white/80 px-0.5 text-[9px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80"
-                              >
-                                {dayLabel.weekday} {dayLabel.dayMonth}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-[13px] font-semibold leading-tight text-slate-800">
+                            {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))}
+                          </span>
+                          <span className="max-w-full px-0.5 text-[12px] font-medium leading-tight text-slate-500">
+                            ({sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})
+                          </span>
+                        </div>
+                        <div className="flex w-full min-w-0 gap-1">
+                          {sprintDaysWithWeekday(currentYear, activeMonth, 2).map((dayLabel) => (
+                            <span
+                              key={dayLabel.key}
+                              className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
+                            >
+                              <span className="w-full truncate text-[11px] font-semibold leading-none text-slate-700">
+                                {dayLabel.weekday}
                               </span>
-                            );
-                          })}
-                        </span>
+                              <span className="w-full truncate text-[10px] font-medium leading-none text-slate-500 tabular-nums">
+                                {dayLabel.dayMonth}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       </button>
                     </div>
                     <MonthDropCell month={activeMonth} />
@@ -1616,10 +1626,10 @@ export function TimelineGrid({
                             }}
                             className="flex min-h-[3.35rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                           >
-                            <span className="text-[12px] font-semibold leading-tight text-slate-800">
+                            <span className="text-[13px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
                             </span>
-                            <span className="text-[11px] font-medium leading-tight text-slate-500">
+                            <span className="text-[12px] font-medium leading-tight text-slate-500">
                               ({sprintDateWeekdayRangeText(currentYear, month, 1)})
                             </span>
                           </button>
@@ -1633,10 +1643,10 @@ export function TimelineGrid({
                             }}
                             className="flex min-h-[3.35rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                           >
-                            <span className="text-[12px] font-semibold leading-tight text-slate-800">
+                            <span className="text-[13px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
                             </span>
-                            <span className="text-[11px] font-medium leading-tight text-slate-500">
+                            <span className="text-[12px] font-medium leading-tight text-slate-500">
                               ({sprintDateWeekdayRangeText(currentYear, month, 2)})
                             </span>
                           </button>
