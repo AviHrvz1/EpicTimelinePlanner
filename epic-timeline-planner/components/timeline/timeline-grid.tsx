@@ -903,7 +903,7 @@ export function TimelineGrid({
         onMonthPlanTabChange?.("epic-gantt");
       },
     });
-    if (activeSprint != null && monthPlanTab === "sprint-kanban") {
+    if (activeSprint != null) {
       breadcrumbItems.push({
         label: `Sprint ${activeSprint}`,
         onClick: () => {
@@ -912,31 +912,25 @@ export function TimelineGrid({
         },
         currentTone: "sprint",
       });
-    } else if (activeSprint != null && monthPlanTab === "sprint-capacity") {
-      breadcrumbItems.push({
-        label: `Sprint ${activeSprint} · capacity`,
-        onClick: () => {
-          onMonthPlanTabChange?.("sprint-capacity");
-        },
-        currentTone: "sprint",
-      });
-    } else if (activeSprint != null && monthPlanTab === "sprint-status") {
-      breadcrumbItems.push({
-        label: `Sprint ${activeSprint} · insights`,
-        onClick: () => {
-          onMonthPlanTabChange?.("sprint-status");
-          setActiveSprintTab("status");
-        },
-        currentTone: "sprint",
-      });
+      if (monthPlanTab === "sprint-capacity") {
+        breadcrumbItems.push({
+          label: "Capacity",
+          onClick: null,
+        });
+      } else if (monthPlanTab === "sprint-status") {
+        breadcrumbItems.push({
+          label: "Insights",
+          onClick: null,
+        });
+      }
     } else if (monthPlanTab === "month-status") {
       breadcrumbItems.push({
-        label: "Month insights",
+        label: "Insights",
         onClick: null,
       });
     } else if (monthPlanTab === "month-capacity") {
       breadcrumbItems.push({
-        label: "Month capacity",
+        label: "Capacity",
         onClick: null,
       });
     }
@@ -950,16 +944,19 @@ export function TimelineGrid({
     });
     breadcrumbItems.push({
       label: focusedQuarter.label,
-      onClick: () => onFocusedQuarterChange(focusedQuarter.label),
+      onClick: () => {
+        setQuarterViewTab("gantt");
+        onFocusedQuarterChange(focusedQuarter.label);
+      },
     });
     if (quarterViewTab === "status") {
       breadcrumbItems.push({
-        label: "Quarter status",
+        label: "Insights",
         onClick: null,
       });
     } else if (quarterViewTab === "capacity") {
       breadcrumbItems.push({
-        label: "Quarter capacity",
+        label: "Capacity",
         onClick: null,
       });
     }
