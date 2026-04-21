@@ -12,6 +12,7 @@ const createEpicSchema = z.object({
   assignee: z.string().trim().max(120).optional().nullable(),
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
   team: epicTeamIdSchema.optional().nullable(),
+  originalEstimateDays: z.number().int().min(0).max(5000).optional().nullable(),
 });
 
 function quarterFromMonth(month: number | null | undefined): number | null {
@@ -53,6 +54,7 @@ export async function POST(
       assignee: parsed.data.assignee || null,
       color: parsed.data.color ?? "#3B82F6",
       team: parsed.data.team ?? null,
+      originalEstimateDays: parsed.data.originalEstimateDays ?? null,
       initiativeId: id,
       planYear: initiative.year,
       planQuarter: quarterFromMonth(initiative.startMonth),

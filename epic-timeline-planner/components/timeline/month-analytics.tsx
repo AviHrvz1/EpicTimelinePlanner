@@ -17,6 +17,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -85,8 +86,13 @@ function collectMonthStories(
   return rows;
 }
 
-function collectMonthEpics(initiatives: InitiativeItem[], month: number, filterEpicTeamId?: string | null) {
-  const rows: Array<{ id: string; title: string; userStories: UserStoryItem[] }> = [];
+function collectMonthEpics(
+  initiatives: InitiativeItem[],
+  month: number,
+  planYear: number,
+  filterEpicTeamId?: string | null,
+) {
+  const rows: EpicItem[] = [];
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
@@ -96,9 +102,10 @@ function collectMonthEpics(initiatives: InitiativeItem[], month: number, filterE
         continue;
       }
       rows.push({
-        id: epic.id,
-        title: epic.title,
-        userStories: epic.userStories ?? [],
+        ...epic,
+        planStartMonth: month,
+        planEndMonth: month,
+        planYear,
       });
     }
   }
@@ -107,6 +114,7 @@ function collectMonthEpics(initiatives: InitiativeItem[], month: number, filterE
 
 export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId = null }: MonthAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
+  const [estimateSource, setEstimateSource] = useState<EstimateSource>("auto");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
 
   const analytics = useMemo(() => {
@@ -260,31 +268,19 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const topSlice = pieData[0] ?? null;
   const monthEpics = useMemo(
-    () => collectMonthEpics(initiatives, month, filterEpicTeamId),
-    [initiatives, month, filterEpicTeamId],
+    () => collectMonthEpics(initiatives, month, planYear, filterEpicTeamId),
+    [initiatives, month, planYear, filterEpicTeamId],
   );
   const monthBurndown = useMemo(
     () =>
       buildQuarterBurndownSeries(
-        monthEpics.map((epic) => ({
-          id: epic.id,
-          title: epic.title,
-          userStories: epic.userStories,
-          color: "#2563eb",
-          assignee: "",
-          team: null,
-          planSprint: null,
-          planYear,
-          planQuarter: null,
-          planStartMonth: month,
-          planEndMonth: month,
-        })) as EpicItem[],
+        monthEpics.map((epic) => epicForBurndown(epic, estimateSource)),
         "individual",
         metric,
         [month],
         planYear,
       ),
-    [monthEpics, metric, month, planYear],
+    [monthEpics, metric, month, planYear, estimateSource],
   );
 
   const chartLegendColumnClass = `space-y-1.5 md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-0`;
@@ -379,25 +375,37 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
-          <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-            <button
-              type="button"
-              onClick={() => setMetric("daysLeft")}
-              className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
-                metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
-              }`}
+          <div className="flex items-center gap-2">
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setMetric("daysLeft")}
+                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
+                  metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
+                }`}
+              >
+                Days left
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetric("storyCount")}
+                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
+                  metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
+                }`}
+              >
+                Stories
+              </button>
+            </div>
+            <select
+              value={estimateSource}
+              onChange={(e) => setEstimateSource(e.target.value as EstimateSource)}
+              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
+              aria-label="Burndown estimate source"
             >
-              Days left
-            </button>
-            <button
-              type="button"
-              onClick={() => setMetric("storyCount")}
-              className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
-                metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
-              }`}
-            >
-              Stories
-            </button>
+              <option value="auto">Auto (stories, else original)</option>
+              <option value="original">Original estimate</option>
+              <option value="stories">Σ Stories only</option>
+            </select>
           </div>
         </div>
         <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">

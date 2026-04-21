@@ -16,6 +16,7 @@ const updateEpicSchema = z.object({
   planStartMonth: z.number().int().min(1).max(12).optional().nullable(),
   planEndMonth: z.number().int().min(1).max(12).optional().nullable(),
   team: epicTeamIdSchema.optional().nullable(),
+  originalEstimateDays: z.number().int().min(0).max(5000).optional().nullable(),
 });
 
 function quarterFromMonth(month: number | null | undefined): number | null {
@@ -57,6 +58,7 @@ export async function PATCH(
         planStartMonth: true,
         planEndMonth: true,
         team: true,
+        originalEstimateDays: true,
       },
     });
     if (!existing) {
@@ -80,6 +82,8 @@ export async function PATCH(
     if (patch.planEndMonth !== undefined && patch.planEndMonth !== existing.planEndMonth)
       changes.push("Quarter plan end month updated");
     if (patch.team !== undefined && patch.team !== existing.team) changes.push("Delivery team updated");
+    if (patch.originalEstimateDays !== undefined && patch.originalEstimateDays !== existing.originalEstimateDays)
+      changes.push("Original estimate updated");
 
     const nextInitiativeId = patch.initiativeId ?? existing.initiativeId;
     const initiative = await db.initiative.findUnique({
@@ -103,6 +107,7 @@ export async function PATCH(
         ...(patch.planStartMonth !== undefined ? { planStartMonth: patch.planStartMonth } : {}),
         ...(patch.planEndMonth !== undefined ? { planEndMonth: patch.planEndMonth } : {}),
         ...(patch.team !== undefined ? { team: patch.team } : {}),
+        ...(patch.originalEstimateDays !== undefined ? { originalEstimateDays: patch.originalEstimateDays } : {}),
         planYear: nextPlanYear,
         planQuarter: nextPlanQuarter,
         ...(changes.length > 0

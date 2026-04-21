@@ -70,6 +70,8 @@ export type EpicItem = {
   icon: string;
   description: string | null;
   assignee: string | null;
+  /** Planner-entered estimate used before story estimates are available. */
+  originalEstimateDays: number | null;
   color: string;
   initiativeId: string;
   planYear: number | null;

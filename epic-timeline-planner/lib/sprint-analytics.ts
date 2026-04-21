@@ -1,4 +1,5 @@
 import { StoryStatus } from "@/lib/generated/prisma";
+import { epicOriginalEstimateDays, epicStoryEstimateDaysSum, type EstimateSource } from "@/lib/epic-estimates";
 import { storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 
@@ -69,6 +70,7 @@ function collectMonthStories(
   initiatives: InitiativeItem[],
   month: number,
   filterEpicTeamId?: string | null,
+  estimateSource: EstimateSource = "auto",
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
   for (const initiative of initiatives) {
@@ -76,7 +78,22 @@ function collectMonthStories(
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
       if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
-      rows.push(...(epic.userStories ?? []));
+      const stories = epic.userStories ?? [];
+      const storySum = epicStoryEstimateDaysSum(epic);
+      const useOriginal = estimateSource === "original" || (estimateSource === "auto" && storySum <= 0);
+      const perStoryOriginal = stories.length > 0 ? epicOriginalEstimateDays(epic) / stories.length : 0;
+      rows.push(
+        ...stories.map((story) => {
+          if (estimateSource === "stories") return story;
+          if (!useOriginal) return story;
+          const nextEst = Math.max(0, Math.round(perStoryOriginal));
+          return {
+            ...story,
+            estimatedDays: nextEst,
+            daysLeft: nextEst,
+          };
+        }),
+      );
     }
   }
   return rows;
@@ -524,8 +541,9 @@ export function buildSprintAnalytics(
   /** Calendar year for the roadmap view (must match the timeline year, not arbitrary initiative order). */
   planYear: number,
   filterEpicTeamId?: string | null,
+  estimateSource: EstimateSource = "auto",
 ): SprintAnalyticsData {
-  const stories = collectMonthStories(initiatives, month, filterEpicTeamId);
+  const stories = collectMonthStories(initiatives, month, filterEpicTeamId, estimateSource);
   const workload = buildWorkloadByAssignee(stories, month, yearSprint);
   const capacity = buildWorkloadCapacityByAssignee(stories, month, yearSprint, planYear);
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);

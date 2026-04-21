@@ -30,6 +30,7 @@ type EpicFormDialogProps = {
     color: string;
     initiativeId: string;
     team: string | null;
+    originalEstimateDays: number | null;
   }) => Promise<void> | void;
   onDelete?: (epicId: string) => Promise<void> | void;
   storyRefById?: Record<string, string>;
@@ -61,6 +62,9 @@ export function EpicFormDialog({
   const [description, setDescription] = useState(epic?.description ?? "");
   const [assignee, setAssignee] = useState(epic?.assignee ?? "");
   const [color, setColor] = useState(epic?.color ?? "#3B82F6");
+  const [originalEstimateDaysDraft, setOriginalEstimateDaysDraft] = useState(
+    epic?.originalEstimateDays == null ? "" : String(epic.originalEstimateDays),
+  );
   const [initiativeId, setInitiativeId] = useState(epic?.initiativeId ?? lockInitiativeId ?? "");
   const [teamDraft, setTeamDraft] = useState("");
   const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
@@ -78,6 +82,7 @@ export function EpicFormDialog({
     setDescription(epic?.description ?? "");
     setAssignee(epic?.assignee ?? "");
     setColor(epic?.color ?? "#3B82F6");
+    setOriginalEstimateDaysDraft(epic?.originalEstimateDays == null ? "" : String(epic.originalEstimateDays));
     setInitiativeId(epic?.initiativeId ?? lockInitiativeId ?? initiatives[0]?.id ?? "");
     setForceTeamFieldEdit(false);
     setTeamDraft(
@@ -148,6 +153,10 @@ export function EpicFormDialog({
         color,
         initiativeId,
         team: teamDraft === "" ? null : teamDraft,
+        originalEstimateDays:
+          originalEstimateDaysDraft.trim() === ""
+            ? null
+            : Math.max(0, Math.round(Number(originalEstimateDaysDraft) || 0)),
       });
       onClose();
     } finally {
@@ -307,6 +316,22 @@ export function EpicFormDialog({
               value={color}
               onChange={(event) => setColor(event.target.value)}
             />
+          </label>
+          <label className="space-y-1">
+            <p className="text-sm font-medium text-slate-600">Original estimate (days)</p>
+            <input
+              type="number"
+              min={0}
+              max={5000}
+              step={1}
+              className="w-full rounded-md border bg-background px-3 py-2 text-base"
+              placeholder="e.g. 40"
+              value={originalEstimateDaysDraft}
+              onChange={(event) => setOriginalEstimateDaysDraft(event.target.value)}
+            />
+            <p className="text-[12px] leading-snug text-slate-500">
+              Used for capacity and burndown when story estimates are missing.
+            </p>
           </label>
           {showTeamSelect ? (
             <label className="space-y-1 md:col-span-2">

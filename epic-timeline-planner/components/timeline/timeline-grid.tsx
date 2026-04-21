@@ -10,15 +10,16 @@ import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
 import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
+import { QuarterTeamCapacityBoard } from "@/components/timeline/quarter-team-capacity";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
+import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import {
   MONTH_TEAM_COLUMNS,
   isKnownEpicTeamId,
-  monthTeamLabelForId,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem } from "@/lib/types";
@@ -392,7 +393,10 @@ type TimelineGridProps = {
   /** Persisted team queues keyed by `year:month` (see monthTeamBoardStorageKey). */
   monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
   monthTeamCapacityBoard?: { capacities: Record<string, number> };
+  monthTeamCapacityByKey?: Record<string, MonthTeamCapacityBoardModel>;
   onMonthTeamCapacityChange?: (teamId: string, days: number) => void;
+  /** Quarter view: set per-team quarter total; parent splits across months in the quarter. */
+  onQuarterTeamCapacityChange?: (quarterLabel: string, teamId: string, quarterTotalDays: number) => void;
   onMonthTeamCapacityEpicRemove?: (epicId: string) => void;
   /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
@@ -545,7 +549,9 @@ export function TimelineGrid({
   onMonthPlanTabChange,
   monthTeamBoardByKey = {},
   monthTeamCapacityBoard = { capacities: {} },
+  monthTeamCapacityByKey = {},
   onMonthTeamCapacityChange,
+  onQuarterTeamCapacityChange,
   onMonthTeamCapacityEpicRemove,
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
@@ -559,7 +565,7 @@ export function TimelineGrid({
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
-  const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status">("gantt");
+  const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status" | "capacity">("gantt");
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
   const lastSprintModeSyncKeyRef = useRef<string | null>(null);
@@ -936,6 +942,11 @@ export function TimelineGrid({
         label: "Month insights",
         onClick: null,
       });
+    } else if (monthPlanTab === "month-capacity") {
+      breadcrumbItems.push({
+        label: "Month capacity",
+        onClick: null,
+      });
     }
   } else if (focusedQuarter) {
     breadcrumbItems.push({
@@ -949,6 +960,17 @@ export function TimelineGrid({
       label: focusedQuarter.label,
       onClick: () => onFocusedQuarterChange(focusedQuarter.label),
     });
+    if (quarterViewTab === "status") {
+      breadcrumbItems.push({
+        label: "Quarter status",
+        onClick: null,
+      });
+    } else if (quarterViewTab === "capacity") {
+      breadcrumbItems.push({
+        label: "Quarter capacity",
+        onClick: null,
+      });
+    }
   }
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
@@ -1261,6 +1283,23 @@ export function TimelineGrid({
               <span className="sr-only">Quarter status</span>
               <span role="tooltip" className={railNavTooltipClass}>
                 Quarter status
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("capacity")}
+              title="Quarter capacity"
+              className={cn(
+                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                quarterViewTab === "capacity"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <Thermometer className="size-4" aria-hidden />
+              <span className="sr-only">Quarter capacity</span>
+              <span role="tooltip" className={railNavTooltipClass}>
+                Quarter capacity
               </span>
             </button>
           </div>
@@ -1706,6 +1745,19 @@ export function TimelineGrid({
       <div className={cn("space-y-2", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
         {activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
           <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
+        ) : activeMonth ? null : focusedQuarter && quarterViewTab === "capacity" ? (
+          <QuarterTeamCapacityBoard
+            initiatives={initiatives}
+            quarterLabel={focusedQuarter.label}
+            quarterMonths={focusedQuarter.months}
+            year={currentYear}
+            monthTeamCapacityByKey={monthTeamCapacityByKey}
+            onCapacityChange={(teamId, quarterTotalDays) =>
+              onQuarterTeamCapacityChange?.(focusedQuarter.label, teamId, quarterTotalDays)
+            }
+            onOpenEpic={onOpenEpic}
+            onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
+          />
         ) : visibleScheduledLanes.length === 0 ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : (
             <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">

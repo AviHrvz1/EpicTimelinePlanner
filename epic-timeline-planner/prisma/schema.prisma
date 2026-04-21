@@ -67,6 +67,7 @@ model Epic {
   icon         String        @default("📁")
   description  String?
   assignee     String?
+  originalEstimateDays Int?
   color        String        @default("#3B82F6")
   initiativeId String
   planYear       Int?

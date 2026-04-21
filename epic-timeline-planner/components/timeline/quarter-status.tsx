@@ -10,6 +10,7 @@ import {
   collectQuarterEpics,
   type QuarterBurndownMetric,
 } from "@/lib/quarter-analytics";
+import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,7 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
   const epicRows = useMemo(() => collectQuarterEpics(initiatives, quarterMonths), [initiatives, quarterMonths]);
   const [aggregateMode, setAggregateMode] = useState(true);
   const [metric, setMetric] = useState<QuarterBurndownMetric>("daysLeft");
+  const [estimateSource, setEstimateSource] = useState<EstimateSource>("auto");
   const [selectedEpicIds, setSelectedEpicIds] = useState<string[]>([]);
 
   const selectedRows = useMemo(() => {
@@ -45,7 +47,7 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const topSlice = pieData[0] ?? null;
   const burndownData = buildQuarterBurndownSeries(
-    selectedRows.map((r) => r.epic),
+    selectedRows.map((r) => epicForBurndown(r.epic, estimateSource)),
     aggregateMode ? "aggregate" : "individual",
     metric,
     quarterMonths,
@@ -117,27 +119,39 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
             <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
-          <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
-            <button
-              type="button"
-              onClick={() => setMetric("daysLeft")}
-              className={cn(
-                "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
-                metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-              )}
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setMetric("daysLeft")}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                  metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
+                )}
+              >
+                Days left
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetric("storyCount")}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                  metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
+                )}
+              >
+                Stories
+              </button>
+            </div>
+            <select
+              value={estimateSource}
+              onChange={(e) => setEstimateSource(e.target.value as EstimateSource)}
+              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
+              aria-label="Burndown estimate source"
             >
-              Days left
-            </button>
-            <button
-              type="button"
-              onClick={() => setMetric("storyCount")}
-              className={cn(
-                "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
-                metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-              )}
-            >
-              Stories
-            </button>
+              <option value="auto">Auto (stories, else original)</option>
+              <option value="original">Original estimate</option>
+              <option value="stories">Σ Stories only</option>
+            </select>
           </div>
         </div>
         <div className="h-60">

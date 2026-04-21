@@ -58,6 +58,7 @@ const epicPlanCollision: CollisionDetection = (args) => {
   const isMonthTeamSlotDrop = (id: string) => parseMonthTeamSlotDropId(id) != null;
   const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
   const isMonthTeamCapacityDrop = (id: string) => id.startsWith("month-capacity:");
+  const isQuarterTeamCapacityDrop = (id: string) => id.startsWith("quarter-capacity:");
   const isDropTarget = (id: string) =>
     id.startsWith("epic-plan:") ||
     id.startsWith("month:") ||
@@ -67,7 +68,8 @@ const epicPlanCollision: CollisionDetection = (args) => {
     isEpicKanbanDrop(id) ||
     isMonthTeamSlotDrop(id) ||
     isSprintCapacityDrop(id) ||
-    isMonthTeamCapacityDrop(id);
+    isMonthTeamCapacityDrop(id) ||
+    isQuarterTeamCapacityDrop(id);
   /** Thin insert zones (month epic list + team queue) should win when the pointer is over them. */
   const isNarrowSlot = (id: string) => parseEpicBacklogSlotDropId(id) != null || isMonthTeamSlotDrop(id);
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));

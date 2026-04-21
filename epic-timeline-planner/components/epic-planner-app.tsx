@@ -30,6 +30,7 @@ import {
   parseMonthEpicKanbanDropId,
   parseMonthTeamSlotDropId,
   parseMonthTeamCapacityBucketDropId,
+  parseQuarterTeamCapacityBucketDropId,
   parseSprintCapacityBucketDropId,
 } from "@/lib/epic-dnd-ids";
 import {
@@ -46,6 +47,8 @@ import {
   sanitizeMonthTeamBoardPersisted,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
+import { collectQuarterEpics } from "@/lib/quarter-analytics";
+import { splitQuarterTotalAcrossMonths } from "@/lib/quarter-team-capacity";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -727,6 +730,26 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     [activeMonthTeamCapacityKey],
   );
 
+  const updateQuarterTeamCapacity = useCallback((quarterLabel: string, teamId: string, quarterTotalDays: number) => {
+    const q = QUARTERS.find((item) => item.label === quarterLabel);
+    if (!q) return;
+    const parts = splitQuarterTotalAcrossMonths(quarterTotalDays, q.months.length, 200);
+    setMonthTeamCapacityByKey((prev) => {
+      let next = { ...prev };
+      for (let i = 0; i < q.months.length; i++) {
+        const mk = monthTeamCapacityBoardKey(selectedYear, q.months[i]!);
+        const cur = next[mk] ?? emptyMonthTeamCapacityBoard();
+        next = {
+          ...next,
+          [mk]: {
+            capacities: { ...cur.capacities, [teamId]: parts[i]! },
+          },
+        };
+      }
+      return next;
+    });
+  }, [selectedYear]);
+
   const removeEpicFromMonthTeamCapacity = useCallback(
     async (epicId: string) => {
       if (activeTimelineMonth == null) return;
@@ -919,6 +942,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     color: string;
     initiativeId: string;
     team: string | null;
+    originalEstimateDays: number | null;
   }) {
     const request = editingEpic
       ? fetch(`/api/epics/${editingEpic.id}`, {
@@ -1420,6 +1444,56 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ team: teamCapacityDrop.teamId }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          toast.success("Team updated");
+        } catch {
+          await refresh();
+          toast.error("Failed to save team");
+        }
+        return;
+      }
+
+      const quarterCapacityDrop = parseQuarterTeamCapacityBucketDropId(overId);
+      if (quarterCapacityDrop) {
+        if (!MONTH_TEAM_IDS.includes(quarterCapacityDrop.teamId)) return;
+        if (quarterCapacityDrop.year !== selectedYear) {
+          toast.message("Switch the roadmap year to update that quarter’s team capacity.");
+          return;
+        }
+        const qDef = QUARTERS.find((item) => item.label === quarterCapacityDrop.quarterLabel);
+        if (!qDef) return;
+        const inQuarter = collectQuarterEpics(initiatives, qDef.months).some((c) => c.epic.id === epicId);
+        if (!inQuarter) {
+          toast.message("Only epics tied to this quarter can be assigned to team capacity.");
+          return;
+        }
+        const targetMonth =
+          qDef.months.find((m) => collectMonthEpicsForTeamBoard(initiatives, m).some((c) => c.epic.id === epicId)) ??
+          qDef.months[0]!;
+        const queueKey = monthTeamBoardStorageKey(quarterCapacityDrop.year, targetMonth);
+        setMonthTeamBoardByKey((prev) => {
+          const cur = prev[queueKey] ?? { queues: {} };
+          return {
+            ...prev,
+            [queueKey]: applyEpicTeamQueueMove(cur, epicId, quarterCapacityDrop.teamId, Number.MAX_SAFE_INTEGER),
+          };
+        });
+        flushSync(() => {
+          setInitiatives((prev) =>
+            prev.map((i) => ({
+              ...i,
+              epics: (i.epics ?? []).map((e) =>
+                e.id === epicId ? { ...e, team: quarterCapacityDrop.teamId } : e,
+              ),
+            })),
+          );
+        });
+        try {
+          const response = await fetch(`/api/epics/${epicId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: quarterCapacityDrop.teamId }),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           toast.success("Team updated");
@@ -2153,7 +2227,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onMonthPlanTabChange={handleMonthPlanTabChange}
                 monthTeamBoardByKey={monthTeamBoardByKey}
                 monthTeamCapacityBoard={activeMonthTeamCapacityBoard}
+                monthTeamCapacityByKey={monthTeamCapacityByKey}
                 onMonthTeamCapacityChange={updateMonthTeamCapacity}
+                onQuarterTeamCapacityChange={updateQuarterTeamCapacity}
                 onMonthTeamCapacityEpicRemove={removeEpicFromMonthTeamCapacity}
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}

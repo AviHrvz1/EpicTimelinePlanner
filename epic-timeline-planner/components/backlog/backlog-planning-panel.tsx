@@ -47,6 +47,7 @@ type BacklogColumnKey =
   | "sprint"
   | "assignee"
   | "estDays"
+  | "epicOriginalEst"
   | "daysLeft"
   | "progress";
 type GroupLevel = "year" | "quarter" | "month" | "sprint";
@@ -63,6 +64,7 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "sprint",
   "assignee",
   "estDays",
+  "epicOriginalEst",
   "daysLeft",
   "progress",
 ];
@@ -76,6 +78,7 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   sprint: "Sprint",
   assignee: "Assignee",
   estDays: "Est Days",
+  epicOriginalEst: "Epic Original Est",
   daysLeft: "Days Left",
   progress: "Progress",
 };
@@ -89,6 +92,7 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   sprint: 90,
   assignee: 120,
   estDays: 90,
+  epicOriginalEst: 110,
   daysLeft: 90,
   progress: 180,
 };
@@ -102,6 +106,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   sprint: 148,
   assignee: 190,
   estDays: 128,
+  epicOriginalEst: 150,
   daysLeft: 128,
   progress: 220,
 };
@@ -119,6 +124,7 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   sprint: true,
   assignee: true,
   estDays: true,
+  epicOriginalEst: true,
   daysLeft: true,
   progress: true,
 };
@@ -131,6 +137,7 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "sprint",
   "assignee",
   "estDays",
+  "epicOriginalEst",
   "daysLeft",
   "progress",
 ]);
@@ -788,6 +795,7 @@ export function BacklogPlanningPanel({
             epicId: epic.id,
             epicTitle: epic.title,
             epicAssignee: epic.assignee?.trim() || "Unassigned",
+            epicOriginalEstimateDays: epic.originalEstimateDays ?? 0,
             monthNum,
             monthLabelValue: monthLabel(monthNum),
             quarterLabelValue: quarterFromMonth(monthNum),
@@ -812,6 +820,7 @@ export function BacklogPlanningPanel({
           epicId: epic.id,
           epicTitle: epic.title,
           epicAssignee: epic.assignee?.trim() || "Unassigned",
+          epicOriginalEstimateDays: epic.originalEstimateDays ?? 0,
           epicMonthNum: epic.planStartMonth ?? initiative.startMonth ?? null,
           epicMonthLabelValue: monthLabel(epic.planStartMonth ?? initiative.startMonth),
           epicQuarterLabelValue: quarterFromMonth(epic.planStartMonth ?? initiative.startMonth),
@@ -1155,6 +1164,7 @@ export function BacklogPlanningPanel({
               )}
             </span>
               ),
+              epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
               daysLeft: (
             <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "daysLeft" ? (
@@ -1246,6 +1256,7 @@ export function BacklogPlanningPanel({
             sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
             assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
             estDays: <span className="text-center text-[16px] text-slate-400">-</span>,
+            epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
             daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
             progress: <span className="text-center text-[16px] text-slate-400">-</span>,
           })}
@@ -1297,6 +1308,7 @@ export function BacklogPlanningPanel({
       const folderId = `${epicPath}/epic:${epicId}`;
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(epicRows);
+      const originalEstimate = epicRows[0]?.epicOriginalEstimateDays ?? 0;
 
       return (
         <div key={folderId}>
@@ -1412,6 +1424,11 @@ export function BacklogPlanningPanel({
               estDays: (
                 <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                   Σ {estimated}d
+                </span>
+              ),
+              epicOriginalEst: (
+                <span className="text-center text-[16px] font-medium text-slate-600">
+                  {originalEstimate}d
                 </span>
               ),
               daysLeft: (
@@ -1565,6 +1582,7 @@ export function BacklogPlanningPanel({
                   Σ {estimated}d
                 </span>
               ),
+              epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
               daysLeft: (
                 <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                   Σ {left}d
@@ -1774,6 +1792,7 @@ export function BacklogPlanningPanel({
                     Σ 0d
                   </span>
                 ),
+                epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
                 daysLeft: (
                   <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                     Σ 0d
@@ -1873,6 +1892,11 @@ export function BacklogPlanningPanel({
                         estDays: (
                           <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                             Σ 0d
+                          </span>
+                        ),
+                        epicOriginalEst: (
+                          <span className="text-center text-[16px] font-medium text-slate-600">
+                            {epic.epicOriginalEstimateDays}d
                           </span>
                         ),
                         daysLeft: (
@@ -2122,8 +2146,10 @@ export function BacklogPlanningPanel({
           showTableHeaderRow?: unknown;
         };
         if (parsed.columnVisibility && typeof parsed.columnVisibility === "object") {
-          setColumnVisibility((prev) => {
-            const next = { ...prev };
+          setColumnVisibility(() => {
+            // Start from defaults so new columns (e.g. epic original est) stay visible unless
+            // the user explicitly saved them off — old saved layouts omit unknown keys.
+            const next = { ...DEFAULT_BACKLOG_COLUMN_VISIBILITY };
             for (const key of BACKLOG_COLUMN_ORDER) {
               const v = parsed.columnVisibility![key];
               if (typeof v === "boolean") next[key] = v;
@@ -2719,6 +2745,7 @@ export function BacklogPlanningPanel({
                           Σ {initiativeDays.estimated}d
                         </span>
                       ),
+                      epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
                       daysLeft: (
                         <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                           Σ {initiativeDays.left}d
@@ -3009,6 +3036,11 @@ export function BacklogPlanningPanel({
                                 estDays: (
                                   <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                                     Σ {epicDays.estimated}d
+                                  </span>
+                                ),
+                                epicOriginalEst: (
+                                  <span className="text-center text-[16px] font-medium text-slate-600">
+                                    {epic.originalEstimateDays ?? 0}d
                                   </span>
                                 ),
                                 daysLeft: (
@@ -3390,6 +3422,7 @@ export function BacklogPlanningPanel({
                                       )}
                                     </span>
                                       ),
+                                      epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
                                       daysLeft: (
                                     <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "daysLeft" ? (

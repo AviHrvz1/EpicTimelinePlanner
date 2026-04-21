@@ -3,38 +3,52 @@
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
 import { epicEffectiveEstimateDays } from "@/lib/epic-estimates";
-import { monthTeamCapacityBucketDropId } from "@/lib/epic-dnd-ids";
-import { MONTH_TEAM_COLUMNS, collectMonthEpicsForTeamBoard } from "@/lib/month-team-board";
+import { collectQuarterEpics } from "@/lib/quarter-analytics";
+import { quarterTeamCapacityBucketDropId } from "@/lib/epic-dnd-ids";
+import { monthTeamCapacityBoardKey, type MonthTeamCapacityBoard } from "@/lib/month-team-capacity";
+import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
-import { type MonthTeamCapacityBoard } from "@/lib/month-team-capacity";
 
-type MonthTeamCapacityProps = {
+type QuarterTeamCapacityBoardProps = {
   initiatives: InitiativeItem[];
+  quarterLabel: string;
+  quarterMonths: readonly number[];
   year: number;
-  month: number;
-  capacityBoard: MonthTeamCapacityBoard;
-  onCapacityChange: (teamId: string, days: number) => void;
+  monthTeamCapacityByKey: Record<string, MonthTeamCapacityBoard>;
+  onCapacityChange: (teamId: string, quarterTotalDays: number) => void;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
 };
 
-export function MonthTeamCapacityBoard({
+export function QuarterTeamCapacityBoard({
   initiatives,
+  quarterLabel,
+  quarterMonths,
   year,
-  month,
-  capacityBoard,
+  monthTeamCapacityByKey,
   onCapacityChange,
   onOpenEpic,
   onRemoveEpicFromCapacity,
-}: MonthTeamCapacityProps) {
-  const rows = collectMonthEpicsForTeamBoard(initiatives, month);
-  const gradientKey = `month-${year}-${month}`.replace(/[^a-zA-Z0-9]+/g, "-");
+}: QuarterTeamCapacityBoardProps) {
+  const rows = collectQuarterEpics(initiatives, quarterMonths);
+  const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
+  const gaugeScaleMax = 60 * quarterMonths.length;
+  const capacityInputMax = 200 * quarterMonths.length;
+
+  const teamQuarterCapacity = new Map<string, number>();
+  for (const team of MONTH_TEAM_COLUMNS) {
+    let total = 0;
+    for (const month of quarterMonths) {
+      const key = monthTeamCapacityBoardKey(year, month);
+      total += Number(monthTeamCapacityByKey[key]?.capacities?.[team.id] ?? 20);
+    }
+    teamQuarterCapacity.set(team.id, total);
+  }
 
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
   for (const team of MONTH_TEAM_COLUMNS) {
-    const cap = Number(capacityBoard.capacities[team.id] ?? 20);
-    teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
+    teamTotalCapacity += Number(teamQuarterCapacity.get(team.id) ?? 0);
     const cards = rows.filter((row) => row.epic.team === team.id);
     teamTotalAssigned += cards.reduce(
       (sum, row) => sum + epicEffectiveEstimateDays(row.epic, "auto"),
@@ -61,18 +75,19 @@ export function MonthTeamCapacityBoard({
               initiativeTitle: row.initiative.title,
               loadDays: epicEffectiveEstimateDays(row.epic, "auto"),
             }));
+          const capacity = Number(teamQuarterCapacity.get(team.id) ?? 0);
           return (
             <TeamCapacityBucket
               key={team.id}
               team={team}
               cards={cards}
-              capacity={Number(capacityBoard.capacities[team.id] ?? 20)}
+              capacity={capacity}
               onCapacityChange={(days) => onCapacityChange(team.id, days)}
               onOpenEpic={onOpenEpic}
               onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
-              dropId={monthTeamCapacityBucketDropId(year, month, team.id)}
-              gaugeScaleMax={60}
-              capacityInputMax={200}
+              dropId={quarterTeamCapacityBucketDropId(year, quarterLabel, team.id)}
+              gaugeScaleMax={gaugeScaleMax}
+              capacityInputMax={capacityInputMax}
             />
           );
         })}
