@@ -172,3 +172,25 @@ export function parseMonthTeamSlotDropId(
   if (!teamId) return null;
   return { year, month, teamId, index };
 }
+
+const SPRINT_CAPACITY_BUCKET_PREFIX = "capacity:";
+
+/** Sprint capacity drop target by sprint + team + member. */
+export function sprintCapacityBucketDropId(yearSprint: number, teamKey: string, member: string): string {
+  return `${SPRINT_CAPACITY_BUCKET_PREFIX}${yearSprint}:${encodeURIComponent(teamKey)}:${encodeURIComponent(member)}`;
+}
+
+export function parseSprintCapacityBucketDropId(
+  overId: string,
+): { yearSprint: number; teamKey: string; member: string } | null {
+  if (!overId.startsWith(SPRINT_CAPACITY_BUCKET_PREFIX)) return null;
+  const rest = overId.slice(SPRINT_CAPACITY_BUCKET_PREFIX.length);
+  const parts = rest.split(":");
+  if (parts.length !== 3) return null;
+  const yearSprint = Number(parts[0]);
+  if (!Number.isFinite(yearSprint) || yearSprint < 1 || yearSprint > 24) return null;
+  const teamKey = decodeURIComponent(parts[1] ?? "");
+  const member = decodeURIComponent(parts[2] ?? "");
+  if (!teamKey || !member) return null;
+  return { yearSprint, teamKey, member };
+}

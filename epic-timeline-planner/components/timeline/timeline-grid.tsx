@@ -10,6 +10,7 @@ import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
+import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
@@ -322,7 +323,13 @@ function EpicGanttLaneRow({
   );
 }
 
-export type MonthPlanSurfaceTab = "epic-gantt" | "team-queue" | "month-status" | "sprint-kanban" | "sprint-status";
+export type MonthPlanSurfaceTab =
+  | "epic-gantt"
+  | "team-queue"
+  | "month-status"
+  | "sprint-kanban"
+  | "sprint-status"
+  | "sprint-capacity";
 
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
@@ -351,6 +358,10 @@ type TimelineGridProps = {
   sprintStoryBoardTeamId?: string | null;
   /** Sprint view team filter selector (null = all teams). */
   onSprintStoryBoardTeamChange?: (teamId: string | null) => void;
+  /** Sprint capacity buckets state for the active sprint + team filter. */
+  sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> };
+  onSprintCapacityChange?: (member: string, days: number) => void;
+  onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
@@ -493,6 +504,9 @@ export function TimelineGrid({
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
   onSprintStoryBoardTeamChange,
+  sprintCapacityBoard,
+  onSprintCapacityChange,
+  onSprintCapacityStoryEstimateChange,
 }: TimelineGridProps) {
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
@@ -840,6 +854,12 @@ export function TimelineGrid({
         onClick: null,
         currentTone: "sprint",
       });
+    } else if (activeSprint != null && monthPlanTab === "sprint-capacity") {
+      breadcrumbItems.push({
+        label: `Sprint ${activeSprint} · capacity`,
+        onClick: null,
+        currentTone: "sprint",
+      });
     } else if (activeSprint != null && monthPlanTab === "sprint-status") {
       breadcrumbItems.push({
         label: `Sprint ${activeSprint} · insights`,
@@ -870,7 +890,10 @@ export function TimelineGrid({
   const hasContextSideMenu = activeMonth != null || focusedQuarter != null;
   const showSprintTeamPicker =
     activeMonth != null &&
-    (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "month-status");
+    (monthPlanTab === "sprint-kanban" ||
+      monthPlanTab === "sprint-status" ||
+      monthPlanTab === "sprint-capacity" ||
+      monthPlanTab === "month-status");
 
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto overflow-x-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
@@ -991,7 +1014,10 @@ export function TimelineGrid({
       {activeMonth ? (
         <div className="relative z-30 h-0">
           <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
-            {activeSprint != null && (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status") ? (
+            {activeSprint != null &&
+            (monthPlanTab === "sprint-kanban" ||
+              monthPlanTab === "sprint-status" ||
+              monthPlanTab === "sprint-capacity") ? (
               <>
                 <button
                   type="button"
@@ -1026,6 +1052,22 @@ export function TimelineGrid({
                 >
                   <BarChart3 className="size-4" aria-hidden />
                   <span className="sr-only">Sprint insights</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMonthPlanTabChange?.("sprint-capacity");
+                  }}
+                  title="Sprint capacity"
+                  className={cn(
+                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                    monthPlanTab === "sprint-capacity"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  <BarChart3 className="size-4" aria-hidden />
+                  <span className="sr-only">Sprint capacity</span>
                 </button>
               </>
             ) : (
@@ -1266,6 +1308,21 @@ export function TimelineGrid({
                   month={activeMonth}
                   yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  onOpenStory={onOpenStory ?? (() => {})}
+                />
+              </div>
+            ) : monthPlanTab === "sprint-capacity" ? (
+              <div className="flex-1 p-3 sm:p-5">
+                <SprintCapacityBoard
+                  initiatives={initiatives}
+                  month={activeMonth}
+                  yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+                  selectedTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}
+                  onCapacityChange={(member, days) => onSprintCapacityChange?.(member, days)}
+                  onEstimateChange={(storyId, estimatedDays) =>
+                    onSprintCapacityStoryEstimateChange?.(storyId, estimatedDays)
+                  }
                   onOpenStory={onOpenStory ?? (() => {})}
                 />
               </div>

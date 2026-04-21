@@ -56,6 +56,7 @@ const epicPlanCollision: CollisionDetection = (args) => {
   const isKanbanTodoDrop = (id: string) => /^kanban:(\d+):todo$/.test(id);
   const isEpicKanbanDrop = (id: string) => /^epic-kanban:\d+:(todo|inProgress|done|approved)$/.test(id);
   const isMonthTeamSlotDrop = (id: string) => parseMonthTeamSlotDropId(id) != null;
+  const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
   const isDropTarget = (id: string) =>
     id.startsWith("epic-plan:") ||
     id.startsWith("month:") ||
@@ -63,7 +64,8 @@ const epicPlanCollision: CollisionDetection = (args) => {
     parseEpicBacklogSlotDropId(id) != null ||
     isKanbanTodoDrop(id) ||
     isEpicKanbanDrop(id) ||
-    isMonthTeamSlotDrop(id);
+    isMonthTeamSlotDrop(id) ||
+    isSprintCapacityDrop(id);
   /** Thin insert zones (month epic list + team queue) should win when the pointer is over them. */
   const isNarrowSlot = (id: string) => parseEpicBacklogSlotDropId(id) != null || isMonthTeamSlotDrop(id);
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
@@ -91,12 +93,14 @@ const storyKanbanCollision: CollisionDetection = (args) => {
   if (unscheduleRect.length > 0) return unscheduleRect;
 
   const isKanban = (id: string) => id.startsWith("kanban:");
-  const pointerHits = pointerWithin(args).filter((c) => isKanban(String(c.id)));
+  const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
+  const isStoryDropTarget = (id: string) => isKanban(id) || isSprintCapacityDrop(id);
+  const pointerHits = pointerWithin(args).filter((c) => isStoryDropTarget(String(c.id)));
   if (pointerHits.length > 0) return pointerHits;
-  const rectHits = rectIntersection(args).filter((c) => isKanban(String(c.id)));
+  const rectHits = rectIntersection(args).filter((c) => isStoryDropTarget(String(c.id)));
   if (rectHits.length > 0) return rectHits;
   return closestCenter(args).filter(
-    (c) => isKanban(String(c.id)) || String(c.id) === unscheduleId,
+    (c) => isStoryDropTarget(String(c.id)) || String(c.id) === unscheduleId,
   );
 };
 
