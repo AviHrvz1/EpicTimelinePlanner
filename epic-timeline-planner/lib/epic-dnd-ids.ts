@@ -174,6 +174,7 @@ export function parseMonthTeamSlotDropId(
 }
 
 const SPRINT_CAPACITY_BUCKET_PREFIX = "capacity:";
+const MONTH_TEAM_CAPACITY_BUCKET_PREFIX = "month-capacity:";
 
 /** Sprint capacity drop target by sprint + team + member. */
 export function sprintCapacityBucketDropId(yearSprint: number, teamKey: string, member: string): string {
@@ -193,4 +194,24 @@ export function parseSprintCapacityBucketDropId(
   const member = decodeURIComponent(parts[2] ?? "");
   if (!teamKey || !member) return null;
   return { yearSprint, teamKey, member };
+}
+
+export function monthTeamCapacityBucketDropId(year: number, month: number, teamId: string): string {
+  return `${MONTH_TEAM_CAPACITY_BUCKET_PREFIX}${year}:${month}:${encodeURIComponent(teamId)}`;
+}
+
+export function parseMonthTeamCapacityBucketDropId(
+  overId: string,
+): { year: number; month: number; teamId: string } | null {
+  if (!overId.startsWith(MONTH_TEAM_CAPACITY_BUCKET_PREFIX)) return null;
+  const rest = overId.slice(MONTH_TEAM_CAPACITY_BUCKET_PREFIX.length);
+  const parts = rest.split(":");
+  if (parts.length !== 3) return null;
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const teamId = decodeURIComponent(parts[2] ?? "");
+  if (!Number.isFinite(year)) return null;
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null;
+  if (!teamId) return null;
+  return { year, month, teamId };
 }

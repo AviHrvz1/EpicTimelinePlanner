@@ -41,12 +41,12 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex h-full min-h-[36rem] flex-col rounded-xl border p-2 transition",
+        "flex h-full min-h-0 flex-col rounded-xl border p-2 transition",
         tone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
     >
-      <div className="mb-2 flex items-center justify-center gap-1.5 border-b border-black/5 pb-2 text-slate-600">
+      <div className="mb-2 flex items-center justify-center gap-1.5 pb-1 text-slate-600">
         <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
         <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
       </div>

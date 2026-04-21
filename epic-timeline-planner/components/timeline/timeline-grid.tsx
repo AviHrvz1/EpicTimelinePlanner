@@ -8,6 +8,7 @@ import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timelin
 import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
+import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
 import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
@@ -172,6 +173,43 @@ function sprintDateRangeText(year: number, month: number, lane: 1 | 2): string {
   return `${formatDayMonthYearShort(start)}-${formatDayMonthYearShort(end)}`;
 }
 
+function sprintDateWeekdayRangeText(year: number, month: number, lane: 1 | 2): string {
+  const lastDay = new Date(year, month, 0).getDate();
+  const startDay = lane === 1 ? 1 : 16;
+  const endDay = lane === 1 ? 15 : lastDay;
+  const start = new Date(year, month - 1, startDay);
+  const end = new Date(year, month - 1, endDay);
+  const wd = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short" });
+  return `${wd(start)} ${formatDayMonthYearShort(start)} - ${wd(end)} ${formatDayMonthYearShort(end)}`;
+}
+
+function sprintDaysWithWeekday(year: number, month: number, lane: 1 | 2): Array<{
+  key: string;
+  weekday: string;
+  dayMonth: string;
+}> {
+  const lastDay = new Date(year, month, 0).getDate();
+  const startDay = lane === 1 ? 1 : 16;
+  const endDay = lane === 1 ? 15 : lastDay;
+  const out: Array<{ key: string; weekday: string; dayMonth: string }> = [];
+  for (let day = startDay; day <= endDay; day += 1) {
+    const date = new Date(year, month - 1, day);
+    const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+    out.push({
+      key: date.toISOString(),
+      weekday,
+      dayMonth: formatDayMonthShort(date),
+    });
+  }
+  return out;
+}
+
+function formatDayMonthShort(date: Date): string {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}`;
+}
+
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
@@ -326,6 +364,7 @@ function EpicGanttLaneRow({
 export type MonthPlanSurfaceTab =
   | "epic-gantt"
   | "team-queue"
+  | "month-capacity"
   | "month-status"
   | "sprint-kanban"
   | "sprint-status"
@@ -352,6 +391,8 @@ type TimelineGridProps = {
   onMonthPlanTabChange?: (tab: MonthPlanSurfaceTab) => void;
   /** Persisted team queues keyed by `year:month` (see monthTeamBoardStorageKey). */
   monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
+  monthTeamCapacityBoard?: { capacities: Record<string, number> };
+  onMonthTeamCapacityChange?: (teamId: string, days: number) => void;
   /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
   /** Delivery team id when sprint story board was opened from a team lane (breadcrumbs + left epic list). */
@@ -502,6 +543,8 @@ export function TimelineGrid({
   monthPlanTab = "epic-gantt",
   onMonthPlanTabChange,
   monthTeamBoardByKey = {},
+  monthTeamCapacityBoard = { capacities: {} },
+  onMonthTeamCapacityChange,
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
   onSprintStoryBoardTeamChange,
@@ -916,9 +959,15 @@ export function TimelineGrid({
       monthPlanTab === "sprint-status" ||
       monthPlanTab === "sprint-capacity" ||
       monthPlanTab === "month-status");
+  const suppressMainVerticalScroll = activeMonth != null && monthPlanTab === "sprint-kanban";
 
   return (
-    <div className="h-full min-h-0 w-full overflow-y-auto overflow-x-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+    <div
+      className={cn(
+        "h-full min-h-0 w-full overflow-x-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5",
+        suppressMainVerticalScroll ? "overflow-y-hidden" : "overflow-y-auto",
+      )}
+    >
       <div
         className={cn(
           "mb-4 flex items-center gap-3",
@@ -1139,6 +1188,23 @@ export function TimelineGrid({
                 </button>
                 <button
                   type="button"
+                  onClick={() => onMonthPlanTabChange?.("month-capacity")}
+                  title="Team capacity"
+                  className={cn(
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    monthPlanTab === "month-capacity"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  <Thermometer className="size-4" aria-hidden />
+                  <span className="sr-only">Team capacity</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Team capacity
+                  </span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => onMonthPlanTabChange?.("month-status")}
                   title="Month insights"
                   className={cn(
@@ -1239,6 +1305,7 @@ export function TimelineGrid({
               "flex flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
               monthPlanTab === "epic-gantt" ||
               monthPlanTab === "team-queue" ||
+              monthPlanTab === "month-capacity" ||
               monthPlanTab === "sprint-kanban"
                 ? "min-h-[56rem]"
                 : "min-h-0",
@@ -1261,34 +1328,58 @@ export function TimelineGrid({
                     <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
-                        title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))} board (${sprintDateRangeText(currentYear, activeMonth, 1)})`}
+                        title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))} board (${sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})`}
                         onClick={() => {
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 1), null);
                         }}
-                        className="flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex min-h-[5.5rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
                         <span className="text-[11px] font-semibold leading-tight text-slate-800">
                           {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))}
                         </span>
                         <span className="text-[10px] font-medium leading-tight text-slate-500">
-                          ({sprintDateRangeText(currentYear, activeMonth, 1)})
+                          ({sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})
+                        </span>
+                        <span className="mt-1 grid w-full grid-cols-3 gap-1">
+                          {sprintDaysWithWeekday(currentYear, activeMonth, 1).map((dayLabel) => {
+                            return (
+                              <span
+                                key={dayLabel.key}
+                                className="flex min-h-[1.45rem] items-center justify-center rounded bg-white/80 px-0.5 text-[9px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80"
+                              >
+                                {dayLabel.weekday} {dayLabel.dayMonth}
+                              </span>
+                            );
+                          })}
                         </span>
                       </button>
                       <button
                         type="button"
-                        title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))} board (${sprintDateRangeText(currentYear, activeMonth, 2)})`}
+                        title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))} board (${sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})`}
                         onClick={() => {
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 2), null);
                         }}
-                        className="flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex min-h-[5.5rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
                         <span className="text-[11px] font-semibold leading-tight text-slate-800">
                           {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))}
                         </span>
                         <span className="text-[10px] font-medium leading-tight text-slate-500">
-                          ({sprintDateRangeText(currentYear, activeMonth, 2)})
+                          ({sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})
+                        </span>
+                        <span className="mt-1 grid w-full grid-cols-3 gap-1">
+                          {sprintDaysWithWeekday(currentYear, activeMonth, 2).map((dayLabel) => {
+                            return (
+                              <span
+                                key={dayLabel.key}
+                                className="flex min-h-[1.45rem] items-center justify-center rounded bg-white/80 px-0.5 text-[9px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80"
+                              >
+                                {dayLabel.weekday} {dayLabel.dayMonth}
+                              </span>
+                            );
+                          })}
                         </span>
                       </button>
                     </div>
@@ -1345,6 +1436,17 @@ export function TimelineGrid({
                   onOpenSprintKanban={(yearSprint, teamId) => {
                     onEnterSprintStoryBoard?.(yearSprint, teamId);
                   }}
+                />
+              </div>
+            ) : monthPlanTab === "month-capacity" ? (
+              <div className="flex-1 p-3 sm:p-5">
+                <MonthTeamCapacityBoard
+                  initiatives={initiatives}
+                  year={currentYear}
+                  month={activeMonth}
+                  capacityBoard={monthTeamCapacityBoard}
+                  onCapacityChange={(teamId, days) => onMonthTeamCapacityChange?.(teamId, days)}
+                  onOpenEpic={onOpenEpic}
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
@@ -1428,7 +1530,7 @@ export function TimelineGrid({
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateRangeText(currentYear, month, 1)})`}
+                            title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateWeekdayRangeText(currentYear, month, 1)})`}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
@@ -1440,12 +1542,12 @@ export function TimelineGrid({
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
                             </span>
                             <span className="text-[10px] font-medium leading-tight text-slate-500">
-                              ({sprintDateRangeText(currentYear, month, 1)})
+                              ({sprintDateWeekdayRangeText(currentYear, month, 1)})
                             </span>
                           </button>
                           <button
                             type="button"
-                            title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))} (${sprintDateRangeText(currentYear, month, 2)})`}
+                            title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))} (${sprintDateWeekdayRangeText(currentYear, month, 2)})`}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
                               setFocusedMonth(month);
@@ -1457,7 +1559,7 @@ export function TimelineGrid({
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
                             </span>
                             <span className="text-[10px] font-medium leading-tight text-slate-500">
-                              ({sprintDateRangeText(currentYear, month, 2)})
+                              ({sprintDateWeekdayRangeText(currentYear, month, 2)})
                             </span>
                           </button>
                         </div>

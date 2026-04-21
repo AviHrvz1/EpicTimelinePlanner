@@ -29,6 +29,7 @@ import {
   parseStoryIdFromDraggable,
   parseMonthEpicKanbanDropId,
   parseMonthTeamSlotDropId,
+  parseMonthTeamCapacityBucketDropId,
   parseSprintCapacityBucketDropId,
 } from "@/lib/epic-dnd-ids";
 import {
@@ -56,6 +57,13 @@ import {
   sprintCapacityBoardKey,
   type SprintCapacityBoard,
 } from "@/lib/sprint-capacity";
+import {
+  MONTH_TEAM_CAPACITY_STORAGE_KEY,
+  emptyMonthTeamCapacityBoard,
+  monthTeamCapacityBoardKey,
+  sanitizeMonthTeamCapacityBoard,
+  type MonthTeamCapacityBoard,
+} from "@/lib/month-team-capacity";
 import {
   clampYearSprint,
   globalSprintFromMonthLane,
@@ -286,6 +294,22 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       return {};
     }
   });
+  const [monthTeamCapacityByKey, setMonthTeamCapacityByKey] = useState<Record<string, MonthTeamCapacityBoard>>(
+    () => {
+      if (typeof window === "undefined") return {};
+      try {
+        const raw = localStorage.getItem(MONTH_TEAM_CAPACITY_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as Record<string, MonthTeamCapacityBoard>;
+        if (!parsed || typeof parsed !== "object") return {};
+        return Object.fromEntries(
+          Object.entries(parsed).map(([k, board]) => [k, sanitizeMonthTeamCapacityBoard(board)]),
+        );
+      } catch {
+        return {};
+      }
+    },
+  );
   const [topMode, setTopMode] = useState<"roadmap" | "backlog">("roadmap");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
@@ -497,6 +521,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (hydratedMonth != null) {
       if (planTabRaw === "team") {
         hydratedMonthPlanTab = "team-queue";
+      } else if (planTabRaw === "teamCapacity") {
+        hydratedMonthPlanTab = "month-capacity";
       } else if (planTabRaw === "epic") {
         hydratedMonthPlanTab = "epic-gantt";
       } else if (planTabRaw === "monthInsights") {
@@ -590,6 +616,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   }, [sprintCapacityByKey]);
 
   useEffect(() => {
+    try {
+      const cleaned = Object.fromEntries(
+        Object.entries(monthTeamCapacityByKey).map(([k, v]) => [k, sanitizeMonthTeamCapacityBoard(v)]),
+      );
+      localStorage.setItem(MONTH_TEAM_CAPACITY_STORAGE_KEY, JSON.stringify(cleaned));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [monthTeamCapacityByKey]);
+
+  useEffect(() => {
     if (!isUrlHydrated) return;
     const params = new URLSearchParams();
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
@@ -597,6 +634,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       params.set("month", String(activeTimelineMonth));
       if (activeMonthPlanTab === "epic-gantt") params.set("planTab", "epic");
       else if (activeMonthPlanTab === "team-queue") params.set("planTab", "team");
+      else if (activeMonthPlanTab === "month-capacity") params.set("planTab", "teamCapacity");
       else if (activeMonthPlanTab === "month-status") params.set("planTab", "monthInsights");
       else if (activeMonthPlanTab === "sprint-kanban") params.set("planTab", "sprintBoard");
       else if (activeMonthPlanTab === "sprint-capacity") params.set("planTab", "sprintCapacity");
@@ -657,10 +695,36 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setActiveMonthPlanTab(tab);
     if (tab === "sprint-kanban") setActiveSprintTab("kanban");
     if (tab === "sprint-status") setActiveSprintTab("status");
-    if (tab === "epic-gantt" || tab === "team-queue" || tab === "month-status") {
+    if (tab === "epic-gantt" || tab === "team-queue" || tab === "month-capacity" || tab === "month-status") {
       setSprintStoryBoardTeamId(null);
     }
   }, []);
+
+  const activeMonthTeamCapacityKey = useMemo(() => {
+    if (activeTimelineMonth == null) return null;
+    return monthTeamCapacityBoardKey(selectedYear, activeTimelineMonth);
+  }, [selectedYear, activeTimelineMonth]);
+
+  const activeMonthTeamCapacityBoard = useMemo(() => {
+    if (!activeMonthTeamCapacityKey) return emptyMonthTeamCapacityBoard();
+    return monthTeamCapacityByKey[activeMonthTeamCapacityKey] ?? emptyMonthTeamCapacityBoard();
+  }, [activeMonthTeamCapacityKey, monthTeamCapacityByKey]);
+
+  const updateMonthTeamCapacity = useCallback(
+    (teamId: string, days: number) => {
+      if (!activeMonthTeamCapacityKey) return;
+      setMonthTeamCapacityByKey((prev) => {
+        const cur = prev[activeMonthTeamCapacityKey] ?? emptyMonthTeamCapacityBoard();
+        return {
+          ...prev,
+          [activeMonthTeamCapacityKey]: {
+            capacities: { ...cur.capacities, [teamId]: Math.max(0, Math.min(200, Number(days) || 0)) },
+          },
+        };
+      });
+    },
+    [activeMonthTeamCapacityKey],
+  );
 
   const openSprintStoryBoard = useCallback((yearSprint: number, teamId: string | null) => {
     const clamped = clampYearSprint(yearSprint);
@@ -1285,6 +1349,53 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         return;
       }
       console.log("[gantt-drop] epic branch", { epicId, overId });
+
+      const teamCapacityDrop = parseMonthTeamCapacityBucketDropId(overId);
+      if (teamCapacityDrop) {
+        if (!MONTH_TEAM_IDS.includes(teamCapacityDrop.teamId)) return;
+        if (teamCapacityDrop.year !== selectedYear) {
+          toast.message("Switch the roadmap year to update that month’s team capacity.");
+          return;
+        }
+        const inMonth = collectMonthEpicsForTeamBoard(initiatives, teamCapacityDrop.month).some(
+          (c) => c.epic.id === epicId,
+        );
+        if (!inMonth) {
+          toast.message("Only epics tied to this month can be assigned to team capacity.");
+          return;
+        }
+        const key = monthTeamBoardStorageKey(teamCapacityDrop.year, teamCapacityDrop.month);
+        setMonthTeamBoardByKey((prev) => {
+          const cur = prev[key] ?? { queues: {} };
+          return {
+            ...prev,
+            [key]: applyEpicTeamQueueMove(cur, epicId, teamCapacityDrop.teamId, Number.MAX_SAFE_INTEGER),
+          };
+        });
+        flushSync(() => {
+          setInitiatives((prev) =>
+            prev.map((i) => ({
+              ...i,
+              epics: (i.epics ?? []).map((e) =>
+                e.id === epicId ? { ...e, team: teamCapacityDrop.teamId } : e,
+              ),
+            })),
+          );
+        });
+        try {
+          const response = await fetch(`/api/epics/${epicId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: teamCapacityDrop.teamId }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          toast.success("Team updated");
+        } catch {
+          await refresh();
+          toast.error("Failed to save team");
+        }
+        return;
+      }
 
       const teamSlot = parseMonthTeamSlotDropId(overId);
       if (teamSlot) {
@@ -1917,7 +2028,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                             i.startMonth <= m &&
                             i.endMonth >= m,
                         );
-                  setEditingEpicInitiativeId(firstForMonth?.id ?? null);
+                  if (!firstForMonth) {
+                    if (m != null) {
+                      toast.message("No scheduled initiative for this month. Plan an initiative in this month first.");
+                    } else {
+                      toast.message("Create an initiative first, then add an epic.");
+                    }
+                    return;
+                  }
+                  setEditingEpicInitiativeId(firstForMonth.id);
                   setEpicDialogOpen(true);
                 }}
                 onEditInitiative={(initiative) => {
@@ -2000,6 +2119,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 monthPlanTab={activeMonthPlanTab}
                 onMonthPlanTabChange={handleMonthPlanTabChange}
                 monthTeamBoardByKey={monthTeamBoardByKey}
+                monthTeamCapacityBoard={activeMonthTeamCapacityBoard}
+                onMonthTeamCapacityChange={updateMonthTeamCapacity}
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}

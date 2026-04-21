@@ -21,6 +21,15 @@ type SprintCapacityBoardProps = {
   onOpenStory: (storyId: string) => void;
 };
 
+const MEMBER_PANEL_TONES = [
+  "border-sky-200/90 bg-gradient-to-b from-sky-50/90 to-white",
+  "border-violet-200/90 bg-gradient-to-b from-violet-50/90 to-white",
+  "border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white",
+  "border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-white",
+  "border-rose-200/90 bg-gradient-to-b from-rose-50/90 to-white",
+  "border-cyan-200/90 bg-gradient-to-b from-cyan-50/90 to-white",
+];
+
 function CapacityStoryCard({
   card,
   onEstimateChange,
@@ -101,6 +110,7 @@ function CapacityBucket({
   capacity,
   assignedTotal,
   cards,
+  toneClass,
   onCapacityChange,
   onEstimateChange,
   onUnscheduleStory,
@@ -112,6 +122,7 @@ function CapacityBucket({
   capacity: number;
   assignedTotal: number;
   cards: Array<{ id: string; title: string; epicTitle: string; estimatedDays: number }>;
+  toneClass: string;
   onCapacityChange: (days: number) => void;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
@@ -134,7 +145,7 @@ function CapacityBucket({
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
 
   return (
-    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100/70">
+    <section className={cn("min-w-0 rounded-2xl border bg-white p-3 shadow-sm ring-1 ring-slate-100/70", toneClass)}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="truncate text-[15px] font-bold text-slate-800">
           <span className="mr-1.5 inline-flex align-middle text-slate-600">
@@ -161,14 +172,14 @@ function CapacityBucket({
           ref={setNodeRef}
           style={{ ["--bucket-row-h" as string]: "calc((23rem - 1rem) / 10)" }}
           className={cn(
-            "relative min-h-[23rem] overflow-hidden rounded-2xl border border-slate-300/80 bg-slate-50 p-2 transition",
-            isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
+            "relative min-h-[23rem] overflow-hidden rounded-2xl border border-slate-300/80 bg-white p-2 transition",
+            isOver && "border-primary ring-2 ring-primary/20",
           )}
         >
           <img
             src="/images/sprint-capacity-bucket.svg"
             alt="Capacity bucket"
-            className="pointer-events-none absolute inset-y-0 left-1/2 h-full w-[94%] -translate-x-1/2 object-contain opacity-30"
+            className="pointer-events-none absolute top-1 left-1/2 h-[88%] w-[92%] -translate-x-1/2 object-contain opacity-30"
           />
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] transition-all"
@@ -290,10 +301,11 @@ export function SprintCapacityBoard({
         Drag user stories from the left panel into a developer bucket. Bucket fill and warnings update from planned vs available days.
       </div>
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-        {members.map((member) => {
+        {members.map((member, idx) => {
           const assignedIds = capacityBoard.assignments[member] ?? [];
           const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
           const assignedTotal = cards.reduce((sum, card) => sum + card.estimatedDays, 0);
+          const toneClass = MEMBER_PANEL_TONES[idx % MEMBER_PANEL_TONES.length]!;
           return (
             <CapacityBucket
               key={member}
@@ -303,6 +315,7 @@ export function SprintCapacityBoard({
               capacity={capacityBoard.capacities[member] ?? 6}
               assignedTotal={assignedTotal}
               cards={cards}
+              toneClass={toneClass}
               onCapacityChange={(days) => onCapacityChange(member, days)}
               onEstimateChange={onEstimateChange}
               onUnscheduleStory={onUnscheduleStory}
