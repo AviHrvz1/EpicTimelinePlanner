@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { BarChart3, ChevronDown, ChevronRight, Map as MapIcon, Thermometer } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Map as MapIcon, Thermometer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -14,6 +14,7 @@ import { QuarterTeamCapacityBoard } from "@/components/timeline/quarter-team-cap
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
+import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
@@ -361,7 +362,8 @@ export type MonthPlanSurfaceTab =
   | "month-status"
   | "sprint-kanban"
   | "sprint-status"
-  | "sprint-capacity";
+  | "sprint-capacity"
+  | "sprint-retrospective";
 
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
@@ -401,6 +403,8 @@ type TimelineGridProps = {
   onSprintCapacityChange?: (member: string, days: number) => void;
   onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
   onSprintCapacityStoryUnschedule?: (storyId: string) => void;
+  sprintRetrospective?: (SprintRetrospectiveDoc & { updatedAt: string }) | null;
+  onSaveSprintRetrospective?: (doc: SprintRetrospectiveDoc) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
@@ -552,6 +556,8 @@ export function TimelineGrid({
   onSprintCapacityChange,
   onSprintCapacityStoryEstimateChange,
   onSprintCapacityStoryUnschedule,
+  sprintRetrospective = null,
+  onSaveSprintRetrospective,
 }: TimelineGridProps) {
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
@@ -820,7 +826,8 @@ export function TimelineGrid({
         if (
           monthPlanTab !== "sprint-kanban" &&
           monthPlanTab !== "sprint-status" &&
-          monthPlanTab !== "sprint-capacity"
+          monthPlanTab !== "sprint-capacity" &&
+          monthPlanTab !== "sprint-retrospective"
         ) {
           onMonthPlanTabChange?.("epic-gantt");
         }
@@ -903,7 +910,12 @@ export function TimelineGrid({
         onMonthPlanTabChange?.("epic-gantt");
       },
     });
-    if (activeSprint != null) {
+    const isSprintSurface =
+      monthPlanTab === "sprint-kanban" ||
+      monthPlanTab === "sprint-status" ||
+      monthPlanTab === "sprint-capacity" ||
+      monthPlanTab === "sprint-retrospective";
+    if (activeSprint != null && isSprintSurface) {
       breadcrumbItems.push({
         label: `Sprint ${activeSprint}`,
         onClick: () => {
@@ -920,6 +932,11 @@ export function TimelineGrid({
       } else if (monthPlanTab === "sprint-status") {
         breadcrumbItems.push({
           label: "Insights",
+          onClick: null,
+        });
+      } else if (monthPlanTab === "sprint-retrospective") {
+        breadcrumbItems.push({
+          label: "Retrospective",
           onClick: null,
         });
       }
@@ -971,6 +988,7 @@ export function TimelineGrid({
     (monthPlanTab === "sprint-kanban" ||
       monthPlanTab === "sprint-status" ||
       monthPlanTab === "sprint-capacity" ||
+      monthPlanTab === "sprint-retrospective" ||
       monthPlanTab === "month-status");
   const suppressMainVerticalScroll = activeMonth != null && monthPlanTab === "sprint-kanban";
 
@@ -1101,7 +1119,8 @@ export function TimelineGrid({
             {activeSprint != null &&
             (monthPlanTab === "sprint-kanban" ||
               monthPlanTab === "sprint-status" ||
-              monthPlanTab === "sprint-capacity") ? (
+              monthPlanTab === "sprint-capacity" ||
+              monthPlanTab === "sprint-retrospective") ? (
               <>
                 <button
                   type="button"
@@ -1160,6 +1179,25 @@ export function TimelineGrid({
                   <span className="sr-only">Sprint capacity</span>
                   <span role="tooltip" className={railNavTooltipClass}>
                     Sprint capacity
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMonthPlanTabChange?.("sprint-retrospective");
+                  }}
+                  title="Sprint retrospective"
+                  className={cn(
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    monthPlanTab === "sprint-retrospective"
+                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  )}
+                >
+                  <ClipboardList className="size-4" aria-hidden />
+                  <span className="sr-only">Sprint retrospective</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Sprint retrospective
                   </span>
                 </button>
               </>
@@ -1336,7 +1374,8 @@ export function TimelineGrid({
               monthPlanTab === "epic-gantt" ||
               monthPlanTab === "team-queue" ||
               monthPlanTab === "month-capacity" ||
-              monthPlanTab === "sprint-kanban"
+              monthPlanTab === "sprint-kanban" ||
+              monthPlanTab === "sprint-retrospective"
                 ? "min-h-[56rem]"
                 : "min-h-0",
             )}
@@ -1503,6 +1542,15 @@ export function TimelineGrid({
                   }
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onOpenStory={onOpenStory ?? (() => {})}
+                />
+              </div>
+            ) : monthPlanTab === "sprint-retrospective" ? (
+              <div className="flex-1 p-3 sm:p-5">
+                <SprintRetrospectiveEditor
+                  sprintLabel={`Sprint ${activeSprint ?? firstGlobalSprintForMonth(activeMonth)}`}
+                  initialDoc={sprintRetrospective}
+                  updatedAt={sprintRetrospective?.updatedAt ?? null}
+                  onSave={(doc) => onSaveSprintRetrospective?.(doc)}
                 />
               </div>
             ) : monthPlanTab === "month-status" ? (

@@ -14,6 +14,7 @@ import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-d
 import { InitiativeListPanel } from "@/components/initiatives/initiative-list-panel";
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
 import { DragContext } from "@/components/timeline/drag-context";
+import { type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { TimelineGrid, type MonthPlanSurfaceTab } from "@/components/timeline/timeline-grid";
 import {
   EPICS_UNPLAN_DROP_ID,
@@ -78,6 +79,15 @@ import {
 type PlannerProps = {
   initialInitiatives: InitiativeItem[];
   year: number;
+};
+
+const SPRINT_RETROSPECTIVE_STORAGE_KEY = "epicPlanner.sprintRetrospective.v1";
+
+type SprintRetrospectiveEntry = {
+  wentWellHtml: string;
+  improveHtml: string;
+  actionItems: Array<{ id: string; title: string; owner: string; dueDate: string }>;
+  updatedAt: string;
 };
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -314,6 +324,53 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
     },
   );
+  const [sprintRetrospectiveByKey, setSprintRetrospectiveByKey] = useState<
+    Record<string, SprintRetrospectiveEntry>
+  >(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem(SPRINT_RETROSPECTIVE_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object") return {};
+      const out: Record<string, SprintRetrospectiveEntry> = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        if (!value || typeof value !== "object") continue;
+        const v = value as {
+          content?: unknown;
+          wentWellHtml?: unknown;
+          improveHtml?: unknown;
+          actionItems?: unknown;
+          updatedAt?: unknown;
+        };
+        const updatedAt = typeof v.updatedAt === "string" ? v.updatedAt : new Date().toISOString();
+        const wentWellHtml =
+          typeof v.wentWellHtml === "string"
+            ? v.wentWellHtml
+            : typeof v.content === "string"
+              ? v.content
+              : "<p><br/></p>";
+        const improveHtml = typeof v.improveHtml === "string" ? v.improveHtml : "<p><br/></p>";
+        const actionItems = Array.isArray(v.actionItems)
+          ? v.actionItems
+              .filter((item) => item && typeof item === "object")
+              .map((item) => {
+                const row = item as { id?: unknown; title?: unknown; owner?: unknown; dueDate?: unknown };
+                return {
+                  id: typeof row.id === "string" ? row.id : crypto.randomUUID(),
+                  title: typeof row.title === "string" ? row.title : "",
+                  owner: typeof row.owner === "string" ? row.owner : "",
+                  dueDate: typeof row.dueDate === "string" ? row.dueDate : "",
+                };
+              })
+          : [];
+        out[key] = { wentWellHtml, improveHtml, actionItems, updatedAt };
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  });
   const [topMode, setTopMode] = useState<"roadmap" | "backlog">("roadmap");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
@@ -535,6 +592,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         hydratedMonthPlanTab = "sprint-kanban";
       } else if (planTabRaw === "sprintCapacity") {
         hydratedMonthPlanTab = "sprint-capacity";
+      } else if (planTabRaw === "sprintRetro") {
+        hydratedMonthPlanTab = "sprint-retrospective";
       } else if (planTabRaw === "sprintInsights") {
         hydratedMonthPlanTab = params.get("sprint") != null ? "sprint-status" : "month-status";
       } else if (params.get("sprint") != null) {
@@ -546,7 +605,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       if (
         hydratedMonthPlanTab === "sprint-kanban" ||
         hydratedMonthPlanTab === "sprint-status" ||
-        hydratedMonthPlanTab === "sprint-capacity"
+        hydratedMonthPlanTab === "sprint-capacity" ||
+        hydratedMonthPlanTab === "sprint-retrospective"
       ) {
         const sprintTeamRaw = params.get("sprintTeam");
         if (sprintTeamRaw && MONTH_TEAM_IDS.includes(sprintTeamRaw)) {
@@ -587,7 +647,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         const onSprintSurface =
           activeMonthPlanTab === "sprint-kanban" ||
           activeMonthPlanTab === "sprint-status" ||
-          activeMonthPlanTab === "sprint-capacity";
+          activeMonthPlanTab === "sprint-capacity" ||
+          activeMonthPlanTab === "sprint-retrospective";
         /** Opening sprint from the roadmap sets month + sprint tab in one update; don't clobber back to epic Gantt. */
         if (!onSprintSurface) {
           setActiveMonthPlanTab("epic-gantt");
@@ -631,6 +692,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   }, [monthTeamCapacityByKey]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(SPRINT_RETROSPECTIVE_STORAGE_KEY, JSON.stringify(sprintRetrospectiveByKey));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [sprintRetrospectiveByKey]);
+
+  useEffect(() => {
     if (!isUrlHydrated) return;
     const params = new URLSearchParams();
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
@@ -642,6 +711,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       else if (activeMonthPlanTab === "month-status") params.set("planTab", "monthInsights");
       else if (activeMonthPlanTab === "sprint-kanban") params.set("planTab", "sprintBoard");
       else if (activeMonthPlanTab === "sprint-capacity") params.set("planTab", "sprintCapacity");
+      else if (activeMonthPlanTab === "sprint-retrospective") params.set("planTab", "sprintRetro");
       else params.set("planTab", "sprintInsights");
     }
     if (activeYearSprint != null) params.set("sprint", String(activeYearSprint));
@@ -649,7 +719,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (
       (activeMonthPlanTab === "sprint-kanban" ||
         activeMonthPlanTab === "sprint-status" ||
-        activeMonthPlanTab === "sprint-capacity") &&
+        activeMonthPlanTab === "sprint-capacity" ||
+        activeMonthPlanTab === "sprint-retrospective") &&
       isKnownEpicTeamId(sprintStoryBoardTeamId)
     ) {
       params.set("sprintTeam", sprintStoryBoardTeamId);
@@ -805,6 +876,33 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const members = defaultMembersForTeam(sprintStoryBoardTeamId);
     return emptySprintCapacityBoard(members);
   }, [activeSprintCapacityKey, sprintCapacityByKey, sprintStoryBoardTeamId]);
+
+  const activeSprintRetrospectiveKey = useMemo(() => {
+    if (activeYearSprint == null) return null;
+    return `${selectedYear}:${activeYearSprint}`;
+  }, [selectedYear, activeYearSprint]);
+
+  const activeSprintRetrospective = useMemo(() => {
+    if (!activeSprintRetrospectiveKey) return null;
+    return sprintRetrospectiveByKey[activeSprintRetrospectiveKey] ?? null;
+  }, [activeSprintRetrospectiveKey, sprintRetrospectiveByKey]);
+
+  const saveSprintRetrospective = useCallback(
+    (doc: SprintRetrospectiveDoc) => {
+      if (!activeSprintRetrospectiveKey) return;
+      setSprintRetrospectiveByKey((prev) => ({
+        ...prev,
+        [activeSprintRetrospectiveKey]: {
+          wentWellHtml: doc.wentWellHtml,
+          improveHtml: doc.improveHtml,
+          actionItems: doc.actionItems,
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      toast.success("Retrospective saved");
+    },
+    [activeSprintRetrospectiveKey],
+  );
 
   const updateSprintCapacity = useCallback(
     (member: string, days: number) => {
@@ -2235,6 +2333,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
                 onSprintCapacityStoryUnschedule={unscheduleStoryFromCapacity}
+                sprintRetrospective={activeSprintRetrospective}
+                onSaveSprintRetrospective={saveSprintRetrospective}
                 onEnterSprintStoryBoard={openSprintStoryBoard}
                 sprintStoryBoardTeamId={sprintStoryBoardTeamId}
                 onSprintStoryBoardTeamChange={setSprintStoryBoardTeamId}

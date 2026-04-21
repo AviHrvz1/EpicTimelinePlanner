@@ -267,3 +267,12 @@
     @apply font-sans;
   }
 }
+
+/** Tiptap: show Placeholder extension text on empty blocks */
+.ProseMirror .is-empty.is-editor-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
