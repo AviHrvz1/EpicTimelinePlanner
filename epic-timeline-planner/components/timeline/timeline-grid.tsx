@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { BarChart3, ChevronDown, ChevronRight, Map as MapIcon } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, Map as MapIcon, Thermometer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -888,6 +888,8 @@ export function TimelineGrid({
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
   const hasContextSideMenu = activeMonth != null || focusedQuarter != null;
+  const railNavTooltipClass =
+    "pointer-events-none absolute left-full top-1/2 z-[200] ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100";
   const showSprintTeamPicker =
     activeMonth != null &&
     (monthPlanTab === "sprint-kanban" ||
@@ -1013,7 +1015,7 @@ export function TimelineGrid({
       </div>
       {activeMonth ? (
         <div className="relative z-30 h-0">
-          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
             {activeSprint != null &&
             (monthPlanTab === "sprint-kanban" ||
               monthPlanTab === "sprint-status" ||
@@ -1027,7 +1029,7 @@ export function TimelineGrid({
                   }}
                   title="Sprint board"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                     monthPlanTab === "sprint-kanban"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1035,6 +1037,9 @@ export function TimelineGrid({
                 >
                   <MapIcon className="size-4" aria-hidden />
                   <span className="sr-only">Sprint board</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Sprint board
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -1044,7 +1049,7 @@ export function TimelineGrid({
                   }}
                   title="Sprint insights"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                     monthPlanTab === "sprint-status"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1052,6 +1057,9 @@ export function TimelineGrid({
                 >
                   <BarChart3 className="size-4" aria-hidden />
                   <span className="sr-only">Sprint insights</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Sprint insights
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -1060,14 +1068,17 @@ export function TimelineGrid({
                   }}
                   title="Sprint capacity"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                     monthPlanTab === "sprint-capacity"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
-                  <BarChart3 className="size-4" aria-hidden />
+                  <Thermometer className="size-4" aria-hidden />
                   <span className="sr-only">Sprint capacity</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Sprint capacity
+                  </span>
                 </button>
               </>
             ) : (
@@ -1077,7 +1088,7 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("epic-gantt")}
                   title="Epic plan"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                     monthPlanTab === "epic-gantt"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1085,13 +1096,16 @@ export function TimelineGrid({
                 >
                   <MapIcon className="size-4" aria-hidden />
                   <span className="sr-only">Epic plan</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Epic plan
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("team-queue")}
                   title="Team queue"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                     monthPlanTab === "team-queue"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1099,13 +1113,16 @@ export function TimelineGrid({
                 >
                   <BarChart3 className="size-4" aria-hidden />
                   <span className="sr-only">Team queue</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Team queue
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-status")}
                   title="Month insights"
                   className={cn(
-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                     monthPlanTab === "month-status"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1113,6 +1130,9 @@ export function TimelineGrid({
                 >
                   <BarChart3 className="size-4" aria-hidden />
                   <span className="sr-only">Month insights</span>
+                  <span role="tooltip" className={railNavTooltipClass}>
+                    Month insights
+                  </span>
                 </button>
               </>
             )}
@@ -1120,13 +1140,13 @@ export function TimelineGrid({
         </div>
       ) : focusedQuarter ? (
         <div className="relative z-30 h-0">
-          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
             <button
               type="button"
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
               className={cn(
-                "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                 quarterViewTab === "gantt"
                   ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1134,13 +1154,16 @@ export function TimelineGrid({
             >
               <MapIcon className="size-4" aria-hidden />
               <span className="sr-only">Gantt</span>
+              <span role="tooltip" className={railNavTooltipClass}>
+                Gantt
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setQuarterViewTab("status")}
               title="Quarter status"
               className={cn(
-                "inline-flex h-9 w-full items-center justify-center rounded-md transition",
+                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
                 quarterViewTab === "status"
                   ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1148,6 +1171,9 @@ export function TimelineGrid({
             >
               <BarChart3 className="size-4" aria-hidden />
               <span className="sr-only">Quarter status</span>
+              <span role="tooltip" className={railNavTooltipClass}>
+                Quarter status
+              </span>
             </button>
           </div>
         </div>
