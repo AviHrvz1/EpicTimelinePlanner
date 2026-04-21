@@ -6,25 +6,30 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
+  AlertCircle,
   Bold,
   CalendarDays,
+  ClipboardList,
   Heading2,
   Heading3,
   Italic,
   Link as LinkIcon,
   List,
+  ListChecks,
   ListOrdered,
   Plus,
   Quote,
   Redo,
   Save,
+  Sparkles,
   Strikethrough,
   Trash2,
   Underline as UnderlineIcon,
   Undo,
   User,
+  type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useState, type MouseEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -53,6 +58,11 @@ type SprintRetrospectiveEditorProps = {
 
 function normalizeSectionHtml(raw: string | undefined | null) {
   return raw?.trim() ? raw : SECTION_TEMPLATE_HTML;
+}
+
+/** Keeps ProseMirror focused so block commands (headings, lists, quote) apply to the selection. */
+function toolbarPointerDown(e: MouseEvent) {
+  e.preventDefault();
 }
 
 function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
@@ -96,7 +106,8 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("bold"))}
-        disabled={!editor.can().chain().focus().toggleBold().run()}
+        disabled={!editor.can().toggleBold()}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleBold().run()}
         aria-pressed={editor.isActive("bold")}
         title="Bold"
@@ -108,7 +119,8 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("italic"))}
-        disabled={!editor.can().chain().focus().toggleItalic().run()}
+        disabled={!editor.can().toggleItalic()}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleItalic().run()}
         aria-pressed={editor.isActive("italic")}
         title="Italic"
@@ -120,6 +132,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("underline"))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         aria-pressed={editor.isActive("underline")}
         title="Underline"
@@ -131,6 +144,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("strike"))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleStrike().run()}
         aria-pressed={editor.isActive("strike")}
         title="Strikethrough"
@@ -145,6 +159,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("heading", { level: 2 }))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         aria-pressed={editor.isActive("heading", { level: 2 })}
         title="Heading 2"
@@ -156,6 +171,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("heading", { level: 3 }))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         aria-pressed={editor.isActive("heading", { level: 3 })}
         title="Heading 3"
@@ -167,6 +183,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("bulletList"))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         aria-pressed={editor.isActive("bulletList")}
         title="Bullet list"
@@ -178,6 +195,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("orderedList"))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         aria-pressed={editor.isActive("orderedList")}
         title="Numbered list"
@@ -189,6 +207,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("blockquote"))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
         aria-pressed={editor.isActive("blockquote")}
         title="Quote"
@@ -203,6 +222,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className={mkToggle(editor.isActive("link"))}
+        onMouseDown={toolbarPointerDown}
         onClick={() => {
           const prev = editor.getAttributes("link").href as string | undefined;
           const url = window.prompt("Link URL", prev ?? "https://");
@@ -227,8 +247,9 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className="h-8 w-8 shrink-0 rounded-md border-border bg-background p-0 shadow-none hover:bg-muted"
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().undo().run()}
-        disabled={!editor.can().chain().focus().undo().run()}
+        disabled={!editor.can().undo()}
         title="Undo"
       >
         <Undo className="size-4" />
@@ -238,8 +259,9 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         size="sm"
         variant="outline"
         className="h-8 w-8 shrink-0 rounded-md border-border bg-background p-0 shadow-none hover:bg-muted"
+        onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().redo().run()}
-        disabled={!editor.can().chain().focus().redo().run()}
+        disabled={!editor.can().redo()}
         title="Redo"
       >
         <Redo className="size-4" />
@@ -250,6 +272,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
 
 type RetroRichSectionProps = {
   title: string;
+  titleIcon: LucideIcon;
   titleAccentClass: string;
   placeholder: string;
   field: "wentWell" | "improve";
@@ -260,6 +283,7 @@ type RetroRichSectionProps = {
 
 function RetroRichSection({
   title,
+  titleIcon: TitleIcon,
   titleAccentClass,
   placeholder,
   field,
@@ -314,8 +338,14 @@ function RetroRichSection({
         editor?.isFocused && "border-primary/35 ring-2 ring-ring/40",
       )}
     >
-      <h4 className={cn("mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground", titleAccentClass)}>
-        {title}
+      <h4
+        className={cn(
+          "mb-3 flex items-center gap-2.5 font-sans text-base font-normal leading-snug tracking-tight md:text-lg",
+          titleAccentClass,
+        )}
+      >
+        <TitleIcon className="size-[1.125rem] shrink-0 opacity-90 md:size-5" aria-hidden />
+        <span>{title}</span>
       </h4>
       <RetroEditorToolbar editor={editor} />
       <div className="mt-2 overflow-hidden rounded-lg border border-border bg-muted/25">
@@ -389,8 +419,14 @@ export function SprintRetrospectiveEditor({
     <section className="font-sans rounded-xl border border-border bg-card p-5 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0 space-y-1">
-          <h3 className="text-base font-semibold tracking-tight text-foreground md:text-lg">
-            {sprintLabel} retrospective
+          <h3 className="flex items-center gap-2.5 font-sans text-base font-semibold tracking-tight text-foreground md:text-lg">
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+              aria-hidden
+            >
+              <ClipboardList className="size-[1.125rem]" />
+            </span>
+            <span>{sprintLabel} Retrospective</span>
           </h3>
           <p className="text-sm text-muted-foreground">
             Capture learnings, decisions, and follow-up actions for this sprint.
@@ -411,8 +447,9 @@ export function SprintRetrospectiveEditor({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <RetroRichSection
-          title="What went well"
-          titleAccentClass="text-emerald-700"
+          title="What went well?"
+          titleIcon={Sparkles}
+          titleAccentClass="text-emerald-700 dark:text-emerald-400"
           placeholder="Highlights, wins, and practices to repeat…"
           field="wentWell"
           initialDoc={initialDoc}
@@ -420,8 +457,9 @@ export function SprintRetrospectiveEditor({
           onHtmlChange={setWentWellHtml}
         />
         <RetroRichSection
-          title="What did not go well"
-          titleAccentClass="text-rose-700"
+          title="What did not go well?"
+          titleIcon={AlertCircle}
+          titleAccentClass="text-rose-700 dark:text-rose-400"
           placeholder="Friction, misses, and risks to address…"
           field="improve"
           initialDoc={initialDoc}
@@ -432,7 +470,10 @@ export function SprintRetrospectiveEditor({
 
       <section className="mt-5 rounded-xl border border-border bg-muted/10 p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-primary">Action items</h4>
+          <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+            <ListChecks className="size-4 shrink-0 text-primary" aria-hidden />
+            Action items
+          </h4>
           <Button type="button" size="sm" variant="outline" onClick={addActionItem} className="gap-1.5 border-border shadow-none">
             <Plus className="size-3.5" />
             Add item
