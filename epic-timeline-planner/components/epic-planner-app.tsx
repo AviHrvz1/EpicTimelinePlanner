@@ -734,6 +734,48 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }, []);
 
+  const unscheduleStoryFromCapacity = useCallback(async (storyId: string) => {
+    setSprintCapacityByKey((prev) => {
+      const next = Object.fromEntries(
+        Object.entries(prev).map(([k, board]) => [
+          k,
+          {
+            capacities: { ...board.capacities },
+            assignments: Object.fromEntries(
+              Object.entries(board.assignments).map(([member, ids]) => [member, ids.filter((id) => id !== storyId)]),
+            ),
+          },
+        ]),
+      );
+      return next;
+    });
+    flushSync(() => {
+      setInitiatives((prev) =>
+        prev.map((init) => ({
+          ...init,
+          epics: (init.epics ?? []).map((epic) => ({
+            ...epic,
+            userStories: (epic.userStories ?? []).map((story) =>
+              story.id === storyId ? { ...story, sprint: null } : story,
+            ),
+          })),
+        })),
+      );
+    });
+    try {
+      const response = await fetch(`/api/stories/${storyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprint: null }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      toast.success("Story moved to unscheduled");
+    } catch {
+      await refresh();
+      toast.error("Failed to unschedule story");
+    }
+  }, []);
+
   async function refresh(targetYear = selectedYear) {
     const data = await parseJson<InitiativeItem[]>(
       await fetch(`/api/initiatives?year=${targetYear}`, { cache: "no-store" }),
@@ -1961,6 +2003,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
+                onSprintCapacityStoryUnschedule={unscheduleStoryFromCapacity}
                 onEnterSprintStoryBoard={openSprintStoryBoard}
                 sprintStoryBoardTeamId={sprintStoryBoardTeamId}
                 onSprintStoryBoardTeamChange={setSprintStoryBoardTeamId}

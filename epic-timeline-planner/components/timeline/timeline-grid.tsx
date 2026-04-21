@@ -362,6 +362,7 @@ type TimelineGridProps = {
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> };
   onSprintCapacityChange?: (member: string, days: number) => void;
   onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
+  onSprintCapacityStoryUnschedule?: (storyId: string) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
@@ -507,6 +508,7 @@ export function TimelineGrid({
   sprintCapacityBoard,
   onSprintCapacityChange,
   onSprintCapacityStoryEstimateChange,
+  onSprintCapacityStoryUnschedule,
 }: TimelineGridProps) {
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
@@ -768,11 +770,21 @@ export function TimelineGrid({
       prevActiveMonthRef.current = activeMonth;
       if (hadPreviousMonth && activeMonth != null) {
         setActiveSprint(firstGlobalSprintForMonth(activeMonth));
-        onMonthPlanTabChange?.("epic-gantt");
+        /**
+         * Sprint entry from month/year sprint chips sets sprint tab in parent.
+         * Do not clobber it back to epic-gantt on month transition.
+         */
+        if (
+          monthPlanTab !== "sprint-kanban" &&
+          monthPlanTab !== "sprint-status" &&
+          monthPlanTab !== "sprint-capacity"
+        ) {
+          onMonthPlanTabChange?.("epic-gantt");
+        }
         setActiveSprintTab("kanban");
       }
     }
-  }, [activeMonth, onMonthPlanTabChange]);
+  }, [activeMonth, monthPlanTab, onMonthPlanTabChange]);
 
   useEffect(() => {
     if (activeMonth != null && activeSprint == null) {
@@ -851,19 +863,27 @@ export function TimelineGrid({
     if (activeSprint != null && monthPlanTab === "sprint-kanban") {
       breadcrumbItems.push({
         label: `Sprint ${activeSprint}`,
-        onClick: null,
+        onClick: () => {
+          onMonthPlanTabChange?.("sprint-kanban");
+          setActiveSprintTab("kanban");
+        },
         currentTone: "sprint",
       });
     } else if (activeSprint != null && monthPlanTab === "sprint-capacity") {
       breadcrumbItems.push({
         label: `Sprint ${activeSprint} · capacity`,
-        onClick: null,
+        onClick: () => {
+          onMonthPlanTabChange?.("sprint-capacity");
+        },
         currentTone: "sprint",
       });
     } else if (activeSprint != null && monthPlanTab === "sprint-status") {
       breadcrumbItems.push({
         label: `Sprint ${activeSprint} · insights`,
-        onClick: null,
+        onClick: () => {
+          onMonthPlanTabChange?.("sprint-status");
+          setActiveSprintTab("status");
+        },
         currentTone: "sprint",
       });
     } else if (monthPlanTab === "month-status") {
@@ -882,14 +902,14 @@ export function TimelineGrid({
     });
     breadcrumbItems.push({
       label: focusedQuarter.label,
-      onClick: null,
+      onClick: () => onFocusedQuarterChange(focusedQuarter.label),
     });
   }
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
   const hasContextSideMenu = activeMonth != null || focusedQuarter != null;
   const railNavTooltipClass =
-    "pointer-events-none absolute left-full top-1/2 z-[200] ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100";
+    "pointer-events-none absolute left-full top-1/2 z-[200] ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
   const showSprintTeamPicker =
     activeMonth != null &&
     (monthPlanTab === "sprint-kanban" ||
@@ -907,14 +927,14 @@ export function TimelineGrid({
         )}
       >
         {hasBreadcrumbs ? (
-          <div className="inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 shadow-sm ring-1 ring-slate-200/90 backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 backdrop-blur-sm">
             {breadcrumbItems.map((item, index) => (
               <div key={`${item.label}-${index}`} className="flex items-center gap-1">
                 {item.onClick ? (
                   <button
                     type="button"
                     onClick={item.onClick}
-                    className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 active:scale-[0.98]"
+                    className="cursor-pointer px-1 py-1 text-[14px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -922,10 +942,10 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "rounded-lg px-3 py-1.5 text-[14px] font-semibold tracking-[0.01em] shadow-sm ring-1",
+                      "px-1 py-1 text-[14px] font-semibold tracking-[0.01em]",
                       item.currentTone === "sprint"
-                        ? "bg-gradient-to-r from-sky-50 via-indigo-50/90 to-violet-50 text-slate-800 ring-sky-200/75"
-                        : "bg-slate-800 text-white ring-slate-900/10",
+                        ? "text-indigo-700"
+                        : "text-slate-900",
                     )}
                   >
                     {item.label}
@@ -1349,6 +1369,7 @@ export function TimelineGrid({
                   onEstimateChange={(storyId, estimatedDays) =>
                     onSprintCapacityStoryEstimateChange?.(storyId, estimatedDays)
                   }
+                  onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onOpenStory={onOpenStory ?? (() => {})}
                 />
               </div>
