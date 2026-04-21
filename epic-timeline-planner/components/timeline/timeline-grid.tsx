@@ -1614,12 +1614,12 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                            className="flex min-h-[3.35rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                           >
-                            <span className="text-[11px] font-semibold leading-tight text-slate-800">
+                            <span className="text-[12px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
                             </span>
-                            <span className="text-[10px] font-medium leading-tight text-slate-500">
+                            <span className="text-[11px] font-medium leading-tight text-slate-500">
                               ({sprintDateWeekdayRangeText(currentYear, month, 1)})
                             </span>
                           </button>
@@ -1631,12 +1631,12 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                            className="flex min-h-[3.35rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                           >
-                            <span className="text-[11px] font-semibold leading-tight text-slate-800">
+                            <span className="text-[12px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
                             </span>
-                            <span className="text-[10px] font-medium leading-tight text-slate-500">
+                            <span className="text-[11px] font-medium leading-tight text-slate-500">
                               ({sprintDateWeekdayRangeText(currentYear, month, 2)})
                             </span>
                           </button>
