@@ -21,7 +21,8 @@ export function inferGanttLaneInsertIndexFromClientY(clientY: number): number | 
 
   const cRect = container.getBoundingClientRect();
   const margin = 16;
-  if (clientY < cRect.top - margin || clientY > cRect.bottom + margin) return undefined;
+  /** Allow Y below the container: empty space under the last row is still “append lane”. */
+  if (clientY < cRect.top - margin) return undefined;
 
   const rows = [...container.querySelectorAll<HTMLElement>("[data-gantt-lane-index]")];
   if (rows.length === 0) return undefined;

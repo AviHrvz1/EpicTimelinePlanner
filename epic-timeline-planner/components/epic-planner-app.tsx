@@ -218,6 +218,12 @@ function computeInitiativeMonthLanePlacement(
 
   const overlappingOthers = others.filter(overlapsPlacedRange);
   const clampedLaneForTarget = laneIndex == null ? undefined : Math.max(0, Math.min(laneIndex, others.length));
+  /** Gantt row groups: one per distinct `timelineRow` (matches `data-gantt-lane-index` 0..n-1, append = n). */
+  const distinctScheduledRowCount = new Set(scheduledAll.map((item) => item.timelineRow)).size;
+  const maxTimelineRow =
+    scheduledAll.length > 0 ? Math.max(...scheduledAll.map((item) => item.timelineRow)) : current.timelineRow;
+  const appendTimelineRow = maxTimelineRow + 1;
+  const wantsAppendRow = laneIndex != null && laneIndex >= distinctScheduledRowCount;
   const hoveredScheduledForTarget =
     hoveredLaneIndex == null
       ? null
@@ -233,15 +239,34 @@ function computeInitiativeMonthLanePlacement(
   const targetRowFromLaneForTarget =
     clampedLaneForTarget == null
       ? null
-      : clampedLaneForTarget >= scheduledAll.length
+      : clampedLaneForTarget >= others.length
         ? null
         : laneScheduledForTarget?.id === initiativeId
           ? null
           : (laneScheduledForTarget?.timelineRow ?? null);
-  const desiredTargetRow =
-    hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
+  /** Bottom insert (lane index past last Gantt row) uses a new `timelineRow`, not nearest row from pointer. */
+  const desiredTargetRow = wantsAppendRow
+    ? appendTimelineRow
+    : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
       ? hoveredTimelineRow
       : targetRowFromHoverLaneForTarget ?? targetRowFromLaneForTarget;
+  console.log("[gantt-drop] target-row inputs", {
+    initiativeId,
+    laneIndex,
+    hoveredLaneIndex,
+    hoveredTimelineRow,
+    clampedLaneForTarget,
+    distinctScheduledRowCount,
+    scheduledAllLength: scheduledAll.length,
+    othersLength: others.length,
+    maxTimelineRow,
+    appendTimelineRow,
+    wantsAppendRow,
+    targetRowFromHoverLaneForTarget,
+    targetRowFromLaneForTarget,
+    desiredTargetRow,
+    scheduledRows: scheduledAll.map((x) => ({ id: x.id, timelineRow: x.timelineRow })),
+  });
 
   // No overlap with existing initiatives: only update moved initiative range/status.
   if (overlappingOthers.length === 0) {
@@ -252,6 +277,10 @@ function computeInitiativeMonthLanePlacement(
       laneIndex,
       hoveredLaneIndex,
       hoveredTimelineRow,
+      wantsAppendRow,
+      appendTimelineRow,
+      clampedLaneForTarget,
+      scheduledAllLength: scheduledAll.length,
       currentTimelineRow: current.timelineRow,
       desiredTargetRow,
       movedTimelineRow,
@@ -284,6 +313,10 @@ function computeInitiativeMonthLanePlacement(
         laneIndex,
         hoveredLaneIndex,
         hoveredTimelineRow,
+        wantsAppendRow,
+        appendTimelineRow,
+        clampedLaneForTarget,
+        scheduledAllLength: scheduledAll.length,
         desiredTargetRow,
         currentTimelineRow: current.timelineRow,
         overlappingIds: overlappingOthers.map((x) => ({ id: x.id, row: x.timelineRow })),
@@ -2199,14 +2232,32 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     let hoveredLaneIndex: number | undefined;
     let hoveredTimelineRow: number | undefined;
     const cy = clientYCenterFromDragEnd(event);
+    console.log("[gantt-drop] initiative pointer baseline", {
+      activeId,
+      overId,
+      clientYCenter: cy,
+      laneFromTarget,
+    });
     if (cy !== undefined) {
       if (laneIndex === undefined) {
         const inferred = inferGanttLaneInsertIndexFromClientY(cy);
+        console.log("[gantt-drop] infer lane insert index", {
+          clientYCenter: cy,
+          inferredLaneIndex: inferred,
+        });
         if (inferred !== undefined) laneIndex = inferred;
       }
       const hovered = inferGanttLaneHoverIndexFromClientY(cy);
+      console.log("[gantt-drop] infer lane hover index", {
+        clientYCenter: cy,
+        hoveredLaneIndex: hovered,
+      });
       if (hovered !== undefined) hoveredLaneIndex = hovered;
       const hoverRow = inferGanttLaneHoverTimelineRowFromClientY(cy);
+      console.log("[gantt-drop] infer lane hover timeline row", {
+        clientYCenter: cy,
+        hoveredTimelineRow: hoverRow,
+      });
       if (hoverRow !== undefined) hoveredTimelineRow = hoverRow;
     }
 
