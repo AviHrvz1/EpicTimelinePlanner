@@ -2,8 +2,54 @@
 
 import { useDraggable } from "@dnd-kit/core";
 
-import { epicTimelineDraggableId, initiativeTimelineDraggableId } from "@/lib/epic-dnd-ids";
+import {
+  type GanttTimelineBarDragData,
+  epicTimelineDraggableId,
+  initiativeTimelineDraggableId,
+} from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
+
+/** Fills DragOverlay bounds so the preview lines up with the real Gantt bar. */
+export function TimelineBarDragPreview({
+  title,
+  color,
+  progressPercent,
+  progressLabel,
+}: {
+  title: string;
+  color: string;
+  progressPercent: number;
+  progressLabel?: string;
+}) {
+  const safeProgress = Math.max(0, Math.min(100, progressPercent));
+  return (
+    <div className="flex h-full w-full flex-col space-y-0">
+      <div
+        className="relative z-10 flex h-9 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-lg ring-1 ring-black/15"
+        style={{ backgroundColor: color }}
+      >
+        <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-center antialiased">
+          {title}
+        </span>
+      </div>
+      <div className="mt-0.5 flex items-center gap-1.5 px-2">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+          <div
+            className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500"
+            style={{ width: `${safeProgress}%` }}
+            aria-hidden
+          />
+        </div>
+        <span
+          className="shrink-0 text-[10px] font-semibold text-slate-500"
+          title={progressLabel}
+        >
+          {safeProgress}%
+        </span>
+      </div>
+    </div>
+  );
+}
 
 type InitiativeTimelineBarProps = {
   id: string;
@@ -29,11 +75,19 @@ export function InitiativeTimelineBar({
   emphasizeFlash = false,
   emphasizeTick = 0,
 }: InitiativeTimelineBarProps) {
+  const safeProgress = Math.max(0, Math.min(100, progressPercent));
+  const dragData = {
+    kind: "gantt-timeline-bar",
+    title,
+    color,
+    progressPercent: safeProgress,
+    progressLabel,
+  } satisfies GanttTimelineBarDragData;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: initiativeTimelineDraggableId(id),
     disabled: Boolean(isResizing),
+    data: dragData,
   });
-  const safeProgress = Math.max(0, Math.min(100, progressPercent));
 
   return (
     <div
@@ -126,11 +180,19 @@ export function EpicPlanTimelineBar({
   emphasizeFlash = false,
   emphasizeTick = 0,
 }: EpicPlanTimelineBarProps) {
+  const safeProgress = Math.max(0, Math.min(100, progressPercent));
+  const dragData = {
+    kind: "gantt-timeline-bar",
+    title,
+    color,
+    progressPercent: safeProgress,
+    progressLabel,
+  } satisfies GanttTimelineBarDragData;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(id),
     disabled: Boolean(isResizing),
+    data: dragData,
   });
-  const safeProgress = Math.max(0, Math.min(100, progressPercent));
 
   return (
     <div

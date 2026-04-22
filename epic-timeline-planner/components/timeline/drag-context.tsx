@@ -10,12 +10,16 @@ import {
   TouchSensor,
   pointerWithin,
   rectIntersection,
+  useDndContext,
+  useDndMonitor,
   useSensor,
   useSensors,
   type CollisionDetection,
 } from "@dnd-kit/core";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { TimelineBarDragPreview } from "@/components/timeline/epic-timeline-bar";
+import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import {
   EPICS_UNPLAN_DROP_ID,
   STORIES_UNSCHEDULE_DROP_ID,
@@ -23,6 +27,8 @@ import {
   parseEpicBacklogSlotDropId,
   parseMonthTeamSlotDropId,
   isEpicPlanDraggableId,
+  isEpicPlanCompactDragData,
+  isGanttTimelineBarDragData,
   isInitiativeDraggableId,
   isStoryDraggableId,
 } from "@/lib/epic-dnd-ids";
@@ -43,10 +49,67 @@ type DragContextProps = {
   children: React.ReactNode;
 };
 
+/** Header strip droppables: `month:1` … `month:12` (see `MonthDropCell`). */
+function isMonthColumnDropId(id: string): boolean {
+  return /^month:\d+$/.test(id);
+}
+
+function isTimelineInitiativeDrag(activeId: string): boolean {
+  return activeId.startsWith("timeline-initiative:");
+}
+
+/**
+ * Gantt month targets are thin strips under month titles; the pointer is usually over the lane, not the strip.
+ * For timeline bars, use the bar's **left edge** (`collisionRect.left`) to pick the month column so long
+ * initiatives match the visual start, not wherever the hand happens to be.
+ */
 const initiativeCollision: CollisionDetection = (args) => {
+  const activeId = String(args.active.id);
   const isDropTarget = (id: string) =>
     id.startsWith("month:") || id === "initiatives:backlog-drop" || parseBacklogSlotDropId(id) != null;
-  const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
+
+  const pointerHits = pointerWithin(args).filter((c) => {
+    const id = String(c.id);
+    if (!isDropTarget(id)) return false;
+    return !(c.data as { droppableContainer?: { disabled?: boolean } } | undefined)?.droppableContainer?.disabled;
+  });
+
+  /** Backlog / slot targets: pointer must be inside (not inferred from bar left). */
+  const pointerPriority = pointerHits.filter((c) => !isMonthColumnDropId(String(c.id)));
+  if (pointerPriority.length > 0) return pointerPriority;
+
+  if (isTimelineInitiativeDrag(activeId) && args.collisionRect) {
+    const anchorX = args.collisionRect.left;
+    const monthContainers = args.droppableContainers.filter(
+      (c) => !c.disabled && isMonthColumnDropId(String(c.id)) && args.droppableRects.get(c.id) != null,
+    );
+    if (monthContainers.length > 0) {
+      let best: { id: (typeof monthContainers)[0]["id"]; dist: number; container: (typeof monthContainers)[0] } | null =
+        null;
+      for (const c of monthContainers) {
+        const id = c.id;
+        const rect = args.droppableRects.get(id)!;
+        const inside = anchorX >= rect.left && anchorX <= rect.right;
+        const dist = inside ? 0 : anchorX < rect.left ? rect.left - anchorX : anchorX - rect.right;
+        if (
+          !best ||
+          dist < best.dist ||
+          (dist === best.dist && rect.left < args.droppableRects.get(best.id)!.left)
+        ) {
+          best = { id, dist, container: c };
+        }
+      }
+      if (best) {
+        return [
+          {
+            id: best.id,
+            data: { droppableContainer: best.container, value: best.dist },
+          },
+        ];
+      }
+    }
+  }
+
   if (pointerHits.length > 0) return pointerHits;
   return closestCenter(args).filter((c) => isDropTarget(String(c.id)));
 };
@@ -121,8 +184,98 @@ const collisionDetection: CollisionDetection = (args) => {
   return closestCenter(args);
 };
 
+function EpicPlanCompactDragPreview({
+  title,
+  color,
+  icon,
+}: {
+  title: string;
+  color: string;
+  icon?: string | null;
+}) {
+  return (
+    <div
+      className="flex h-full w-full cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-md ring-1 ring-black/15"
+      style={{ backgroundColor: color }}
+    >
+      <span className="min-w-0 flex-1 truncate px-2.5 text-center">
+        <EpicPlanBarIcon icon={icon} />
+        {title}
+      </span>
+    </div>
+  );
+}
+
+function shallowCloneDragPayload(d: unknown): unknown {
+  if (d && typeof d === "object" && !Array.isArray(d)) {
+    return { ...(d as Record<string, unknown>) };
+  }
+  return d;
+}
+
+/** Snapshot drag `data` on start so overlay content isn’t `{}` for a frame (dnd-kit defaultData race). */
+function DragOverlayLayer() {
+  const [payloadSnapshot, setPayloadSnapshot] = useState<unknown>(undefined);
+  useDndMonitor(
+    useMemo(
+      () => ({
+        onDragStart({ active }) {
+          setPayloadSnapshot(shallowCloneDragPayload(active.data.current));
+        },
+        onDragEnd() {
+          setPayloadSnapshot(undefined);
+        },
+        onDragCancel() {
+          setPayloadSnapshot(undefined);
+        },
+      }),
+      [],
+    ),
+  );
+  return (
+    <DragOverlay zIndex={9999}>
+      <PlannerDragOverlayBody payloadSnapshot={payloadSnapshot} />
+    </DragOverlay>
+  );
+}
+
+function PlannerDragOverlayBody({ payloadSnapshot }: { payloadSnapshot: unknown }) {
+  const { active } = useDndContext();
+  if (!active) return null;
+  const id = String(active.id);
+  const data =
+    payloadSnapshot !== undefined ? payloadSnapshot : active.data.current;
+
+  if (isGanttTimelineBarDragData(data)) {
+    return (
+      <TimelineBarDragPreview
+        title={data.title}
+        color={data.color}
+        progressPercent={data.progressPercent}
+        progressLabel={data.progressLabel}
+      />
+    );
+  }
+  if (isEpicPlanCompactDragData(data)) {
+    return (
+      <EpicPlanCompactDragPreview title={data.title} color={data.color} icon={data.icon} />
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-xl">
+      {isEpicPlanDraggableId(id)
+        ? "Place epic"
+        : isInitiativeDraggableId(id)
+          ? "Move initiative"
+          : isStoryDraggableId(id)
+            ? "Move story"
+            : "Move"}
+    </div>
+  );
+}
+
 export function DragContext({ onDragEnd, children }: DragContextProps) {
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor),
@@ -137,9 +290,7 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
         droppable: { strategy: MeasuringStrategy.Always },
       }}
       onDragStart={(event) => {
-        const id = String(event.active.id);
-        console.log("[gantt-drop] dnd dragStart", { activeId: id });
-        setActiveDragId(id);
+        console.log("[gantt-drop] dnd dragStart", { activeId: String(event.active.id) });
       }}
       onDragEnd={(event) => {
         console.log("[gantt-drop] dnd dragEnd", {
@@ -147,30 +298,16 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
           overId: event.over?.id,
           delta: event.delta,
         });
-        setActiveDragId(null);
         suppressPostDragClicksFor();
         onDragEnd(event);
       }}
       onDragCancel={() => {
         console.log("[gantt-drop] dnd dragCancel");
-        setActiveDragId(null);
         suppressPostDragClicksFor();
       }}
     >
       {children}
-      <DragOverlay zIndex={9999}>
-        {activeDragId ? (
-          <div className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-xl">
-            {isEpicPlanDraggableId(activeDragId)
-              ? "Place epic"
-              : isInitiativeDraggableId(activeDragId)
-                ? "Move initiative"
-                : isStoryDraggableId(activeDragId)
-                  ? "Move story"
-                  : "Move"}
-          </div>
-        ) : null}
-      </DragOverlay>
+      <DragOverlayLayer />
     </DndContext>
   );
 }

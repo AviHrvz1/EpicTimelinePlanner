@@ -2238,7 +2238,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       );
     console.log("[gantt-drop] placement", {
       orderedScheduledIds,
-      rowForMoved: orderedScheduledIds.indexOf(initiativeId),
+      /** Only set when overlap path re-sorts rows; otherwise empty (see non-overlap branch). */
+      rowIndexFromOrder: orderedScheduledIds.indexOf(initiativeId),
+      movedTimelineRow,
+      rowsChanged,
     });
 
     flushSync(() => setInitiatives(placementNext));

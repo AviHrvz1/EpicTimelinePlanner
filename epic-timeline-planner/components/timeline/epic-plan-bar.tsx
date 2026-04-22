@@ -3,7 +3,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Folder, Zap } from "lucide-react";
 
-import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
+import { type EpicPlanCompactDragData, epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
 
 /** Emoji or Lucide bolt; legacy DB default 🎯 (target) maps to bolt. */
@@ -47,8 +47,15 @@ type EpicPlanBarProps = {
 };
 
 export function EpicPlanBar({ id, title, icon, color, onClick }: EpicPlanBarProps) {
+  const dragData = {
+    kind: "epic-plan-compact",
+    title,
+    color,
+    icon,
+  } satisfies EpicPlanCompactDragData;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(id),
+    data: dragData,
   });
 
   return (

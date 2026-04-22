@@ -75,6 +75,39 @@ export function parseEpicIdFromPlanDraggable(activeId: string): string | null {
   return null;
 }
 
+/** `useDraggable` data for Gantt initiative / epic bars (bar + progress row). */
+export type GanttTimelineBarDragData = {
+  kind: "gantt-timeline-bar";
+  title: string;
+  color: string;
+  progressPercent: number;
+  progressLabel?: string;
+};
+
+/** Single-row epic plan bar (list / compact). */
+export type EpicPlanCompactDragData = {
+  kind: "epic-plan-compact";
+  title: string;
+  color: string;
+  icon?: string | null;
+};
+
+export function isGanttTimelineBarDragData(d: unknown): d is GanttTimelineBarDragData {
+  return (
+    typeof d === "object" &&
+    d !== null &&
+    (d as GanttTimelineBarDragData).kind === "gantt-timeline-bar"
+  );
+}
+
+export function isEpicPlanCompactDragData(d: unknown): d is EpicPlanCompactDragData {
+  return (
+    typeof d === "object" &&
+    d !== null &&
+    (d as EpicPlanCompactDragData).kind === "epic-plan-compact"
+  );
+}
+
 /** Droppable id for placing an initiative at a backlog list index. */
 export function backlogSlotDropId(index: number): string {
   return `${BACKLOG_SLOT_PREFIX}${index}`;
