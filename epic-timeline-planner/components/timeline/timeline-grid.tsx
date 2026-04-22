@@ -87,6 +87,7 @@ function GanttLaneRow({
     <div
       className={cn("relative min-w-0", emphasize ? "z-[25]" : "z-10")}
       data-gantt-lane-index={ganttLaneSortIndex}
+      data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
       <div className="relative grid min-w-0 gap-2" style={gridStyle}>
           <div
@@ -330,6 +331,7 @@ function EpicGanttLaneRow({
     <div
       className={cn("relative min-w-0", emphasize ? "z-[25]" : "z-10")}
       data-gantt-lane-index={ganttLaneSortIndex}
+      data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
       <p className="mb-1 truncate text-[11px] font-medium text-slate-500">{initiative.title}</p>
       <div className="relative grid min-w-0 gap-2" style={gridStyle}>
@@ -1677,60 +1679,130 @@ export function TimelineGrid({
                     </p>
                   ) : (
                     <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
-                    {visibleScheduledLanes.map((initiative) => {
-                      const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
-                      const qHi = globalSprintFromMonthLane(
-                        focusedQuarter.months[focusedQuarter.months.length - 1],
-                        2,
-                      );
-                      const spr = resolvedInitiativeYearSprintBounds(initiative);
-                      const ss = spr?.startYearSprint ?? qLo;
-                      const es = spr?.endYearSprint ?? qHi;
-                      const visS = Math.max(ss, qLo);
-                      const visE = Math.min(es, qHi);
-                      const span = Math.max(visE - visS + 1, 1);
-                      const columnStart = visS - qLo + 1;
-                      const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
-                      let previewColumnStart = columnStart;
-                      let previewSpan = span;
-                      if (rz) {
-                        if (rz.side === "right") {
-                          const newEndSprint = Math.min(qHi, Math.max(ss, es + rz.deltaSteps));
-                          const nVisE = Math.min(newEndSprint, qHi);
-                          const nVisS = Math.max(ss, qLo);
-                          previewSpan = Math.max(nVisE - nVisS + 1, 1);
-                        } else {
-                          const newStartSprint = Math.max(qLo, Math.min(es, ss + rz.deltaSteps));
-                          const nVisS = Math.max(newStartSprint, qLo);
-                          const nVisE = Math.min(es, qHi);
-                          previewColumnStart = nVisS - qLo + 1;
-                          previewSpan = Math.max(nVisE - nVisS + 1, 1);
+                      {(() => {
+                        const byTimelineRow = new Map<number, InitiativeItem[]>();
+                        for (const item of visibleScheduledLanes) {
+                          const key = Number.isFinite(item.timelineRow) ? item.timelineRow : 0;
+                          const bucket = byTimelineRow.get(key);
+                          if (bucket) bucket.push(item);
+                          else byTimelineRow.set(key, [item]);
                         }
-                      }
-                      const isEmphasis =
-                        ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
-                      return (
-                        <GanttLaneRow
-                          key={initiative.id}
-                          initiative={initiative}
-                          gridStyle={ganttLaneGridStyle}
-                          previewColumnStart={previewColumnStart}
-                          previewSpan={previewSpan}
-                          rz={rz}
-                          handleResizePointerDown={handleResizePointerDown}
-                          onResizeInitiativeRange={onResizeInitiativeRange}
-                          onOpenInitiative={onOpenInitiative}
-                          barElsRef={barElsRef}
-                          ganttLaneSortIndex={Math.max(
-                            0,
-                            scheduledInitiatives.findIndex((x) => x.id === initiative.id),
-                          )}
-                          emphasize={isEmphasis}
-                          emphasizeTick={isEmphasis ? ganttEmphasis.tick : 0}
-                        />
-                      );
-                    })}
-                  </div>
+                        const groupedRows = [...byTimelineRow.entries()]
+                          .sort((a, b) => a[0] - b[0])
+                          .map(([timelineRow, items]) => ({
+                            timelineRow,
+                            items: [...items].sort((a, b) => a.title.localeCompare(b.title)),
+                          }));
+
+                        return groupedRows.map((group, groupIdx) => (
+                          <div
+                            key={`gantt-row-${group.timelineRow}`}
+                            className="relative min-w-0 z-10"
+                            data-gantt-lane-index={groupIdx}
+                            data-gantt-timeline-row={group.timelineRow}
+                          >
+                            <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                              {group.items.map((initiative) => {
+                                const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
+                                const qHi = globalSprintFromMonthLane(
+                                  focusedQuarter.months[focusedQuarter.months.length - 1],
+                                  2,
+                                );
+                                const spr = resolvedInitiativeYearSprintBounds(initiative);
+                                const ss = spr?.startYearSprint ?? qLo;
+                                const es = spr?.endYearSprint ?? qHi;
+                                const visS = Math.max(ss, qLo);
+                                const visE = Math.min(es, qHi);
+                                const span = Math.max(visE - visS + 1, 1);
+                                const columnStart = visS - qLo + 1;
+                                const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
+                                let previewColumnStart = columnStart;
+                                let previewSpan = span;
+                                if (rz) {
+                                  if (rz.side === "right") {
+                                    const newEndSprint = Math.min(qHi, Math.max(ss, es + rz.deltaSteps));
+                                    const nVisE = Math.min(newEndSprint, qHi);
+                                    const nVisS = Math.max(ss, qLo);
+                                    previewSpan = Math.max(nVisE - nVisS + 1, 1);
+                                  } else {
+                                    const newStartSprint = Math.max(qLo, Math.min(es, ss + rz.deltaSteps));
+                                    const nVisS = Math.max(newStartSprint, qLo);
+                                    const nVisE = Math.min(es, qHi);
+                                    previewColumnStart = nVisS - qLo + 1;
+                                    previewSpan = Math.max(nVisE - nVisS + 1, 1);
+                                  }
+                                }
+                                const isEmphasis =
+                                  ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
+                                const resizeEdgeClass =
+                                  "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                                const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
+                                const totalStories = stories.length;
+                                const finishedStories = stories.filter(
+                                  (story) => story.status === "done" || story.status === "approved",
+                                ).length;
+                                const completionPercent =
+                                  totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+                                return (
+                                  <div
+                                    key={initiative.id}
+                                    ref={(node) => {
+                                      if (node) barElsRef.current.set(initiative.id, node);
+                                      else barElsRef.current.delete(initiative.id);
+                                    }}
+                                    className={cn(
+                                      "relative z-20 min-w-0 rounded-lg pt-0.5 pb-2",
+                                      isEmphasis ? "overflow-visible" : "overflow-hidden",
+                                    )}
+                                    style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
+                                  >
+                                    <InitiativeTimelineBar
+                                      id={initiative.id}
+                                      title={initiative.title}
+                                      color={initiative.color}
+                                      progressPercent={completionPercent}
+                                      progressLabel={
+                                        totalStories > 0
+                                          ? `${finishedStories}/${totalStories} done or approved`
+                                          : "No user stories"
+                                      }
+                                      isResizing={Boolean(rz)}
+                                      emphasizeFlash={isEmphasis}
+                                      emphasizeTick={isEmphasis ? ganttEmphasis.tick : 0}
+                                      onClick={() => onOpenInitiative(initiative.id)}
+                                    />
+                                    {onResizeInitiativeRange ? (
+                                      <>
+                                        <div
+                                          role="slider"
+                                          aria-label="Resize initiative start (sprint step)"
+                                          title="Drag to change start sprint"
+                                          className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                                          onPointerDown={(e) => {
+                                            e.stopPropagation();
+                                            handleResizePointerDown(initiative.id, "left", e);
+                                          }}
+                                        />
+                                        <div
+                                          role="slider"
+                                          aria-label="Resize initiative end (sprint step)"
+                                          title="Drag to change end sprint"
+                                          className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                                          onPointerDown={(e) => {
+                                            e.stopPropagation();
+                                            handleResizePointerDown(initiative.id, "right", e);
+                                          }}
+                                        />
+                                      </>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1825,47 +1897,120 @@ export function TimelineGrid({
           <div className="relative w-full">
             <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
             <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
-            {scheduledInitiatives.map((initiative, rowIndex) => {
-              const sm = initiative.startMonth ?? 1;
-              const em = initiative.endMonth ?? sm;
-              const spr = resolvedInitiativeYearSprintBounds(initiative);
-              const startS = spr?.startYearSprint ?? firstGlobalSprintForMonth(sm);
-              const endS = spr?.endYearSprint ?? globalSprintFromMonthLane(em, 2);
-              const span = Math.max(endS - startS + 1, 1);
-              const columnStart = startS;
-              const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
-              let previewColumnStart = columnStart;
-              let previewSpan = span;
-              if (rz) {
-                if (rz.side === "right") {
-                  const newEndSprint = Math.min(24, Math.max(startS, endS + rz.deltaSteps));
-                  previewSpan = Math.max(newEndSprint - startS + 1, 1);
-                } else {
-                  const newStartSprint = Math.max(1, Math.min(endS, startS + rz.deltaSteps));
-                  previewColumnStart = newStartSprint;
-                  previewSpan = Math.max(endS - newStartSprint + 1, 1);
+              {(() => {
+                const byTimelineRow = new Map<number, InitiativeItem[]>();
+                for (const item of scheduledInitiatives) {
+                  const key = Number.isFinite(item.timelineRow) ? item.timelineRow : 0;
+                  const bucket = byTimelineRow.get(key);
+                  if (bucket) bucket.push(item);
+                  else byTimelineRow.set(key, [item]);
                 }
-              }
-              const isEmphasis =
-                ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
-              return (
-                <GanttLaneRow
-                  key={initiative.id}
-                  initiative={initiative}
-                  gridStyle={ganttLaneGridStyle}
-                  previewColumnStart={previewColumnStart}
-                  previewSpan={previewSpan}
-                  rz={rz}
-                  handleResizePointerDown={handleResizePointerDown}
-                  onResizeInitiativeRange={onResizeInitiativeRange}
-                  onOpenInitiative={onOpenInitiative}
-                  barElsRef={barElsRef}
-                  ganttLaneSortIndex={rowIndex}
-                  emphasize={isEmphasis}
-                  emphasizeTick={isEmphasis ? ganttEmphasis.tick : 0}
-                />
-              );
-            })}
+                const groupedRows = [...byTimelineRow.entries()]
+                  .sort((a, b) => a[0] - b[0])
+                  .map(([timelineRow, items]) => ({
+                    timelineRow,
+                    items: [...items].sort((a, b) => a.title.localeCompare(b.title)),
+                  }));
+
+                return groupedRows.map((group, groupIdx) => (
+                  <div
+                    key={`year-gantt-row-${group.timelineRow}`}
+                    className="relative min-w-0 z-10"
+                    data-gantt-lane-index={groupIdx}
+                    data-gantt-timeline-row={group.timelineRow}
+                  >
+                    <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                      {group.items.map((initiative) => {
+                        const sm = initiative.startMonth ?? 1;
+                        const em = initiative.endMonth ?? sm;
+                        const spr = resolvedInitiativeYearSprintBounds(initiative);
+                        const startS = spr?.startYearSprint ?? firstGlobalSprintForMonth(sm);
+                        const endS = spr?.endYearSprint ?? globalSprintFromMonthLane(em, 2);
+                        const span = Math.max(endS - startS + 1, 1);
+                        const columnStart = startS;
+                        const rz = resizePreview?.initiativeId === initiative.id ? resizePreview : null;
+                        let previewColumnStart = columnStart;
+                        let previewSpan = span;
+                        if (rz) {
+                          if (rz.side === "right") {
+                            const newEndSprint = Math.min(24, Math.max(startS, endS + rz.deltaSteps));
+                            previewSpan = Math.max(newEndSprint - startS + 1, 1);
+                          } else {
+                            const newStartSprint = Math.max(1, Math.min(endS, startS + rz.deltaSteps));
+                            previewColumnStart = newStartSprint;
+                            previewSpan = Math.max(endS - newStartSprint + 1, 1);
+                          }
+                        }
+                        const isEmphasis =
+                          ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
+                        const resizeEdgeClass =
+                          "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                        const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
+                        const totalStories = stories.length;
+                        const finishedStories = stories.filter(
+                          (story) => story.status === "done" || story.status === "approved",
+                        ).length;
+                        const completionPercent =
+                          totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+                        return (
+                          <div
+                            key={initiative.id}
+                            ref={(node) => {
+                              if (node) barElsRef.current.set(initiative.id, node);
+                              else barElsRef.current.delete(initiative.id);
+                            }}
+                            className={cn(
+                              "relative z-20 min-w-0 rounded-lg pt-0.5 pb-2",
+                              isEmphasis ? "overflow-visible" : "overflow-hidden",
+                            )}
+                            style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
+                          >
+                            <InitiativeTimelineBar
+                              id={initiative.id}
+                              title={initiative.title}
+                              color={initiative.color}
+                              progressPercent={completionPercent}
+                              progressLabel={
+                                totalStories > 0
+                                  ? `${finishedStories}/${totalStories} done or approved`
+                                  : "No user stories"
+                              }
+                              isResizing={Boolean(rz)}
+                              emphasizeFlash={isEmphasis}
+                              emphasizeTick={isEmphasis ? ganttEmphasis.tick : 0}
+                              onClick={() => onOpenInitiative(initiative.id)}
+                            />
+                            {onResizeInitiativeRange ? (
+                              <>
+                                <div
+                                  role="slider"
+                                  aria-label="Resize initiative start (sprint step)"
+                                  title="Drag to change start sprint"
+                                  className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    handleResizePointerDown(initiative.id, "left", e);
+                                  }}
+                                />
+                                <div
+                                  role="slider"
+                                  aria-label="Resize initiative end (sprint step)"
+                                  title="Drag to change end sprint"
+                                  className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    handleResizePointerDown(initiative.id, "right", e);
+                                  }}
+                                />
+                              </>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
         )}

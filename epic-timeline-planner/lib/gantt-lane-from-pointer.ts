@@ -70,3 +70,70 @@ export function inferGanttLaneInsertIndexFromClientY(clientY: number): number | 
 
   return bestInsert;
 }
+
+/** Maps viewport Y to the nearest rendered lane index (not insert slot). */
+export function inferGanttLaneHoverIndexFromClientY(clientY: number): number | undefined {
+  const container = document.getElementById(TIMELINE_GANTT_ROWS_CONTAINER_ID);
+  if (!container) return undefined;
+
+  const rows = [...container.querySelectorAll<HTMLElement>("[data-gantt-lane-index]")];
+  if (rows.length === 0) return undefined;
+
+  rows.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+
+  let bestLane: number | undefined;
+  let bestCost = Infinity;
+
+  for (const el of rows) {
+    const idx = Number(el.dataset.ganttLaneIndex);
+    if (!Number.isFinite(idx)) continue;
+    const r = el.getBoundingClientRect();
+
+    let cost = 0;
+    if (clientY < r.top) cost = r.top - clientY;
+    else if (clientY > r.bottom) cost = clientY - r.bottom;
+    else cost = 0;
+
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestLane = idx;
+    }
+  }
+
+  return bestLane;
+}
+
+/**
+ * Nearest lane’s persisted `timelineRow` (from `data-gantt-timeline-row` on row wrappers).
+ * Use this when lanes are grouped so lane index ≠ initiative list index.
+ */
+export function inferGanttLaneHoverTimelineRowFromClientY(clientY: number): number | undefined {
+  const container = document.getElementById(TIMELINE_GANTT_ROWS_CONTAINER_ID);
+  if (!container) return undefined;
+
+  const rows = [...container.querySelectorAll<HTMLElement>("[data-gantt-lane-index]")];
+  if (rows.length === 0) return undefined;
+
+  rows.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+
+  let bestRow: number | undefined;
+  let bestCost = Infinity;
+
+  for (const el of rows) {
+    const tr = Number(el.dataset.ganttTimelineRow);
+    if (!Number.isFinite(tr)) continue;
+    const r = el.getBoundingClientRect();
+
+    let cost = 0;
+    if (clientY < r.top) cost = r.top - clientY;
+    else if (clientY > r.bottom) cost = clientY - r.bottom;
+    else cost = 0;
+
+    if (cost < bestCost) {
+      bestCost = cost;
+      bestRow = tr;
+    }
+  }
+
+  return bestRow;
+}
