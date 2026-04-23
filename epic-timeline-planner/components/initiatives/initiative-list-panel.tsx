@@ -16,7 +16,7 @@ import {
   storyListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
-import { isKnownEpicTeamId } from "@/lib/month-team-board";
+import { MONTH_TEAM_COLUMNS, isKnownEpicTeamId } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
@@ -966,6 +966,9 @@ export function InitiativeListPanel({
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [epicSearch, setEpicSearch] = useState("");
+  const [panelQuarterFilter, setPanelQuarterFilter] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
+  const [panelTeamFilterId, setPanelTeamFilterId] = useState<string>("all");
+  const [panelStatusFilter, setPanelStatusFilter] = useState<"all" | "To Do" | "In Progress" | "Done" | "Approved">("all");
 
   const monthAssignedEpics = useMemo(() => {
     if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
@@ -1007,6 +1010,17 @@ export function InitiativeListPanel({
     if (!isKnownEpicTeamId(monthEpicTeamFilterId)) return monthAssignedEpics;
     return monthAssignedEpics.filter(({ epic }) => epic.team === monthEpicTeamFilterId);
   }, [monthAssignedEpics, monthEpicTeamFilterId]);
+  const monthPanelEpicsFiltered = useMemo(() => {
+    return monthPanelEpics.filter(({ epic, initiative }) => {
+      if (panelQuarterFilter !== "all") {
+        const monthForQuarter = epic.planStartMonth ?? initiative.startMonth;
+        if (monthForQuarter == null || quarterFromMonth(monthForQuarter) !== panelQuarterFilter) return false;
+      }
+      if (panelTeamFilterId !== "all" && epic.team !== panelTeamFilterId) return false;
+      if (panelStatusFilter !== "all" && epicExecutionStatusMeta(epic).label !== panelStatusFilter) return false;
+      return true;
+    });
+  }, [monthPanelEpics, panelQuarterFilter, panelStatusFilter, panelTeamFilterId]);
   const planAnchorMonth = epicPanelQuarterMonths?.[0] ?? activeMonth;
 
   const monthBacklogEpics = useMemo(() => {
@@ -1028,12 +1042,12 @@ export function InitiativeListPanel({
   }, [monthPanelEpics, planAnchorMonth, epicBacklogOrderByMonth]);
   const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
-    if (!q) return monthPanelEpics;
-    return monthPanelEpics.filter(
+    if (!q) return monthPanelEpicsFiltered;
+    return monthPanelEpicsFiltered.filter(
       ({ epic, initiative }) =>
         epic.title.toLowerCase().includes(q) || initiative.title.toLowerCase().includes(q),
     );
-  }, [monthPanelEpics, epicSearch]);
+  }, [monthPanelEpicsFiltered, epicSearch]);
 
   const initiativeList = useMemo(
     () =>
@@ -1047,9 +1061,21 @@ export function InitiativeListPanel({
   );
   const filteredInitiatives = useMemo(() => {
     const q = initiativeSearch.trim().toLowerCase();
-    if (!q) return initiativeList;
-    return initiativeList.filter((initiative) => initiative.title.toLowerCase().includes(q));
-  }, [initiativeList, initiativeSearch]);
+    return initiativeList.filter((initiative) => {
+      if (q && !initiative.title.toLowerCase().includes(q)) return false;
+      if (panelQuarterFilter !== "all") {
+        if (initiative.startMonth == null || quarterFromMonth(initiative.startMonth) !== panelQuarterFilter) return false;
+      }
+      if (panelTeamFilterId !== "all") {
+        const hasTeam = (initiative.epics ?? []).some((epic) => epic.team === panelTeamFilterId);
+        if (!hasTeam) return false;
+      }
+      if (panelStatusFilter !== "all" && initiativeExecutionStatusMeta(initiative).label !== panelStatusFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [initiativeList, initiativeSearch, panelQuarterFilter, panelStatusFilter, panelTeamFilterId]);
   const showInitiativeBacklogDrop = !inMonthView && !isSprintModeActive;
 
   const showNewButton = inMonthView || !isSprintModeActive;
@@ -1111,10 +1137,51 @@ export function InitiativeListPanel({
               aria-label="Search epics in selected month"
             />
             <datalist id="month-epic-search-suggestions">
-              {monthPanelEpics.map(({ epic }) => (
+              {monthPanelEpicsFiltered.map(({ epic }) => (
                 <option key={`${epic.id}-${epic.title}`} value={epic.title} />
               ))}
             </datalist>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={panelQuarterFilter}
+              onChange={(event) => setPanelQuarterFilter(event.target.value as "all" | "Q1" | "Q2" | "Q3" | "Q4")}
+              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Filter left panel by quarter"
+            >
+              <option value="all">All quarters</option>
+              <option value="Q1">Q1</option>
+              <option value="Q2">Q2</option>
+              <option value="Q3">Q3</option>
+              <option value="Q4">Q4</option>
+            </select>
+            <select
+              value={panelTeamFilterId}
+              onChange={(event) => setPanelTeamFilterId(event.target.value)}
+              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Filter left panel by team"
+            >
+              <option value="all">All teams</option>
+              {MONTH_TEAM_COLUMNS.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={panelStatusFilter}
+              onChange={(event) =>
+                setPanelStatusFilter(event.target.value as "all" | "To Do" | "In Progress" | "Done" | "Approved")
+              }
+              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Filter left panel by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="To Do">To Do</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Done">Done</option>
+              <option value="Approved">Approved</option>
+            </select>
           </div>
           <h3 className="mb-2 text-[14px] font-medium tracking-[0.01em] text-slate-900">
             {epicPanelQuarterLabel
@@ -1134,9 +1201,11 @@ export function InitiativeListPanel({
             {filteredMonthBacklogEpics.length === 0 ? (
               <p className="text-[11px] text-slate-700">
                 {monthPanelEpics.length === 0
-                  ? epicPanelQuarterLabel
-                    ? "No epics are under initiatives scheduled in this quarter yet."
-                    : "No epics are under initiatives scheduled in this month yet."
+                  ? panelQuarterFilter !== "all" || panelTeamFilterId !== "all" || panelStatusFilter !== "all"
+                    ? "No epics match the selected filters."
+                    : epicPanelQuarterLabel
+                      ? "No epics are under initiatives scheduled in this quarter yet."
+                      : "No epics are under initiatives scheduled in this month yet."
                   : "No epics match your search."}
               </p>
             ) : (
@@ -1181,6 +1250,47 @@ export function InitiativeListPanel({
               ))}
             </datalist>
           </div>
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={panelQuarterFilter}
+              onChange={(event) => setPanelQuarterFilter(event.target.value as "all" | "Q1" | "Q2" | "Q3" | "Q4")}
+              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Filter initiatives by quarter"
+            >
+              <option value="all">All quarters</option>
+              <option value="Q1">Q1</option>
+              <option value="Q2">Q2</option>
+              <option value="Q3">Q3</option>
+              <option value="Q4">Q4</option>
+            </select>
+            <select
+              value={panelTeamFilterId}
+              onChange={(event) => setPanelTeamFilterId(event.target.value)}
+              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Filter initiatives by team"
+            >
+              <option value="all">All teams</option>
+              {MONTH_TEAM_COLUMNS.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={panelStatusFilter}
+              onChange={(event) =>
+                setPanelStatusFilter(event.target.value as "all" | "To Do" | "In Progress" | "Done" | "Approved")
+              }
+              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Filter initiatives by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="To Do">To Do</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Done">Done</option>
+              <option value="Approved">Approved</option>
+            </select>
+          </div>
           <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
             Initiatives ({filteredInitiatives.length})
           </h3>
@@ -1188,7 +1298,7 @@ export function InitiativeListPanel({
             <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
               {initiativeList.length === 0
                 ? "No initiatives yet. Add one to begin planning."
-                : "No initiatives match your search."}
+                : "No initiatives match your filters/search."}
             </p>
           ) : (
             <>
