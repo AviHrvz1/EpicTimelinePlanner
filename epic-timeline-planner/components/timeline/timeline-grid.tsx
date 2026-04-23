@@ -397,6 +397,8 @@ type TimelineGridProps = {
   onMonthTeamCapacityChange?: (teamId: string, days: number) => void;
   /** Quarter view: set per-team quarter total; parent splits across months in the quarter. */
   onQuarterTeamCapacityChange?: (quarterLabel: string, teamId: string, quarterTotalDays: number) => void;
+  /** All-quarters view: set per-team year total; parent splits across all months in year. */
+  onYearTeamCapacityChange?: (teamId: string, yearTotalDays: number) => void;
   onMonthTeamCapacityEpicRemove?: (epicId: string) => void;
   /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
@@ -558,6 +560,7 @@ export function TimelineGrid({
   monthTeamCapacityByKey = {},
   onMonthTeamCapacityChange,
   onQuarterTeamCapacityChange,
+  onYearTeamCapacityChange,
   onMonthTeamCapacityEpicRemove,
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
@@ -574,6 +577,8 @@ export function TimelineGrid({
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status" | "capacity">("gantt");
+  const [capacityQuarterFilterLabel, setCapacityQuarterFilterLabel] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
+  const [capacityTeamFilterId, setCapacityTeamFilterId] = useState<string>("all");
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -592,6 +597,10 @@ export function TimelineGrid({
   const focusedQuarter = useMemo(
     () => QUARTERS.find((quarter) => quarter.label === focusedQuarterLabel) ?? null,
     [focusedQuarterLabel],
+  );
+  const filteredCapacityQuarter = useMemo(
+    () => QUARTERS.find((quarter) => quarter.label === capacityQuarterFilterLabel) ?? null,
+    [capacityQuarterFilterLabel],
   );
   const scheduledInitiatives = useMemo(() => {
     const list = initiatives.filter(
@@ -1662,6 +1671,87 @@ export function TimelineGrid({
             </button>
           </div>
         </div>
+      ) : !activeMonth && !focusedQuarter ? (
+        <div className="relative z-30 h-0">
+          <div
+            className={cn(
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80 transition-[width] duration-200",
+              isRailExpanded ? "w-44" : "w-[3.25rem]",
+            )}
+            onMouseEnter={() => setIsRailExpanded(true)}
+            onMouseLeave={() => setIsRailExpanded(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("gantt")}
+              title="Gantt"
+              className={cn(
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                quarterViewTab === "gantt"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <MapIcon className="size-4" aria-hidden />
+              <span className="sr-only">Gantt</span>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
+                Gantt
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("status")}
+              title="All quarters status"
+              className={cn(
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                quarterViewTab === "status"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <BarChart3 className="size-4" aria-hidden />
+              <span className="sr-only">All quarters status</span>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
+                All quarters status
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("capacity")}
+              title="All quarters capacity"
+              className={cn(
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                quarterViewTab === "capacity"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <Thermometer className="size-4" aria-hidden />
+              <span className="sr-only">All quarters capacity</span>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
+                All quarters capacity
+              </span>
+            </button>
+          </div>
+        </div>
       ) : null}
       {!activeMonth && !focusedQuarter ? (
         <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
@@ -2155,8 +2245,68 @@ export function TimelineGrid({
       )}
 
       <div className={cn("space-y-2", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
-        {activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
+        {!activeMonth && quarterViewTab === "capacity" ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2 shadow-sm ring-1 ring-slate-100/80">
+            {!focusedQuarter ? (
+              <label className="inline-flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Quarter</span>
+                <select
+                  value={capacityQuarterFilterLabel}
+                  onChange={(event) =>
+                    setCapacityQuarterFilterLabel(event.target.value as "all" | "Q1" | "Q2" | "Q3" | "Q4")
+                  }
+                  className="h-8 min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                  aria-label="Filter quarter capacity by quarter"
+                >
+                  <option value="all">All quarters</option>
+                  {QUARTERS.map((quarter) => (
+                    <option key={quarter.label} value={quarter.label}>
+                      {quarter.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="inline-flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+              <select
+                value={capacityTeamFilterId}
+                onChange={(event) => setCapacityTeamFilterId(event.target.value)}
+                className="h-8 min-w-[9rem] rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                aria-label="Filter quarter capacity by team"
+              >
+                <option value="all">All teams</option>
+                {MONTH_TEAM_COLUMNS.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
+        {activeMonth ? null : !focusedQuarter && quarterViewTab === "status" ? (
+          <QuarterStatus initiatives={initiatives} quarterMonths={MONTHS.map((_, i) => i + 1)} planYear={currentYear} />
+        ) : activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
           <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
+        ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
+          <QuarterTeamCapacityBoard
+            initiatives={initiatives}
+            quarterLabel={filteredCapacityQuarter?.label ?? "All quarters"}
+            quarterMonths={filteredCapacityQuarter?.months ?? MONTHS.map((_, i) => i + 1)}
+            year={currentYear}
+            monthTeamCapacityByKey={monthTeamCapacityByKey}
+            onCapacityChange={(teamId, totalDays) => {
+              if (filteredCapacityQuarter) {
+                onQuarterTeamCapacityChange?.(filteredCapacityQuarter.label, teamId, totalDays);
+                return;
+              }
+              onYearTeamCapacityChange?.(teamId, totalDays);
+            }}
+            onOpenEpic={onOpenEpic}
+            onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
+            teamFilterId={capacityTeamFilterId === "all" ? null : capacityTeamFilterId}
+          />
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard
             initiatives={initiatives}
@@ -2169,6 +2319,7 @@ export function TimelineGrid({
             }
             onOpenEpic={onOpenEpic}
             onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
+            teamFilterId={capacityTeamFilterId === "all" ? null : capacityTeamFilterId}
           />
         ) : yearRoadmapEpics.length === 0 ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : (

@@ -51,6 +51,7 @@ type QuarterTeamCapacityBoardProps = {
   onCapacityChange: (teamId: string, quarterTotalDays: number) => void;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
+  teamFilterId?: string | null;
 };
 
 export function QuarterTeamCapacityBoard({
@@ -62,14 +63,19 @@ export function QuarterTeamCapacityBoard({
   onCapacityChange,
   onOpenEpic,
   onRemoveEpicFromCapacity,
+  teamFilterId = null,
 }: QuarterTeamCapacityBoardProps) {
   const rows = collectQuarterEpics(initiatives, quarterMonths);
   const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
   const gaugeScaleMax = 60 * quarterMonths.length;
   const capacityInputMax = 200 * quarterMonths.length;
 
+  const visibleTeams = teamFilterId
+    ? MONTH_TEAM_COLUMNS.filter((team) => team.id === teamFilterId)
+    : MONTH_TEAM_COLUMNS;
+
   const teamQuarterCapacity = new Map<string, number>();
-  for (const team of MONTH_TEAM_COLUMNS) {
+  for (const team of visibleTeams) {
     let total = 0;
     for (const month of quarterMonths) {
       const key = monthTeamCapacityBoardKey(year, month);
@@ -80,7 +86,7 @@ export function QuarterTeamCapacityBoard({
 
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
-  for (const team of MONTH_TEAM_COLUMNS) {
+  for (const team of visibleTeams) {
     teamTotalCapacity += Number(teamQuarterCapacity.get(team.id) ?? 0);
     const cards = rows.filter((row) => row.epic.team === team.id);
     teamTotalAssigned += cards.reduce(
@@ -98,7 +104,7 @@ export function QuarterTeamCapacityBoard({
         totalCapacity={teamTotalCapacity}
       />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        {MONTH_TEAM_COLUMNS.map((team) => {
+        {visibleTeams.map((team) => {
           const cards = rows
             .filter((row) => row.epic.team === team.id)
             .map((row) => {

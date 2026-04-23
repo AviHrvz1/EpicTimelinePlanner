@@ -1248,6 +1248,25 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     });
   }, [selectedYear]);
 
+  const updateYearTeamCapacity = useCallback((teamId: string, yearTotalDays: number) => {
+    const allMonths = Array.from({ length: 12 }, (_, index) => index + 1);
+    const parts = splitQuarterTotalAcrossMonths(yearTotalDays, allMonths.length, 200);
+    setMonthTeamCapacityByKey((prev) => {
+      let next = { ...prev };
+      for (let i = 0; i < allMonths.length; i++) {
+        const mk = monthTeamCapacityBoardKey(selectedYear, allMonths[i]!);
+        const cur = next[mk] ?? emptyMonthTeamCapacityBoard();
+        next = {
+          ...next,
+          [mk]: {
+            capacities: { ...cur.capacities, [teamId]: parts[i]! },
+          },
+        };
+      }
+      return next;
+    });
+  }, [selectedYear]);
+
   const removeEpicFromMonthTeamCapacity = useCallback(
     async (epicId: string) => {
       if (activeTimelineMonth == null) return;
@@ -2833,6 +2852,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 monthTeamCapacityByKey={monthTeamCapacityByKey}
                 onMonthTeamCapacityChange={updateMonthTeamCapacity}
                 onQuarterTeamCapacityChange={updateQuarterTeamCapacity}
+                onYearTeamCapacityChange={updateYearTeamCapacity}
                 onMonthTeamCapacityEpicRemove={removeEpicFromMonthTeamCapacity}
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}
