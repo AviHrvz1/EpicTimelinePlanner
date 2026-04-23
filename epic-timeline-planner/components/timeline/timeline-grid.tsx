@@ -577,6 +577,7 @@ export function TimelineGrid({
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status" | "capacity">("gantt");
+  const [roadmapBarMode, setRoadmapBarMode] = useState<"epics" | "initiatives">("epics");
   const [capacityQuarterFilterLabel, setCapacityQuarterFilterLabel] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
   const [capacityTeamFilterId, setCapacityTeamFilterId] = useState<string>("all");
   const [isRailExpanded, setIsRailExpanded] = useState(false);
@@ -654,6 +655,62 @@ export function TimelineGrid({
         a.epic.title.localeCompare(b.epic.title),
     );
   }, [initiatives]);
+  const yearRoadmapInitiatives = useMemo(() => {
+    const rows: Array<{ initiative: InitiativeItem; startS: number; endS: number }> = [];
+    for (const initiative of initiatives) {
+      const plannedEpicBounds = (initiative.epics ?? [])
+        .filter((epic) => epic.planStartMonth != null && epic.planEndMonth != null)
+        .map((epic) => ({
+          startS: globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1),
+          endS: globalSprintFromMonthLane(epic.planEndMonth!, 2),
+        }));
+      if (plannedEpicBounds.length === 0) continue;
+      const startS = Math.min(...plannedEpicBounds.map((b) => b.startS));
+      const endS = Math.max(...plannedEpicBounds.map((b) => b.endS));
+      rows.push({ initiative, startS, endS });
+    }
+    return rows.sort(
+      (a, b) =>
+        a.initiative.timelineRow - b.initiative.timelineRow ||
+        a.initiative.title.localeCompare(b.initiative.title),
+    );
+  }, [initiatives]);
+  const quarterRoadmapInitiatives = useMemo(() => {
+    if (!focusedQuarter) return [] as Array<{ initiative: InitiativeItem; startS: number; endS: number }>;
+    const qStartS = firstGlobalSprintForMonth(focusedQuarter.months[0]);
+    const qEndS = globalSprintFromMonthLane(focusedQuarter.months[focusedQuarter.months.length - 1], 2);
+    return yearRoadmapInitiatives
+      .filter((row) => !(row.endS < qStartS || row.startS > qEndS))
+      .map((row) => ({
+        initiative: row.initiative,
+        startS: Math.max(row.startS, qStartS),
+        endS: Math.min(row.endS, qEndS),
+      }));
+  }, [focusedQuarter, yearRoadmapInitiatives]);
+  const yearRoadmapInitiativeRows = useMemo(() => {
+    const byRow = new Map<number, Array<{ initiative: InitiativeItem; startS: number; endS: number }>>();
+    for (const item of yearRoadmapInitiatives) {
+      const row = Number.isFinite(item.initiative.timelineRow) ? item.initiative.timelineRow : 0;
+      const bucket = byRow.get(row);
+      if (bucket) bucket.push(item);
+      else byRow.set(row, [item]);
+    }
+    return [...byRow.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([timelineRow, items]) => ({ timelineRow, items }));
+  }, [yearRoadmapInitiatives]);
+  const quarterRoadmapInitiativeRows = useMemo(() => {
+    const byRow = new Map<number, Array<{ initiative: InitiativeItem; startS: number; endS: number }>>();
+    for (const item of quarterRoadmapInitiatives) {
+      const row = Number.isFinite(item.initiative.timelineRow) ? item.initiative.timelineRow : 0;
+      const bucket = byRow.get(row);
+      if (bucket) bucket.push(item);
+      else byRow.set(row, [item]);
+    }
+    return [...byRow.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([timelineRow, items]) => ({ timelineRow, items }));
+  }, [quarterRoadmapInitiatives]);
   const quarterRoadmapEpicRows = useMemo(() => {
     const byRow = new Map<number, Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }>>();
     for (const item of quarterRoadmapEpics) {
@@ -1317,18 +1374,36 @@ export function TimelineGrid({
             </label>
             {summaryBadges ? (
               <div className="flex flex-wrap items-center justify-end gap-2 pr-3">
-                <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300">
+                <button
+                  type="button"
+                  onClick={() => setRoadmapBarMode("initiatives")}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    roadmapBarMode === "initiatives"
+                      ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
                   {summaryBadges.totalInitiatives} initiatives
-                </div>
+                </button>
                 <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-emerald-800">
                   {summaryBadges.scheduledInitiatives} scheduled
                 </div>
                 <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800">
                   {summaryBadges.backlogInitiatives} backlog
                 </div>
-                <div className="rounded-full bg-amber-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-amber-800">
+                <button
+                  type="button"
+                  onClick={() => setRoadmapBarMode("epics")}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    roadmapBarMode === "epics"
+                      ? "bg-amber-100 text-amber-800 ring-amber-200"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
                   {summaryBadges.totalEpics} epics
-                </div>
+                </button>
                 <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
                   {summaryBadges.totalStories} user stories
                 </div>
@@ -2092,7 +2167,51 @@ export function TimelineGrid({
                 </div>
                 <div className="relative w-full">
                   <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
-                  {quarterRoadmapEpics.length === 0 ? (
+                  {roadmapBarMode === "initiatives" ? (
+                    quarterRoadmapInitiativeRows.length === 0 ? (
+                      <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
+                        No initiatives with planned epics in this quarter.
+                      </p>
+                    ) : (
+                      <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
+                        {quarterRoadmapInitiativeRows.map((group, idx) => (
+                          <div
+                            key={`q-init-row-${group.timelineRow}`}
+                            className="relative min-w-0 z-10"
+                            data-gantt-lane-index={idx}
+                            data-gantt-timeline-row={group.timelineRow}
+                          >
+                            <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                              {group.items.map((row) => {
+                                const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
+                                const columnStart = Math.max(1, row.startS - qLo + 1);
+                                const span = Math.max(row.endS - row.startS + 1, 1);
+                                const stories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+                                const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+                                const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                                return (
+                                  <div
+                                    key={`q-init-${row.initiative.id}`}
+                                    className="relative min-w-0 rounded-lg pt-0.5 pb-2 z-20"
+                                    style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
+                                  >
+                                    <InitiativeTimelineBar
+                                      id={row.initiative.id}
+                                      title={row.initiative.title}
+                                      color={row.initiative.color}
+                                      progressPercent={completionPercent}
+                                      progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                                      onClick={() => onOpenInitiative(row.initiative.id)}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : quarterRoadmapEpics.length === 0 ? (
                     <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
                       Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled
                       bar along the timeline.
@@ -2321,14 +2440,60 @@ export function TimelineGrid({
             onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
             teamFilterId={capacityTeamFilterId === "all" ? null : capacityTeamFilterId}
           />
-        ) : yearRoadmapEpics.length === 0 ? (
+        ) : roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
+          focusedQuarter && quarterViewTab === "gantt" ? null : (
+            <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
+              No initiatives with planned epics to display on the roadmap.
+            </p>
+          )
+        ) : yearRoadmapEpics.length === 0 && roadmapBarMode === "epics" ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : (
             <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
               Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
               along the timeline.
             </p>
           )
-        ) : focusedQuarter && quarterViewTab === "gantt" ? null : (
+        ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (
+          <div className="relative w-full">
+            <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
+            <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
+              {yearRoadmapInitiativeRows.map((group, idx) => (
+                <div
+                  key={`year-init-row-${group.timelineRow}`}
+                  className="relative min-w-0 z-10"
+                  data-gantt-lane-index={idx}
+                  data-gantt-timeline-row={group.timelineRow}
+                >
+                  <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                    {group.items.map((row) => {
+                      const columnStart = Math.max(1, row.startS);
+                      const span = Math.max(row.endS - row.startS + 1, 1);
+                      const stories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+                      const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+                      const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                      return (
+                        <div
+                          key={`year-init-${row.initiative.id}`}
+                          className="relative min-w-0 rounded-lg pt-0.5 pb-2 z-20"
+                          style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
+                        >
+                          <InitiativeTimelineBar
+                            id={row.initiative.id}
+                            title={row.initiative.title}
+                            color={row.initiative.color}
+                            progressPercent={completionPercent}
+                            progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                            onClick={() => onOpenInitiative(row.initiative.id)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
           <div className="relative w-full">
             <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
             <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
