@@ -8,6 +8,9 @@ import {
 } from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
 
+const ganttBarTooltipClass =
+  "pointer-events-none absolute left-2 top-0 z-[200] -translate-y-[calc(100%+6px)] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover/bar:opacity-100";
+
 /** Fills DragOverlay bounds so the preview lines up with the real Gantt bar. */
 export function TimelineBarDragPreview({
   title,
@@ -27,7 +30,7 @@ export function TimelineBarDragPreview({
         className="relative z-10 flex h-9 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-lg ring-1 ring-black/15"
         style={{ backgroundColor: color }}
       >
-        <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-center antialiased">
+        <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased">
           {title}
         </span>
       </div>
@@ -83,8 +86,11 @@ export function InitiativeTimelineBar({
         if (isResizing) return;
         onClick?.();
       }}
-      className="relative z-20 space-y-0"
+      className="group/bar relative z-20 space-y-0"
     >
+      <div role="tooltip" className={ganttBarTooltipClass}>
+        {title}
+      </div>
       <div
         className={cn(
           "relative z-10 flex h-9 w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-semibold text-white",
@@ -104,7 +110,7 @@ export function InitiativeTimelineBar({
         ) : null}
         <span
           className={cn(
-            "relative z-10 min-w-0 flex-1 truncate px-3 text-center antialiased",
+            "relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased",
             emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
           )}
         >
@@ -173,13 +179,13 @@ export function EpicPlanTimelineBar({
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      title={`${title} — drag to move on timeline`}
+      title={title}
       onClick={() => {
         if (isDragging || isResizing) return;
         onClick?.();
       }}
       className={cn(
-        "relative z-20 space-y-0",
+        "group/bar relative z-20 space-y-0",
         isDragging && "z-50 opacity-60",
       )}
       style={{
@@ -190,6 +196,9 @@ export function EpicPlanTimelineBar({
         position: isDragging ? "relative" : undefined,
       }}
     >
+      <div role="tooltip" className={ganttBarTooltipClass}>
+        {title}
+      </div>
       <div
         className={cn(
           "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white active:cursor-grabbing",
@@ -209,7 +218,7 @@ export function EpicPlanTimelineBar({
         ) : null}
         <span
           className={cn(
-            "relative z-10 min-w-0 flex-1 truncate px-3 text-center antialiased",
+            "relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased",
             emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
           )}
         >
