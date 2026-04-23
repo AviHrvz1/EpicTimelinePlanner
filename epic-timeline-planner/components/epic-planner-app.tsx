@@ -2862,6 +2862,34 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setEditingInitiative(initiative);
                   setInitiativeDialogOpen(true);
                 }}
+                onUnscheduleEpic={async (epicId) => {
+                  const before = initiatives;
+                  const target = before.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId);
+                  if (!target) return;
+                  const alreadyUnscheduled =
+                    target.planSprint == null && target.planStartMonth == null && target.planEndMonth == null;
+                  if (alreadyUnscheduled) return;
+                  flushSync(() => {
+                    setInitiatives((prev) =>
+                      prev.map((initiative) => ({
+                        ...initiative,
+                        epics: (initiative.epics ?? []).map((epic) =>
+                          epic.id === epicId
+                            ? { ...epic, planSprint: null, planStartMonth: null, planEndMonth: null }
+                            : epic,
+                        ),
+                      })),
+                    );
+                  });
+                  try {
+                    await patchEpicClearPlan(epicId);
+                    toast.success("Epic moved to unscheduled");
+                  } catch (err) {
+                    await refresh();
+                    const description = err instanceof Error ? err.message : undefined;
+                    toast.error("Failed to unschedule epic", description ? { description } : undefined);
+                  }
+                }}
                 ganttEmphasis={ganttEmphasis}
                 ganttEpicEmphasis={ganttEpicEmphasis}
                 onResizeInitiativeRange={async (initiativeId, range) => {

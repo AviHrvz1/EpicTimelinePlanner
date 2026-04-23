@@ -1,6 +1,7 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
+import { X } from "lucide-react";
 
 import {
   type GanttTimelineBarDragData,
@@ -144,6 +145,7 @@ type EpicPlanTimelineBarProps = {
   progressLabel?: string;
   isResizing?: boolean;
   onClick?: () => void;
+  onUnschedule?: () => void;
   emphasizeFlash?: boolean;
   emphasizeTick?: number;
 };
@@ -157,6 +159,7 @@ export function EpicPlanTimelineBar({
   progressLabel,
   isResizing,
   onClick,
+  onUnschedule,
   emphasizeFlash = false,
   emphasizeTick = 0,
 }: EpicPlanTimelineBarProps) {
@@ -209,6 +212,21 @@ export function EpicPlanTimelineBar({
         )}
         style={{ backgroundColor: color }}
       >
+        {onUnschedule ? (
+          <button
+            type="button"
+            aria-label="Unschedule epic"
+            title="Move epic to unscheduled backlog"
+            className="pointer-events-none absolute right-2 top-0.5 z-[60] inline-flex size-4.5 items-center justify-center rounded-full bg-white/20 text-white opacity-0 ring-1 ring-white/40 transition duration-150 group-hover/bar:pointer-events-auto group-hover/bar:opacity-100 hover:bg-white/30"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUnschedule();
+            }}
+          >
+            <X className="size-3" strokeWidth={2.5} aria-hidden />
+          </button>
+        ) : null}
         {emphasizeFlash ? (
           <div
             key={emphasizeTick}

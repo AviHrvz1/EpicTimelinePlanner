@@ -156,6 +156,7 @@ type EpicGanttLaneRowProps = {
   initiative: InitiativeItem;
   gridStyle: CSSProperties;
   onOpenEpic: (epicId: string) => void;
+  onUnscheduleEpic?: (epicId: string) => void;
   ganttLaneSortIndex: number;
   emphasize?: boolean;
   emphasizeTick?: number;
@@ -318,6 +319,7 @@ function EpicGanttLaneRow({
   initiative,
   gridStyle,
   onOpenEpic,
+  onUnscheduleEpic,
   ganttLaneSortIndex,
   emphasize = false,
   emphasizeTick = 0,
@@ -350,6 +352,7 @@ function EpicGanttLaneRow({
             }
             emphasizeFlash={emphasize}
             emphasizeTick={emphasizeTick}
+            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
           />
         </div>
@@ -412,6 +415,7 @@ type TimelineGridProps = {
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
   onOpenEpic: (epicId: string) => void;
+  onUnscheduleEpic?: (epicId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onResizeInitiativeRange?: (initiativeId: string, range: InitiativeScheduleRangePatch) => void;
@@ -540,6 +544,7 @@ export function TimelineGrid({
   onSprintModeChange,
   onSprintTabChange,
   onOpenEpic,
+  onUnscheduleEpic,
   onOpenInitiative,
   onOpenStory,
   onResizeInitiativeRange,
@@ -1828,6 +1833,7 @@ export function TimelineGrid({
                                 initiative={initiative}
                                 gridStyle={epicMonthGridStyle}
                                 onOpenEpic={onOpenEpic}
+                                onUnscheduleEpic={onUnscheduleEpic}
                                 ganttLaneSortIndex={rowIndex}
                                 emphasize={emphasize}
                                 emphasizeTick={emphasizeTick}
@@ -2047,6 +2053,7 @@ export function TimelineGrid({
                                     isResizing={Boolean(rz)}
                                     emphasizeFlash={isEpicEmphasis}
                                     emphasizeTick={isEpicEmphasis ? ganttEpicEmphasis.tick : 0}
+                                    onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                     onClick={() => onOpenEpic(row.epic.id)}
                                   />
                                   {onResizeEpicPlanRange ? (
@@ -2217,6 +2224,7 @@ export function TimelineGrid({
                             isResizing={Boolean(rz)}
                             emphasizeFlash={isEpicEmphasis}
                             emphasizeTick={isEpicEmphasis ? ganttEpicEmphasis.tick : 0}
+                            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                             onClick={() => onOpenEpic(row.epic.id)}
                           />
                           {onResizeEpicPlanRange ? (

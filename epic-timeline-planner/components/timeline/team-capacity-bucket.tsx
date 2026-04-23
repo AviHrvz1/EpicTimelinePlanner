@@ -14,6 +14,9 @@ export function TeamEpicCard({
   title,
   initiativeTitle,
   loadDays,
+  planningLabel,
+  executionStatusLabel,
+  executionStatusClassName,
   onOpenEpic,
   onRemoveEpicFromCapacity,
 }: {
@@ -22,6 +25,9 @@ export function TeamEpicCard({
   title: string;
   initiativeTitle: string;
   loadDays: number;
+  planningLabel?: string;
+  executionStatusLabel?: string;
+  executionStatusClassName?: string;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
 }) {
@@ -52,6 +58,23 @@ export function TeamEpicCard({
           ::
         </button>
         <div className="min-w-0 flex-1 pr-1">
+          <div className="mb-1 flex flex-wrap items-center gap-1">
+            {planningLabel ? (
+              <span className="inline-flex items-center rounded border border-violet-200/90 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800">
+                {planningLabel}
+              </span>
+            ) : null}
+            {executionStatusLabel ? (
+              <span
+                className={cn(
+                  "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold",
+                  executionStatusClassName ?? "border-blue-200/90 bg-blue-50 text-blue-800",
+                )}
+              >
+                {executionStatusLabel}
+              </span>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => onOpenEpic(epicId)}
@@ -105,6 +128,9 @@ export function TeamCapacityBucket({
     title: string;
     initiativeTitle: string;
     loadDays: number;
+    planningLabel?: string;
+    executionStatusLabel?: string;
+    executionStatusClassName?: string;
   }>;
   capacity: number;
   onCapacityChange: (days: number) => void;

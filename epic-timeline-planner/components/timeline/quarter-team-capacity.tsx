@@ -9,6 +9,33 @@ import { monthTeamCapacityBoardKey, type MonthTeamCapacityBoard } from "@/lib/mo
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
 
+function quarterFromMonth(month: number): string {
+  if (month <= 3) return "Q1";
+  if (month <= 6) return "Q2";
+  if (month <= 9) return "Q3";
+  return "Q4";
+}
+
+function epicPlanningLabel(epic: InitiativeItem["epics"][number]): string {
+  const isPlanned = epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  if (!isPlanned) return "Unscheduled";
+  return quarterFromMonth(epic.planStartMonth);
+}
+
+function epicExecutionStatusMeta(epic: InitiativeItem["epics"][number]): { label: string; className: string } {
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) {
+    return { label: "To Do", className: "border-amber-200/90 bg-amber-50 text-amber-800" };
+  }
+  if (stories.every((s) => s.status === "approved")) {
+    return { label: "Approved", className: "border-violet-200/90 bg-violet-50 text-violet-800" };
+  }
+  if (stories.every((s) => s.status === "done" || s.status === "approved")) {
+    return { label: "Done", className: "border-emerald-200/90 bg-emerald-50 text-emerald-800" };
+  }
+  return { label: "In Progress", className: "border-blue-200/90 bg-blue-50 text-blue-800" };
+}
+
 type QuarterTeamCapacityBoardProps = {
   initiatives: InitiativeItem[];
   quarterLabel: string;
@@ -68,13 +95,19 @@ export function QuarterTeamCapacityBoard({
         {MONTH_TEAM_COLUMNS.map((team) => {
           const cards = rows
             .filter((row) => row.epic.team === team.id)
-            .map((row) => ({
-              epicId: row.epic.id,
-              icon: row.epic.icon,
-              title: row.epic.title,
-              initiativeTitle: row.initiative.title,
-              loadDays: epicEffectiveEstimateDays(row.epic, "auto"),
-            }));
+            .map((row) => {
+              const execution = epicExecutionStatusMeta(row.epic);
+              return {
+                epicId: row.epic.id,
+                icon: row.epic.icon,
+                title: row.epic.title,
+                initiativeTitle: row.initiative.title,
+                loadDays: epicEffectiveEstimateDays(row.epic, "auto"),
+                planningLabel: epicPlanningLabel(row.epic),
+                executionStatusLabel: execution.label,
+                executionStatusClassName: execution.className,
+              };
+            });
           const capacity = Number(teamQuarterCapacity.get(team.id) ?? 0);
           return (
             <TeamCapacityBucket

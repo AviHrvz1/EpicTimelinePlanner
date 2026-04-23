@@ -16,6 +16,33 @@ import { cn } from "@/lib/utils";
 import { globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 
+function quarterFromMonth(month: number): string {
+  if (month <= 3) return "Q1";
+  if (month <= 6) return "Q2";
+  if (month <= 9) return "Q3";
+  return "Q4";
+}
+
+function epicPlanningLabel(epic: InitiativeItem["epics"][number]): string {
+  const isPlanned = epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  if (!isPlanned) return "Unscheduled";
+  return quarterFromMonth(epic.planStartMonth);
+}
+
+function epicExecutionStatusMeta(epic: InitiativeItem["epics"][number]): { label: string; className: string } {
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) {
+    return { label: "To Do", className: "border-amber-200/90 bg-amber-50 text-amber-800" };
+  }
+  if (stories.every((s) => s.status === "approved")) {
+    return { label: "Approved", className: "border-violet-200/90 bg-violet-50 text-violet-800" };
+  }
+  if (stories.every((s) => s.status === "done" || s.status === "approved")) {
+    return { label: "Done", className: "border-emerald-200/90 bg-emerald-50 text-emerald-800" };
+  }
+  return { label: "In Progress", className: "border-blue-200/90 bg-blue-50 text-blue-800" };
+}
+
 function TeamQueueDropSlot({
   year,
   month,
@@ -54,6 +81,8 @@ function TeamEpicCard({
   onOpenEpic: (epicId: string) => void;
 }) {
   const { epic, initiative } = epicRow;
+  const planLabel = epicPlanningLabel(epic);
+  const executionStatus = epicExecutionStatusMeta(epic);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(epic.id),
   });
@@ -99,6 +128,19 @@ function TeamEpicCard({
             onClick={() => onOpenEpic(epic.id)}
             className="w-full rounded-lg px-1 py-0.5 text-left transition hover:bg-slate-50"
           >
+            <div className="mb-1 flex flex-wrap items-center gap-1">
+              <span className="inline-flex items-center rounded border border-violet-200/90 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800">
+                {planLabel}
+              </span>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold",
+                  executionStatus.className,
+                )}
+              >
+                {executionStatus.label}
+              </span>
+            </div>
             <p className="flex min-w-0 items-center gap-1.5 text-[14px] font-semibold leading-snug text-slate-900">
               {epic.icon?.trim() && epic.icon !== "📁" ? (
                 <span className="shrink-0">{epic.icon}</span>

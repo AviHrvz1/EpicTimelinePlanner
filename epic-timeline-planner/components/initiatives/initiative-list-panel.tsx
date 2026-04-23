@@ -116,7 +116,13 @@ function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: str
       className: "border border-slate-200/90 bg-slate-100 text-slate-600",
     };
   }
+  return {
+    label: quarterFromMonth(epic.planStartMonth),
+    className: "border border-violet-200/90 bg-violet-50 text-violet-800",
+  };
+}
 
+function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: string } {
   const stories = epic.userStories ?? [];
   if (stories.length === 0) {
     return {
@@ -124,35 +130,21 @@ function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: str
       className: "border border-amber-200/90 bg-amber-50 text-amber-800",
     };
   }
-
-  const total = stories.length;
-  const approved = stories.filter((s) => s.status === "approved").length;
-  const doneOrApproved = stories.filter((s) => s.status === "done" || s.status === "approved").length;
-  const progressed = stories.some(
-    (s) => s.status === "inProgress" || s.status === "done" || s.status === "approved",
-  );
-
-  if (approved === total) {
+  if (stories.every((s) => s.status === "approved")) {
     return {
       label: "Approved",
       className: "border border-violet-200/90 bg-violet-50 text-violet-800",
     };
   }
-  if (doneOrApproved === total) {
+  if (stories.every((s) => s.status === "done" || s.status === "approved")) {
     return {
-      label: "DONE",
+      label: "Done",
       className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800",
     };
   }
-  if (progressed) {
-    return {
-      label: "In Progress",
-      className: "border border-blue-200/90 bg-blue-50 text-blue-800",
-    };
-  }
   return {
-    label: "To Do",
-    className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+    label: "In Progress",
+    className: "border border-blue-200/90 bg-blue-50 text-blue-800",
   };
 }
 
@@ -251,6 +243,8 @@ function InitiativeTreeEpicRow({
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const completion = epicCompletionMeta(epic);
+  const epicPlanStatus = epicPlanningStatusMeta(epic);
+  const epicExecutionStatus = epicExecutionStatusMeta(epic);
 
   return (
     <div
@@ -302,8 +296,18 @@ function InitiativeTreeEpicRow({
                 </div>
               </div>
             </button>
-            <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover/epic:opacity-100 group-focus-within/epic:opacity-100">
+            <div className="flex shrink-0 items-start gap-1">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-0.5">
+                <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
+                  {epicPlanStatus.label}
+                </span>
+                <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
+                  {epicExecutionStatus.label}
+                </span>
+              </div>
+              <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover/epic:opacity-100 group-focus-within/epic:opacity-100">
               <EditRowIconButton label="Edit epic" onClick={() => onOpenEpic(epic, initiative)} />
+              </div>
             </div>
           </div>
           <div className="mt-2 space-y-1.5">
@@ -467,12 +471,7 @@ function InitiativeTreeCard({
                   {initiative.status === "scheduled" && initiative.startMonth != null ? (
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pl-1 pr-0.5">
                       <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] font-normal text-violet-700">
-                        Quarter {quarterFromMonth(initiative.startMonth)}
-                      </span>
-                      <span className="rounded bg-blue-100 px-2 py-0.5 text-[11px] font-normal text-blue-700">
-                        {initiative.endMonth != null && initiative.endMonth !== initiative.startMonth
-                          ? `${MONTHS[initiative.startMonth - 1]}-${MONTHS[initiative.endMonth - 1]}`
-                          : MONTHS[initiative.startMonth - 1]}
+                        {quarterFromMonth(initiative.startMonth)}
                       </span>
                     </div>
                   ) : null}
@@ -626,7 +625,8 @@ function SprintEpicCard({
     disabled: !backlogDropSlot,
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
-  const epicStatus = epicPlanningStatusMeta(epic);
+  const epicPlanStatus = epicPlanningStatusMeta(epic);
+  const epicExecutionStatus = epicExecutionStatusMeta(epic);
   const completion = epicCompletionMeta(epic);
   const [isOpen, setIsOpen] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
@@ -699,8 +699,11 @@ function SprintEpicCard({
                   <p className="min-w-0 truncate text-[16px] font-normal leading-6 text-slate-900">{epic.title}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pl-1 pr-0.5">
-                  <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicStatus.className)}>
-                    {epicStatus.label}
+                  <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
+                    {epicPlanStatus.label}
+                  </span>
+                  <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
+                    {epicExecutionStatus.label}
                   </span>
                 </div>
               </div>
