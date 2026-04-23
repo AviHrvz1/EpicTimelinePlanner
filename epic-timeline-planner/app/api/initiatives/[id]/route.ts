@@ -95,6 +95,35 @@ export async function PATCH(
     },
   });
 
+  if (patch.color !== undefined && patch.color !== existing.color) {
+    await db.epic.updateMany({
+      where: { initiativeId: id },
+      data: { color: patch.color },
+    });
+    const refreshed = await db.initiative.findUnique({
+      where: { id },
+      include: {
+        comments: { orderBy: { createdAt: "desc" } },
+        history: { orderBy: { createdAt: "desc" } },
+        epics: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            comments: { orderBy: { createdAt: "desc" } },
+            history: { orderBy: { createdAt: "desc" } },
+            userStories: {
+              orderBy: { createdAt: "asc" },
+              include: {
+                comments: { orderBy: { createdAt: "desc" } },
+                history: { orderBy: { createdAt: "desc" } },
+              },
+            },
+          },
+        },
+      },
+    });
+    return NextResponse.json(refreshed);
+  }
+
   return NextResponse.json(initiative);
 }
 

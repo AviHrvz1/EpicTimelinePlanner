@@ -40,7 +40,7 @@ export async function POST(
 
   const initiative = await db.initiative.findUnique({
     where: { id },
-    select: { year: true, startMonth: true },
+    select: { year: true, startMonth: true, color: true },
   });
   if (!initiative) {
     return NextResponse.json({ message: "Initiative not found" }, { status: 404 });
@@ -52,7 +52,7 @@ export async function POST(
       icon: parsed.data.icon ?? "📁",
       description: parsed.data.description || null,
       assignee: parsed.data.assignee || null,
-      color: parsed.data.color ?? "#3B82F6",
+      color: initiative.color,
       team: parsed.data.team ?? null,
       originalEstimateDays: parsed.data.originalEstimateDays ?? null,
       initiativeId: id,

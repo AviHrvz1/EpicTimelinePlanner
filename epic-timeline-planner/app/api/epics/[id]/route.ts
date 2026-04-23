@@ -74,7 +74,6 @@ export async function PATCH(
     if (patch.description !== undefined && patch.description !== existing.description)
       changes.push("Description updated");
     if (patch.assignee !== undefined && patch.assignee !== existing.assignee) changes.push("Assignee updated");
-    if (patch.color !== undefined && patch.color !== existing.color) changes.push("Color updated");
     if (patch.initiativeId !== undefined && patch.initiativeId !== existing.initiativeId)
       changes.push("Parent initiative changed");
     if (patch.planSprint !== undefined && patch.planSprint !== existing.planSprint)
@@ -92,7 +91,7 @@ export async function PATCH(
     const nextInitiativeId = patch.initiativeId ?? existing.initiativeId;
     const initiative = await db.initiative.findUnique({
       where: { id: nextInitiativeId },
-      select: { year: true, startMonth: true },
+      select: { year: true, startMonth: true, color: true },
     });
     const nextPlanStartMonth = patch.planStartMonth ?? existing.planStartMonth ?? initiative?.startMonth ?? null;
     const nextPlanYear = initiative?.year ?? existing.planYear ?? null;
@@ -105,7 +104,7 @@ export async function PATCH(
         ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.assignee !== undefined ? { assignee: patch.assignee } : {}),
-        ...(patch.color !== undefined ? { color: patch.color } : {}),
+        ...(initiative?.color != null ? { color: initiative.color } : {}),
         ...(patch.initiativeId !== undefined ? { initiativeId: patch.initiativeId } : {}),
         ...(patch.planSprint !== undefined ? { planSprint: patch.planSprint } : {}),
         ...(patch.planStartMonth !== undefined ? { planStartMonth: patch.planStartMonth } : {}),
