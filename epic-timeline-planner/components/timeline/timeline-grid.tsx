@@ -1201,7 +1201,7 @@ export function TimelineGrid({
   }
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
-  const hasContextSideMenu = activeMonth != null || focusedQuarter != null;
+  const hasContextSideMenu = activeMonth != null || focusedQuarter != null || (!activeMonth && !focusedQuarter);
   const railLabelBaseClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
 
@@ -2182,7 +2182,7 @@ export function TimelineGrid({
               </div>
             </div>
           ) : !focusedQuarter ? (
-            <div className="mb-4 w-full">
+            <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
               <div className="grid min-w-0 grid-cols-4 gap-2">
               {QUARTERS.map((quarter) => (
                 <section
