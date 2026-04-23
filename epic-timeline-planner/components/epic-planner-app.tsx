@@ -2602,29 +2602,53 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     };
   }, [isResizingPanel]);
 
-  const modeNavTooltipClass =
-    "pointer-events-none absolute left-full top-1/2 z-[200] ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100";
+  const [isModeRailExpanded, setIsModeRailExpanded] = useState(false);
+  const modeRailLabelClass =
+    "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
 
   const modeSwitchMenu = (
     <aside className="relative z-20 flex min-h-0 items-start overflow-visible">
-      <nav className="mt-1 flex w-full flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+      <nav
+        className={cn(
+          "mt-1 flex flex-col gap-1.5 overflow-visible rounded-xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50/75 p-1.5 shadow-lg ring-1 ring-slate-100/90 transition-[width] duration-200",
+          isModeRailExpanded ? "w-44" : "w-full",
+        )}
+        onMouseEnter={() => setIsModeRailExpanded(true)}
+        onMouseLeave={() => setIsModeRailExpanded(false)}
+      >
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
             onClick={() => setTopMode("roadmap")}
             aria-label="Roadmap planning"
             className={cn(
-              "inline-flex h-10 w-full items-center justify-center rounded-md transition",
+              "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
               topMode === "roadmap"
-                ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+                ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
+                : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
             )}
           >
-            <MapIcon className="size-4" aria-hidden />
+            <span
+              className={cn(
+                "inline-flex size-6 items-center justify-center rounded-md transition-colors",
+                topMode === "roadmap"
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80 group-hover:text-slate-700",
+              )}
+              aria-hidden
+            >
+              <MapIcon className="size-3.5" aria-hidden />
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                modeRailLabelClass,
+                isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+              )}
+            >
+              Roadmap planning
+            </span>
           </button>
-          <span role="tooltip" className={modeNavTooltipClass}>
-            Roadmap planning
-          </span>
         </div>
         <div className="group relative w-full overflow-visible">
           <button
@@ -2632,17 +2656,33 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("backlog")}
             aria-label="Backlog workspace"
             className={cn(
-              "inline-flex h-10 w-full items-center justify-center rounded-md transition",
+              "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
               topMode === "backlog"
-                ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+                ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
+                : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
             )}
           >
-            <Archive className="size-4" aria-hidden />
+            <span
+              className={cn(
+                "inline-flex size-6 items-center justify-center rounded-md transition-colors",
+                topMode === "backlog"
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80 group-hover:text-slate-700",
+              )}
+              aria-hidden
+            >
+              <Archive className="size-3.5" aria-hidden />
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                modeRailLabelClass,
+                isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+              )}
+            >
+              Backlog workspace
+            </span>
           </button>
-          <span role="tooltip" className={modeNavTooltipClass}>
-            Backlog workspace
-          </span>
         </div>
       </nav>
     </aside>

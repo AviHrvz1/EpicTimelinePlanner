@@ -569,6 +569,7 @@ export function TimelineGrid({
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status" | "capacity">("gantt");
+  const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
   const lastSprintModeSyncKeyRef = useRef<string | null>(null);
@@ -1187,8 +1188,17 @@ export function TimelineGrid({
 
   const hasBreadcrumbs = breadcrumbItems.length > 0;
   const hasContextSideMenu = activeMonth != null || focusedQuarter != null;
-  const railNavTooltipClass =
-    "pointer-events-none absolute left-full top-1/2 z-[200] ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
+  const railLabelBaseClass =
+    "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
+
+  useEffect(() => {
+    console.log("[rail-nav] expanded state changed", {
+      isRailExpanded,
+      activeMonth,
+      focusedQuarterLabel,
+      quarterViewTab,
+    });
+  }, [isRailExpanded, activeMonth, focusedQuarterLabel, quarterViewTab]);
   const showSprintTeamPicker =
     activeMonth != null &&
     (monthPlanTab === "sprint-kanban" ||
@@ -1321,7 +1331,30 @@ export function TimelineGrid({
       </div>
       {activeMonth ? (
         <div className="relative z-30 h-0">
-          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+          <div
+            className={cn(
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80 transition-[width] duration-200",
+              isRailExpanded ? "w-44" : "w-[3.25rem]",
+            )}
+            onMouseEnter={() => {
+              console.log("[rail-nav] month rail mouseenter", {
+                activeMonth,
+                monthPlanTab,
+                activeSprint,
+                previousExpanded: isRailExpanded,
+              });
+              setIsRailExpanded(true);
+            }}
+            onMouseLeave={() => {
+              console.log("[rail-nav] month rail mouseleave", {
+                activeMonth,
+                monthPlanTab,
+                activeSprint,
+                previousExpanded: isRailExpanded,
+              });
+              setIsRailExpanded(false);
+            }}
+          >
             {activeSprint != null &&
             (monthPlanTab === "sprint-kanban" ||
               monthPlanTab === "sprint-status" ||
@@ -1336,7 +1369,7 @@ export function TimelineGrid({
                   }}
                   title="Sprint board"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-kanban"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1344,7 +1377,13 @@ export function TimelineGrid({
                 >
                   <MapIcon className="size-4" aria-hidden />
                   <span className="sr-only">Sprint board</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Sprint board
                   </span>
                 </button>
@@ -1356,7 +1395,7 @@ export function TimelineGrid({
                   }}
                   title="Sprint insights"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-status"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1364,7 +1403,13 @@ export function TimelineGrid({
                 >
                   <BarChart3 className="size-4" aria-hidden />
                   <span className="sr-only">Sprint insights</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Sprint insights
                   </span>
                 </button>
@@ -1375,7 +1420,7 @@ export function TimelineGrid({
                   }}
                   title="Sprint capacity"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-capacity"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1383,7 +1428,13 @@ export function TimelineGrid({
                 >
                   <Thermometer className="size-4" aria-hidden />
                   <span className="sr-only">Sprint capacity</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Sprint capacity
                   </span>
                 </button>
@@ -1394,7 +1445,7 @@ export function TimelineGrid({
                   }}
                   title="Sprint retrospective"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-retrospective"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1402,7 +1453,13 @@ export function TimelineGrid({
                 >
                   <ClipboardList className="size-4" aria-hidden />
                   <span className="sr-only">Sprint retrospective</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Sprint retrospective
                   </span>
                 </button>
@@ -1414,7 +1471,7 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("epic-gantt")}
                   title="Epic plan"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "epic-gantt"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1422,7 +1479,13 @@ export function TimelineGrid({
                 >
                   <MapIcon className="size-4" aria-hidden />
                   <span className="sr-only">Epic plan</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Epic plan
                   </span>
                 </button>
@@ -1431,7 +1494,7 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("team-queue")}
                   title="Team queue"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "team-queue"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1439,7 +1502,13 @@ export function TimelineGrid({
                 >
                   <BarChart3 className="size-4" aria-hidden />
                   <span className="sr-only">Team queue</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Team queue
                   </span>
                 </button>
@@ -1448,7 +1517,7 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("month-capacity")}
                   title="Team capacity"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "month-capacity"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1456,7 +1525,13 @@ export function TimelineGrid({
                 >
                   <Thermometer className="size-4" aria-hidden />
                   <span className="sr-only">Team capacity</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Team capacity
                   </span>
                 </button>
@@ -1465,7 +1540,7 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("month-status")}
                   title="Month insights"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "month-status"
                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1473,7 +1548,13 @@ export function TimelineGrid({
                 >
                   <BarChart3 className="size-4" aria-hidden />
                   <span className="sr-only">Month insights</span>
-                  <span role="tooltip" className={railNavTooltipClass}>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      railLabelBaseClass,
+                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                    )}
+                  >
                     Month insights
                   </span>
                 </button>
@@ -1483,13 +1564,34 @@ export function TimelineGrid({
         </div>
       ) : focusedQuarter ? (
         <div className="relative z-30 h-0">
-          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+          <div
+            className={cn(
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80 transition-[width] duration-200",
+              isRailExpanded ? "w-44" : "w-[3.25rem]",
+            )}
+            onMouseEnter={() => {
+              console.log("[rail-nav] quarter rail mouseenter", {
+                focusedQuarterLabel,
+                quarterViewTab,
+                previousExpanded: isRailExpanded,
+              });
+              setIsRailExpanded(true);
+            }}
+            onMouseLeave={() => {
+              console.log("[rail-nav] quarter rail mouseleave", {
+                focusedQuarterLabel,
+                quarterViewTab,
+                previousExpanded: isRailExpanded,
+              });
+              setIsRailExpanded(false);
+            }}
+          >
             <button
               type="button"
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "gantt"
                   ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1497,7 +1599,13 @@ export function TimelineGrid({
             >
               <MapIcon className="size-4" aria-hidden />
               <span className="sr-only">Gantt</span>
-              <span role="tooltip" className={railNavTooltipClass}>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
                 Gantt
               </span>
             </button>
@@ -1506,7 +1614,7 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("status")}
               title="Quarter status"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "status"
                   ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1514,7 +1622,13 @@ export function TimelineGrid({
             >
               <BarChart3 className="size-4" aria-hidden />
               <span className="sr-only">Quarter status</span>
-              <span role="tooltip" className={railNavTooltipClass}>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
                 Quarter status
               </span>
             </button>
@@ -1523,7 +1637,7 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("capacity")}
               title="Quarter capacity"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "capacity"
                   ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -1531,7 +1645,13 @@ export function TimelineGrid({
             >
               <Thermometer className="size-4" aria-hidden />
               <span className="sr-only">Quarter capacity</span>
-              <span role="tooltip" className={railNavTooltipClass}>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
                 Quarter capacity
               </span>
             </button>
