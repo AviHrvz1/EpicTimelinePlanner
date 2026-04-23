@@ -76,6 +76,8 @@ model Epic {
   planSprint     Int?
   planStartMonth Int?
   planEndMonth   Int?
+  /** Vertical order in roadmap Gantt for epic bars (lower = higher on screen). */
+  timelineRow    Int           @default(0)
   /** Delivery team id when assigned on the month team board (`platform` | `experience` | `data`). */
   team           String?
   userStories    UserStory[]

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Epic" ADD COLUMN "timelineRow" INTEGER NOT NULL DEFAULT 0;

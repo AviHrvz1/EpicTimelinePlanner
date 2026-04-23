@@ -15,6 +15,7 @@ const updateEpicSchema = z.object({
   planSprint: z.union([z.literal(1), z.literal(2)]).optional().nullable(),
   planStartMonth: z.number().int().min(1).max(12).optional().nullable(),
   planEndMonth: z.number().int().min(1).max(12).optional().nullable(),
+  timelineRow: z.number().int().min(0).max(100000).optional(),
   team: epicTeamIdSchema.optional().nullable(),
   originalEstimateDays: z.number().int().min(0).max(5000).optional().nullable(),
 });
@@ -57,6 +58,7 @@ export async function PATCH(
         planSprint: true,
         planStartMonth: true,
         planEndMonth: true,
+        timelineRow: true,
         team: true,
         originalEstimateDays: true,
       },
@@ -81,6 +83,8 @@ export async function PATCH(
       changes.push("Quarter plan start month updated");
     if (patch.planEndMonth !== undefined && patch.planEndMonth !== existing.planEndMonth)
       changes.push("Quarter plan end month updated");
+    if (patch.timelineRow !== undefined && patch.timelineRow !== existing.timelineRow)
+      changes.push("Gantt row updated");
     if (patch.team !== undefined && patch.team !== existing.team) changes.push("Delivery team updated");
     if (patch.originalEstimateDays !== undefined && patch.originalEstimateDays !== existing.originalEstimateDays)
       changes.push("Original estimate updated");
@@ -106,6 +110,7 @@ export async function PATCH(
         ...(patch.planSprint !== undefined ? { planSprint: patch.planSprint } : {}),
         ...(patch.planStartMonth !== undefined ? { planStartMonth: patch.planStartMonth } : {}),
         ...(patch.planEndMonth !== undefined ? { planEndMonth: patch.planEndMonth } : {}),
+        ...(patch.timelineRow !== undefined ? { timelineRow: patch.timelineRow } : {}),
         ...(patch.team !== undefined ? { team: patch.team } : {}),
         ...(patch.originalEstimateDays !== undefined ? { originalEstimateDays: patch.originalEstimateDays } : {}),
         planYear: nextPlanYear,

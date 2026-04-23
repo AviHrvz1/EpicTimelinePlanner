@@ -5,7 +5,6 @@ import { useDraggable } from "@dnd-kit/core";
 import {
   type GanttTimelineBarDragData,
   epicTimelineDraggableId,
-  initiativeTimelineDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
 
@@ -76,44 +75,19 @@ export function InitiativeTimelineBar({
   emphasizeTick = 0,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
-  const dragData = {
-    kind: "gantt-timeline-bar",
-    title,
-    color,
-    progressPercent: safeProgress,
-    progressLabel,
-  } satisfies GanttTimelineBarDragData;
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: initiativeTimelineDraggableId(id),
-    disabled: Boolean(isResizing),
-    data: dragData,
-  });
 
   return (
     <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      title={`${title} — drag to move on timeline`}
+      title={title}
       onClick={() => {
-        if (isDragging || isResizing) return;
+        if (isResizing) return;
         onClick?.();
       }}
-      className={cn(
-        "relative z-20 space-y-0",
-        isDragging && "z-50 opacity-60",
-      )}
-      style={{
-        transform:
-          transform && !isResizing
-            ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-            : undefined,
-        position: isDragging ? "relative" : undefined,
-      }}
+      className="relative z-20 space-y-0"
     >
       <div
         className={cn(
-          "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white active:cursor-grabbing",
+          "relative z-10 flex h-9 w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-semibold text-white",
           emphasizeFlash
             ? "ring-1 ring-white/20"
             : "shadow-lg ring-1 ring-black/15",

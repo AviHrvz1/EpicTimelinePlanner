@@ -14,7 +14,6 @@ import {
   backlogSlotDropId,
   epicBacklogSlotDropId,
   epicListDraggableId,
-  initiativeListDraggableId,
   storyListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
@@ -192,37 +191,15 @@ function DraggableInitiativeCard({
   onEdit: (initiative: InitiativeItem) => void;
   onDelete: (id: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: initiativeListDraggableId(initiative.id),
-  });
-
   return (
     <div
-      ref={setNodeRef}
-      className={cn(
-        "rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5",
-        isDragging && "opacity-60",
-      )}
+      className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5"
       style={{
         borderLeftColor: initiative.color,
         borderLeftWidth: 4,
-        transform: !isDragging && transform
-          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-          : undefined,
-        zIndex: isDragging ? 60 : undefined,
-        position: isDragging ? "relative" : undefined,
       }}
     >
       <div className="flex items-center gap-2.5">
-        <button
-          type="button"
-          className="shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-          aria-label="Drag initiative"
-          {...attributes}
-          {...listeners}
-        >
-          <DragHandleIcon size="sm" />
-        </button>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -427,9 +404,6 @@ function InitiativeTreeCard({
   planContextMonth: number | null;
   epicPlanDragEnabled: boolean;
 }) {
-  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
-    id: initiativeListDraggableId(initiative.id),
-  });
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
     id: backlogDropIndex != null ? backlogSlotDropId(backlogDropIndex) : `initiative-card:${initiative.id}`,
     disabled: backlogDropIndex == null,
@@ -460,35 +434,17 @@ function InitiativeTreeCard({
 
   return (
     <div
-      ref={(node) => {
-        setDragRef(node);
-        setDropRef(node);
-      }}
+      ref={setDropRef}
       className={cn(
         "rounded-xl border border-slate-200/90 bg-white p-3 font-sans antialiased shadow-sm ring-1 ring-black/5",
-        isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
       style={{
         borderLeftColor: initiative.color,
         borderLeftWidth: 4,
-        transform: !isDragging && transform
-          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-          : undefined,
-        zIndex: isDragging ? 60 : undefined,
-        position: isDragging ? "relative" : undefined,
       }}
     >
       <div className="flex items-start gap-3">
-        <button
-          type="button"
-          className="mt-0.5 shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-          aria-label="Drag initiative"
-          {...attributes}
-          {...listeners}
-        >
-          <DragHandleIcon size="sm" />
-        </button>
         <div className="min-w-0 flex-1">
           <div className="group/init flex items-start justify-between gap-1">
             <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2 text-left">
@@ -929,7 +885,7 @@ export function InitiativeListPanel({
   });
 
   const inMonthView = activeMonth != null;
-  const epicPlanDragEnabled = inMonthView;
+  const epicPlanDragEnabled = !isSprintModeActive;
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [epicSearch, setEpicSearch] = useState("");

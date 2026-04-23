@@ -218,7 +218,7 @@ function computeInitiativeMonthLanePlacement(
   };
 
   const overlappingOthers = others.filter(overlapsPlacedRange);
-  const clampedLaneForTarget = laneIndex == null ? undefined : Math.max(0, Math.min(laneIndex, others.length));
+  const clampedLaneForTarget = laneIndex == null ? undefined : Math.max(0, laneIndex);
   /** Gantt row groups: one per distinct `timelineRow` (matches `data-gantt-lane-index` 0..n-1, append = n). */
   const distinctScheduledRowCount = new Set(scheduledAll.map((item) => item.timelineRow)).size;
   const maxTimelineRow =
@@ -248,9 +248,11 @@ function computeInitiativeMonthLanePlacement(
   /** Bottom insert (lane index past last Gantt row) uses a new `timelineRow`, not nearest row from pointer. */
   const desiredTargetRow = wantsAppendRow
     ? appendTimelineRow
-    : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
-      ? hoveredTimelineRow
-      : targetRowFromHoverLaneForTarget ?? targetRowFromLaneForTarget;
+    : targetRowFromLaneForTarget != null
+      ? targetRowFromLaneForTarget
+      : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
+        ? hoveredTimelineRow
+        : targetRowFromHoverLaneForTarget;
   console.log("[gantt-drop] target-row inputs", {
     initiativeId,
     laneIndex,
@@ -406,6 +408,235 @@ function computeInitiativeMonthLanePlacement(
     rowsChanged,
     movedTimelineRow: rowById.get(initiativeId) ?? current.timelineRow,
   };
+}
+
+type ScheduledEpicPlacementRow = {
+  epicId: string;
+  initiativeId: string;
+  title: string;
+  timelineRow: number;
+  startMonth: number;
+  endMonth: number;
+};
+
+function monthRangeForEpicDrop(
+  epic: EpicItem,
+  dropMonth: number,
+  isFirstSchedule: boolean,
+): { startMonth: number; endMonth: number } {
+  if (isFirstSchedule || epic.planStartMonth == null || epic.planEndMonth == null) {
+    return { startMonth: dropMonth, endMonth: dropMonth };
+  }
+  const span = epic.planEndMonth - epic.planStartMonth + 1;
+  let startMonth = dropMonth;
+  let endMonth = dropMonth + span - 1;
+  if (endMonth > 12) {
+    endMonth = 12;
+    startMonth = Math.max(1, endMonth - span + 1);
+  }
+  startMonth = Math.max(1, Math.min(12, startMonth));
+  endMonth = Math.max(startMonth, Math.min(12, endMonth));
+  return { startMonth, endMonth };
+}
+
+function collectScheduledEpicRows(initiatives: InitiativeItem[]): ScheduledEpicPlacementRow[] {
+  const rows: ScheduledEpicPlacementRow[] = [];
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+      rows.push({
+        epicId: epic.id,
+        initiativeId: initiative.id,
+        title: epic.title,
+        timelineRow: Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0,
+        startMonth: epic.planStartMonth,
+        endMonth: epic.planEndMonth,
+      });
+    }
+  }
+  return rows.sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
+}
+
+function computeEpicMonthLanePlacement(
+  prev: InitiativeItem[],
+  epicId: string,
+  month: number,
+  planSprint: 1 | 2,
+  laneIndex: number | undefined,
+  hoveredLaneIndex: number | undefined,
+  hoveredTimelineRow: number | undefined,
+  isFirstSchedule: boolean,
+): { next: InitiativeItem[]; rowsChanged: boolean; movedTimelineRow: number | null } {
+  const currentInit = prev.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
+  const currentEpic = currentInit?.epics?.find((e) => e.id === epicId);
+  if (!currentInit || !currentEpic) {
+    return { next: prev, rowsChanged: false, movedTimelineRow: null };
+  }
+
+  const { startMonth: sm, endMonth: em } = monthRangeForEpicDrop(currentEpic, month, isFirstSchedule);
+  const scheduledAll = collectScheduledEpicRows(prev);
+  const others = scheduledAll.filter((row) => row.epicId !== epicId);
+  const overlapsPlacedRange = (row: ScheduledEpicPlacementRow) => !(row.endMonth < sm || row.startMonth > em);
+  const overlappingOthers = others.filter(overlapsPlacedRange);
+  const currentRow = Number.isFinite(currentEpic.timelineRow) ? currentEpic.timelineRow : 0;
+
+  if (isFirstSchedule) {
+    const insertAt = laneIndex !== undefined ? Math.max(0, Math.min(laneIndex, others.length)) : others.length;
+    const newOrder = [
+      ...others.slice(0, insertAt),
+      { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: 0, startMonth: sm, endMonth: em },
+      ...others.slice(insertAt),
+    ];
+    const rowByEpicId = new Map(newOrder.map((row, idx) => [row.epicId, idx]));
+    const next = prev.map((initiative) => ({
+      ...initiative,
+      epics: (initiative.epics ?? []).map((epic) =>
+        epic.id === epicId
+          ? {
+              ...epic,
+              planSprint,
+              planStartMonth: sm,
+              planEndMonth: em,
+              timelineRow: rowByEpicId.get(epic.id) ?? 0,
+            }
+          : rowByEpicId.has(epic.id)
+            ? { ...epic, timelineRow: rowByEpicId.get(epic.id)! }
+            : epic,
+      ),
+    }));
+    return { next, rowsChanged: true, movedTimelineRow: rowByEpicId.get(epicId) ?? null };
+  }
+
+  const clampedLaneForTarget = laneIndex == null ? undefined : Math.max(0, laneIndex);
+  const distinctScheduledRowCount = new Set(scheduledAll.map((item) => item.timelineRow)).size;
+  const maxTimelineRow = scheduledAll.length > 0 ? Math.max(...scheduledAll.map((item) => item.timelineRow)) : currentRow;
+  const appendTimelineRow = maxTimelineRow + 1;
+  const wantsAppendRow = laneIndex != null && laneIndex >= distinctScheduledRowCount;
+  const hoveredScheduledForTarget =
+    hoveredLaneIndex == null
+      ? null
+      : (scheduledAll[Math.max(0, Math.min(hoveredLaneIndex, Math.max(0, scheduledAll.length - 1)))] ?? null);
+  const targetRowFromHoverLaneForTarget =
+    hoveredScheduledForTarget && hoveredScheduledForTarget.epicId !== epicId
+      ? hoveredScheduledForTarget.timelineRow
+      : null;
+  const targetRowFromLaneForTarget =
+    clampedLaneForTarget == null
+      ? null
+      : clampedLaneForTarget;
+  const desiredTargetRow = wantsAppendRow
+    ? appendTimelineRow
+    : targetRowFromLaneForTarget != null
+      ? targetRowFromLaneForTarget
+      : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
+        ? hoveredTimelineRow
+        : targetRowFromHoverLaneForTarget;
+  console.log("[gantt-drop][epic] target-row inputs", {
+    epicId,
+    month,
+    laneIndex,
+    hoveredLaneIndex,
+    hoveredTimelineRow,
+    isFirstSchedule,
+    currentRow,
+    clampedLaneForTarget,
+    distinctScheduledRowCount,
+    scheduledAllLength: scheduledAll.length,
+    othersLength: others.length,
+    maxTimelineRow,
+    appendTimelineRow,
+    wantsAppendRow,
+    targetRowFromHoverLaneForTarget,
+    targetRowFromLaneForTarget,
+    desiredTargetRow,
+    scheduledRows: scheduledAll.map((x) => ({
+      epicId: x.epicId,
+      row: x.timelineRow,
+      range: [x.startMonth, x.endMonth],
+    })),
+  });
+
+  if (overlappingOthers.length === 0 || (desiredTargetRow != null && !overlappingOthers.some((row) => row.timelineRow === desiredTargetRow))) {
+    const movedTimelineRow = desiredTargetRow ?? currentRow;
+    const rowsChanged = movedTimelineRow !== currentRow;
+    console.log("[gantt-drop][epic] non-overlap lane resolution", {
+      epicId,
+      month,
+      laneIndex,
+      hoveredLaneIndex,
+      hoveredTimelineRow,
+      desiredTargetRow,
+      movedTimelineRow,
+      currentRow,
+      rowsChanged,
+      overlapCount: overlappingOthers.length,
+    });
+    const next = prev.map((initiative) => ({
+      ...initiative,
+      epics: (initiative.epics ?? []).map((epic) =>
+        epic.id === epicId
+          ? { ...epic, planSprint, planStartMonth: sm, planEndMonth: em, timelineRow: movedTimelineRow }
+          : epic,
+      ),
+    }));
+    return { next, rowsChanged, movedTimelineRow };
+  }
+
+  const overlappingIds = new Set(overlappingOthers.map((row) => row.epicId));
+  const overlapRows = [...new Set([currentRow, ...overlappingOthers.map((row) => row.timelineRow)])].sort((a, b) => a - b);
+  let insertAtOverlap = overlappingOthers.length;
+  if (laneIndex !== undefined) {
+    const overlapsBeforeLane = others.reduce((count, row, idx) => {
+      if (idx >= laneIndex) return count;
+      return overlappingIds.has(row.epicId) ? count + 1 : count;
+    }, 0);
+    insertAtOverlap = Math.max(0, Math.min(overlapsBeforeLane, overlappingOthers.length));
+  }
+  const overlapOrder = [
+    ...overlappingOthers.slice(0, insertAtOverlap),
+    { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: currentRow, startMonth: sm, endMonth: em },
+    ...overlappingOthers.slice(insertAtOverlap),
+  ];
+  const rowByEpicId = new Map<string, number>();
+  overlapOrder.forEach((row, idx) => rowByEpicId.set(row.epicId, overlapRows[Math.min(idx, overlapRows.length - 1)]!));
+  console.log("[gantt-drop][epic] overlap lane resolution", {
+    epicId,
+    month,
+    laneIndex,
+    hoveredLaneIndex,
+    hoveredTimelineRow,
+    currentRow,
+    overlapRows,
+    overlappingIds: overlappingOthers.map((x) => ({ epicId: x.epicId, row: x.timelineRow })),
+    overlapOrder: overlapOrder.map((x) => x.epicId),
+    nextRow: rowByEpicId.get(epicId) ?? currentRow,
+  });
+
+  const next = prev.map((initiative) => ({
+    ...initiative,
+    epics: (initiative.epics ?? []).map((epic) =>
+      epic.id === epicId
+        ? {
+            ...epic,
+            planSprint,
+            planStartMonth: sm,
+            planEndMonth: em,
+            timelineRow: rowByEpicId.get(epic.id) ?? epic.timelineRow,
+          }
+        : rowByEpicId.has(epic.id)
+          ? { ...epic, timelineRow: rowByEpicId.get(epic.id)! }
+          : epic,
+    ),
+  }));
+  const rowsChanged = next.some((initiative) => {
+    const beforeInit = prev.find((item) => item.id === initiative.id);
+    if (!beforeInit) return false;
+    return (initiative.epics ?? []).some((epic) => {
+      const beforeEpic = (beforeInit.epics ?? []).find((row) => row.id === epic.id);
+      return beforeEpic != null && beforeEpic.timelineRow !== epic.timelineRow;
+    });
+  });
+  return { next, rowsChanged, movedTimelineRow: rowByEpicId.get(epicId) ?? currentRow };
 }
 
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
@@ -1440,7 +1671,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   async function patchEpicQuarterPlan(
     epicId: string,
-    payload: { planSprint: number; planStartMonth: number; planEndMonth: number },
+    payload: { planSprint: number; planStartMonth: number; planEndMonth: number; timelineRow?: number },
   ) {
     const response = await fetch(`/api/epics/${epicId}`, {
       method: "PATCH",
@@ -1464,6 +1695,34 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       }
       throw new Error(message);
     }
+  }
+
+  async function persistEpicTimelineRowPatches(prev: InitiativeItem[], next: InitiativeItem[]) {
+    const prevRows = new Map<string, number>();
+    for (const initiative of prev) {
+      for (const epic of initiative.epics ?? []) {
+        prevRows.set(epic.id, Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0);
+      }
+    }
+    const changed: Array<{ epicId: string; timelineRow: number }> = [];
+    for (const initiative of next) {
+      for (const epic of initiative.epics ?? []) {
+        const before = prevRows.get(epic.id);
+        const row = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
+        if (before != null && before !== row) changed.push({ epicId: epic.id, timelineRow: row });
+      }
+    }
+    if (changed.length === 0) return;
+    await Promise.all(
+      changed.map(async ({ epicId, timelineRow }) => {
+        const response = await fetch(`/api/epics/${epicId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timelineRow }),
+        });
+        if (!response.ok) throw new Error(`Failed to persist epic row for ${epicId}`);
+      }),
+    );
   }
 
   async function createStoryWithDetails(payload: {
@@ -2006,13 +2265,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
       let month: number;
       let planSprint: 1 | 2;
-      let dropLaneIndex: number | undefined;
+      let laneIndex: number | undefined;
       const epicCell = /^epic-plan:(\d+):([12])$/.exec(overId);
       if (epicCell) {
         month = Number(epicCell[1]);
         const lane = Number(epicCell[2]) as 1 | 2;
         planSprint = lane;
-        dropLaneIndex = undefined;
+        laneIndex = undefined;
       } else if (overId.startsWith("month:")) {
         const parsed = parseMonthDropTarget(overId);
         if (!parsed) {
@@ -2021,8 +2280,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }
         month = parsed.month;
         planSprint = 1;
-        dropLaneIndex = parsed.laneIndex;
-        console.log("[gantt-drop] epic month drop parsed", { month, dropLaneIndex });
+        laneIndex = parsed.laneIndex;
+        console.log("[gantt-drop] epic month drop parsed", { month, laneIndex });
       } else {
         console.log("[gantt-drop] epic branch: overId not epic-plan or month", { overId });
         return;
@@ -2032,121 +2291,87 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         return;
       }
 
-      const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
-      const epic = initiative?.epics?.find((e) => e.id === epicId);
-      if (!initiative || !epic) return;
+      const before = initiatives;
+      const currentInit = before.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
+      const currentEpic = currentInit?.epics?.find((e) => e.id === epicId);
+      if (!currentInit || !currentEpic) return;
 
-      const wasUnscheduled =
-        initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null;
-
-      let nextStart: number;
-      let nextEnd: number;
-      if (wasUnscheduled) {
-        nextStart = month;
-        nextEnd = month;
-      } else {
-        const sm = initiative.startMonth!;
-        const em = initiative.endMonth!;
-        nextStart = Math.min(sm, month);
-        nextEnd = Math.max(em, month);
-      }
-
-      const rangeChanged =
-        wasUnscheduled ||
-        nextStart !== initiative.startMonth ||
-        nextEnd !== initiative.endMonth;
-
-      const planMonth = month;
-
-      if (rangeChanged && !wasUnscheduled) {
-        toast.message("Initiative range extended", {
-          description: `Now spans ${MONTHS[nextStart - 1]}–${MONTHS[nextEnd - 1]} so the epic can sit in ${MONTHS[planMonth - 1]}.`,
-        });
-      }
-
-      flushSync(() => {
-        setInitiatives((prev) => {
-          if (wasUnscheduled && dropLaneIndex !== undefined) {
-            const L = dropLaneIndex;
-            const bumped = prev.map((i) => {
-              if (i.status !== InitiativeStatus.scheduled || i.id === initiative.id) return i;
-              if (i.timelineRow >= L) return { ...i, timelineRow: i.timelineRow + 1 };
-              return i;
-            });
-            return bumped.map((i) => {
-              if (i.id !== initiative.id) return i;
-              return {
-                ...i,
-                status: InitiativeStatus.scheduled,
-                startMonth: nextStart,
-                endMonth: nextEnd,
-                ...yearSprintRangeFromMonthRange(nextStart, nextEnd),
-                timelineRow: L,
-                epics: (i.epics ?? []).map((e) =>
-                  e.id === epicId
-                    ? {
-                        ...e,
-                        planSprint,
-                        planStartMonth: planMonth,
-                        planEndMonth: planMonth,
-                      }
-                    : e,
-                ),
-              };
-            });
-          }
-          let nextRow: number | undefined;
-          if (wasUnscheduled) {
-            const maxR = Math.max(
-              -1,
-              ...prev
-                .filter((x) => x.status === InitiativeStatus.scheduled && x.id !== initiative.id)
-                .map((x) => x.timelineRow),
-            );
-            nextRow = maxR + 1;
-          }
-          return prev.map((i) => {
-            if (i.id !== initiative.id) return i;
-            return {
-              ...i,
-              status: InitiativeStatus.scheduled,
-              startMonth: nextStart,
-              endMonth: nextEnd,
-              ...yearSprintRangeFromMonthRange(nextStart, nextEnd),
-              ...(wasUnscheduled && nextRow !== undefined ? { timelineRow: nextRow } : {}),
-              epics: (i.epics ?? []).map((e) =>
-                e.id === epicId
-                  ? {
-                      ...e,
-                      planSprint,
-                      planStartMonth: planMonth,
-                      planEndMonth: planMonth,
-                    }
-                  : e,
-              ),
-            };
+      const isFirstSchedule = currentEpic.planStartMonth == null || currentEpic.planEndMonth == null;
+      let hoveredLaneIndex: number | undefined;
+      let hoveredTimelineRow: number | undefined;
+      const cy = clientYCenterFromDragEnd(event);
+      console.log("[gantt-drop][epic] pointer baseline", {
+        activeId,
+        overId,
+        epicId,
+        month,
+        laneFromTarget: laneIndex,
+        clientYCenter: cy,
+        isFirstSchedule,
+      });
+      if (cy !== undefined) {
+        if (laneIndex === undefined) {
+          const inferred = inferGanttLaneInsertIndexFromClientY(cy);
+          console.log("[gantt-drop][epic] infer lane insert index", {
+            epicId,
+            clientYCenter: cy,
+            inferredLaneIndex: inferred,
           });
+          if (inferred !== undefined) laneIndex = inferred;
+        }
+        const hovered = inferGanttLaneHoverIndexFromClientY(cy);
+        console.log("[gantt-drop][epic] infer lane hover index", {
+          epicId,
+          clientYCenter: cy,
+          hoveredLaneIndex: hovered,
         });
+        if (hovered !== undefined) hoveredLaneIndex = hovered;
+        const hoverRow = inferGanttLaneHoverTimelineRowFromClientY(cy);
+        console.log("[gantt-drop][epic] infer lane hover timeline row", {
+          epicId,
+          clientYCenter: cy,
+          hoveredTimelineRow: hoverRow,
+        });
+        if (hoverRow !== undefined) hoveredTimelineRow = hoverRow;
+      }
+      console.log("[gantt-drop][epic] month drop", {
+        epicId,
+        month,
+        laneIndex,
+        hoveredLaneIndex,
+        hoveredTimelineRow,
+        isFirstSchedule,
       });
 
+      const { next: placementNext, rowsChanged, movedTimelineRow } = computeEpicMonthLanePlacement(
+        before,
+        epicId,
+        month,
+        planSprint,
+        laneIndex,
+        hoveredLaneIndex,
+        hoveredTimelineRow,
+        isFirstSchedule,
+      );
+      console.log("[gantt-drop][epic] placement", {
+        epicId,
+        rowsChanged,
+        movedTimelineRow,
+      });
+      flushSync(() => setInitiatives(placementNext));
+      const updatedEpic =
+        placementNext.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId) ?? null;
+
       try {
-        if (wasUnscheduled) {
-          console.log("[gantt-drop] epic → scheduleInitiative", {
-            initiativeId: initiative.id,
-            planMonth,
-            dropLaneIndex,
-            wasUnscheduled,
-          });
-          await scheduleInitiative(initiative.id, planMonth, dropLaneIndex);
-        } else if (rangeChanged) {
-          console.log("[gantt-drop] epic → patchInitiativeScheduleRange", { nextStart, nextEnd });
-          await patchInitiativeScheduleRange(initiative.id, nextStart, nextEnd, undefined, initiative.year);
-        }
         await patchEpicQuarterPlan(epicId, {
           planSprint,
-          planStartMonth: planMonth,
-          planEndMonth: planMonth,
+          planStartMonth: updatedEpic?.planStartMonth ?? month,
+          planEndMonth: updatedEpic?.planEndMonth ?? month,
+          ...(movedTimelineRow != null ? { timelineRow: movedTimelineRow } : {}),
         });
+        if (rowsChanged) {
+          await persistEpicTimelineRowPatches(before, placementNext);
+        }
         toast.success("Epic placed on the plan");
         flashGanttEpicEmphasis(epicId);
       } catch (err) {
@@ -2681,6 +2906,71 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     await refresh();
                     const description = err instanceof Error ? err.message : undefined;
                     toast.error("Failed to resize initiative", description ? { description } : undefined);
+                  }
+                }}
+                onResizeEpicPlanRange={async (epicId, range) => {
+                  const before = initiatives;
+                  const target = before.flatMap((initiative) => initiative.epics ?? []).find((epic) => epic.id === epicId);
+                  if (!target) return;
+                  const overlaps = (aS: number, aE: number, bS: number, bE: number) => !(aE < bS || bE < aS);
+                  let nextTimelineRow = Number.isFinite(target.timelineRow) ? target.timelineRow : 0;
+                  const scheduledOthers = before
+                    .flatMap((initiative) => initiative.epics ?? [])
+                    .filter((epic) => epic.id !== epicId && epic.planStartMonth != null && epic.planEndMonth != null);
+                  const sameRowOverlaps = scheduledOthers.filter((epic) => {
+                    const row = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
+                    if (row !== nextTimelineRow) return false;
+                    const bS = globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1);
+                    const bE = globalSprintFromMonthLane(epic.planEndMonth!, 2);
+                    return overlaps(range.startYearSprint, range.endYearSprint, bS, bE);
+                  });
+                  if (sameRowOverlaps.length > 0) {
+                    const maxRow = Math.max(nextTimelineRow, ...scheduledOthers.map((epic) => Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0));
+                    for (let row = 0; row <= maxRow + 1; row += 1) {
+                      const blocked = scheduledOthers.some((epic) => {
+                        const rowValue = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
+                        if (rowValue !== row) return false;
+                        const bS = globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1);
+                        const bE = globalSprintFromMonthLane(epic.planEndMonth!, 2);
+                        return overlaps(range.startYearSprint, range.endYearSprint, bS, bE);
+                      });
+                      if (!blocked) {
+                        nextTimelineRow = row;
+                        break;
+                      }
+                    }
+                  }
+                  const after = before.map((initiative) => ({
+                    ...initiative,
+                    epics: (initiative.epics ?? []).map((epic) =>
+                      epic.id === epicId
+                        ? {
+                            ...epic,
+                            planSprint: 1,
+                            planStartMonth: range.startMonth,
+                            planEndMonth: range.endMonth,
+                            timelineRow: nextTimelineRow,
+                          }
+                        : epic,
+                    ),
+                  }));
+                  setInitiatives(after);
+                  try {
+                    await patchEpicQuarterPlan(epicId, {
+                      planSprint: 1,
+                      planStartMonth: range.startMonth,
+                      planEndMonth: range.endMonth,
+                      timelineRow: nextTimelineRow,
+                    });
+                    await persistEpicTimelineRowPatches(before, after);
+                    toast.success("Approved", {
+                      description: "The epic timeline was adjusted and saved.",
+                    });
+                  } catch (err) {
+                    console.error("[onResizeEpicPlanRange]", err);
+                    await refresh();
+                    const description = err instanceof Error ? err.message : undefined;
+                    toast.error("Failed to resize epic", description ? { description } : undefined);
                   }
                 }}
                 onOpenStory={(storyId) => {

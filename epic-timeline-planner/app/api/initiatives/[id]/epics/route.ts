@@ -58,6 +58,7 @@ export async function POST(
       initiativeId: id,
       planYear: initiative.year,
       planQuarter: quarterFromMonth(initiative.startMonth),
+      timelineRow: 0,
       history: { create: { entry: "Epic created" } },
     },
   });
