@@ -65,6 +65,29 @@ function toolbarPointerDown(e: MouseEvent) {
   e.preventDefault();
 }
 
+function logRetroToolbarState(editor: Editor, action: string) {
+  const state = editor.state;
+  const { from, to, empty } = state.selection;
+  const active = {
+    bold: editor.isActive("bold"),
+    italic: editor.isActive("italic"),
+    underline: editor.isActive("underline"),
+    strike: editor.isActive("strike"),
+    h2: editor.isActive("heading", { level: 2 }),
+    h3: editor.isActive("heading", { level: 3 }),
+    bulletList: editor.isActive("bulletList"),
+    orderedList: editor.isActive("orderedList"),
+    blockquote: editor.isActive("blockquote"),
+    link: editor.isActive("link"),
+  };
+  console.log("[retro-toolbar] action", {
+    action,
+    selection: { from, to, empty },
+    active,
+    html: editor.getHTML(),
+  });
+}
+
 function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
   const [, bump] = useReducer((n: number) => n + 1, 0);
 
@@ -160,7 +183,11 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("heading", { level: 2 }))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        onClick={() => {
+          const ok = editor.chain().focus().toggleHeading({ level: 2 }).run();
+          console.log("[retro-toolbar] click", { action: "toggleHeading2", ok });
+          logRetroToolbarState(editor, "toggleHeading2");
+        }}
         aria-pressed={editor.isActive("heading", { level: 2 })}
         title="Heading 2"
       >
@@ -172,7 +199,11 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("heading", { level: 3 }))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        onClick={() => {
+          const ok = editor.chain().focus().toggleHeading({ level: 3 }).run();
+          console.log("[retro-toolbar] click", { action: "toggleHeading3", ok });
+          logRetroToolbarState(editor, "toggleHeading3");
+        }}
         aria-pressed={editor.isActive("heading", { level: 3 })}
         title="Heading 3"
       >
@@ -184,7 +215,11 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("bulletList"))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        onClick={() => {
+          const ok = editor.chain().focus().toggleBulletList().run();
+          console.log("[retro-toolbar] click", { action: "toggleBulletList", ok });
+          logRetroToolbarState(editor, "toggleBulletList");
+        }}
         aria-pressed={editor.isActive("bulletList")}
         title="Bullet list"
       >
@@ -196,7 +231,11 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("orderedList"))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        onClick={() => {
+          const ok = editor.chain().focus().toggleOrderedList().run();
+          console.log("[retro-toolbar] click", { action: "toggleOrderedList", ok });
+          logRetroToolbarState(editor, "toggleOrderedList");
+        }}
         aria-pressed={editor.isActive("orderedList")}
         title="Numbered list"
       >
@@ -208,7 +247,15 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("blockquote"))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        onClick={() => {
+          let ok = editor.chain().focus().toggleBlockquote().run();
+          if (!ok) {
+            // Fallback when current node context (e.g. inside list) blocks direct quote toggle.
+            ok = editor.chain().focus().clearNodes().toggleBlockquote().run();
+          }
+          console.log("[retro-toolbar] click", { action: "toggleBlockquote", ok });
+          logRetroToolbarState(editor, "toggleBlockquote");
+        }}
         aria-pressed={editor.isActive("blockquote")}
         title="Quote"
       >
@@ -296,6 +343,8 @@ function RetroRichSection({
     extensions: [
       StarterKit.configure({
         heading: { levels: [2, 3] },
+        link: false,
+        underline: false,
       }),
       Underline,
       Link.configure({
@@ -313,6 +362,13 @@ function RetroRichSection({
         class: cn(
           "prose prose-slate dark:prose-invert max-w-none min-h-[10rem] px-3 py-2.5 text-sm text-foreground outline-none",
           "prose-headings:font-semibold prose-p:my-1 prose-ul:my-1 prose-ol:my-1",
+          // Make toolbar block formats visibly distinct in the retrospective editor.
+          "[&_h2]:my-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:leading-snug",
+          "[&_h3]:my-1.5 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:leading-snug",
+          "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6",
+          "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6",
+          "[&_li]:my-0.5",
+          "[&_blockquote]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:italic",
           "focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none",
         ),
       },
