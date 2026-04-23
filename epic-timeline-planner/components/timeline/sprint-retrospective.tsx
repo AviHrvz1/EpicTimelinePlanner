@@ -22,6 +22,8 @@ import {
   Redo,
   Save,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   Strikethrough,
   Trash2,
   Underline as UnderlineIcon,
@@ -63,29 +65,6 @@ function normalizeSectionHtml(raw: string | undefined | null) {
 /** Keeps ProseMirror focused so block commands (headings, lists, quote) apply to the selection. */
 function toolbarPointerDown(e: MouseEvent) {
   e.preventDefault();
-}
-
-function logRetroToolbarState(editor: Editor, action: string) {
-  const state = editor.state;
-  const { from, to, empty } = state.selection;
-  const active = {
-    bold: editor.isActive("bold"),
-    italic: editor.isActive("italic"),
-    underline: editor.isActive("underline"),
-    strike: editor.isActive("strike"),
-    h2: editor.isActive("heading", { level: 2 }),
-    h3: editor.isActive("heading", { level: 3 }),
-    bulletList: editor.isActive("bulletList"),
-    orderedList: editor.isActive("orderedList"),
-    blockquote: editor.isActive("blockquote"),
-    link: editor.isActive("link"),
-  };
-  console.log("[retro-toolbar] action", {
-    action,
-    selection: { from, to, empty },
-    active,
-    html: editor.getHTML(),
-  });
 }
 
 function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
@@ -183,11 +162,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("heading", { level: 2 }))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => {
-          const ok = editor.chain().focus().toggleHeading({ level: 2 }).run();
-          console.log("[retro-toolbar] click", { action: "toggleHeading2", ok });
-          logRetroToolbarState(editor, "toggleHeading2");
-        }}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         aria-pressed={editor.isActive("heading", { level: 2 })}
         title="Heading 2"
       >
@@ -199,11 +174,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("heading", { level: 3 }))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => {
-          const ok = editor.chain().focus().toggleHeading({ level: 3 }).run();
-          console.log("[retro-toolbar] click", { action: "toggleHeading3", ok });
-          logRetroToolbarState(editor, "toggleHeading3");
-        }}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         aria-pressed={editor.isActive("heading", { level: 3 })}
         title="Heading 3"
       >
@@ -215,11 +186,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("bulletList"))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => {
-          const ok = editor.chain().focus().toggleBulletList().run();
-          console.log("[retro-toolbar] click", { action: "toggleBulletList", ok });
-          logRetroToolbarState(editor, "toggleBulletList");
-        }}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
         aria-pressed={editor.isActive("bulletList")}
         title="Bullet list"
       >
@@ -231,11 +198,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         variant="outline"
         className={mkToggle(editor.isActive("orderedList"))}
         onMouseDown={toolbarPointerDown}
-        onClick={() => {
-          const ok = editor.chain().focus().toggleOrderedList().run();
-          console.log("[retro-toolbar] click", { action: "toggleOrderedList", ok });
-          logRetroToolbarState(editor, "toggleOrderedList");
-        }}
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
         aria-pressed={editor.isActive("orderedList")}
         title="Numbered list"
       >
@@ -253,8 +216,6 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
             // Fallback when current node context (e.g. inside list) blocks direct quote toggle.
             ok = editor.chain().focus().clearNodes().toggleBlockquote().run();
           }
-          console.log("[retro-toolbar] click", { action: "toggleBlockquote", ok });
-          logRetroToolbarState(editor, "toggleBlockquote");
         }}
         aria-pressed={editor.isActive("blockquote")}
         title="Quote"
@@ -360,7 +321,7 @@ function RetroRichSection({
     editorProps: {
       attributes: {
         class: cn(
-          "prose prose-slate dark:prose-invert max-w-none min-h-[10rem] px-3 py-2.5 text-sm text-foreground outline-none",
+          "prose prose-slate dark:prose-invert max-w-none min-h-[14rem] px-3 py-2.5 text-sm text-foreground outline-none",
           "prose-headings:font-semibold prose-p:my-1 prose-ul:my-1 prose-ol:my-1",
           // Make toolbar block formats visibly distinct in the retrospective editor.
           "[&_h2]:my-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:leading-snug",
@@ -369,7 +330,7 @@ function RetroRichSection({
           "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6",
           "[&_li]:my-0.5",
           "[&_blockquote]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:italic",
-          "focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none",
+          "focus:outline-none [&_.ProseMirror]:min-h-[14rem] [&_.ProseMirror]:outline-none",
         ),
       },
     },
@@ -390,21 +351,21 @@ function RetroRichSection({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border bg-card p-4 shadow-sm transition-[box-shadow,border-color]",
-        editor?.isFocused && "border-primary/35 ring-2 ring-ring/40",
+        "rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm transition-[box-shadow,border-color]",
+        editor?.isFocused && "border-primary/35 shadow-md ring-2 ring-ring/35",
       )}
     >
-      <h4
+      <div
         className={cn(
-          "mb-3 flex items-center gap-2.5 font-sans text-base font-normal leading-snug tracking-tight md:text-lg",
+          "mb-2.5 flex items-center gap-2 rounded-lg px-3 py-2 text-lg font-semibold italic text-white shadow-sm",
           titleAccentClass,
         )}
       >
-        <TitleIcon className="size-[1.125rem] shrink-0 opacity-90 md:size-5" aria-hidden />
+        <TitleIcon className="size-4 shrink-0 opacity-95" aria-hidden />
         <span>{title}</span>
-      </h4>
+      </div>
       <RetroEditorToolbar editor={editor} />
-      <div className="mt-2 overflow-hidden rounded-lg border border-border bg-muted/25">
+      <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white">
         <EditorContent editor={editor} />
       </div>
     </section>
@@ -472,20 +433,20 @@ export function SprintRetrospectiveEditor({
   }
 
   return (
-    <section className="font-sans rounded-xl border border-border bg-card p-5 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+    <section className="font-sans rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/70 to-white p-5 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0 space-y-1">
-          <h3 className="flex items-center gap-2.5 font-sans text-base font-semibold tracking-tight text-foreground md:text-lg">
+          <h3 className="flex items-center gap-2.5 font-sans text-xl font-bold tracking-tight text-slate-700 md:text-2xl">
             <span
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700"
               aria-hidden
             >
               <ClipboardList className="size-[1.125rem]" />
             </span>
-            <span>{sprintLabel} Retrospective</span>
+            <span>Retrospective</span>
           </h3>
-          <p className="text-sm text-muted-foreground">
-            Capture learnings, decisions, and follow-up actions for this sprint.
+          <p className="text-sm text-slate-500">
+            {sprintLabel} - capture wins, improvements, and concrete next actions.
           </p>
         </div>
         <Button
@@ -494,7 +455,7 @@ export function SprintRetrospectiveEditor({
           size="default"
           onClick={handleSave}
           disabled={!dirty}
-          className="h-9 shrink-0 gap-2 px-4"
+          className="h-9 shrink-0 gap-2 px-4 font-semibold"
         >
           <Save className="size-4" data-icon="inline-start" />
           Save
@@ -504,8 +465,8 @@ export function SprintRetrospectiveEditor({
       <div className="grid gap-4 lg:grid-cols-2">
         <RetroRichSection
           title="What went well?"
-          titleIcon={Sparkles}
-          titleAccentClass="text-emerald-700 dark:text-emerald-400"
+          titleIcon={ThumbsUp}
+          titleAccentClass="bg-gradient-to-r from-cyan-500 to-teal-500"
           placeholder="Highlights, wins, and practices to repeat…"
           field="wentWell"
           initialDoc={initialDoc}
@@ -514,8 +475,8 @@ export function SprintRetrospectiveEditor({
         />
         <RetroRichSection
           title="What did not go well?"
-          titleIcon={AlertCircle}
-          titleAccentClass="text-rose-700 dark:text-rose-400"
+          titleIcon={ThumbsDown}
+          titleAccentClass="bg-gradient-to-r from-fuchsia-600 to-purple-600"
           placeholder="Friction, misses, and risks to address…"
           field="improve"
           initialDoc={initialDoc}
@@ -524,63 +485,71 @@ export function SprintRetrospectiveEditor({
         />
       </div>
 
-      <section className="mt-5 rounded-xl border border-border bg-muted/10 p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
-            <ListChecks className="size-4 shrink-0 text-primary" aria-hidden />
-            Action items
-          </h4>
-          <Button type="button" size="sm" variant="outline" onClick={addActionItem} className="gap-1.5 border-border shadow-none">
+      <section className="mt-4 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm">
+        <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 px-3 py-2 text-lg font-semibold italic text-white shadow-sm">
+          <span className="inline-flex items-center gap-2">
+            <ListChecks className="size-4 shrink-0" aria-hidden />
+            What's next?
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={addActionItem}
+            className="h-7 gap-1.5 border border-white/35 bg-white/15 px-2 text-white hover:bg-white/25 hover:text-white"
+          >
             <Plus className="size-3.5" />
-            Add item
+            Add
           </Button>
         </div>
 
         <div className="space-y-2">
           {actionItems.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border bg-background/80 px-3 py-2.5 text-sm text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">
               No action items yet. Add one to assign owner and due date.
             </p>
           ) : (
             actionItems.map((item) => (
               <div
                 key={item.id}
-                className="flex flex-col gap-2 rounded-lg border border-border bg-card p-2 sm:flex-row sm:items-center"
+                className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2"
               >
-                <input
-                  value={item.title}
-                  onChange={(e) => updateActionItem(item.id, { title: e.target.value })}
-                  placeholder="Action item"
-                  className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-none outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                />
-                <label className="flex h-10 shrink-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 sm:w-[10.5rem]">
-                  <User className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
-                    value={item.owner}
-                    onChange={(e) => updateActionItem(item.id, { owner: e.target.value })}
-                    placeholder="Owner"
-                    className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    value={item.title}
+                    onChange={(e) => updateActionItem(item.id, { title: e.target.value })}
+                    placeholder="Action item"
+                    className="h-9 min-w-0 flex-[4.2] rounded-md border border-slate-200 bg-white px-2.5 text-sm text-foreground shadow-none outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
                   />
-                </label>
-                <label className="flex h-10 shrink-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 sm:w-[9.5rem]">
-                  <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <input
-                    type="date"
-                    value={item.dueDate}
-                    onChange={(e) => updateActionItem(item.id, { dueDate: e.target.value })}
-                    className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
-                  />
-                </label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeActionItem(item.id)}
-                  className="h-10 w-10 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  title="Remove action item"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+                  <label className="flex h-9 min-w-0 flex-[0.55] items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5">
+                    <User className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    <input
+                      value={item.owner}
+                      onChange={(e) => updateActionItem(item.id, { owner: e.target.value })}
+                      placeholder="Owner"
+                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-slate-400"
+                    />
+                  </label>
+                  <label className="flex h-9 min-w-0 flex-[0.5] items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5">
+                    <CalendarDays className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    <input
+                      type="date"
+                      value={item.dueDate}
+                      onChange={(e) => updateActionItem(item.id, { dueDate: e.target.value })}
+                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeActionItem(item.id)}
+                    className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    title="Remove action item"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
             ))
           )}
