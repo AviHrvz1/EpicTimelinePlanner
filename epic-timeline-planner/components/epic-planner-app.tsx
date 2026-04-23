@@ -75,6 +75,7 @@ import {
   clampYearSprint,
   globalSprintFromMonthLane,
   monthLaneFromGlobalSprint,
+  resolvedInitiativeYearSprintBounds,
   yearSprintRangeFromMonthRange,
 } from "@/lib/year-sprint";
 
@@ -2601,19 +2602,65 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onResizeInitiativeRange={async (initiativeId, range) => {
                   const planYear =
                     initiatives.find((i) => i.id === initiativeId)?.year ?? selectedYear;
-                  setInitiatives((prev) =>
-                    prev.map((i) =>
-                      i.id === initiativeId
-                        ? {
-                            ...i,
-                            startMonth: range.startMonth,
-                            endMonth: range.endMonth,
-                            startYearSprint: range.startYearSprint,
-                            endYearSprint: range.endYearSprint,
-                          }
-                        : i,
-                    ),
+                  const before = initiatives;
+                  const target = before.find((i) => i.id === initiativeId);
+                  const nextRangeStart = range.startYearSprint;
+                  const nextRangeEnd = range.endYearSprint;
+                  const overlaps = (aS: number, aE: number, bS: number, bE: number) => !(aE < bS || bE < aS);
+                  let nextTimelineRow = target?.timelineRow ?? 0;
+                  if (target) {
+                    const scheduledOthers = before.filter(
+                      (i) =>
+                        i.id !== initiativeId &&
+                        i.status === InitiativeStatus.scheduled &&
+                        i.startMonth != null &&
+                        i.endMonth != null,
+                    );
+                    const sameRowOverlaps = scheduledOthers.filter((i) => {
+                      if (i.timelineRow !== target.timelineRow) return false;
+                      const b = resolvedInitiativeYearSprintBounds(i);
+                      if (!b) return false;
+                      return overlaps(nextRangeStart, nextRangeEnd, b.startYearSprint, b.endYearSprint);
+                    });
+                    if (sameRowOverlaps.length > 0) {
+                      const maxRow = Math.max(
+                        target.timelineRow,
+                        ...scheduledOthers.map((i) => i.timelineRow),
+                      );
+                      for (let row = 0; row <= maxRow + 1; row += 1) {
+                        const blocked = scheduledOthers.some((i) => {
+                          if (i.timelineRow !== row) return false;
+                          const b = resolvedInitiativeYearSprintBounds(i);
+                          if (!b) return false;
+                          return overlaps(nextRangeStart, nextRangeEnd, b.startYearSprint, b.endYearSprint);
+                        });
+                        if (!blocked) {
+                          nextTimelineRow = row;
+                          break;
+                        }
+                      }
+                      console.log("[gantt-resize] reflow row for overlap", {
+                        initiativeId,
+                        previousRow: target.timelineRow,
+                        nextTimelineRow,
+                        conflictingIds: sameRowOverlaps.map((i) => i.id),
+                        nextRange: [nextRangeStart, nextRangeEnd],
+                      });
+                    }
+                  }
+                  const after = before.map((i) =>
+                    i.id === initiativeId
+                      ? {
+                          ...i,
+                          startMonth: range.startMonth,
+                          endMonth: range.endMonth,
+                          startYearSprint: range.startYearSprint,
+                          endYearSprint: range.endYearSprint,
+                          timelineRow: nextTimelineRow,
+                        }
+                      : i,
                   );
+                  setInitiatives(after);
                   try {
                     await patchInitiativeScheduleRange(
                       initiativeId,
@@ -2625,6 +2672,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       },
                       planYear,
                     );
+                    await persistInitiativeTimelineRowPatches(before, after);
                     toast.success("Approved", {
                       description: "The initiative timeline was adjusted and saved.",
                     });

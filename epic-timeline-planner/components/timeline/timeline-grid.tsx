@@ -97,7 +97,8 @@ function GanttLaneRow({
               else barElsRef.current.delete(initiative.id);
             }}
             className={cn(
-              "relative z-20 min-w-0 rounded-lg pt-0.5 pb-2",
+              "relative min-w-0 rounded-lg pt-0.5 pb-2",
+              rz ? "z-0 opacity-70" : "z-20",
               emphasize ? "overflow-visible" : "overflow-hidden",
             )}
             style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
@@ -721,6 +722,54 @@ export function TimelineGrid({
       return a.epic.title.localeCompare(b.epic.title);
     });
   }, [scheduledInitiatives, activeMonth]);
+
+  useEffect(() => {
+    if (!resizePreview || activeMonth != null) return;
+    const target = scheduledInitiatives.find((i) => i.id === resizePreview.initiativeId);
+    if (!target) return;
+    const bounds = resolvedInitiativeYearSprintBounds(target);
+    if (!bounds) return;
+
+    const qLo = focusedQuarter != null ? firstGlobalSprintForMonth(focusedQuarter.months[0]) : 1;
+    const qHi =
+      focusedQuarter != null
+        ? globalSprintFromMonthLane(focusedQuarter.months[focusedQuarter.months.length - 1], 2)
+        : 24;
+
+    const ss = bounds.startYearSprint;
+    const es = bounds.endYearSprint;
+    const nextStart =
+      resizePreview.side === "left" ? Math.max(qLo, Math.min(es, ss + resizePreview.deltaSteps)) : ss;
+    const nextEnd =
+      resizePreview.side === "right" ? Math.min(qHi, Math.max(ss, es + resizePreview.deltaSteps)) : es;
+    const previewS = Math.max(nextStart, qLo);
+    const previewE = Math.min(nextEnd, qHi);
+    const row = Number.isFinite(target.timelineRow) ? target.timelineRow : 0;
+
+    const overlapsSameRow = scheduledInitiatives
+      .filter((i) => i.id !== target.id && (Number.isFinite(i.timelineRow) ? i.timelineRow : 0) === row)
+      .map((i) => {
+        const b = resolvedInitiativeYearSprintBounds(i);
+        if (!b) return null;
+        const s = Math.max(b.startYearSprint, qLo);
+        const e = Math.min(b.endYearSprint, qHi);
+        const overlaps = !(e < previewS || s > previewE);
+        return { id: i.id, title: i.title, row, range: [s, e] as const, overlaps };
+      })
+      .filter((x): x is { id: string; title: string; row: number; range: readonly [number, number]; overlaps: boolean } => x != null);
+
+    const overlapIds = overlapsSameRow.filter((x) => x.overlaps).map((x) => x.id);
+    const overlapRanges = overlapsSameRow
+      .filter((x) => x.overlaps)
+      .map((x) => `${x.id}:${x.range[0]}-${x.range[1]}`);
+    const candidateRanges = overlapsSameRow.map((x) => `${x.id}:${x.range[0]}-${x.range[1]}:${x.overlaps ? "hit" : "nohit"}`);
+    console.log(
+      `[gantt-resize] id=${target.id} row=${row} side=${resizePreview.side} delta=${resizePreview.deltaSteps} ` +
+        `orig=${ss}-${es} preview=${previewS}-${previewE} q=${qLo}-${qHi} ` +
+        `overlapIds=${overlapIds.join(",") || "none"} overlapRanges=${overlapRanges.join(",") || "none"} ` +
+        `sameRow=${candidateRanges.join("|") || "none"}`,
+    );
+  }, [resizePreview, scheduledInitiatives, focusedQuarter, activeMonth]);
   const epicMonthGridStyle = useMemo((): CSSProperties => ({ gridTemplateColumns: "repeat(1, minmax(0, 1fr))" }), []);
 
   const quarterLabelByMonth = new Map<number, string>(
@@ -1751,7 +1800,8 @@ export function TimelineGrid({
                                       else barElsRef.current.delete(initiative.id);
                                     }}
                                     className={cn(
-                                      "relative z-20 min-w-0 rounded-lg pt-0.5 pb-2",
+                                      "relative min-w-0 rounded-lg pt-0.5 pb-2",
+                                      rz ? "z-0 opacity-70" : "z-20",
                                       isEmphasis ? "overflow-visible" : "overflow-hidden",
                                     )}
                                     style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
@@ -1960,7 +2010,8 @@ export function TimelineGrid({
                               else barElsRef.current.delete(initiative.id);
                             }}
                             className={cn(
-                              "relative z-20 min-w-0 rounded-lg pt-0.5 pb-2",
+                              "relative min-w-0 rounded-lg pt-0.5 pb-2",
+                              rz ? "z-0 opacity-70" : "z-20",
                               isEmphasis ? "overflow-visible" : "overflow-hidden",
                             )}
                             style={{ gridColumn: `${previewColumnStart} / span ${previewSpan}`, gridRow: 1 }}
