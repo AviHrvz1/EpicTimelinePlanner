@@ -1753,7 +1753,7 @@ export function TimelineGrid({
           </div>
         </div>
       ) : null}
-      {!activeMonth && !focusedQuarter ? (
+      {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
         <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
           <div className="grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
@@ -2181,7 +2181,7 @@ export function TimelineGrid({
                 </div>
               </div>
             </div>
-          ) : !focusedQuarter ? (
+          ) : !focusedQuarter && quarterViewTab === "gantt" ? (
             <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
               <div className="grid min-w-0 grid-cols-4 gap-2">
               {QUARTERS.map((quarter) => (
