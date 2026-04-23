@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
-import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import {
@@ -142,6 +141,54 @@ function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: st
       className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800",
     };
   }
+  const hasProgress = stories.some(
+    (s) => s.status === "inProgress" || s.status === "done" || s.status === "approved",
+  );
+  if (hasProgress) {
+    return {
+      label: "In Progress",
+      className: "border border-blue-200/90 bg-blue-50 text-blue-800",
+    };
+  }
+  return {
+    label: "To Do",
+    className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+  };
+}
+
+function initiativeExecutionStatusMeta(initiative: InitiativeItem): { label: string; className: string } {
+  const epics = initiative.epics ?? [];
+  if (epics.length === 0) {
+    return {
+      label: "To Do",
+      className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+    };
+  }
+  const statuses = epics.map((epic) => epicExecutionStatusMeta(epic).label);
+  if (statuses.every((label) => label === "Approved")) {
+    return {
+      label: "Approved",
+      className: "border border-violet-200/90 bg-violet-50 text-violet-800",
+    };
+  }
+  if (statuses.every((label) => label === "Done" || label === "Approved")) {
+    return {
+      label: "Done",
+      className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800",
+    };
+  }
+  if (statuses.some((label) => label === "In Progress")) {
+    return {
+      label: "In Progress",
+      className: "border border-blue-200/90 bg-blue-50 text-blue-800",
+    };
+  }
+  if (statuses.some((label) => label === "To Do")) {
+    return {
+      label: "To Do",
+      className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+    };
+  }
   return {
     label: "In Progress",
     className: "border border-blue-200/90 bg-blue-50 text-blue-800",
@@ -200,9 +247,7 @@ function DraggableInitiativeCard({
               </span>
               <p className="min-w-0 truncate text-[15px] leading-5 font-normal text-slate-900">{initiative.title}</p>
             </div>
-            <div className="flex shrink-0 gap-1">
-              <EditRowIconButton label="Edit initiative" onClick={() => onEdit(initiative)} />
-            </div>
+            <div className="flex shrink-0 gap-1" />
           </div>
           {initiative.description ? (
             <p className="line-clamp-2 text-[12px] leading-4 text-slate-600">{initiative.description}</p>
@@ -273,19 +318,27 @@ function InitiativeTreeEpicRow({
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="group/epic flex items-start justify-between gap-2">
-            <button
-              type="button"
-              onClick={onToggleEpic}
-              className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
-              aria-expanded={isEpicOpen}
-            >
-              <ChevronRight
-                className={cn(
-                  "mt-0.5 size-3.5 shrink-0 text-slate-400 transition-transform",
-                  isEpicOpen && "rotate-90",
-                )}
-              />
-              <div className="min-w-0">
+            <div className="flex min-w-0 flex-1 items-start gap-1.5">
+              <button
+                type="button"
+                onClick={onToggleEpic}
+                className="mt-0.5 inline-flex shrink-0 rounded-sm text-slate-400 transition-colors hover:text-slate-600"
+                aria-label={isEpicOpen ? "Collapse epic" : "Expand epic"}
+                aria-expanded={isEpicOpen}
+              >
+                <ChevronRight
+                  className={cn(
+                    "size-3.5 shrink-0 transition-transform",
+                    isEpicOpen && "rotate-90",
+                  )}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenEpic(epic, initiative)}
+                className="min-w-0 flex-1 rounded-md px-0.5 text-left hover:bg-white/90"
+                aria-label={`Open epic ${epic.title}`}
+              >
                 <div className="flex min-w-0 items-center gap-1.5">
                   <span className="inline-flex shrink-0 text-[15px] leading-none text-slate-700">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
@@ -294,20 +347,15 @@ function InitiativeTreeEpicRow({
                     {epic.title}
                   </p>
                 </div>
-              </div>
-            </button>
-            <div className="flex shrink-0 items-start gap-1">
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-0.5">
-                <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
-                  {epicPlanStatus.label}
-                </span>
-                <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
-                  {epicExecutionStatus.label}
-                </span>
-              </div>
-              <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover/epic:opacity-100 group-focus-within/epic:opacity-100">
-              <EditRowIconButton label="Edit epic" onClick={() => onOpenEpic(epic, initiative)} />
-              </div>
+              </button>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-0.5">
+              <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
+                {epicPlanStatus.label}
+              </span>
+              <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
+                {epicExecutionStatus.label}
+              </span>
             </div>
           </div>
           <div className="mt-2 space-y-1.5">
@@ -420,6 +468,7 @@ function InitiativeTreeCard({
   ).length;
   const initiativeProgressPct =
     initiativeStoryTotal > 0 ? Math.round((initiativeStoryDone / initiativeStoryTotal) * 100) : 0;
+  const initiativeExecutionStatus = initiativeExecutionStatusMeta(initiative);
   const [epicTitle, setEpicTitle] = useState("");
   const [isAddingEpic, setIsAddingEpic] = useState(false);
   const [openEpicIds, setOpenEpicIds] = useState<Record<string, boolean>>({});
@@ -451,14 +500,27 @@ function InitiativeTreeCard({
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="group/init flex items-start justify-between gap-1">
-            <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2 text-left">
-              <ChevronRight
-                className={cn(
-                  "mt-1 size-4 shrink-0 text-slate-500 transition-transform",
-                  isOpen && "rotate-90",
-                )}
-              />
-              <div className="min-w-0 flex-1 text-left">
+            <div className="flex min-w-0 flex-1 items-start gap-2">
+              <button
+                type="button"
+                onClick={onToggle}
+                className="mt-1 inline-flex shrink-0 rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+                aria-label={isOpen ? "Collapse initiative" : "Expand initiative"}
+                aria-expanded={isOpen}
+              >
+                <ChevronRight
+                  className={cn(
+                    "size-4 shrink-0 transition-transform",
+                    isOpen && "rotate-90",
+                  )}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => onEditInitiative(initiative)}
+                className="min-w-0 flex-1 rounded-md px-0.5 text-left hover:bg-white/90"
+                aria-label={`Open initiative ${initiative.title}`}
+              >
                 <div className="flex w-full min-w-0 items-center gap-1">
                   <div className="flex min-w-0 flex-1 items-center gap-1.5">
                     <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
@@ -468,13 +530,6 @@ function InitiativeTreeCard({
                       {initiative.title}
                     </p>
                   </div>
-                  {initiative.status === "scheduled" && initiative.startMonth != null ? (
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pl-1 pr-0.5">
-                      <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] font-normal text-violet-700">
-                        {quarterFromMonth(initiative.startMonth)}
-                      </span>
-                    </div>
-                  ) : null}
                 </div>
                 {initiative.description ? (
                   <p className="line-clamp-2 text-[13px] leading-5 text-slate-600">{initiative.description}</p>
@@ -510,10 +565,22 @@ function InitiativeTreeCard({
                     />
                   </div>
                 </div>
-              </div>
-            </button>
-            <div className="flex shrink-0 gap-1 opacity-0 transition-opacity duration-150 group-hover/init:opacity-100 group-focus-within/init:opacity-100">
-              <EditRowIconButton label="Edit initiative" onClick={() => onEditInitiative(initiative)} />
+              </button>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pl-1 pr-0.5 pt-0.5">
+              {initiative.status === "scheduled" && initiative.startMonth != null ? (
+                <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                  {quarterFromMonth(initiative.startMonth)}
+                </span>
+              ) : null}
+              <span
+                className={cn(
+                  "px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]",
+                  initiativeExecutionStatus.className,
+                )}
+              >
+                {initiativeExecutionStatus.label}
+              </span>
             </div>
           </div>
 
@@ -678,33 +745,34 @@ function SprintEpicCard({
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={() => setIsOpen((prev) => !prev)}
-            className="flex min-w-0 items-start gap-1.5 text-left"
-            aria-expanded={isOpen}
-          >
-            <ChevronRight
-              className={cn(
-                "mt-0.5 size-4 shrink-0 text-slate-500 transition-transform",
-                isOpen && "rotate-90",
-              )}
-            />
-            <div className="min-w-0 flex-1 text-left">
+          <div className="flex min-w-0 items-start gap-1.5 text-left">
+            <button
+              type="button"
+              onClick={() => setIsOpen((prev) => !prev)}
+              className="mt-0.5 inline-flex shrink-0 rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+              aria-label={isOpen ? "Collapse epic" : "Expand epic"}
+              aria-expanded={isOpen}
+            >
+              <ChevronRight
+                className={cn(
+                  "size-4 shrink-0 transition-transform",
+                  isOpen && "rotate-90",
+                )}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenEpic(epic, initiative)}
+              className="min-w-0 flex-1 rounded-md px-0.5 text-left hover:bg-slate-50"
+              aria-label={`Open epic ${epic.title}`}
+            >
+              <div className="min-w-0 flex-1 text-left">
               <div className="flex w-full min-w-0 items-center gap-1">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                   </span>
                   <p className="min-w-0 truncate text-[16px] font-normal leading-6 text-slate-900">{epic.title}</p>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pl-1 pr-0.5">
-                  <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
-                    {epicPlanStatus.label}
-                  </span>
-                  <span className={cn("px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
-                    {epicExecutionStatus.label}
-                  </span>
                 </div>
               </div>
               <p className="truncate text-[12px] font-normal text-slate-500">{initiative.title}</p>
@@ -739,11 +807,17 @@ function SprintEpicCard({
                   />
                 </div>
               </div>
-            </div>
-          </button>
+              </div>
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-          <EditRowIconButton label="Edit epic" onClick={() => onOpenEpic(epic, initiative)} />
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pl-1 pr-0.5 pt-0.5">
+          <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
+            {epicPlanStatus.label}
+          </span>
+          <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
+            {epicExecutionStatus.label}
+          </span>
         </div>
       </div>
       {isOpen ? (

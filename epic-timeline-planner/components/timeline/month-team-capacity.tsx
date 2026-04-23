@@ -32,7 +32,13 @@ function epicExecutionStatusMeta(epic: InitiativeItem["epics"][number]): { label
   if (stories.every((s) => s.status === "done" || s.status === "approved")) {
     return { label: "Done", className: "border-emerald-200/90 bg-emerald-50 text-emerald-800" };
   }
-  return { label: "In Progress", className: "border-blue-200/90 bg-blue-50 text-blue-800" };
+  const hasProgress = stories.some(
+    (s) => s.status === "inProgress" || s.status === "done" || s.status === "approved",
+  );
+  if (hasProgress) {
+    return { label: "In Progress", className: "border-blue-200/90 bg-blue-50 text-blue-800" };
+  }
+  return { label: "To Do", className: "border-amber-200/90 bg-amber-50 text-amber-800" };
 }
 
 type MonthTeamCapacityProps = {
