@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Map as MapIcon, Thermometer } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Map as MapIcon, Thermometer, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -654,6 +654,7 @@ export function TimelineGrid({
   const [roadmapBarMode, setRoadmapBarMode] = useState<"epics" | "initiatives">("epics");
   const [capacityQuarterFilterLabel, setCapacityQuarterFilterLabel] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
   const [capacityTeamFilterId, setCapacityTeamFilterId] = useState<string>("all");
+  const [isSprintTeamMenuOpen, setIsSprintTeamMenuOpen] = useState(false);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -668,6 +669,7 @@ export function TimelineGrid({
     side: "left" | "right";
     deltaSteps: number;
   } | null>(null);
+  const sprintTeamMenuRef = useRef<HTMLDivElement | null>(null);
 
   const focusedQuarter = useMemo(
     () => QUARTERS.find((quarter) => quarter.label === focusedQuarterLabel) ?? null,
@@ -1427,7 +1429,57 @@ export function TimelineGrid({
       monthPlanTab === "sprint-capacity" ||
       monthPlanTab === "sprint-retrospective" ||
       monthPlanTab === "month-status");
+  const selectedSprintTeamId = isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : "all";
+  const sprintTeamOptions = useMemo(
+    () => [
+      {
+        value: "all",
+        label: "All Teams",
+        icon: <Users className="size-3.5 text-slate-500" aria-hidden />,
+      },
+      ...MONTH_TEAM_COLUMNS.map((team) => ({
+        value: team.id,
+        label: team.label,
+        icon: (
+          <span
+            className={cn(
+              "inline-block size-2.5 rounded-full",
+              team.id === "platform" && "bg-sky-500",
+              team.id === "experience" && "bg-violet-500",
+              team.id === "data" && "bg-amber-500",
+            )}
+            aria-hidden
+          />
+        ),
+      })),
+    ],
+    [],
+  );
+  const selectedSprintTeamOption =
+    sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
   const suppressMainVerticalScroll = activeMonth != null && monthPlanTab === "sprint-kanban";
+
+  useEffect(() => {
+    if (!isSprintTeamMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!sprintTeamMenuRef.current?.contains(event.target as Node)) {
+        setIsSprintTeamMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSprintTeamMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isSprintTeamMenuOpen]);
+
+  useEffect(() => {
+    if (!showSprintTeamPicker) setIsSprintTeamMenuOpen(false);
+  }, [showSprintTeamPicker]);
 
   return (
     <div
@@ -1438,20 +1490,20 @@ export function TimelineGrid({
     >
       <div
         className={cn(
-          "mb-4 flex items-center gap-3",
+          "relative z-30 mb-4 flex items-center gap-3 overflow-visible",
           hasBreadcrumbs ? "px-0 py-1" : "rounded-lg bg-slate-100 px-0 py-2.5",
           hasBreadcrumbs ? "justify-between" : "justify-start",
         )}
       >
         {hasBreadcrumbs ? (
-          <div className="inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 backdrop-blur-sm">
+          <div className="relative z-30 inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 backdrop-blur-sm">
             {breadcrumbItems.map((item, index) => (
-              <div key={`${item.label}-${index}`} className="flex items-center gap-1">
+              <div key={`${item.label}-${index}`} className="flex shrink-0 items-center gap-1">
                 {item.onClick ? (
                   <button
                     type="button"
                     onClick={item.onClick}
-                    className="cursor-pointer px-1 py-1 text-[14px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-1 text-[14px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -1459,7 +1511,7 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "px-1 py-1 text-[14px] font-semibold tracking-[0.01em]",
+                      "whitespace-nowrap px-1 py-1 text-[14px] font-semibold tracking-[0.01em]",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
                         : "text-slate-900",
@@ -1478,22 +1530,42 @@ export function TimelineGrid({
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
                 <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/90 px-2 py-1 shadow-sm">
                   <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
-                  <select
-                    value={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : "all"}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      onSprintStoryBoardTeamChange?.(next === "all" ? null : next);
-                    }}
-                    className="h-7 min-w-[9.25rem] cursor-pointer rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
-                    aria-label="Filter sprint views by team"
-                  >
-                    <option value="all">All teams</option>
-                    {MONTH_TEAM_COLUMNS.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative z-40" ref={sprintTeamMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
+                      className="inline-flex h-7 min-w-[9.25rem] items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      aria-label="Filter sprint views by team"
+                      aria-expanded={isSprintTeamMenuOpen}
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                        {selectedSprintTeamOption.icon}
+                        <span className="truncate">{selectedSprintTeamOption.label}</span>
+                      </span>
+                      <ChevronDown className="size-3.5 text-slate-500" aria-hidden />
+                    </button>
+                    {isSprintTeamMenuOpen ? (
+                      <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                        {sprintTeamOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              onSprintStoryBoardTeamChange?.(option.value === "all" ? null : option.value);
+                              setIsSprintTeamMenuOpen(false);
+                            }}
+                            className={cn(
+                              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                              selectedSprintTeamId === option.value && "bg-slate-100",
+                            )}
+                          >
+                            {option.icon}
+                            <span>{option.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 </label>
               </>
             ) : null}
