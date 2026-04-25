@@ -649,6 +649,32 @@ export function TimelineGrid({
       return !(end < qs || start > qe);
     });
   }, [scheduledInitiatives, focusedQuarter]);
+  const summaryBadgesForScope = useMemo(() => {
+    if (!summaryBadges) return null;
+    if (!focusedQuarter) return summaryBadges;
+    const qStart = focusedQuarter.months[0];
+    const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+    const quarterInitiatives = initiatives.filter((initiative) => {
+      if (initiative.status !== "scheduled") return false;
+      if (initiative.startMonth == null || initiative.endMonth == null) return false;
+      return !(initiative.endMonth < qStart || initiative.startMonth > qEnd);
+    });
+    const quarterEpics = quarterInitiatives.flatMap((initiative) => initiative.epics ?? []);
+    const scheduledEpics = quarterEpics.filter((epic) => {
+      if (epic.planStartMonth == null || epic.planEndMonth == null || epic.planSprint == null) return false;
+      return !(epic.planEndMonth < qStart || epic.planStartMonth > qEnd);
+    });
+    const unscheduledEpics = quarterEpics.length - scheduledEpics.length;
+    const totalStories = quarterEpics.reduce((sum, epic) => sum + (epic.userStories?.length ?? 0), 0);
+    return {
+      totalInitiatives: quarterInitiatives.length,
+      scheduledInitiatives: quarterInitiatives.length,
+      totalEpics: quarterEpics.length,
+      scheduledEpics: scheduledEpics.length,
+      unscheduledEpics,
+      totalStories,
+    };
+  }, [focusedQuarter, initiatives, summaryBadges]);
   const quarterRoadmapEpics = useMemo(() => {
     if (!focusedQuarter) return [] as Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }>;
     const qStart = focusedQuarter.months[0];
@@ -1395,30 +1421,34 @@ export function TimelineGrid({
             ) : null}
           </div>
         ) : null}
-        {!focusedQuarter && !activeMonth ? (
+        {!activeMonth ? (
           <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <label className="ml-3 inline-flex items-center gap-3 rounded-md border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 py-1 shadow-sm ring-1 ring-indigo-200/60">
-              <span className="shrink-0 text-[12px] font-semibold tracking-[0.045em] text-slate-700 uppercase">
-                Roadmap
-              </span>
-              <div className="relative">
-                <select
-                  value={currentYear}
-                  onChange={(event) => onYearChange?.(Number(event.target.value))}
-                  className="h-[30px] min-w-[5.75rem] cursor-pointer appearance-none rounded-md border border-indigo-300/75 bg-white/95 py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-slate-800 shadow-[0_1px_2px_rgba(67,56,202,0.06)] outline-none transition hover:border-indigo-400/85 hover:bg-white hover:shadow-[0_1px_4px_rgba(67,56,202,0.1)] focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-300/55"
-                >
-                  <option value={2024}>2024</option>
-                  <option value={2025}>2025</option>
-                  <option value={2026}>2026</option>
-                  <option value={2027}>2027</option>
-                </select>
-                <ChevronDown
-                  className="pointer-events-none absolute right-1.5 top-1/2 size-[13px] -translate-y-1/2 text-indigo-600/90"
-                  aria-hidden
-                />
-              </div>
-            </label>
-            {summaryBadges ? (
+            {!focusedQuarter ? (
+              <label className="ml-3 inline-flex items-center gap-3 rounded-md border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 py-1 shadow-sm ring-1 ring-indigo-200/60">
+                <span className="shrink-0 text-[12px] font-semibold tracking-[0.045em] text-slate-700 uppercase">
+                  Roadmap
+                </span>
+                <div className="relative">
+                  <select
+                    value={currentYear}
+                    onChange={(event) => onYearChange?.(Number(event.target.value))}
+                    className="h-[30px] min-w-[5.75rem] cursor-pointer appearance-none rounded-md border border-indigo-300/75 bg-white/95 py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-slate-800 shadow-[0_1px_2px_rgba(67,56,202,0.06)] outline-none transition hover:border-indigo-400/85 hover:bg-white hover:shadow-[0_1px_4px_rgba(67,56,202,0.1)] focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-300/55"
+                  >
+                    <option value={2024}>2024</option>
+                    <option value={2025}>2025</option>
+                    <option value={2026}>2026</option>
+                    <option value={2027}>2027</option>
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-1.5 top-1/2 size-[13px] -translate-y-1/2 text-indigo-600/90"
+                    aria-hidden
+                  />
+                </div>
+              </label>
+            ) : (
+              <div />
+            )}
+            {summaryBadgesForScope ? (
               <div className="flex flex-wrap items-center justify-end gap-2 pr-3">
                 <button
                   type="button"
@@ -1433,7 +1463,25 @@ export function TimelineGrid({
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
-                  {summaryBadges.totalInitiatives} Initiatives
+                  {summaryBadgesForScope.totalInitiatives} Initiatives
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoadmapBarMode("epics");
+                    onSummaryStatusQuickFilterChange?.(null);
+                  }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                      ? "bg-amber-100 text-amber-800 ring-amber-200"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  {("totalEpics" in summaryBadgesForScope
+                    ? summaryBadgesForScope.totalEpics
+                    : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
+                  Epics
                 </button>
                 <button
                   type="button"
@@ -1449,7 +1497,7 @@ export function TimelineGrid({
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
-                  {summaryBadges.unscheduledEpics} Unscheduled
+                  {summaryBadgesForScope.unscheduledEpics} Unscheduled
                 </button>
                 <button
                   type="button"
@@ -1466,10 +1514,10 @@ export function TimelineGrid({
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
-                  {summaryBadges.scheduledEpics} Scheduled
+                  {summaryBadgesForScope.scheduledEpics} Scheduled
                 </button>
                 <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
-                  {summaryBadges.totalStories} User Stories
+                  {summaryBadgesForScope.totalStories} User Stories
                 </div>
               </div>
             ) : null}

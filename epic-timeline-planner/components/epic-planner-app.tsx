@@ -2818,6 +2818,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     ? sprintStoryBoardTeamId
                     : null
                 }
+                panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
                 onInitiativeAccordionChange={handleInitiativeAccordionChange}
                 panelStatusQuickFilter={panelStatusQuickFilter}
               />

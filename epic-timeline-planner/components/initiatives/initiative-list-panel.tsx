@@ -349,6 +349,8 @@ type InitiativeListPanelProps = {
   epicPanelQuarterMonths?: number[] | null;
   /** Label for quarter-scoped list (e.g. `Q1`). */
   epicPanelQuarterLabel?: string | null;
+  /** Optional quarter sync from timeline selection. */
+  panelQuarterQuickFilter?: "Q1" | "Q2" | "Q3" | "Q4" | null;
   /** Fires when an initiative accordion opens or closes (initiative list mode). */
   onInitiativeAccordionChange?: (initiativeId: string, isOpen: boolean) => void;
   /** Optional top-chip quick filter sync (Scheduled / Unscheduled epics). */
@@ -1086,6 +1088,7 @@ export function InitiativeListPanel({
   monthEpicTeamFilterId = null,
   epicPanelQuarterMonths = null,
   epicPanelQuarterLabel = null,
+  panelQuarterQuickFilter = null,
   onInitiativeAccordionChange,
   panelStatusQuickFilter = null,
 }: InitiativeListPanelProps) {
@@ -1162,6 +1165,13 @@ export function InitiativeListPanel({
     }
     return [...withoutAll, value];
   };
+  useEffect(() => {
+    if (panelQuarterQuickFilter == null) {
+      setPanelQuarterFilters(["all"]);
+      return;
+    }
+    setPanelQuarterFilters([panelQuarterQuickFilter]);
+  }, [panelQuarterQuickFilter]);
   useEffect(() => {
     if (panelStatusQuickFilter == null) {
       setPanelStatusFilters((prev) => {
