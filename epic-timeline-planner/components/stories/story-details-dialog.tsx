@@ -532,15 +532,23 @@ export function StoryDetailsDialog({
           </div>
           <div className="flex items-center gap-2">
             {!isCreateMode ? (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                onClick={() => void handleDelete()}
-                aria-label="Delete story"
-                className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-              >
-                <Trash className="size-4" />
-              </Button>
+              <>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => void handleDelete()}
+                  aria-label="Delete story"
+                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                >
+                  <Trash className="size-4" />
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button size="sm" className="h-8 px-3 text-xs font-medium" onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </>
             ) : (
               <Button className="px-3 text-xs font-medium" onClick={handleSave} disabled={saving}>
                 {saving ? "Creating..." : "Create"}

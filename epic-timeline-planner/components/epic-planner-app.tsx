@@ -3194,6 +3194,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       </main>
       <InitiativeFormDialog
         open={initiativeDialogOpen}
+        initiatives={initiatives}
         initiative={currentEditingInitiative}
         onOpenEpic={(epicId) => {
           for (const initiative of initiatives) {
@@ -3210,6 +3211,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           setEditingEpic(undefined);
           setEditingEpicInitiativeId(initiativeId);
           setEpicDialogOpen(true);
+        }}
+        onPatchEpic={async (epicId, patch) => {
+          try {
+            const response = await fetch(`/api/epics/${epicId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(patch),
+            });
+            if (!response.ok) throw new Error("Failed to patch epic");
+            await refresh();
+          } catch {
+            toast.error("Failed to update epic");
+          }
         }}
         onAddComment={async (initiativeId, body) => {
           try {
