@@ -408,6 +408,7 @@ type TimelineGridProps = {
     unscheduledEpics: number;
     totalStories: number;
   };
+  onSummaryStatusQuickFilterChange?: (value: "Scheduled" | "Unscheduled" | null) => void;
   focusedQuarterLabel: string | null;
   focusedMonthExternal?: number | null;
   activeSprintExternal?: number | null;
@@ -563,6 +564,7 @@ export function TimelineGrid({
   currentYear,
   onYearChange,
   summaryBadges,
+  onSummaryStatusQuickFilterChange,
   focusedQuarterLabel,
   focusedMonthExternal,
   activeSprintExternal,
@@ -1418,7 +1420,10 @@ export function TimelineGrid({
               <div className="flex flex-wrap items-center justify-end gap-2 pr-3">
                 <button
                   type="button"
-                  onClick={() => setRoadmapBarMode("initiatives")}
+                  onClick={() => {
+                    setRoadmapBarMode("initiatives");
+                    onSummaryStatusQuickFilterChange?.(null);
+                  }}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                     roadmapBarMode === "initiatives"
@@ -1428,12 +1433,19 @@ export function TimelineGrid({
                 >
                   {summaryBadges.totalInitiatives} Initiatives
                 </button>
-                <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800">
-                  {summaryBadges.unscheduledEpics} Unscheduled Epics
-                </div>
                 <button
                   type="button"
-                  onClick={() => setRoadmapBarMode("epics")}
+                  onClick={() => onSummaryStatusQuickFilterChange?.("Unscheduled")}
+                  className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-300/80"
+                >
+                  {summaryBadges.unscheduledEpics} Unscheduled
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoadmapBarMode("epics");
+                    onSummaryStatusQuickFilterChange?.("Scheduled");
+                  }}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                     roadmapBarMode === "epics"
@@ -1441,7 +1453,7 @@ export function TimelineGrid({
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
-                  {summaryBadges.scheduledEpics} Scheduled Epics
+                  {summaryBadges.scheduledEpics} Scheduled
                 </button>
                 <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
                   {summaryBadges.totalStories} User Stories

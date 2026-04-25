@@ -17,7 +17,7 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
@@ -88,6 +88,7 @@ function IconFilterSelect<T extends string>({
   allValue: T;
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
   const allOption = options.find((opt) => opt.value === allValue) ?? null;
   const isAllSelected = values.includes(allValue) || values.length === 0;
   const selected = isAllSelected
@@ -96,13 +97,28 @@ function IconFilterSelect<T extends string>({
   if (!selected) return null;
   const selectedCount = isAllSelected ? 0 : values.length;
   const selectedLabel = isAllSelected ? selected.label : selectedCount === 1 ? selected.label : `${selectedCount} selected`;
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current != null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+  const closeMenuSoon = () => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      detailsRef.current?.removeAttribute("open");
+      closeTimeoutRef.current = null;
+    }, 180);
+  };
 
   return (
     <details
       ref={detailsRef}
       className="group relative"
-      onMouseLeave={() => detailsRef.current?.removeAttribute("open")}
+      onMouseEnter={clearCloseTimeout}
+      onMouseLeave={closeMenuSoon}
       onBlur={(event) => {
+        clearCloseTimeout();
         const next = event.relatedTarget as Node | null;
         if (!next || !event.currentTarget.contains(next)) {
           detailsRef.current?.removeAttribute("open");
@@ -122,7 +138,7 @@ function IconFilterSelect<T extends string>({
         </span>
         <ChevronDown className="size-3.5 shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden />
       </summary>
-      <div className="absolute z-50 mt-1 w-full min-w-max rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+      <div className="absolute top-full left-0 z-50 mt-1 w-full min-w-max rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
         {options.map((opt) => (
           <button
             key={opt.value}
@@ -335,6 +351,8 @@ type InitiativeListPanelProps = {
   epicPanelQuarterLabel?: string | null;
   /** Fires when an initiative accordion opens or closes (initiative list mode). */
   onInitiativeAccordionChange?: (initiativeId: string, isOpen: boolean) => void;
+  /** Optional top-chip quick filter sync (Scheduled / Unscheduled epics). */
+  panelStatusQuickFilter?: "Scheduled" | "Unscheduled" | null;
 };
 
 function DraggableInitiativeCard({
@@ -1069,6 +1087,7 @@ export function InitiativeListPanel({
   epicPanelQuarterMonths = null,
   epicPanelQuarterLabel = null,
   onInitiativeAccordionChange,
+  panelStatusQuickFilter = null,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef } = useDroppable({
     id: "initiatives:backlog-drop",
@@ -1085,7 +1104,7 @@ export function InitiativeListPanel({
   const [panelQuarterFilters, setPanelQuarterFilters] = useState<Array<"all" | "Q1" | "Q2" | "Q3" | "Q4">>(["all"]);
   const [panelTeamFilterIds, setPanelTeamFilterIds] = useState<string[]>(["all"]);
   const [panelStatusFilters, setPanelStatusFilters] = useState<Array<
-    "all" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
+    "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
   >>(["all"]);
   const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
     { value: "all", label: "All quarters", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
@@ -1112,9 +1131,10 @@ export function InitiativeListPanel({
     })),
   ];
   const statusFilterOptions: IconFilterOption<
-    "all" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
+    "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
   >[] = [
     { value: "all", label: "All Statuses", icon: <ListFilter className="size-3.5 text-slate-500" /> },
+    { value: "Scheduled", label: "Scheduled", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
     { value: "Unscheduled", label: "Unscheduled", icon: <Circle className="size-3.5 text-slate-500" /> },
     { value: "To Do", label: "To Do", icon: <ListTodo className="size-3.5 text-slate-500" /> },
     { value: "In Progress", label: "In Progress", icon: <PlayCircle className="size-3.5 text-slate-500" /> },
@@ -1142,6 +1162,10 @@ export function InitiativeListPanel({
     }
     return [...withoutAll, value];
   };
+  useEffect(() => {
+    if (panelStatusQuickFilter == null) return;
+    setPanelStatusFilters([panelStatusQuickFilter]);
+  }, [panelStatusQuickFilter]);
 
   const monthAssignedEpics = useMemo(() => {
     if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
@@ -1192,11 +1216,13 @@ export function InitiativeListPanel({
       }
       if (!panelTeamFilterIds.includes("all") && !panelTeamFilterIds.includes(epic.team ?? "")) return false;
       if (!panelStatusFilters.includes("all")) {
-        if (panelStatusFilters.includes("Unscheduled")) {
-          if (epicPlanningStatusMeta(epic).label !== "Unscheduled") return false;
-        } else if (
-          !panelStatusFilters.includes(epicExecutionStatusMeta(epic).label as "To Do" | "In Progress" | "Done" | "Approved")
-        ) {
+        const planning = epicPlanningStatusMeta(epic).label;
+        const execution = epicExecutionStatusMeta(epic).label as "To Do" | "In Progress" | "Done" | "Approved";
+        const matches =
+          (panelStatusFilters.includes("Scheduled") && planning !== "Unscheduled") ||
+          (panelStatusFilters.includes("Unscheduled") && planning === "Unscheduled") ||
+          panelStatusFilters.includes(execution);
+        if (!matches) {
           return false;
         }
       }
@@ -1258,16 +1284,22 @@ export function InitiativeListPanel({
         if (!hasTeam) return false;
       }
       if (!panelStatusFilters.includes("all")) {
-        if (panelStatusFilters.includes("Unscheduled")) {
-          const hasUnscheduledEpics = (initiative.epics ?? []).some(
-            (epic) => epicPlanningStatusMeta(epic).label === "Unscheduled",
-          );
-          if (initiative.status !== "backlog" && !hasUnscheduledEpics) return false;
-        } else if (
-          !panelStatusFilters.includes(
-            initiativeExecutionStatusMeta(initiative).label as "To Do" | "In Progress" | "Done" | "Approved",
-          )
-        ) {
+        const hasUnscheduledEpics = (initiative.epics ?? []).some(
+          (epic) => epicPlanningStatusMeta(epic).label === "Unscheduled",
+        );
+        const hasScheduledEpics = (initiative.epics ?? []).some(
+          (epic) => epicPlanningStatusMeta(epic).label !== "Unscheduled",
+        );
+        const initiativeExecution = initiativeExecutionStatusMeta(initiative).label as
+          | "To Do"
+          | "In Progress"
+          | "Done"
+          | "Approved";
+        const matches =
+          (panelStatusFilters.includes("Unscheduled") && (initiative.status === "backlog" || hasUnscheduledEpics)) ||
+          (panelStatusFilters.includes("Scheduled") && (initiative.status === "scheduled" || hasScheduledEpics)) ||
+          panelStatusFilters.includes(initiativeExecution);
+        if (!matches) {
           return false;
         }
       }

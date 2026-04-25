@@ -714,6 +714,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [activeYearSprint, setActiveYearSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("epic-gantt");
+  const [panelStatusQuickFilter, setPanelStatusQuickFilter] = useState<"Scheduled" | "Unscheduled" | null>(null);
   /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
   const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
   const [monthTeamBoardByKey, setMonthTeamBoardByKey] = useState<Record<string, MonthTeamBoardPersisted>>(() => {
@@ -2818,6 +2819,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     : null
                 }
                 onInitiativeAccordionChange={handleInitiativeAccordionChange}
+                panelStatusQuickFilter={panelStatusQuickFilter}
               />
               <div
                 className="group relative flex cursor-col-resize items-stretch justify-center"
@@ -2841,6 +2843,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 zoom={1}
                 currentYear={selectedYear}
                 summaryBadges={roadmapSummary}
+                onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 onYearChange={async (nextYear) => {
                   if (nextYear === selectedYear) return;
                   setSelectedYear(nextYear);
