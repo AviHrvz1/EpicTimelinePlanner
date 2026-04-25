@@ -10,6 +10,8 @@ const updateStorySchema = z.object({
   icon: z.string().trim().min(1).max(4).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   assignee: z.string().trim().max(120).optional().nullable(),
+  labels: z.string().trim().max(500).optional().nullable(),
+  priority: z.string().trim().max(60).optional().nullable(),
   /** Year sprint 1–24, or legacy 1–2 (month lane) per `resolveStoryYearSprint`. */
   sprint: z.number().int().min(YEAR_SPRINT_MIN).max(YEAR_SPRINT_MAX).optional().nullable(),
   estimatedDays: z.number().int().min(0).max(3650).optional().nullable(),
@@ -48,6 +50,8 @@ export async function PATCH(
       icon: true,
       description: true,
       assignee: true,
+      labels: true,
+      priority: true,
       sprint: true,
       estimatedDays: true,
       daysLeft: true,
@@ -68,6 +72,8 @@ export async function PATCH(
   if (patch.description !== undefined && patch.description !== existing.description)
     changes.push("Description updated");
   if (patch.assignee !== undefined && patch.assignee !== existing.assignee) changes.push("Assignee updated");
+  if (patch.labels !== undefined && patch.labels !== existing.labels) changes.push("Labels updated");
+  if (patch.priority !== undefined && patch.priority !== existing.priority) changes.push("Priority updated");
   if (patch.sprint !== undefined && patch.sprint !== existing.sprint) changes.push("Sprint updated");
   if (patch.estimatedDays !== undefined && patch.estimatedDays !== existing.estimatedDays)
     changes.push("Estimated days updated");
@@ -100,6 +106,8 @@ export async function PATCH(
       ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
       ...(patch.description !== undefined ? { description: patch.description } : {}),
       ...(patch.assignee !== undefined ? { assignee: patch.assignee } : {}),
+      ...(patch.labels !== undefined ? { labels: patch.labels } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.sprint !== undefined ? { sprint: patch.sprint } : {}),
       ...(patch.estimatedDays !== undefined ? { estimatedDays: patch.estimatedDays } : {}),
       ...(patch.daysLeft !== undefined ? { daysLeft: patch.daysLeft } : {}),

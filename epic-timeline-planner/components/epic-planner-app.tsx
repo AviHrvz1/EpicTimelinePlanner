@@ -1760,6 +1760,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     icon: string;
     description: string | null;
     assignee: string | null;
+    labels: string | null;
+    priority: string | null;
     sprint: number | null;
     estimatedDays: number | null;
     daysLeft: number | null;
@@ -1808,6 +1810,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       icon: string;
       description: string | null;
       assignee: string | null;
+      labels: string | null;
+      priority: string | null;
       sprint: number | null;
       estimatedDays: number | null;
       daysLeft: number | null;
@@ -3306,6 +3310,23 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           } catch {
             toast.error("Failed to delete user story");
           }
+        }}
+        onOpenInitiative={(initiativeId) => {
+          setTopMode("roadmap");
+          setFocusedInitiativeId(initiativeId);
+          setInitiativeDialogOpen(true);
+        }}
+        onOpenEpic={(epicId) => {
+          setTopMode("roadmap");
+          const initiative = initiatives.find((item) => (item.epics ?? []).some((epic) => epic.id === epicId));
+          setEditingEpicInitiativeId(initiative?.id ?? null);
+          setEditingEpicId(epicId);
+          setEpicDialogOpen(true);
+        }}
+        onOpenStory={(storyId) => {
+          setTopMode("roadmap");
+          setSelectedStoryId(storyId);
+          setStoryDialogOpen(true);
         }}
         storyRef={selectedStoryId ? storyRefMaps.byId[selectedStoryId] : undefined}
         surfaceAnchorRef={planningRightSurfaceRef}

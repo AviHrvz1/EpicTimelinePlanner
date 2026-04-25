@@ -111,6 +111,8 @@ model UserStory {
   icon          String         @default("📄")
   description   String?
   assignee      String?
+  labels        String?
+  priority      String?
   planYear      Int?
   planQuarter   Int?
   sprint        Int?

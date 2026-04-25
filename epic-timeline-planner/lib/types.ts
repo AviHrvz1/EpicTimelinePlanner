@@ -51,6 +51,8 @@ export type UserStoryItem = {
   icon: string;
   description: string | null;
   assignee: string | null;
+  labels: string | null;
+  priority: string | null;
   planYear: number | null;
   planQuarter: number | null;
   sprint: number | null;

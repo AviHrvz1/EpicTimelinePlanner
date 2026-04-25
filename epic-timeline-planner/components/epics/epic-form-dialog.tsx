@@ -110,7 +110,7 @@ export function EpicFormDialog({
 
   const { visible, leaving } = useDialogPresence(open, onExitComplete);
   const surfaceRect = usePlanningSurfaceRect(surfaceAnchorRef, visible);
-  const anchored = isUsablePlanningSurfaceRect(surfaceRect);
+  const anchored = false;
 
   if (!visible) return null;
 
@@ -219,7 +219,7 @@ export function EpicFormDialog({
     <div
       className={cn(
         "fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[1px]",
-        !anchored && "flex items-start justify-end p-4 pb-6 pl-6 pr-4 pt-6 md:pr-12",
+        !anchored && "flex items-stretch justify-end p-0",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
         leaving && "pointer-events-none",
@@ -230,7 +230,7 @@ export function EpicFormDialog({
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
           anchored
             ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06]"
-            : "w-full max-w-[31.36rem] shrink-0",
+            : "h-full w-[50vw] max-w-[50vw] shrink-0",
         )}
         style={anchored ? planningDetailPanelAnchorStyle(surfaceRect) : undefined}
       >
@@ -239,7 +239,7 @@ export function EpicFormDialog({
             "w-full overflow-y-auto p-5",
             anchored
               ? "h-full min-h-0 flex-1 shadow-none ring-0"
-              : "max-h-[88vh] rounded-2xl border border-slate-200 bg-white shadow-2xl",
+              : "h-full min-h-0 rounded-none border-0 bg-white shadow-none",
             isDraggingDialog && "select-none",
           )}
           style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
