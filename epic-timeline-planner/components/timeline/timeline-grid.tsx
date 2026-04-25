@@ -1720,7 +1720,7 @@ export function TimelineGrid({
                     onMonthPlanTabChange?.("sprint-kanban");
                     setActiveSprintTab("kanban");
                   }}
-                  title="Sprint board"
+                  title="Sprint Board"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-kanban"
@@ -1729,7 +1729,7 @@ export function TimelineGrid({
                   )}
                 >
                   <MapIcon className="size-4" aria-hidden />
-                  <span className="sr-only">Sprint board</span>
+                  <span className="sr-only">Sprint Board</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1737,7 +1737,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Sprint board
+                    Sprint Board
                   </span>
                 </button>
                 <button
@@ -1746,7 +1746,7 @@ export function TimelineGrid({
                     onMonthPlanTabChange?.("sprint-status");
                     setActiveSprintTab("status");
                   }}
-                  title="Sprint insights"
+                  title="Sprint Insights"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-status"
@@ -1755,7 +1755,7 @@ export function TimelineGrid({
                   )}
                 >
                   <BarChart3 className="size-4" aria-hidden />
-                  <span className="sr-only">Sprint insights</span>
+                  <span className="sr-only">Sprint Insights</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1763,7 +1763,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Sprint insights
+                    Sprint Insights
                   </span>
                 </button>
                 <button
@@ -1771,7 +1771,7 @@ export function TimelineGrid({
                   onClick={() => {
                     onMonthPlanTabChange?.("sprint-capacity");
                   }}
-                  title="Sprint capacity"
+                  title="Sprint Capacity"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-capacity"
@@ -1780,7 +1780,7 @@ export function TimelineGrid({
                   )}
                 >
                   <Thermometer className="size-4" aria-hidden />
-                  <span className="sr-only">Sprint capacity</span>
+                  <span className="sr-only">Sprint Capacity</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1788,7 +1788,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Sprint capacity
+                    Sprint Capacity
                   </span>
                 </button>
                 <button
@@ -1796,7 +1796,7 @@ export function TimelineGrid({
                   onClick={() => {
                     onMonthPlanTabChange?.("sprint-retrospective");
                   }}
-                  title="Sprint retrospective"
+                  title="Sprint Retrospective"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-retrospective"
@@ -1805,7 +1805,7 @@ export function TimelineGrid({
                   )}
                 >
                   <ClipboardList className="size-4" aria-hidden />
-                  <span className="sr-only">Sprint retrospective</span>
+                  <span className="sr-only">Sprint Retrospective</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1813,7 +1813,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Sprint retrospective
+                    Sprint Retrospective
                   </span>
                 </button>
               </>
@@ -1822,7 +1822,7 @@ export function TimelineGrid({
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("epic-gantt")}
-                  title="Epic plan"
+                  title="Epic Plan"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "epic-gantt"
@@ -1831,7 +1831,7 @@ export function TimelineGrid({
                   )}
                 >
                   <MapIcon className="size-4" aria-hidden />
-                  <span className="sr-only">Epic plan</span>
+                  <span className="sr-only">Epic Plan</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1839,13 +1839,13 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Epic plan
+                    Epic Plan
                   </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("team-queue")}
-                  title="Team queue"
+                  title="Team Queue"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "team-queue"
@@ -1854,7 +1854,7 @@ export function TimelineGrid({
                   )}
                 >
                   <BarChart3 className="size-4" aria-hidden />
-                  <span className="sr-only">Team queue</span>
+                  <span className="sr-only">Team Queue</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1862,13 +1862,13 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Team queue
+                    Team Queue
                   </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-capacity")}
-                  title="Team capacity"
+                  title="Team Capacity"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "month-capacity"
@@ -1877,7 +1877,7 @@ export function TimelineGrid({
                   )}
                 >
                   <Thermometer className="size-4" aria-hidden />
-                  <span className="sr-only">Team capacity</span>
+                  <span className="sr-only">Team Capacity</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1885,13 +1885,13 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Team capacity
+                    Team Capacity
                   </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-status")}
-                  title="Month insights"
+                  title="Month Insights"
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "month-status"
@@ -1900,7 +1900,7 @@ export function TimelineGrid({
                   )}
                 >
                   <BarChart3 className="size-4" aria-hidden />
-                  <span className="sr-only">Month insights</span>
+                  <span className="sr-only">Month Insights</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -1908,7 +1908,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Month insights
+                    Month Insights
                   </span>
                 </button>
               </>
@@ -1965,7 +1965,7 @@ export function TimelineGrid({
             <button
               type="button"
               onClick={() => setQuarterViewTab("status")}
-              title="Quarter status"
+              title="Quarter Status"
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "status"
@@ -1974,7 +1974,7 @@ export function TimelineGrid({
               )}
             >
               <BarChart3 className="size-4" aria-hidden />
-              <span className="sr-only">Quarter status</span>
+              <span className="sr-only">Quarter Status</span>
               <span
                 aria-hidden
                 className={cn(
@@ -1982,13 +1982,13 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                Quarter status
+                Quarter Status
               </span>
             </button>
             <button
               type="button"
               onClick={() => setQuarterViewTab("capacity")}
-              title="Quarter capacity"
+              title="Quarter Capacity"
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "capacity"
@@ -1997,7 +1997,7 @@ export function TimelineGrid({
               )}
             >
               <Thermometer className="size-4" aria-hidden />
-              <span className="sr-only">Quarter capacity</span>
+              <span className="sr-only">Quarter Capacity</span>
               <span
                 aria-hidden
                 className={cn(
@@ -2005,7 +2005,7 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                Quarter capacity
+                Quarter Capacity
               </span>
             </button>
           </div>
@@ -2046,7 +2046,7 @@ export function TimelineGrid({
             <button
               type="button"
               onClick={() => setQuarterViewTab("status")}
-              title="All quarters status"
+              title="Quarters Status"
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "status"
@@ -2055,7 +2055,7 @@ export function TimelineGrid({
               )}
             >
               <BarChart3 className="size-4" aria-hidden />
-              <span className="sr-only">All quarters status</span>
+              <span className="sr-only">Quarters Status</span>
               <span
                 aria-hidden
                 className={cn(
@@ -2063,13 +2063,13 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                All quarters status
+                Quarters Status
               </span>
             </button>
             <button
               type="button"
               onClick={() => setQuarterViewTab("capacity")}
-              title="All quarters capacity"
+              title="Quarters Capacity"
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "capacity"
@@ -2078,7 +2078,7 @@ export function TimelineGrid({
               )}
             >
               <Thermometer className="size-4" aria-hidden />
-              <span className="sr-only">All quarters capacity</span>
+              <span className="sr-only">Quarters Capacity</span>
               <span
                 aria-hidden
                 className={cn(
@@ -2086,7 +2086,7 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                All quarters capacity
+                Quarters Capacity
               </span>
             </button>
           </div>

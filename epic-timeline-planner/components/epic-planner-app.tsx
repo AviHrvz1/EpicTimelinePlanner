@@ -2651,7 +2651,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           <button
             type="button"
             onClick={() => setTopMode("roadmap")}
-            aria-label="Roadmap planning"
+            aria-label="Roadmap Planning"
             className={cn(
               "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
               topMode === "roadmap"
@@ -2677,7 +2677,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
               )}
             >
-              Roadmap planning
+              Roadmap Planning
             </span>
           </button>
         </div>
@@ -2685,7 +2685,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           <button
             type="button"
             onClick={() => setTopMode("backlog")}
-            aria-label="Backlog workspace"
+            aria-label="Backlog Workspace"
             className={cn(
               "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
               topMode === "backlog"
@@ -2711,7 +2711,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
               )}
             >
-              Backlog workspace
+              Backlog Workspace
             </span>
           </button>
         </div>

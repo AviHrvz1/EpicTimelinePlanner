@@ -1464,13 +1464,17 @@ export function InitiativeListPanel({
 
       {inMonthView ? (
         <div className="space-y-4">
-          <div>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 z-10 size-4.5 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
             <input
               value={epicSearch}
               onChange={(event) => setEpicSearch(event.target.value)}
               list="month-epic-search-suggestions"
               placeholder="Search epic..."
-              className="h-10 w-full rounded-lg bg-white px-3 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              className="h-10 w-full rounded-lg bg-white pl-10 pr-3 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
               aria-label="Search epics in selected month"
             />
             <datalist id="month-epic-search-suggestions">

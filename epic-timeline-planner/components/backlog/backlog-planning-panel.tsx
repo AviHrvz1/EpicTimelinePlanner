@@ -2271,8 +2271,8 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="mb-6 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pt-3 pb-5 shadow-sm ring-1 ring-white/60">
-        <div className="relative flex items-center gap-2">
-          <Search className="size-4 text-slate-500" />
+        <div className="relative flex items-center">
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -2282,10 +2282,10 @@ export function BacklogPlanningPanel({
             onBlur={() => {
               window.setTimeout(() => setShowSearchSuggestions(false), 120);
             }}
-            className="h-9 w-full rounded-lg bg-white/95 px-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-300/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
+            className="h-9 w-full rounded-lg bg-white/95 pl-9 pr-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-300/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
           />
           {showSearchSuggestions && searchSuggestions.length > 0 ? (
-            <div className="absolute left-2 right-2 top-[calc(100%+0.35rem)] z-20 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+            <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
               {searchSuggestions.map((item) => (
                 <button
                   key={item}
