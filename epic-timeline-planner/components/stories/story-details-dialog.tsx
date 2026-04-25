@@ -930,12 +930,15 @@ export function StoryDetailsDialog({
           </section>
           <div className="relative mx-1.5">
             <div
-              className="absolute inset-y-1 left-1/2 w-2 -translate-x-1/2 cursor-ew-resize rounded-full bg-slate-200/80 hover:bg-slate-300"
+              className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-1/2 cursor-col-resize items-stretch justify-center"
               onPointerDown={beginDetailsPanelResize}
               title="Resize details panel"
               aria-label="Resize details panel"
               role="separator"
-            />
+            >
+              <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
+              <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+            </div>
           </div>
 
           <section className="space-y-2.5 rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-3.5">
@@ -1096,12 +1099,15 @@ export function StoryDetailsDialog({
 
         <div className="mt-3">
           <div
-            className="mb-1 h-2 cursor-ns-resize rounded-full bg-slate-200/80 hover:bg-slate-300"
+            className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
             onPointerDown={beginActivityPanelResize}
             title="Resize activity panel height"
             aria-label="Resize activity panel height"
             role="separator"
-          />
+          >
+            <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
+            <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
+          </div>
           <section
             className="flex min-h-0 flex-col space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200"
             style={{ height: `${activityPanelHeightPx}px` }}
