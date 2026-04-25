@@ -811,6 +811,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
   /** Separate from selection so `open` can go false before IDs clear, allowing exit animation. */
   const [storyDialogOpen, setStoryDialogOpen] = useState(false);
+  const pendingStoryDialogNavigationRef = useRef<null | (() => void)>(null);
   const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
@@ -3276,6 +3277,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           setStoryDialogOpen(false);
         }}
         onExitComplete={() => {
+          if (pendingStoryDialogNavigationRef.current) {
+            const run = pendingStoryDialogNavigationRef.current;
+            pendingStoryDialogNavigationRef.current = null;
+            run();
+            return;
+          }
           setSelectedStoryId(null);
           setCreatingStoryEpicId(null);
         }}
@@ -3312,21 +3319,30 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           }
         }}
         onOpenInitiative={(initiativeId) => {
-          setTopMode("roadmap");
-          setFocusedInitiativeId(initiativeId);
-          setInitiativeDialogOpen(true);
+          pendingStoryDialogNavigationRef.current = () => {
+            setTopMode("roadmap");
+            setFocusedInitiativeId(initiativeId);
+            setInitiativeDialogOpen(true);
+          };
+          setStoryDialogOpen(false);
         }}
         onOpenEpic={(epicId) => {
-          setTopMode("roadmap");
-          const initiative = initiatives.find((item) => (item.epics ?? []).some((epic) => epic.id === epicId));
-          setEditingEpicInitiativeId(initiative?.id ?? null);
-          setEditingEpicId(epicId);
-          setEpicDialogOpen(true);
+          pendingStoryDialogNavigationRef.current = () => {
+            setTopMode("roadmap");
+            const initiative = initiatives.find((item) => (item.epics ?? []).some((epic) => epic.id === epicId));
+            setEditingEpicInitiativeId(initiative?.id ?? null);
+            setEditingEpicId(epicId);
+            setEpicDialogOpen(true);
+          };
+          setStoryDialogOpen(false);
         }}
         onOpenStory={(storyId) => {
-          setTopMode("roadmap");
-          setSelectedStoryId(storyId);
-          setStoryDialogOpen(true);
+          pendingStoryDialogNavigationRef.current = () => {
+            setTopMode("roadmap");
+            setSelectedStoryId(storyId);
+            setStoryDialogOpen(true);
+          };
+          setStoryDialogOpen(false);
         }}
         storyRef={selectedStoryId ? storyRefMaps.byId[selectedStoryId] : undefined}
         surfaceAnchorRef={planningRightSurfaceRef}

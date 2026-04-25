@@ -158,7 +158,7 @@
     transform: translateX(0);
   }
   to {
-    transform: translateX(100%);
+    transform: translateX(-100%);
   }
 }
 
@@ -167,7 +167,7 @@
 }
 
 .epic-dialog-panel--exit {
-  animation: epic-dialog-panel-out 0.45s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: epic-dialog-panel-out 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /**
