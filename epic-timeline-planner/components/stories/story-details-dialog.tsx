@@ -1,7 +1,7 @@
 "use client";
 
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, History, MessageSquare, Plus, Tag, Trash, X } from "lucide-react";
+import { ChevronRight, History, MessageSquare, Plus, Tag, Trash, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,6 @@ import { cn } from "@/lib/utils";
 import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type StoryWithEpic = UserStoryItem & { epicTitle: string };
-type ChildStoryDraft = {
-  title: string;
-  sprint: string;
-  status: StoryStatus;
-  assignee: string;
-  priority: string;
-  estimatedDays: string;
-  daysLeft: string;
-};
 
 function quarterLabelFromMonth(month: number | null | undefined): string | null {
   if (month == null) return null;
@@ -99,7 +90,7 @@ export function StoryDetailsDialog({
   onOpenInitiative,
   onOpenEpic,
   onOpenStory,
-  storyRef,
+  storyRef: _storyRef,
   surfaceAnchorRef,
 }: StoryDetailsDialogProps) {
   const [title, setTitle] = useState("");
@@ -123,18 +114,9 @@ export function StoryDetailsDialog({
   const [commenting, setCommenting] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(50);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(220);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(280);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
-  const [childStoryDrafts, setChildStoryDrafts] = useState<Record<string, ChildStoryDraft>>({});
-  const [nestedStoryId, setNestedStoryId] = useState<string | null>(null);
-  const [nestedStoryOpen, setNestedStoryOpen] = useState(false);
-  const [childEditingCell, setChildEditingCell] = useState<{
-    rowId: string;
-    field: "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft";
-  } | null>(null);
-  const [childEditingValue, setChildEditingValue] = useState("");
-  const [newChildTitle, setNewChildTitle] = useState("");
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const lastAutosavePayloadRef = useRef<string>("");
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
@@ -195,50 +177,6 @@ export function StoryDetailsDialog({
     }
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [initiatives]);
-  const siblingStories = useMemo(() => {
-    if (!selectedBreadcrumbMeta) return [] as UserStoryItem[];
-    return (selectedBreadcrumbMeta.epic.userStories ?? []).filter((row) => row.id !== story?.id);
-  }, [selectedBreadcrumbMeta, story?.id]);
-  const nestedStory = useMemo(() => {
-    if (!nestedStoryId) return null;
-    for (const initiative of initiatives) {
-      for (const epic of initiative.epics ?? []) {
-        const row = (epic.userStories ?? []).find((item) => item.id === nestedStoryId);
-        if (row) return { ...row, epicTitle: epic.title } satisfies StoryWithEpic;
-      }
-    }
-    return null;
-  }, [initiatives, nestedStoryId]);
-  useEffect(() => {
-    const next: Record<string, ChildStoryDraft> = {};
-    for (const row of siblingStories) {
-      next[row.id] = {
-        title: row.title ?? "",
-        sprint: row.sprint == null ? "" : String(row.sprint),
-        status: row.status ?? StoryStatus.todo,
-        assignee: row.assignee ?? "",
-        priority: row.priority ?? "",
-        estimatedDays: row.estimatedDays == null ? "" : String(row.estimatedDays),
-        daysLeft: row.daysLeft == null ? "" : String(row.daysLeft),
-      };
-    }
-    setChildStoryDrafts(next);
-  }, [siblingStories]);
-  useEffect(() => {
-    if (Object.keys(childStoryDrafts).length === 0) return;
-    const totals = Object.values(childStoryDrafts).reduce(
-      (acc, row) => {
-        const est = Number(row.estimatedDays);
-        const left = Number(row.daysLeft);
-        if (Number.isFinite(est) && est >= 0) acc.est += est;
-        if (Number.isFinite(left) && left >= 0) acc.left += left;
-        return acc;
-      },
-      { est: 0, left: 0 },
-    );
-    setEstimatedDays(String(Math.round(totals.est)));
-    setDaysLeft(String(Math.round(totals.left)));
-  }, [childStoryDrafts]);
   const displayIds = useMemo(() => {
     const byInitiativeId = new Map<string, string>();
     const byEpicId = new Map<string, string>();
@@ -326,7 +264,7 @@ export function StoryDetailsDialog({
     if (open) {
       setDialogWidthVw(50);
       setDetailsPanelWidthPx(296);
-      setActivityPanelHeightPx(220);
+      setActivityPanelHeightPx(280);
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
       dragStartRef.current = null;
@@ -429,104 +367,6 @@ export function StoryDetailsDialog({
     onClose();
   }
 
-  async function handleSaveChildStory(row: UserStoryItem) {
-    const draft = childStoryDrafts[row.id];
-    if (!draft || !draft.title.trim()) return;
-    await onSave(row.id, {
-      title: draft.title.trim(),
-      icon: row.icon?.trim() || "📄",
-      description: row.description ?? null,
-      assignee: draft.assignee.trim() || null,
-      labels: row.labels ?? null,
-      priority: row.priority ?? null,
-      sprint: draft.sprint.trim() === "" ? null : Number(draft.sprint),
-      estimatedDays: row.estimatedDays ?? null,
-      daysLeft: row.daysLeft ?? null,
-      status: draft.status,
-      epicId: row.epicId,
-    });
-  }
-
-  function beginChildCellEdit(
-    row: UserStoryItem,
-    field: "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft",
-  ) {
-    const draft = childStoryDrafts[row.id];
-    if (!draft) return;
-    const value =
-      field === "title"
-        ? draft.title
-        : field === "sprint"
-          ? draft.sprint
-          : field === "status"
-            ? draft.status
-          : field === "assignee"
-            ? draft.assignee
-            : field === "priority"
-              ? draft.priority
-              : field === "estimatedDays"
-                ? draft.estimatedDays
-                : draft.daysLeft;
-    setChildEditingCell({ rowId: row.id, field });
-    setChildEditingValue(value ?? "");
-  }
-
-  async function confirmChildCellEdit(row: UserStoryItem) {
-    if (!childEditingCell || childEditingCell.rowId !== row.id) return;
-    const existing = childStoryDrafts[row.id];
-    if (!existing) return;
-    const next: ChildStoryDraft =
-      childEditingCell.field === "title"
-        ? { ...existing, title: childEditingValue }
-        : childEditingCell.field === "sprint"
-          ? { ...existing, sprint: childEditingValue }
-          : childEditingCell.field === "status"
-            ? { ...existing, status: childEditingValue as StoryStatus }
-            : childEditingCell.field === "assignee"
-              ? { ...existing, assignee: childEditingValue }
-              : childEditingCell.field === "priority"
-                ? { ...existing, priority: childEditingValue }
-                : childEditingCell.field === "estimatedDays"
-                  ? { ...existing, estimatedDays: childEditingValue }
-                  : { ...existing, daysLeft: childEditingValue };
-    setChildStoryDrafts((prev) => ({ ...prev, [row.id]: next }));
-    setChildEditingCell(null);
-    setChildEditingValue("");
-    await onSave(row.id, {
-      title: next.title.trim(),
-      icon: row.icon?.trim() || "📄",
-      description: row.description ?? null,
-      assignee: next.assignee.trim() || null,
-      labels: row.labels ?? null,
-      priority: next.priority.trim() || null,
-      sprint: next.sprint.trim() === "" ? null : Number(next.sprint),
-      estimatedDays: next.estimatedDays.trim() === "" ? null : Number(next.estimatedDays),
-      daysLeft: next.daysLeft.trim() === "" ? null : Number(next.daysLeft),
-      status: next.status,
-      epicId: row.epicId,
-    });
-  }
-
-  async function handleAddChildStory() {
-    const epicForChild = selectedBreadcrumbMeta?.epic?.id;
-    const normalized = newChildTitle.trim();
-    if (!epicForChild || !normalized) return;
-    await onCreate({
-      title: normalized,
-      icon: "📄",
-      description: null,
-      assignee: null,
-      labels: null,
-      priority: null,
-      sprint: null,
-      estimatedDays: null,
-      daysLeft: null,
-      status: StoryStatus.todo,
-      epicId: epicForChild,
-    });
-    setNewChildTitle("");
-  }
-
   function addLabel(label: string) {
     const normalized = label.trim();
     if (!normalized) return;
@@ -604,7 +444,7 @@ export function StoryDetailsDialog({
       const delta = moveEvent.clientY - startY;
       // Drag up => larger activity panel.
       const next = startHeight - delta;
-      setActivityPanelHeightPx(Math.max(140, Math.min(520, next)));
+      setActivityPanelHeightPx(Math.max(180, Math.min(560, next)));
     }
 
     function onPointerUp() {
@@ -783,199 +623,9 @@ export function StoryDetailsDialog({
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                className="h-40 w-full rounded-md border bg-background px-3 py-2 text-base"
+                className="h-64 w-full rounded-md border bg-background px-3 py-2 text-base"
               />
             </label>
-            <div className="mt-5 space-y-2">
-              <p className="text-sm font-medium text-slate-600">User Stories Children</p>
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-indigo-50/70 text-slate-600">
-                    <tr>
-                      <th className="px-2 py-1.5 font-medium">ID</th>
-                      <th className="px-2 py-1.5 font-medium">Type</th>
-                      <th className="px-2 py-1.5 font-medium">Story</th>
-                      <th className="px-2 py-1.5 font-medium">Sprint</th>
-                      <th className="px-2 py-1.5 font-medium">Status</th>
-                      <th className="px-2 py-1.5 font-medium">Assignee</th>
-                      <th className="px-2 py-1.5 font-medium">Priority</th>
-                      <th className="px-2 py-1.5 font-medium">Est Days</th>
-                      <th className="px-2 py-1.5 font-medium">Est Left</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-t border-slate-100 bg-blue-50/40">
-                      <td className="px-2 py-1.5 text-slate-400">-</td>
-                      <td className="px-2 py-1.5">
-                        <span className="inline-flex rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                          User Story
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex gap-1">
-                          <input
-                            value={newChildTitle}
-                            onChange={(event) => setNewChildTitle(event.target.value)}
-                            placeholder="Add child user story title"
-                            autoComplete="off"
-                            spellCheck={false}
-                            className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800"
-                          />
-                          <Button type="button" size="sm" variant="outline" onClick={() => void handleAddChildStory()}>
-                            Add
-                          </Button>
-                        </div>
-                      </td>
-                      <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                      <td className="px-2 py-1.5 text-slate-400">To Do</td>
-                      <td className="px-2 py-1.5 text-slate-400">Unassigned</td>
-                      <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                      <td className="px-2 py-1.5 text-slate-400">-</td>
-                      <td className="px-2 py-1.5 text-slate-400">-</td>
-                    </tr>
-                    {siblingStories.length === 0 ? (
-                      <tr>
-                        <td className="px-2 py-2 text-slate-500" colSpan={9}>No sibling stories in this epic.</td>
-                      </tr>
-                    ) : (
-                      siblingStories.slice(0, 6).map((row) => (
-                        <tr key={row.id} className="border-t border-slate-100">
-                          <td className="px-2 py-1.5 text-slate-600">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setNestedStoryId(row.id);
-                                setNestedStoryOpen(true);
-                              }}
-                              className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline"
-                              title={row.title}
-                            >
-                              {displayIds.byStoryId.get(row.id) ?? row.id}
-                            </button>
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                              User Story
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-800">
-                            {childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  value={childEditingValue}
-                                  onChange={(event) => setChildEditingValue(event.target.value)}
-                                  className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800"
-                                />
-                                <button type="button" onClick={() => void confirmChildCellEdit(row)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => beginChildCellEdit(row, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                {childStoryDrafts[row.id]?.title ?? row.title}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            {childEditingCell?.rowId === row.id && childEditingCell.field === "sprint" ? (
-                              <div className="flex items-center gap-1">
-                                <select value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700">
-                                  <option value="">Not set</option>
-                                  {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => (
-                                    <option key={i + 1} value={String(i + 1)}>{`Sprint ${i + 1}`}</option>
-                                  ))}
-                                </select>
-                                <button type="button" onClick={() => void confirmChildCellEdit(row)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => beginChildCellEdit(row, "sprint")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                {childStoryDrafts[row.id]?.sprint ? `Sprint ${childStoryDrafts[row.id]?.sprint}` : "Not set"}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            {childEditingCell?.rowId === row.id && childEditingCell.field === "status" ? (
-                              <div className="flex items-center gap-1">
-                                <select value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700">
-                                  <option value={StoryStatus.todo}>To Do</option>
-                                  <option value={StoryStatus.inProgress}>In Progress</option>
-                                  <option value={StoryStatus.done}>Done</option>
-                                  <option value={StoryStatus.approved}>Approved</option>
-                                </select>
-                                <button type="button" onClick={() => void confirmChildCellEdit(row)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => beginChildCellEdit(row, "status")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                {childStoryDrafts[row.id]?.status ?? row.status}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            {childEditingCell?.rowId === row.id && childEditingCell.field === "assignee" ? (
-                              <div className="flex items-center gap-1">
-                                <input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700" placeholder="Unassigned" />
-                                <button type="button" onClick={() => void confirmChildCellEdit(row)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => beginChildCellEdit(row, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                {(childStoryDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            {childEditingCell?.rowId === row.id && childEditingCell.field === "priority" ? (
-                              <div className="flex items-center gap-1">
-                                <select value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700">
-                                  <option value="">Not set</option>
-                                  <option value="P0">P0</option>
-                                  <option value="P1">P1</option>
-                                  <option value="P2">P2</option>
-                                  <option value="P3">P3</option>
-                                </select>
-                                <button type="button" onClick={() => void confirmChildCellEdit(row)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => beginChildCellEdit(row, "priority")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                {childStoryDrafts[row.id]?.priority?.trim() || "Not set"}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            {childEditingCell?.rowId === row.id && childEditingCell.field === "estimatedDays" ? (
-                              <div className="flex items-center gap-1">
-                                <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
-                                <button type="button" onClick={() => void confirmChildCellEdit(row)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => beginChildCellEdit(row, "estimatedDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                {childStoryDrafts[row.id]?.estimatedDays || "-"}
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            {childEditingCell?.rowId === row.id && childEditingCell.field === "daysLeft" ? (
-                              <div className="flex items-center gap-1">
-                                <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
-                                <button type="button" onClick={() => void confirmChildCellEdit(row)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => beginChildCellEdit(row, "daysLeft")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                {childStoryDrafts[row.id]?.daysLeft || "-"}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </section>
           <div className="relative mx-1.5">
             <div
@@ -1200,31 +850,6 @@ export function StoryDetailsDialog({
           </section>
         </div>
         </div>
-        {nestedStoryId != null ? (
-          <StoryDetailsDialog
-            open={nestedStoryOpen}
-            story={nestedStory}
-            initiatives={initiatives}
-            lockParentEpicId={null}
-            onClose={() => setNestedStoryOpen(false)}
-            onExitComplete={() => {
-              setNestedStoryOpen(false);
-              setNestedStoryId(null);
-            }}
-            onCreate={onCreate}
-            onSave={onSave}
-            onDelete={onDelete}
-            onAddComment={onAddComment}
-            onOpenInitiative={onOpenInitiative}
-            onOpenEpic={onOpenEpic}
-            onOpenStory={(storyId) => {
-              setNestedStoryId(storyId);
-              setNestedStoryOpen(true);
-            }}
-            storyRef={nestedStoryId}
-            surfaceAnchorRef={surfaceAnchorRef}
-          />
-        ) : null}
       </div>
     </div>
   );

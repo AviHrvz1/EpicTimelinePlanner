@@ -3233,9 +3233,28 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         epic={currentEditingEpic}
         initiatives={initiatives}
         lockInitiativeId={editingEpicInitiativeId}
+        onOpenInitiative={(initiativeId) => {
+          setTopMode("roadmap");
+          setFocusedInitiativeId(initiativeId);
+          setInitiativeDialogOpen(true);
+          setEpicDialogOpen(false);
+        }}
         onOpenStory={(storyId) => {
           setCreatingStoryEpicId(null);
           setSelectedStoryId(storyId);
+        }}
+        onPatchStory={async (storyId, patch) => {
+          try {
+            const response = await fetch(`/api/stories/${storyId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(patch),
+            });
+            if (!response.ok) throw new Error("Failed to patch story");
+            await refresh();
+          } catch {
+            toast.error("Failed to update story");
+          }
         }}
         onRequestCreateStory={(epicId) => {
           setSelectedStoryId(null);

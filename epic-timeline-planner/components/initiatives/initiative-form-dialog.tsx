@@ -225,7 +225,7 @@ export function InitiativeFormDialog({
 
         <section className="mt-6 space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-slate-800">Epics in this initiative</h3>
+            <h3 className="text-base font-semibold text-slate-800">Child epics</h3>
             <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">
               {initiative?.epics?.length ?? 0}
             </span>
