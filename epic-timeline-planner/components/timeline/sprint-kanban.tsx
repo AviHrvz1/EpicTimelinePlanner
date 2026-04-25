@@ -102,7 +102,7 @@ function KanbanStoryCard({
             {story.title}
           </p>
           <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex w-full flex-wrap items-center justify-end gap-2">
             <span className="rounded-md bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-700">
               {story.assignee?.trim() || "Unassigned"}
             </span>
