@@ -412,10 +412,6 @@ function MonthInitiativeGanttLaneRow({
       data-gantt-lane-index={ganttLaneSortIndex}
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
-      <p className="mb-1 inline-flex min-w-0 items-center gap-1 truncate text-[11px] font-medium text-slate-500">
-        <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-[11px] [&_svg]:size-3 [&_svg]:text-blue-600" />
-        <span className="truncate">{initiative.title}</span>
-      </p>
       <div className="relative grid min-w-0 gap-2" style={{ gridTemplateColumns: "repeat(1, minmax(0, 1fr))" }}>
         <div className="relative z-20 min-w-0 pt-0.5 pb-0.5" style={{ gridColumn: "1 / span 1", gridRow: 1 }}>
           <InitiativeTimelineBar

@@ -13,6 +13,7 @@ import {
   ListTodo,
   PlayCircle,
   Plus,
+  Search,
   Eraser,
   Users,
   Zap,
@@ -1124,6 +1125,7 @@ export function InitiativeListPanel({
   const epicPlanDragEnabled = !isSprintModeActive;
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
+  const [initiativeSearchFocused, setInitiativeSearchFocused] = useState(false);
   const [epicSearch, setEpicSearch] = useState("");
   const [panelQuarterFilters, setPanelQuarterFilters] = useState<Array<"all" | "Q1" | "Q2" | "Q3" | "Q4">>(["all"]);
   const [panelTeamFilterIds, setPanelTeamFilterIds] = useState<string[]>(["all"]);
@@ -1342,7 +1344,14 @@ export function InitiativeListPanel({
   const filteredInitiatives = useMemo(() => {
     const q = initiativeSearch.trim().toLowerCase();
     return initiativeList.filter((initiative) => {
-      if (q && !initiative.title.toLowerCase().includes(q)) return false;
+      if (q) {
+        const initiativeMatch = initiative.title.toLowerCase().includes(q);
+        const epicMatch = (initiative.epics ?? []).some((epic) => epic.title.toLowerCase().includes(q));
+        const storyMatch = (initiative.epics ?? []).some((epic) =>
+          (epic.userStories ?? []).some((story) => story.title.toLowerCase().includes(q)),
+        );
+        if (!initiativeMatch && !epicMatch && !storyMatch) return false;
+      }
       if (!panelQuarterFilters.includes("all")) {
         if (
           initiative.startMonth == null ||
@@ -1378,6 +1387,32 @@ export function InitiativeListPanel({
       return true;
     });
   }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds]);
+  const initiativeSearchSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const initiative of initiativeList) {
+      if (initiative.title.trim()) set.add(initiative.title);
+      for (const epic of initiative.epics ?? []) {
+        if (epic.title.trim()) set.add(epic.title);
+        for (const story of epic.userStories ?? []) {
+          if (story.title.trim()) set.add(story.title);
+        }
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [initiativeList]);
+  const initiativeSearchSuggestionsFiltered = useMemo(() => {
+    const q = initiativeSearch.trim().toLowerCase();
+    if (!q) return initiativeSearchSuggestions.slice(0, 8);
+    return initiativeSearchSuggestions
+      .filter((entry) => entry.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStarts = a.toLowerCase().startsWith(q) ? 0 : 1;
+        const bStarts = b.toLowerCase().startsWith(q) ? 0 : 1;
+        if (aStarts !== bStarts) return aStarts - bStarts;
+        return a.localeCompare(b);
+      })
+      .slice(0, 8);
+  }, [initiativeSearch, initiativeSearchSuggestions]);
   const showInitiativeBacklogDrop = !inMonthView && !isSprintModeActive;
 
   const showNewButton = inMonthView || !isSprintModeActive;
@@ -1548,20 +1583,44 @@ export function InitiativeListPanel({
         </div>
       ) : (
         <div className="space-y-4">
-          <div>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 z-10 size-4.5 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
             <input
               value={initiativeSearch}
               onChange={(event) => setInitiativeSearch(event.target.value)}
-              list="initiative-search-suggestions"
-              placeholder="Search initiative..."
-              className="h-10 w-full rounded-lg bg-white px-3 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              aria-label="Search initiatives"
+              onFocus={() => setInitiativeSearchFocused(true)}
+              onBlur={() => {
+                // Allow click on suggestion item before closing.
+                window.setTimeout(() => setInitiativeSearchFocused(false), 80);
+              }}
+              placeholder="Search..."
+              className="h-11 w-full rounded-lg bg-white pl-10 pr-3 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              aria-label="Search initiatives, epics, or user stories"
             />
-            <datalist id="initiative-search-suggestions">
-              {initiativeList.map((initiative) => (
-                <option key={initiative.id} value={initiative.title} />
-              ))}
-            </datalist>
+            {initiativeSearchFocused && initiativeSearchSuggestionsFiltered.length > 0 ? (
+              <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                {initiativeSearchSuggestionsFiltered.map((entry) => (
+                  <button
+                    key={entry}
+                    type="button"
+                    onMouseDown={(event) => {
+                      // Prevent blur before click selects.
+                      event.preventDefault();
+                    }}
+                    onClick={() => {
+                      setInitiativeSearch(entry);
+                      setInitiativeSearchFocused(false);
+                    }}
+                    className="block w-full rounded-md px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-100"
+                  >
+                    {entry}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             <IconFilterSelect
