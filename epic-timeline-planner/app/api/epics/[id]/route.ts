@@ -13,6 +13,7 @@ const updateEpicSchema = z.object({
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
   initiativeId: z.string().uuid().optional(),
   planSprint: z.union([z.literal(1), z.literal(2)]).optional().nullable(),
+  planEndSprint: z.union([z.literal(1), z.literal(2)]).optional().nullable(),
   planStartMonth: z.number().int().min(1).max(12).optional().nullable(),
   planEndMonth: z.number().int().min(1).max(12).optional().nullable(),
   timelineRow: z.number().int().min(0).max(100000).optional(),
@@ -56,6 +57,7 @@ export async function PATCH(
         planYear: true,
         planQuarter: true,
         planSprint: true,
+        planEndSprint: true,
         planStartMonth: true,
         planEndMonth: true,
         timelineRow: true,
@@ -78,6 +80,8 @@ export async function PATCH(
       changes.push("Parent initiative changed");
     if (patch.planSprint !== undefined && patch.planSprint !== existing.planSprint)
       changes.push("Quarter plan sprint updated");
+    if (patch.planEndSprint !== undefined && patch.planEndSprint !== existing.planEndSprint)
+      changes.push("Quarter plan end sprint updated");
     if (patch.planStartMonth !== undefined && patch.planStartMonth !== existing.planStartMonth)
       changes.push("Quarter plan start month updated");
     if (patch.planEndMonth !== undefined && patch.planEndMonth !== existing.planEndMonth)
@@ -107,6 +111,7 @@ export async function PATCH(
         ...(initiative?.color != null ? { color: initiative.color } : {}),
         ...(patch.initiativeId !== undefined ? { initiativeId: patch.initiativeId } : {}),
         ...(patch.planSprint !== undefined ? { planSprint: patch.planSprint } : {}),
+        ...(patch.planEndSprint !== undefined ? { planEndSprint: patch.planEndSprint } : {}),
         ...(patch.planStartMonth !== undefined ? { planStartMonth: patch.planStartMonth } : {}),
         ...(patch.planEndMonth !== undefined ? { planEndMonth: patch.planEndMonth } : {}),
         ...(patch.timelineRow !== undefined ? { timelineRow: patch.timelineRow } : {}),

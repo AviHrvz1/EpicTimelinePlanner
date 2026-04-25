@@ -155,6 +155,7 @@ type EpicGanttLaneRowProps = {
   epic: EpicItem;
   initiative: InitiativeItem;
   gridStyle: CSSProperties;
+  month?: number | null;
   onOpenEpic: (epicId: string) => void;
   onUnscheduleEpic?: (epicId: string) => void;
   ganttLaneSortIndex: number;
@@ -318,6 +319,7 @@ function EpicGanttLaneRow({
   epic,
   initiative,
   gridStyle,
+  month = null,
   onOpenEpic,
   onUnscheduleEpic,
   ganttLaneSortIndex,
@@ -329,6 +331,29 @@ function EpicGanttLaneRow({
   const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
   const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
   const barColor = epic.color?.trim() ? epic.color : initiative.color;
+  const sprintGridStyle =
+    month != null
+      ? ({ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } satisfies CSSProperties)
+      : gridStyle;
+  let barGridColumn = "1 / span 1";
+  if (month != null && epic.planStartMonth != null && epic.planEndMonth != null) {
+    const startLane = epic.planSprint === 2 ? 2 : 1;
+    const endLane = epic.planEndSprint === 1 ? 1 : 2;
+    let monthStartLane = 1;
+    let monthEndLane = 2;
+    if (month === epic.planStartMonth && month === epic.planEndMonth) {
+      monthStartLane = startLane;
+      monthEndLane = endLane;
+    } else if (month === epic.planStartMonth) {
+      monthStartLane = startLane;
+      monthEndLane = 2;
+    } else if (month === epic.planEndMonth) {
+      monthStartLane = 1;
+      monthEndLane = endLane;
+    }
+    const span = Math.max(1, monthEndLane - monthStartLane + 1);
+    barGridColumn = `${monthStartLane} / span ${span}`;
+  }
 
   return (
     <div
@@ -337,10 +362,10 @@ function EpicGanttLaneRow({
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
       <p className="mb-1 truncate text-[11px] font-medium text-slate-500">{initiative.title}</p>
-      <div className="relative grid min-w-0 gap-2" style={gridStyle}>
+      <div className="relative grid min-w-0 gap-2" style={sprintGridStyle}>
         <div
           className={cn("relative z-20 min-w-0 pt-0.5 pb-0.5", emphasize && "overflow-visible")}
-          style={{ gridColumn: "1 / span 1", gridRow: 1 }}
+          style={{ gridColumn: barGridColumn, gridRow: 1 }}
         >
           <EpicPlanTimelineBar
             id={epic.id}
@@ -630,7 +655,7 @@ export function TimelineGrid({
         if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
         if (epic.planEndMonth < qStart || epic.planStartMonth > qEnd) continue;
         const startS = globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1);
-        const endS = globalSprintFromMonthLane(epic.planEndMonth, 2);
+        const endS = globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2);
         rows.push({ epic, initiative, startS, endS });
       }
     }
@@ -646,7 +671,7 @@ export function TimelineGrid({
       for (const epic of initiative.epics ?? []) {
         if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
         const startS = globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1);
-        const endS = globalSprintFromMonthLane(epic.planEndMonth, 2);
+        const endS = globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2);
         rows.push({ epic, initiative, startS, endS });
       }
     }
@@ -663,7 +688,7 @@ export function TimelineGrid({
         .filter((epic) => epic.planStartMonth != null && epic.planEndMonth != null)
         .map((epic) => ({
           startS: globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1),
-          endS: globalSprintFromMonthLane(epic.planEndMonth!, 2),
+          endS: globalSprintFromMonthLane(epic.planEndMonth!, epic.planEndSprint === 1 ? 1 : 2),
         }));
       if (plannedEpicBounds.length === 0) continue;
       const startS = Math.min(...plannedEpicBounds.map((b) => b.startS));
@@ -858,7 +883,7 @@ export function TimelineGrid({
       if (row.epic.planStartMonth == null || row.epic.planEndMonth == null) return;
 
       const ss0 = globalSprintFromMonthLane(row.epic.planStartMonth, row.epic.planSprint === 2 ? 2 : 1);
-      const es0 = globalSprintFromMonthLane(row.epic.planEndMonth, 2);
+      const es0 = globalSprintFromMonthLane(row.epic.planEndMonth, row.epic.planEndSprint === 1 ? 1 : 2);
       const qLo = focusedQuarter != null ? firstGlobalSprintForMonth(focusedQuarter.months[0]) : 1;
       const qHi =
         focusedQuarter != null
@@ -2014,6 +2039,7 @@ export function TimelineGrid({
                                 epic={epic}
                                 initiative={initiative}
                                 gridStyle={epicMonthGridStyle}
+                                month={activeMonth}
                                 onOpenEpic={onOpenEpic}
                                 onUnscheduleEpic={onUnscheduleEpic}
                                 ganttLaneSortIndex={rowIndex}

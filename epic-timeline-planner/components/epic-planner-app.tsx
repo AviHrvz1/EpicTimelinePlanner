@@ -439,6 +439,10 @@ function monthRangeForEpicDrop(
   return { startMonth, endMonth };
 }
 
+function laneFromYearSprint(yearSprint: number): 1 | 2 {
+  return yearSprint % 2 === 0 ? 2 : 1;
+}
+
 function collectScheduledEpicRows(initiatives: InitiativeItem[]): ScheduledEpicPlacementRow[] {
   const rows: ScheduledEpicPlacementRow[] = [];
   for (const initiative of initiatives) {
@@ -497,6 +501,7 @@ function computeEpicMonthLanePlacement(
               planSprint,
               planStartMonth: sm,
               planEndMonth: em,
+              planEndSprint: 2,
               timelineRow: rowByEpicId.get(epic.id) ?? 0,
             }
           : rowByEpicId.has(epic.id)
@@ -575,7 +580,7 @@ function computeEpicMonthLanePlacement(
       ...initiative,
       epics: (initiative.epics ?? []).map((epic) =>
         epic.id === epicId
-          ? { ...epic, planSprint, planStartMonth: sm, planEndMonth: em, timelineRow: movedTimelineRow }
+          ? { ...epic, planSprint, planStartMonth: sm, planEndMonth: em, planEndSprint: 2, timelineRow: movedTimelineRow }
           : epic,
       ),
     }));
@@ -621,6 +626,7 @@ function computeEpicMonthLanePlacement(
             planSprint,
             planStartMonth: sm,
             planEndMonth: em,
+            planEndSprint: 2,
             timelineRow: rowByEpicId.get(epic.id) ?? epic.timelineRow,
           }
         : rowByEpicId.has(epic.id)
@@ -1665,6 +1671,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         planSprint: null,
+        planEndSprint: null,
         planStartMonth: null,
         planEndMonth: null,
       }),
@@ -1690,7 +1697,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   async function patchEpicQuarterPlan(
     epicId: string,
-    payload: { planSprint: number; planStartMonth: number; planEndMonth: number; timelineRow?: number },
+    payload: { planSprint: number; planEndSprint: number; planStartMonth: number; planEndMonth: number; timelineRow?: number },
   ) {
     const response = await fetch(`/api/epics/${epicId}`, {
       method: "PATCH",
@@ -2265,7 +2272,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               ...i,
               epics: (i.epics ?? []).map((e) =>
                 e.id === epicId
-                  ? { ...e, planSprint: null, planStartMonth: null, planEndMonth: null }
+                  ? { ...e, planSprint: null, planEndSprint: null, planStartMonth: null, planEndMonth: null }
                   : e,
               ),
             })),
@@ -2384,6 +2391,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       try {
         await patchEpicQuarterPlan(epicId, {
           planSprint,
+          planEndSprint: updatedEpic?.planEndSprint ?? 2,
           planStartMonth: updatedEpic?.planStartMonth ?? month,
           planEndMonth: updatedEpic?.planEndMonth ?? month,
           ...(movedTimelineRow != null ? { timelineRow: movedTimelineRow } : {}),
@@ -2895,7 +2903,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                         ...initiative,
                         epics: (initiative.epics ?? []).map((epic) =>
                           epic.id === epicId
-                            ? { ...epic, planSprint: null, planStartMonth: null, planEndMonth: null }
+                            ? { ...epic, planSprint: null, planEndSprint: null, planStartMonth: null, planEndMonth: null }
                             : epic,
                         ),
                       })),
@@ -3009,7 +3017,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     const row = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
                     if (row !== nextTimelineRow) return false;
                     const bS = globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1);
-                    const bE = globalSprintFromMonthLane(epic.planEndMonth!, 2);
+                    const bE = globalSprintFromMonthLane(epic.planEndMonth!, epic.planEndSprint === 1 ? 1 : 2);
                     return overlaps(range.startYearSprint, range.endYearSprint, bS, bE);
                   });
                   if (sameRowOverlaps.length > 0) {
@@ -3019,7 +3027,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                         const rowValue = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
                         if (rowValue !== row) return false;
                         const bS = globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1);
-                        const bE = globalSprintFromMonthLane(epic.planEndMonth!, 2);
+                        const bE = globalSprintFromMonthLane(epic.planEndMonth!, epic.planEndSprint === 1 ? 1 : 2);
                         return overlaps(range.startYearSprint, range.endYearSprint, bS, bE);
                       });
                       if (!blocked) {
@@ -3034,7 +3042,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       epic.id === epicId
                         ? {
                             ...epic,
-                            planSprint: 1,
+                            planSprint: laneFromYearSprint(range.startYearSprint),
+                            planEndSprint: laneFromYearSprint(range.endYearSprint),
                             planStartMonth: range.startMonth,
                             planEndMonth: range.endMonth,
                             timelineRow: nextTimelineRow,
@@ -3045,7 +3054,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setInitiatives(after);
                   try {
                     await patchEpicQuarterPlan(epicId, {
-                      planSprint: 1,
+                      planSprint: laneFromYearSprint(range.startYearSprint),
+                      planEndSprint: laneFromYearSprint(range.endYearSprint),
                       planStartMonth: range.startMonth,
                       planEndMonth: range.endMonth,
                       timelineRow: nextTimelineRow,
