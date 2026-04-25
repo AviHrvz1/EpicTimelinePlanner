@@ -13,6 +13,7 @@ import {
   ListTodo,
   PlayCircle,
   Plus,
+  Eraser,
   Users,
   Zap,
 } from "lucide-react";
@@ -1120,6 +1121,18 @@ export function InitiativeListPanel({
     { value: "Done", label: "Done", icon: <CheckCheck className="size-3.5 text-slate-500" /> },
     { value: "Approved", label: "Approved", icon: <CheckCircle2 className="size-3.5 text-slate-500" /> },
   ];
+  const filtersAreDefault =
+    panelQuarterFilters.length === 1 &&
+    panelQuarterFilters[0] === "all" &&
+    panelTeamFilterIds.length === 1 &&
+    panelTeamFilterIds[0] === "all" &&
+    panelStatusFilters.length === 1 &&
+    panelStatusFilters[0] === "all";
+  const resetAllFilters = () => {
+    setPanelQuarterFilters(["all"]);
+    setPanelTeamFilterIds(["all"]);
+    setPanelStatusFilters(["all"]);
+  };
   const toggleMultiFilter = <T extends string>(prev: T[], value: T, allToken: T): T[] => {
     if (value === allToken) return [allToken];
     const withoutAll = prev.filter((x) => x !== allToken);
@@ -1327,7 +1340,7 @@ export function InitiativeListPanel({
               ))}
             </datalist>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             <IconFilterSelect
               values={panelQuarterFilters}
               onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
@@ -1349,6 +1362,21 @@ export function InitiativeListPanel({
               ariaLabel="Filter left panel by status"
               allValue="all"
             />
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              disabled={filtersAreDefault}
+              title="Reset all filters"
+              aria-label="Reset all filters to default"
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 transition",
+                filtersAreDefault
+                  ? "cursor-not-allowed text-slate-300"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-ring/40",
+              )}
+            >
+              <Eraser className="size-4" aria-hidden />
+            </button>
           </div>
           <h3 className="mb-2 text-[14px] font-medium tracking-[0.01em] text-slate-900">
             {epicPanelQuarterLabel
@@ -1419,7 +1447,7 @@ export function InitiativeListPanel({
               ))}
             </datalist>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             <IconFilterSelect
               values={panelQuarterFilters}
               onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
@@ -1441,6 +1469,21 @@ export function InitiativeListPanel({
               ariaLabel="Filter initiatives by status"
               allValue="all"
             />
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              disabled={filtersAreDefault}
+              title="Reset all filters"
+              aria-label="Reset all filters to default"
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 transition",
+                filtersAreDefault
+                  ? "cursor-not-allowed text-slate-300"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-ring/40",
+              )}
+            >
+              <Eraser className="size-4" aria-hidden />
+            </button>
           </div>
           <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
             Initiatives ({filteredInitiatives.length})
