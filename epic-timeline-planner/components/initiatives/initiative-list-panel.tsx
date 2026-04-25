@@ -74,29 +74,50 @@ function QuarterProgressGlyph({ steps }: { steps: 1 | 2 | 3 | 4 }) {
 }
 
 function IconFilterSelect<T extends string>({
-  value,
-  onChange,
+  values,
+  onToggle,
   options,
   ariaLabel,
+  allValue,
 }: {
-  value: T;
-  onChange: (value: T) => void;
+  values: T[];
+  onToggle: (value: T) => void;
   options: IconFilterOption<T>[];
   ariaLabel: string;
+  allValue: T;
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
-  const selected = options.find((opt) => opt.value === value) ?? options[0] ?? null;
+  const allOption = options.find((opt) => opt.value === allValue) ?? null;
+  const isAllSelected = values.includes(allValue) || values.length === 0;
+  const selected = isAllSelected
+    ? allOption
+    : options.find((opt) => opt.value !== allValue && values.includes(opt.value)) ?? allOption;
   if (!selected) return null;
+  const selectedCount = isAllSelected ? 0 : values.length;
+  const selectedLabel = isAllSelected ? selected.label : selectedCount === 1 ? selected.label : `${selectedCount} selected`;
 
   return (
-    <details ref={detailsRef} className="group relative">
+    <details
+      ref={detailsRef}
+      className="group relative"
+      onMouseLeave={() => detailsRef.current?.removeAttribute("open")}
+      onBlur={(event) => {
+        const next = event.relatedTarget as Node | null;
+        if (!next || !event.currentTarget.contains(next)) {
+          detailsRef.current?.removeAttribute("open");
+        }
+      }}
+    >
       <summary
         className="flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 transition marker:content-none hover:bg-slate-50 focus:ring-2 focus:ring-ring/40 [&::-webkit-details-marker]:hidden"
         aria-label={ariaLabel}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") detailsRef.current?.removeAttribute("open");
+        }}
       >
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0">{selected.icon}</span>
-          <span className="truncate">{selected.label}</span>
+          <span className="truncate">{selectedLabel}</span>
         </span>
         <ChevronDown className="size-3.5 shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden />
       </summary>
@@ -105,15 +126,19 @@ function IconFilterSelect<T extends string>({
           <button
             key={opt.value}
             type="button"
-            onClick={() => {
-              onChange(opt.value);
-              detailsRef.current?.removeAttribute("open");
-            }}
+            onClick={() => onToggle(opt.value)}
             className={cn(
               "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
-              opt.value === value && "bg-slate-100 text-slate-900",
+              (isAllSelected ? opt.value === allValue : values.includes(opt.value)) && "bg-slate-100 text-slate-900",
             )}
           >
+            <input
+              type="checkbox"
+              tabIndex={-1}
+              readOnly
+              checked={isAllSelected ? opt.value === allValue : values.includes(opt.value)}
+              className="size-3.5 rounded border-slate-300 text-slate-700"
+            />
             <span className="shrink-0">{opt.icon}</span>
             <span className="whitespace-nowrap">{opt.label}</span>
           </button>
@@ -1056,11 +1081,11 @@ export function InitiativeListPanel({
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [epicSearch, setEpicSearch] = useState("");
-  const [panelQuarterFilter, setPanelQuarterFilter] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
-  const [panelTeamFilterId, setPanelTeamFilterId] = useState<string>("all");
-  const [panelStatusFilter, setPanelStatusFilter] = useState<
+  const [panelQuarterFilters, setPanelQuarterFilters] = useState<Array<"all" | "Q1" | "Q2" | "Q3" | "Q4">>(["all"]);
+  const [panelTeamFilterIds, setPanelTeamFilterIds] = useState<string[]>(["all"]);
+  const [panelStatusFilters, setPanelStatusFilters] = useState<Array<
     "all" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
-  >("all");
+  >>(["all"]);
   const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
     { value: "all", label: "All quarters", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
     { value: "Q1", label: "Q1", icon: <QuarterProgressGlyph steps={1} /> },
@@ -1069,7 +1094,7 @@ export function InitiativeListPanel({
     { value: "Q4", label: "Q4", icon: <QuarterProgressGlyph steps={4} /> },
   ];
   const teamFilterOptions: IconFilterOption<string>[] = [
-    { value: "all", label: "All teams", icon: <Users className="size-3.5 text-slate-500" /> },
+    { value: "all", label: "All Teams", icon: <Users className="size-3.5 text-slate-500" /> },
     ...MONTH_TEAM_COLUMNS.map((team) => ({
       value: team.id,
       label: team.label,
@@ -1088,13 +1113,22 @@ export function InitiativeListPanel({
   const statusFilterOptions: IconFilterOption<
     "all" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
   >[] = [
-    { value: "all", label: "All statuses", icon: <ListFilter className="size-3.5 text-slate-500" /> },
+    { value: "all", label: "All Statuses", icon: <ListFilter className="size-3.5 text-slate-500" /> },
     { value: "Unscheduled", label: "Unscheduled", icon: <Circle className="size-3.5 text-slate-500" /> },
     { value: "To Do", label: "To Do", icon: <ListTodo className="size-3.5 text-slate-500" /> },
     { value: "In Progress", label: "In Progress", icon: <PlayCircle className="size-3.5 text-slate-500" /> },
     { value: "Done", label: "Done", icon: <CheckCheck className="size-3.5 text-slate-500" /> },
     { value: "Approved", label: "Approved", icon: <CheckCircle2 className="size-3.5 text-slate-500" /> },
   ];
+  const toggleMultiFilter = <T extends string>(prev: T[], value: T, allToken: T): T[] => {
+    if (value === allToken) return [allToken];
+    const withoutAll = prev.filter((x) => x !== allToken);
+    if (withoutAll.includes(value)) {
+      const next = withoutAll.filter((x) => x !== value);
+      return next.length > 0 ? next : [allToken];
+    }
+    return [...withoutAll, value];
+  };
 
   const monthAssignedEpics = useMemo(() => {
     if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
@@ -1134,21 +1168,28 @@ export function InitiativeListPanel({
   }, [monthAssignedEpics, monthEpicTeamFilterId]);
   const monthPanelEpicsFiltered = useMemo(() => {
     return monthPanelEpics.filter(({ epic, initiative }) => {
-      if (panelQuarterFilter !== "all") {
+      if (!panelQuarterFilters.includes("all")) {
         const monthForQuarter = epic.planStartMonth ?? initiative.startMonth;
-        if (monthForQuarter == null || quarterFromMonth(monthForQuarter) !== panelQuarterFilter) return false;
+        if (
+          monthForQuarter == null ||
+          !panelQuarterFilters.includes(quarterFromMonth(monthForQuarter) as "Q1" | "Q2" | "Q3" | "Q4")
+        ) {
+          return false;
+        }
       }
-      if (panelTeamFilterId !== "all" && epic.team !== panelTeamFilterId) return false;
-      if (panelStatusFilter !== "all") {
-        if (panelStatusFilter === "Unscheduled") {
+      if (!panelTeamFilterIds.includes("all") && !panelTeamFilterIds.includes(epic.team ?? "")) return false;
+      if (!panelStatusFilters.includes("all")) {
+        if (panelStatusFilters.includes("Unscheduled")) {
           if (epicPlanningStatusMeta(epic).label !== "Unscheduled") return false;
-        } else if (epicExecutionStatusMeta(epic).label !== panelStatusFilter) {
+        } else if (
+          !panelStatusFilters.includes(epicExecutionStatusMeta(epic).label as "To Do" | "In Progress" | "Done" | "Approved")
+        ) {
           return false;
         }
       }
       return true;
     });
-  }, [monthPanelEpics, panelQuarterFilter, panelStatusFilter, panelTeamFilterId]);
+  }, [monthPanelEpics, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds]);
   const planAnchorMonth = epicPanelQuarterMonths?.[0] ?? activeMonth;
 
   const monthBacklogEpics = useMemo(() => {
@@ -1191,26 +1232,35 @@ export function InitiativeListPanel({
     const q = initiativeSearch.trim().toLowerCase();
     return initiativeList.filter((initiative) => {
       if (q && !initiative.title.toLowerCase().includes(q)) return false;
-      if (panelQuarterFilter !== "all") {
-        if (initiative.startMonth == null || quarterFromMonth(initiative.startMonth) !== panelQuarterFilter) return false;
+      if (!panelQuarterFilters.includes("all")) {
+        if (
+          initiative.startMonth == null ||
+          !panelQuarterFilters.includes(quarterFromMonth(initiative.startMonth) as "Q1" | "Q2" | "Q3" | "Q4")
+        ) {
+          return false;
+        }
       }
-      if (panelTeamFilterId !== "all") {
-        const hasTeam = (initiative.epics ?? []).some((epic) => epic.team === panelTeamFilterId);
+      if (!panelTeamFilterIds.includes("all")) {
+        const hasTeam = (initiative.epics ?? []).some((epic) => panelTeamFilterIds.includes(epic.team ?? ""));
         if (!hasTeam) return false;
       }
-      if (panelStatusFilter !== "all") {
-        if (panelStatusFilter === "Unscheduled") {
+      if (!panelStatusFilters.includes("all")) {
+        if (panelStatusFilters.includes("Unscheduled")) {
           const hasUnscheduledEpics = (initiative.epics ?? []).some(
             (epic) => epicPlanningStatusMeta(epic).label === "Unscheduled",
           );
           if (initiative.status !== "backlog" && !hasUnscheduledEpics) return false;
-        } else if (initiativeExecutionStatusMeta(initiative).label !== panelStatusFilter) {
+        } else if (
+          !panelStatusFilters.includes(
+            initiativeExecutionStatusMeta(initiative).label as "To Do" | "In Progress" | "Done" | "Approved",
+          )
+        ) {
           return false;
         }
       }
       return true;
     });
-  }, [initiativeList, initiativeSearch, panelQuarterFilter, panelStatusFilter, panelTeamFilterId]);
+  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds]);
   const showInitiativeBacklogDrop = !inMonthView && !isSprintModeActive;
 
   const showNewButton = inMonthView || !isSprintModeActive;
@@ -1279,22 +1329,25 @@ export function InitiativeListPanel({
           </div>
           <div className="grid grid-cols-3 gap-2">
             <IconFilterSelect
-              value={panelQuarterFilter}
-              onChange={setPanelQuarterFilter}
+              values={panelQuarterFilters}
+              onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
               options={quarterFilterOptions}
               ariaLabel="Filter left panel by quarter"
+              allValue="all"
             />
             <IconFilterSelect
-              value={panelTeamFilterId}
-              onChange={setPanelTeamFilterId}
+              values={panelTeamFilterIds}
+              onToggle={(value) => setPanelTeamFilterIds((prev) => toggleMultiFilter(prev, value, "all"))}
               options={teamFilterOptions}
               ariaLabel="Filter left panel by team"
+              allValue="all"
             />
             <IconFilterSelect
-              value={panelStatusFilter}
-              onChange={setPanelStatusFilter}
+              values={panelStatusFilters}
+              onToggle={(value) => setPanelStatusFilters((prev) => toggleMultiFilter(prev, value, "all"))}
               options={statusFilterOptions}
               ariaLabel="Filter left panel by status"
+              allValue="all"
             />
           </div>
           <h3 className="mb-2 text-[14px] font-medium tracking-[0.01em] text-slate-900">
@@ -1315,7 +1368,9 @@ export function InitiativeListPanel({
             {filteredMonthBacklogEpics.length === 0 ? (
               <p className="text-[11px] text-slate-700">
                 {monthPanelEpics.length === 0
-                  ? panelQuarterFilter !== "all" || panelTeamFilterId !== "all" || panelStatusFilter !== "all"
+                  ? !panelQuarterFilters.includes("all") ||
+                    !panelTeamFilterIds.includes("all") ||
+                    !panelStatusFilters.includes("all")
                     ? "No epics match the selected filters."
                     : epicPanelQuarterLabel
                       ? "No epics are under initiatives scheduled in this quarter yet."
@@ -1366,22 +1421,25 @@ export function InitiativeListPanel({
           </div>
           <div className="grid grid-cols-3 gap-2">
             <IconFilterSelect
-              value={panelQuarterFilter}
-              onChange={setPanelQuarterFilter}
+              values={panelQuarterFilters}
+              onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
               options={quarterFilterOptions}
               ariaLabel="Filter initiatives by quarter"
+              allValue="all"
             />
             <IconFilterSelect
-              value={panelTeamFilterId}
-              onChange={setPanelTeamFilterId}
+              values={panelTeamFilterIds}
+              onToggle={(value) => setPanelTeamFilterIds((prev) => toggleMultiFilter(prev, value, "all"))}
               options={teamFilterOptions}
               ariaLabel="Filter initiatives by team"
+              allValue="all"
             />
             <IconFilterSelect
-              value={panelStatusFilter}
-              onChange={setPanelStatusFilter}
+              values={panelStatusFilters}
+              onToggle={(value) => setPanelStatusFilters((prev) => toggleMultiFilter(prev, value, "all"))}
               options={statusFilterOptions}
               ariaLabel="Filter initiatives by status"
+              allValue="all"
             />
           </div>
           <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
