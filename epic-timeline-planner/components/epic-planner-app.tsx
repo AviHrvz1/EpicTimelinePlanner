@@ -2844,6 +2844,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 currentYear={selectedYear}
                 summaryBadges={roadmapSummary}
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
+                summaryStatusQuickFilter={panelStatusQuickFilter}
                 onYearChange={async (nextYear) => {
                   if (nextYear === selectedYear) return;
                   setSelectedYear(nextYear);

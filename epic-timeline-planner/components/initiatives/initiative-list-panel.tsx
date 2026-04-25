@@ -1163,7 +1163,13 @@ export function InitiativeListPanel({
     return [...withoutAll, value];
   };
   useEffect(() => {
-    if (panelStatusQuickFilter == null) return;
+    if (panelStatusQuickFilter == null) {
+      setPanelStatusFilters((prev) => {
+        const withoutQuick = prev.filter((value) => value !== "Scheduled" && value !== "Unscheduled");
+        return withoutQuick.length > 0 ? withoutQuick : ["all"];
+      });
+      return;
+    }
     setPanelStatusFilters([panelStatusQuickFilter]);
   }, [panelStatusQuickFilter]);
 

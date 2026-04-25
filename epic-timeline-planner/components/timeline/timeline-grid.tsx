@@ -409,6 +409,7 @@ type TimelineGridProps = {
     totalStories: number;
   };
   onSummaryStatusQuickFilterChange?: (value: "Scheduled" | "Unscheduled" | null) => void;
+  summaryStatusQuickFilter?: "Scheduled" | "Unscheduled" | null;
   focusedQuarterLabel: string | null;
   focusedMonthExternal?: number | null;
   activeSprintExternal?: number | null;
@@ -565,6 +566,7 @@ export function TimelineGrid({
   onYearChange,
   summaryBadges,
   onSummaryStatusQuickFilterChange,
+  summaryStatusQuickFilter = null,
   focusedQuarterLabel,
   focusedMonthExternal,
   activeSprintExternal,
@@ -1435,8 +1437,17 @@ export function TimelineGrid({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onSummaryStatusQuickFilterChange?.("Unscheduled")}
-                  className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-300/80"
+                  onClick={() =>
+                    onSummaryStatusQuickFilterChange?.(
+                      summaryStatusQuickFilter === "Unscheduled" ? null : "Unscheduled",
+                    )
+                  }
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    summaryStatusQuickFilter === "Unscheduled"
+                      ? "bg-slate-300 text-slate-900 ring-slate-400"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
                 >
                   {summaryBadges.unscheduledEpics} Unscheduled
                 </button>
@@ -1444,12 +1455,14 @@ export function TimelineGrid({
                   type="button"
                   onClick={() => {
                     setRoadmapBarMode("epics");
-                    onSummaryStatusQuickFilterChange?.("Scheduled");
+                    onSummaryStatusQuickFilterChange?.(
+                      summaryStatusQuickFilter === "Scheduled" ? null : "Scheduled",
+                    );
                   }}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    roadmapBarMode === "epics"
-                      ? "bg-amber-100 text-amber-800 ring-amber-200"
+                    summaryStatusQuickFilter === "Scheduled"
+                      ? "bg-amber-100 text-amber-800 ring-amber-300"
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
