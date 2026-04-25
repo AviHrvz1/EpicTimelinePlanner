@@ -5,6 +5,7 @@ import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Map as MapIcon, Th
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
+import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
@@ -106,6 +107,7 @@ function GanttLaneRow({
             <InitiativeTimelineBar
               id={initiative.id}
               title={initiative.title}
+              icon={initiative.icon}
               color={initiative.color}
               progressPercent={completionPercent}
               progressLabel={
@@ -361,7 +363,10 @@ function EpicGanttLaneRow({
       data-gantt-lane-index={ganttLaneSortIndex}
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
-      <p className="mb-1 truncate text-[11px] font-medium text-slate-500">{initiative.title}</p>
+      <p className="mb-1 inline-flex min-w-0 items-center gap-1 truncate text-[11px] font-medium text-slate-500">
+        <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-[11px] [&_svg]:size-3 [&_svg]:text-blue-600" />
+        <span className="truncate">{initiative.title}</span>
+      </p>
       <div className="relative grid min-w-0 gap-2" style={sprintGridStyle}>
         <div
           className={cn("relative z-20 min-w-0 pt-0.5 pb-0.5", emphasize && "overflow-visible")}
@@ -370,6 +375,7 @@ function EpicGanttLaneRow({
           <EpicPlanTimelineBar
             id={epic.id}
             title={epic.title}
+            icon={epic.icon}
             color={barColor}
             progressPercent={completionPercent}
             progressLabel={
@@ -406,11 +412,16 @@ function MonthInitiativeGanttLaneRow({
       data-gantt-lane-index={ganttLaneSortIndex}
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
+      <p className="mb-1 inline-flex min-w-0 items-center gap-1 truncate text-[11px] font-medium text-slate-500">
+        <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-[11px] [&_svg]:size-3 [&_svg]:text-blue-600" />
+        <span className="truncate">{initiative.title}</span>
+      </p>
       <div className="relative grid min-w-0 gap-2" style={{ gridTemplateColumns: "repeat(1, minmax(0, 1fr))" }}>
         <div className="relative z-20 min-w-0 pt-0.5 pb-0.5" style={{ gridColumn: "1 / span 1", gridRow: 1 }}>
           <InitiativeTimelineBar
             id={initiative.id}
             title={initiative.title}
+            icon={initiative.icon}
             color={initiative.color}
             progressPercent={completionPercent}
             progressLabel={totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"}
@@ -689,23 +700,27 @@ export function TimelineGrid({
   const summaryBadgesForScope = useMemo(() => {
     if (!summaryBadges) return null;
     if (focusedMonthExternal != null) {
-      const monthInitiatives = initiatives.filter((initiative) => {
-        if (initiative.status !== "scheduled") return false;
-        if (initiative.startMonth == null || initiative.endMonth == null) return false;
-        return initiative.startMonth <= focusedMonthExternal && initiative.endMonth >= focusedMonthExternal;
-      });
-      const monthEpics = monthInitiatives.flatMap((initiative) => initiative.epics ?? []);
-      const scheduledEpics = monthEpics.filter((epic) => {
-        if (epic.planStartMonth == null || epic.planEndMonth == null || epic.planSprint == null) return false;
-        return epic.planStartMonth <= focusedMonthExternal && epic.planEndMonth >= focusedMonthExternal;
-      });
-      const unscheduledEpics = monthEpics.length - scheduledEpics.length;
-      const totalStories = monthEpics.reduce((sum, epic) => sum + (epic.userStories?.length ?? 0), 0);
+      const monthPlannedRows = initiatives.flatMap((initiative) =>
+        (initiative.epics ?? [])
+          .filter((epic) => {
+            if (epic.planStartMonth == null || epic.planEndMonth == null || epic.planSprint == null) return false;
+            return epic.planStartMonth <= focusedMonthExternal && epic.planEndMonth >= focusedMonthExternal;
+          })
+          .map((epic) => ({ initiative, epic })),
+      );
+      const scheduledInitiativeIds = new Set(monthPlannedRows.map((row) => row.initiative.id));
+      const initiativesInMonth = initiatives.filter((initiative) => scheduledInitiativeIds.has(initiative.id));
+      const unscheduledEpics = initiativesInMonth
+        .flatMap((initiative) => initiative.epics ?? [])
+        .filter((epic) => epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null).length;
+      const totalStories = initiativesInMonth
+        .flatMap((initiative) => initiative.epics ?? [])
+        .reduce((sum, epic) => sum + (epic.userStories?.length ?? 0), 0);
       return {
-        totalInitiatives: monthInitiatives.length,
-        scheduledInitiatives: monthInitiatives.length,
-        totalEpics: monthEpics.length,
-        scheduledEpics: scheduledEpics.length,
+        totalInitiatives: scheduledInitiativeIds.size,
+        scheduledInitiatives: scheduledInitiativeIds.size,
+        totalEpics: monthPlannedRows.length + unscheduledEpics,
+        scheduledEpics: monthPlannedRows.length,
         unscheduledEpics,
         totalStories,
       };
@@ -2465,6 +2480,7 @@ export function TimelineGrid({
                                     <InitiativeTimelineBar
                                       id={row.initiative.id}
                                       title={row.initiative.title}
+                                      icon={row.initiative.icon}
                                       color={row.initiative.color}
                                       progressPercent={completionPercent}
                                       progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
@@ -2523,6 +2539,7 @@ export function TimelineGrid({
                                   <EpicPlanTimelineBar
                                     id={row.epic.id}
                                     title={row.epic.title}
+                                    icon={row.epic.icon}
                                     color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
                                     progressPercent={completionPercent}
                                     progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
@@ -2747,6 +2764,7 @@ export function TimelineGrid({
                           <InitiativeTimelineBar
                             id={row.initiative.id}
                             title={row.initiative.title}
+                            icon={row.initiative.icon}
                             color={row.initiative.color}
                             progressPercent={completionPercent}
                             progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
@@ -2801,6 +2819,7 @@ export function TimelineGrid({
                           <EpicPlanTimelineBar
                             id={row.epic.id}
                             title={row.epic.title}
+                            icon={row.epic.icon}
                             color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
                             progressPercent={completionPercent}
                             progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}

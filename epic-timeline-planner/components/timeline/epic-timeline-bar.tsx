@@ -8,6 +8,7 @@ import {
   epicTimelineDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { cn } from "@/lib/utils";
+import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 
 const ganttBarTooltipClass =
   "pointer-events-none absolute left-2 top-0 z-[200] -translate-y-[calc(100%+6px)] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover/bar:opacity-100";
@@ -57,6 +58,7 @@ export function TimelineBarDragPreview({
 type InitiativeTimelineBarProps = {
   id: string;
   title: string;
+  icon?: string | null;
   color: string;
   progressPercent?: number;
   progressLabel?: string;
@@ -70,6 +72,7 @@ type InitiativeTimelineBarProps = {
 export function InitiativeTimelineBar({
   id,
   title,
+  icon,
   color,
   progressPercent = 0,
   progressLabel,
@@ -111,11 +114,12 @@ export function InitiativeTimelineBar({
         ) : null}
         <span
           className={cn(
-            "relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased",
+            "relative z-10 flex min-w-0 flex-1 items-center gap-1 px-3 text-left antialiased",
             emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
           )}
         >
-          {title}
+          <InitiativePlanBarIcon icon={icon} className="mr-0 text-[12px] [&_svg]:size-3.5 [&_svg]:text-blue-200/95" />
+          <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
       <div className="mt-0.5 flex items-center gap-1.5 px-2">
@@ -140,6 +144,7 @@ export function InitiativeTimelineBar({
 type EpicPlanTimelineBarProps = {
   id: string;
   title: string;
+  icon?: string | null;
   color: string;
   progressPercent?: number;
   progressLabel?: string;
@@ -154,6 +159,7 @@ type EpicPlanTimelineBarProps = {
 export function EpicPlanTimelineBar({
   id,
   title,
+  icon,
   color,
   progressPercent = 0,
   progressLabel,
@@ -236,11 +242,12 @@ export function EpicPlanTimelineBar({
         ) : null}
         <span
           className={cn(
-            "relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased",
+            "relative z-10 flex min-w-0 flex-1 items-center gap-1 px-3 text-left antialiased",
             emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
           )}
         >
-          {title}
+          <EpicPlanBarIcon icon={icon} className="mr-0 text-[12px] [&_svg]:size-3.5 [&_svg]:text-white/95" />
+          <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
       <div className="mt-0.5 flex items-center gap-1.5 px-2">

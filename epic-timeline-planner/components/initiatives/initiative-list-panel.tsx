@@ -1217,8 +1217,6 @@ export function InitiativeListPanel({
   }, [panelStatusQuickFilter]);
 
   const monthAssignedEpics = useMemo(() => {
-    const wantsUnscheduledOnlyOrMixed =
-      !panelStatusFilters.includes("all") && panelStatusFilters.includes("Unscheduled");
     if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
       const byEpicId = new Map<string, { epic: EpicItem; initiative: InitiativeItem }>();
       for (const initiative of initiatives) {
@@ -1227,12 +1225,15 @@ export function InitiativeListPanel({
           initiative.startMonth != null &&
           initiative.endMonth != null &&
           epicPanelQuarterMonths.some((month) => initiative.startMonth! <= month && initiative.endMonth! >= month);
-        if (!initiativeIsInQuarterScope) continue;
+        const initiativeHasPlannedEpicInQuarter = (initiative.epics ?? []).some((epic) =>
+          epicPanelQuarterMonths.some((month) => epicIsOnPlanForMonth(epic, month)),
+        );
         for (const epic of initiative.epics ?? []) {
           const isPlannedInQuarterScope = epicPanelQuarterMonths.some((month) => epicIsOnPlanForMonth(epic, month));
           const isUnscheduled =
             epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
-          if (!isPlannedInQuarterScope && !(wantsUnscheduledOnlyOrMixed && isUnscheduled)) continue;
+          const includeUnscheduled = isUnscheduled && (initiativeIsInQuarterScope || initiativeHasPlannedEpicInQuarter);
+          if (!isPlannedInQuarterScope && !includeUnscheduled) continue;
           byEpicId.set(epic.id, { epic, initiative });
         }
       }
@@ -1251,12 +1252,15 @@ export function InitiativeListPanel({
         initiative.endMonth != null &&
         initiative.startMonth <= activeMonth &&
         initiative.endMonth >= activeMonth;
-      if (!initiativeIsInMonthScope) continue;
+      const initiativeHasPlannedEpicInMonth = (initiative.epics ?? []).some((epic) =>
+        epicIsOnPlanForMonth(epic, activeMonth),
+      );
       for (const epic of initiative.epics ?? []) {
         const isPlannedInMonth = epicIsOnPlanForMonth(epic, activeMonth);
         const isUnscheduled =
           epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
-        if (!isPlannedInMonth && !(wantsUnscheduledOnlyOrMixed && isUnscheduled)) continue;
+        const includeUnscheduled = isUnscheduled && (initiativeIsInMonthScope || initiativeHasPlannedEpicInMonth);
+        if (!isPlannedInMonth && !includeUnscheduled) continue;
         rows.push({ epic, initiative });
       }
     }
@@ -1265,7 +1269,7 @@ export function InitiativeListPanel({
       if (byInit !== 0) return byInit;
       return a.epic.title.localeCompare(b.epic.title);
     });
-  }, [initiatives, activeMonth, epicPanelQuarterMonths, panelStatusFilters]);
+  }, [initiatives, activeMonth, epicPanelQuarterMonths]);
   /** Month list scope: all epics for the month, or only those on the selected team when viewing that team’s sprint board. */
   const monthPanelEpics = useMemo(() => {
     if (!isKnownEpicTeamId(monthEpicTeamFilterId)) return monthAssignedEpics;
