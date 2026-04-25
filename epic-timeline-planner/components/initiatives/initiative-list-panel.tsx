@@ -80,12 +80,14 @@ function IconFilterSelect<T extends string>({
   options,
   ariaLabel,
   allValue,
+  disabled = false,
 }: {
   values: T[];
   onToggle: (value: T) => void;
   options: IconFilterOption<T>[];
   ariaLabel: string;
   allValue: T;
+  disabled?: boolean;
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const closeTimeoutRef = useRef<number | null>(null);
@@ -126,9 +128,20 @@ function IconFilterSelect<T extends string>({
       }}
     >
       <summary
-        className="flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 transition marker:content-none hover:bg-slate-50 focus:ring-2 focus:ring-ring/40 [&::-webkit-details-marker]:hidden"
+        className={cn(
+          "flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
+          disabled ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50 focus:ring-2 focus:ring-ring/40",
+        )}
         aria-label={ariaLabel}
+        aria-disabled={disabled}
+        onClick={(event) => {
+          if (disabled) event.preventDefault();
+        }}
         onKeyDown={(event) => {
+          if (disabled) {
+            event.preventDefault();
+            return;
+          }
           if (event.key === "Escape") detailsRef.current?.removeAttribute("open");
         }}
       >
@@ -143,9 +156,14 @@ function IconFilterSelect<T extends string>({
           <button
             key={opt.value}
             type="button"
-            onClick={() => onToggle(opt.value)}
+            onClick={() => {
+              if (disabled) return;
+              onToggle(opt.value);
+            }}
+            disabled={disabled}
             className={cn(
               "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+              disabled && "cursor-not-allowed opacity-60 hover:bg-transparent",
               (isAllSelected ? opt.value === allValue : values.includes(opt.value)) && "bg-slate-100 text-slate-900",
             )}
           >
@@ -351,6 +369,8 @@ type InitiativeListPanelProps = {
   epicPanelQuarterLabel?: string | null;
   /** Optional quarter sync from timeline selection. */
   panelQuarterQuickFilter?: "Q1" | "Q2" | "Q3" | "Q4" | null;
+  /** Lock quarter filter UI (used in quarter gantt view). */
+  panelQuarterFilterLocked?: boolean;
   /** Fires when an initiative accordion opens or closes (initiative list mode). */
   onInitiativeAccordionChange?: (initiativeId: string, isOpen: boolean) => void;
   /** Optional top-chip quick filter sync (Scheduled / Unscheduled epics). */
@@ -1089,6 +1109,7 @@ export function InitiativeListPanel({
   epicPanelQuarterMonths = null,
   epicPanelQuarterLabel = null,
   panelQuarterQuickFilter = null,
+  panelQuarterFilterLocked = false,
   onInitiativeAccordionChange,
   panelStatusQuickFilter = null,
 }: InitiativeListPanelProps) {
@@ -1115,6 +1136,13 @@ export function InitiativeListPanel({
     { value: "Q2", label: "Q2", icon: <QuarterProgressGlyph steps={2} /> },
     { value: "Q3", label: "Q3", icon: <QuarterProgressGlyph steps={3} /> },
     { value: "Q4", label: "Q4", icon: <QuarterProgressGlyph steps={4} /> },
+  ];
+  const monthFilterOptions: IconFilterOption<"current">[] = [
+    {
+      value: "current",
+      label: activeMonth != null ? MONTHS[activeMonth - 1] ?? `Month ${activeMonth}` : "Current month",
+      icon: <CalendarDays className="size-3.5 text-slate-500" />,
+    },
   ];
   const teamFilterOptions: IconFilterOption<string>[] = [
     { value: "all", label: "All Teams", icon: <Users className="size-3.5 text-slate-500" /> },
@@ -1166,12 +1194,17 @@ export function InitiativeListPanel({
     return [...withoutAll, value];
   };
   useEffect(() => {
+    if (activeMonth != null) {
+      // Month view uses a dedicated locked month filter UI; keep quarter filtering neutral.
+      setPanelQuarterFilters(["all"]);
+      return;
+    }
     if (panelQuarterQuickFilter == null) {
       setPanelQuarterFilters(["all"]);
       return;
     }
     setPanelQuarterFilters([panelQuarterQuickFilter]);
-  }, [panelQuarterQuickFilter]);
+  }, [activeMonth, panelQuarterQuickFilter]);
   useEffect(() => {
     if (panelStatusQuickFilter == null) {
       setPanelStatusFilters((prev) => {
@@ -1184,14 +1217,23 @@ export function InitiativeListPanel({
   }, [panelStatusQuickFilter]);
 
   const monthAssignedEpics = useMemo(() => {
+    const wantsUnscheduledOnlyOrMixed =
+      !panelStatusFilters.includes("all") && panelStatusFilters.includes("Unscheduled");
     if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
       const byEpicId = new Map<string, { epic: EpicItem; initiative: InitiativeItem }>();
-      for (const month of epicPanelQuarterMonths) {
-        for (const initiative of initiatives) {
-          for (const epic of initiative.epics ?? []) {
-            if (!epicIsOnPlanForMonth(epic, month)) continue;
-            byEpicId.set(epic.id, { epic, initiative });
-          }
+      for (const initiative of initiatives) {
+        const initiativeIsInQuarterScope =
+          initiative.status === "scheduled" &&
+          initiative.startMonth != null &&
+          initiative.endMonth != null &&
+          epicPanelQuarterMonths.some((month) => initiative.startMonth! <= month && initiative.endMonth! >= month);
+        if (!initiativeIsInQuarterScope) continue;
+        for (const epic of initiative.epics ?? []) {
+          const isPlannedInQuarterScope = epicPanelQuarterMonths.some((month) => epicIsOnPlanForMonth(epic, month));
+          const isUnscheduled =
+            epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
+          if (!isPlannedInQuarterScope && !(wantsUnscheduledOnlyOrMixed && isUnscheduled)) continue;
+          byEpicId.set(epic.id, { epic, initiative });
         }
       }
       return [...byEpicId.values()].sort((a, b) => {
@@ -1203,8 +1245,18 @@ export function InitiativeListPanel({
     if (activeMonth == null) return [];
     const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     for (const initiative of initiatives) {
+      const initiativeIsInMonthScope =
+        initiative.status === "scheduled" &&
+        initiative.startMonth != null &&
+        initiative.endMonth != null &&
+        initiative.startMonth <= activeMonth &&
+        initiative.endMonth >= activeMonth;
+      if (!initiativeIsInMonthScope) continue;
       for (const epic of initiative.epics ?? []) {
-        if (!epicIsOnPlanForMonth(epic, activeMonth)) continue;
+        const isPlannedInMonth = epicIsOnPlanForMonth(epic, activeMonth);
+        const isUnscheduled =
+          epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
+        if (!isPlannedInMonth && !(wantsUnscheduledOnlyOrMixed && isUnscheduled)) continue;
         rows.push({ epic, initiative });
       }
     }
@@ -1213,7 +1265,7 @@ export function InitiativeListPanel({
       if (byInit !== 0) return byInit;
       return a.epic.title.localeCompare(b.epic.title);
     });
-  }, [initiatives, activeMonth, epicPanelQuarterMonths]);
+  }, [initiatives, activeMonth, epicPanelQuarterMonths, panelStatusFilters]);
   /** Month list scope: all epics for the month, or only those on the selected team when viewing that team’s sprint board. */
   const monthPanelEpics = useMemo(() => {
     if (!isKnownEpicTeamId(monthEpicTeamFilterId)) return monthAssignedEpics;
@@ -1389,13 +1441,25 @@ export function InitiativeListPanel({
             </datalist>
           </div>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
-            <IconFilterSelect
-              values={panelQuarterFilters}
-              onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
-              options={quarterFilterOptions}
-              ariaLabel="Filter left panel by quarter"
-              allValue="all"
-            />
+            {activeMonth != null ? (
+              <IconFilterSelect
+                values={["current"]}
+                onToggle={() => {}}
+                options={monthFilterOptions}
+                ariaLabel="Month filter (locked to selected month)"
+                allValue="current"
+                disabled
+              />
+            ) : (
+              <IconFilterSelect
+                values={panelQuarterFilters}
+                onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
+                options={quarterFilterOptions}
+                ariaLabel="Filter left panel by quarter"
+                allValue="all"
+                disabled={panelQuarterFilterLocked}
+              />
+            )}
             <IconFilterSelect
               values={panelTeamFilterIds}
               onToggle={(value) => setPanelTeamFilterIds((prev) => toggleMultiFilter(prev, value, "all"))}
@@ -1502,6 +1566,7 @@ export function InitiativeListPanel({
               options={quarterFilterOptions}
               ariaLabel="Filter initiatives by quarter"
               allValue="all"
+              disabled={panelQuarterFilterLocked}
             />
             <IconFilterSelect
               values={panelTeamFilterIds}

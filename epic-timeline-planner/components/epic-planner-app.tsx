@@ -2819,6 +2819,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     : null
                 }
                 panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
+                panelQuarterFilterLocked={focusedQuarterLabel != null && activeTimelineMonth == null}
                 onInitiativeAccordionChange={handleInitiativeAccordionChange}
                 panelStatusQuickFilter={panelStatusQuickFilter}
               />

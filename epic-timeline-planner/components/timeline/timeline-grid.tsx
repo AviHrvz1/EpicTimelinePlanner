@@ -386,6 +386,42 @@ function EpicGanttLaneRow({
   );
 }
 
+function MonthInitiativeGanttLaneRow({
+  initiative,
+  onOpenInitiative,
+  ganttLaneSortIndex,
+}: {
+  initiative: InitiativeItem;
+  onOpenInitiative: (initiativeId: string) => void;
+  ganttLaneSortIndex: number;
+}) {
+  const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
+  const totalStories = stories.length;
+  const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+
+  return (
+    <div
+      className="relative z-10 min-w-0"
+      data-gantt-lane-index={ganttLaneSortIndex}
+      data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
+    >
+      <div className="relative grid min-w-0 gap-2" style={{ gridTemplateColumns: "repeat(1, minmax(0, 1fr))" }}>
+        <div className="relative z-20 min-w-0 pt-0.5 pb-0.5" style={{ gridColumn: "1 / span 1", gridRow: 1 }}>
+          <InitiativeTimelineBar
+            id={initiative.id}
+            title={initiative.title}
+            color={initiative.color}
+            progressPercent={completionPercent}
+            progressLabel={totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"}
+            onClick={() => onOpenInitiative(initiative.id)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export type MonthPlanSurfaceTab =
   | "epic-gantt"
   | "team-queue"
@@ -404,6 +440,7 @@ type TimelineGridProps = {
   summaryBadges?: {
     totalInitiatives: number;
     scheduledInitiatives: number;
+    totalEpics?: number;
     scheduledEpics: number;
     unscheduledEpics: number;
     totalStories: number;
@@ -651,6 +688,28 @@ export function TimelineGrid({
   }, [scheduledInitiatives, focusedQuarter]);
   const summaryBadgesForScope = useMemo(() => {
     if (!summaryBadges) return null;
+    if (focusedMonthExternal != null) {
+      const monthInitiatives = initiatives.filter((initiative) => {
+        if (initiative.status !== "scheduled") return false;
+        if (initiative.startMonth == null || initiative.endMonth == null) return false;
+        return initiative.startMonth <= focusedMonthExternal && initiative.endMonth >= focusedMonthExternal;
+      });
+      const monthEpics = monthInitiatives.flatMap((initiative) => initiative.epics ?? []);
+      const scheduledEpics = monthEpics.filter((epic) => {
+        if (epic.planStartMonth == null || epic.planEndMonth == null || epic.planSprint == null) return false;
+        return epic.planStartMonth <= focusedMonthExternal && epic.planEndMonth >= focusedMonthExternal;
+      });
+      const unscheduledEpics = monthEpics.length - scheduledEpics.length;
+      const totalStories = monthEpics.reduce((sum, epic) => sum + (epic.userStories?.length ?? 0), 0);
+      return {
+        totalInitiatives: monthInitiatives.length,
+        scheduledInitiatives: monthInitiatives.length,
+        totalEpics: monthEpics.length,
+        scheduledEpics: scheduledEpics.length,
+        unscheduledEpics,
+        totalStories,
+      };
+    }
     if (!focusedQuarter) return summaryBadges;
     const qStart = focusedQuarter.months[0];
     const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
@@ -674,7 +733,7 @@ export function TimelineGrid({
       unscheduledEpics,
       totalStories,
     };
-  }, [focusedQuarter, initiatives, summaryBadges]);
+  }, [focusedMonthExternal, focusedQuarter, initiatives, summaryBadges]);
   const quarterRoadmapEpics = useMemo(() => {
     if (!focusedQuarter) return [] as Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }>;
     const qStart = focusedQuarter.months[0];
@@ -1002,6 +1061,14 @@ export function TimelineGrid({
       return a.epic.title.localeCompare(b.epic.title);
     });
   }, [initiatives, activeMonth]);
+  const monthInitiativeGanttRows = useMemo(() => {
+    if (activeMonth == null) return [] as InitiativeItem[];
+    const byId = new Map<string, InitiativeItem>();
+    for (const { initiative } of monthEpicGanttRows) {
+      byId.set(initiative.id, initiative);
+    }
+    return [...byId.values()].sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
+  }, [activeMonth, monthEpicGanttRows]);
 
   useEffect(() => {
     if (!resizePreview || activeMonth != null) return;
@@ -1523,7 +1590,81 @@ export function TimelineGrid({
             ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="flex items-center gap-2" />
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 pr-3">
+            {summaryBadgesForScope ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoadmapBarMode("initiatives");
+                    onSummaryStatusQuickFilterChange?.(null);
+                  }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    roadmapBarMode === "initiatives"
+                      ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  {summaryBadgesForScope.totalInitiatives} Initiatives
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoadmapBarMode("epics");
+                    onSummaryStatusQuickFilterChange?.(null);
+                  }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                      ? "bg-amber-100 text-amber-800 ring-amber-200"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  {("totalEpics" in summaryBadgesForScope
+                    ? summaryBadgesForScope.totalEpics
+                    : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
+                  Epics
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSummaryStatusQuickFilterChange?.(
+                      summaryStatusQuickFilter === "Unscheduled" ? null : "Unscheduled",
+                    )
+                  }
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    summaryStatusQuickFilter === "Unscheduled"
+                      ? "bg-slate-300 text-slate-900 ring-slate-400"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  {summaryBadgesForScope.unscheduledEpics} Unscheduled
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoadmapBarMode("epics");
+                    onSummaryStatusQuickFilterChange?.(
+                      summaryStatusQuickFilter === "Scheduled" ? null : "Scheduled",
+                    );
+                  }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    summaryStatusQuickFilter === "Scheduled"
+                      ? "bg-amber-100 text-amber-800 ring-amber-300"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  {summaryBadgesForScope.scheduledEpics} Scheduled
+                </button>
+                <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
+                  {summaryBadgesForScope.totalStories} User Stories
+                </div>
+              </>
+            ) : null}
+          </div>
         ) : focusedQuarter ? (
           <div className="flex items-center gap-2" />
         ) : (
@@ -2086,11 +2227,24 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         className="relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto"
                       >
-                        {monthEpicGanttRows.length === 0 ? (
+                        {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
+                          <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
+                            No initiatives are planned in {MONTHS[activeMonth - 1]} yet.
+                          </div>
+                        ) : roadmapBarMode !== "initiatives" && monthEpicGanttRows.length === 0 ? (
                           <div className="rounded-lg bg-slate-50/70 px-4 py-6 text-center text-[12px] text-slate-600">
                             No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag one from the left panel into the
                             drop area below.
                           </div>
+                        ) : roadmapBarMode === "initiatives" ? (
+                          monthInitiativeGanttRows.map((initiative, rowIndex) => (
+                            <MonthInitiativeGanttLaneRow
+                              key={initiative.id}
+                              initiative={initiative}
+                              onOpenInitiative={onOpenInitiative}
+                              ganttLaneSortIndex={rowIndex}
+                            />
+                          ))
                         ) : (
                           monthEpicGanttRows.map(({ epic, initiative }, rowIndex) => {
                             const isInitiativeEmphasis =
