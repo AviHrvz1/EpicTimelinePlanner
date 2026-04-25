@@ -1145,7 +1145,7 @@ export function InitiativeListPanel({
               className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
               aria-label="Filter left panel by quarter"
             >
-              <option value="all">All quarters</option>
+              <option value="all">🗓️ All quarters</option>
               <option value="Q1">Q1</option>
               <option value="Q2">Q2</option>
               <option value="Q3">Q3</option>
@@ -1157,7 +1157,7 @@ export function InitiativeListPanel({
               className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
               aria-label="Filter left panel by team"
             >
-              <option value="all">All teams</option>
+              <option value="all">👥 All teams</option>
               {MONTH_TEAM_COLUMNS.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.label}
@@ -1172,7 +1172,7 @@ export function InitiativeListPanel({
               className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
               aria-label="Filter left panel by status"
             >
-              <option value="all">All statuses</option>
+              <option value="all">📈 All statuses</option>
               <option value="To Do">To Do</option>
               <option value="In Progress">In Progress</option>
               <option value="Done">Done</option>
@@ -1253,7 +1253,7 @@ export function InitiativeListPanel({
               className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
               aria-label="Filter initiatives by quarter"
             >
-              <option value="all">All quarters</option>
+              <option value="all">🗓️ All quarters</option>
               <option value="Q1">Q1</option>
               <option value="Q2">Q2</option>
               <option value="Q3">Q3</option>
@@ -1265,7 +1265,7 @@ export function InitiativeListPanel({
               className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
               aria-label="Filter initiatives by team"
             >
-              <option value="all">All teams</option>
+              <option value="all">👥 All teams</option>
               {MONTH_TEAM_COLUMNS.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.label}
@@ -1280,7 +1280,7 @@ export function InitiativeListPanel({
               className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
               aria-label="Filter initiatives by status"
             >
-              <option value="all">All statuses</option>
+              <option value="all">📈 All statuses</option>
               <option value="To Do">To Do</option>
               <option value="In Progress">In Progress</option>
               <option value="Done">Done</option>
