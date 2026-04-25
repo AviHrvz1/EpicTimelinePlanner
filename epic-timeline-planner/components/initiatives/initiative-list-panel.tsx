@@ -975,10 +975,8 @@ export function InitiativeListPanel({
       const byEpicId = new Map<string, { epic: EpicItem; initiative: InitiativeItem }>();
       for (const month of epicPanelQuarterMonths) {
         for (const initiative of initiatives) {
-          if (initiative.status !== "scheduled") continue;
-          if (initiative.startMonth == null || initiative.endMonth == null) continue;
-          if (initiative.endMonth < month || initiative.startMonth > month) continue;
           for (const epic of initiative.epics ?? []) {
+            if (!epicIsOnPlanForMonth(epic, month)) continue;
             byEpicId.set(epic.id, { epic, initiative });
           }
         }
@@ -992,10 +990,8 @@ export function InitiativeListPanel({
     if (activeMonth == null) return [];
     const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     for (const initiative of initiatives) {
-      if (initiative.status !== "scheduled") continue;
-      if (initiative.startMonth == null || initiative.endMonth == null) continue;
-      if (initiative.endMonth < activeMonth || initiative.startMonth > activeMonth) continue;
       for (const epic of initiative.epics ?? []) {
+        if (!epicIsOnPlanForMonth(epic, activeMonth)) continue;
         rows.push({ epic, initiative });
       }
     }

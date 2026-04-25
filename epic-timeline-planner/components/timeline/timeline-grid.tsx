@@ -572,6 +572,7 @@ export function TimelineGrid({
   sprintRetrospective = null,
   onSaveSprintRetrospective,
 }: TimelineGridProps) {
+  const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
@@ -934,10 +935,7 @@ export function TimelineGrid({
   const monthEpicGanttRows = useMemo(() => {
     if (activeMonth == null) return [];
     const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
-    for (const initiative of scheduledInitiatives) {
-      const sm = initiative.startMonth ?? 1;
-      const em = initiative.endMonth ?? sm;
-      if (em < activeMonth || sm > activeMonth) continue;
+    for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
         if (!epicPlanOverlapsMonth(epic, activeMonth)) continue;
         rows.push({ epic, initiative });
@@ -948,7 +946,7 @@ export function TimelineGrid({
       if (ir !== 0) return ir;
       return a.epic.title.localeCompare(b.epic.title);
     });
-  }, [scheduledInitiatives, activeMonth]);
+  }, [initiatives, activeMonth]);
 
   useEffect(() => {
     if (!resizePreview || activeMonth != null) return;
@@ -1270,6 +1268,25 @@ export function TimelineGrid({
       quarterViewTab,
     });
   }, [isRailExpanded, activeMonth, focusedQuarterLabel, quarterViewTab]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(ROADMAP_BAR_MODE_STORAGE_KEY);
+      if (stored === "epics" || stored === "initiatives") {
+        setRoadmapBarMode(stored);
+      }
+    } catch {
+      // no-op: localStorage unavailable
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(ROADMAP_BAR_MODE_STORAGE_KEY, roadmapBarMode);
+    } catch {
+      // no-op: localStorage unavailable
+    }
+  }, [roadmapBarMode]);
   const showSprintTeamPicker =
     activeMonth != null &&
     (monthPlanTab === "sprint-kanban" ||
