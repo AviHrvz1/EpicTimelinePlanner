@@ -404,8 +404,8 @@ type TimelineGridProps = {
   summaryBadges?: {
     totalInitiatives: number;
     scheduledInitiatives: number;
-    backlogInitiatives: number;
-    totalEpics: number;
+    scheduledEpics: number;
+    unscheduledEpics: number;
     totalStories: number;
   };
   focusedQuarterLabel: string | null;
@@ -1426,13 +1426,10 @@ export function TimelineGrid({
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
-                  {summaryBadges.totalInitiatives} initiatives
+                  {summaryBadges.totalInitiatives} Initiatives
                 </button>
-                <div className="rounded-full bg-emerald-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-emerald-800">
-                  {summaryBadges.scheduledInitiatives} scheduled
-                </div>
                 <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800">
-                  {summaryBadges.backlogInitiatives} backlog
+                  {summaryBadges.unscheduledEpics} Unscheduled Epics
                 </div>
                 <button
                   type="button"
@@ -1444,10 +1441,10 @@ export function TimelineGrid({
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
-                  {summaryBadges.totalEpics} epics
+                  {summaryBadges.scheduledEpics} Scheduled Epics
                 </button>
                 <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
-                  {summaryBadges.totalStories} user stories
+                  {summaryBadges.totalStories} User Stories
                 </div>
               </div>
             ) : null}

@@ -1,8 +1,22 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ChevronRight, Folder, Plus, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  CalendarDays,
+  CheckCheck,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Folder,
+  ListFilter,
+  ListTodo,
+  PlayCircle,
+  Plus,
+  Users,
+  Zap,
+} from "lucide-react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
@@ -31,6 +45,82 @@ function quarterFromMonth(month: number): string {
   if (month <= 6) return "Q2";
   if (month <= 9) return "Q3";
   return "Q4";
+}
+
+type IconFilterOption<T extends string> = {
+  value: T;
+  label: string;
+  icon: ReactNode;
+};
+
+function QuarterProgressGlyph({ steps }: { steps: 1 | 2 | 3 | 4 }) {
+  return (
+    <span className="inline-flex h-3 w-3 items-end gap-[1px] text-slate-500" aria-hidden>
+      {Array.from({ length: 4 }, (_, idx) => (
+        <span
+          key={idx}
+          className={cn(
+            "w-[2px] rounded-[1px] bg-current",
+            idx === 0 && "h-[4px]",
+            idx === 1 && "h-[6px]",
+            idx === 2 && "h-[8px]",
+            idx === 3 && "h-[10px]",
+            idx < steps ? "opacity-95" : "opacity-25",
+          )}
+        />
+      ))}
+    </span>
+  );
+}
+
+function IconFilterSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: IconFilterOption<T>[];
+  ariaLabel: string;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const selected = options.find((opt) => opt.value === value) ?? options[0] ?? null;
+  if (!selected) return null;
+
+  return (
+    <details ref={detailsRef} className="group relative">
+      <summary
+        className="flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 transition marker:content-none hover:bg-slate-50 focus:ring-2 focus:ring-ring/40 [&::-webkit-details-marker]:hidden"
+        aria-label={ariaLabel}
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0">{selected.icon}</span>
+          <span className="truncate">{selected.label}</span>
+        </span>
+        <ChevronDown className="size-3.5 shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="absolute z-50 mt-1 w-full min-w-max rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => {
+              onChange(opt.value);
+              detailsRef.current?.removeAttribute("open");
+            }}
+            className={cn(
+              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+              opt.value === value && "bg-slate-100 text-slate-900",
+            )}
+          >
+            <span className="shrink-0">{opt.icon}</span>
+            <span className="whitespace-nowrap">{opt.label}</span>
+          </button>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
@@ -968,7 +1058,43 @@ export function InitiativeListPanel({
   const [epicSearch, setEpicSearch] = useState("");
   const [panelQuarterFilter, setPanelQuarterFilter] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
   const [panelTeamFilterId, setPanelTeamFilterId] = useState<string>("all");
-  const [panelStatusFilter, setPanelStatusFilter] = useState<"all" | "To Do" | "In Progress" | "Done" | "Approved">("all");
+  const [panelStatusFilter, setPanelStatusFilter] = useState<
+    "all" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
+  >("all");
+  const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
+    { value: "all", label: "All quarters", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
+    { value: "Q1", label: "Q1", icon: <QuarterProgressGlyph steps={1} /> },
+    { value: "Q2", label: "Q2", icon: <QuarterProgressGlyph steps={2} /> },
+    { value: "Q3", label: "Q3", icon: <QuarterProgressGlyph steps={3} /> },
+    { value: "Q4", label: "Q4", icon: <QuarterProgressGlyph steps={4} /> },
+  ];
+  const teamFilterOptions: IconFilterOption<string>[] = [
+    { value: "all", label: "All teams", icon: <Users className="size-3.5 text-slate-500" /> },
+    ...MONTH_TEAM_COLUMNS.map((team) => ({
+      value: team.id,
+      label: team.label,
+      icon: (
+        <span
+          className={cn(
+            "inline-block size-2.5 rounded-full",
+            team.id === "platform" && "bg-sky-500",
+            team.id === "experience" && "bg-violet-500",
+            team.id === "data" && "bg-amber-500",
+          )}
+        />
+      ),
+    })),
+  ];
+  const statusFilterOptions: IconFilterOption<
+    "all" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
+  >[] = [
+    { value: "all", label: "All statuses", icon: <ListFilter className="size-3.5 text-slate-500" /> },
+    { value: "Unscheduled", label: "Unscheduled", icon: <Circle className="size-3.5 text-slate-500" /> },
+    { value: "To Do", label: "To Do", icon: <ListTodo className="size-3.5 text-slate-500" /> },
+    { value: "In Progress", label: "In Progress", icon: <PlayCircle className="size-3.5 text-slate-500" /> },
+    { value: "Done", label: "Done", icon: <CheckCheck className="size-3.5 text-slate-500" /> },
+    { value: "Approved", label: "Approved", icon: <CheckCircle2 className="size-3.5 text-slate-500" /> },
+  ];
 
   const monthAssignedEpics = useMemo(() => {
     if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
@@ -1013,7 +1139,13 @@ export function InitiativeListPanel({
         if (monthForQuarter == null || quarterFromMonth(monthForQuarter) !== panelQuarterFilter) return false;
       }
       if (panelTeamFilterId !== "all" && epic.team !== panelTeamFilterId) return false;
-      if (panelStatusFilter !== "all" && epicExecutionStatusMeta(epic).label !== panelStatusFilter) return false;
+      if (panelStatusFilter !== "all") {
+        if (panelStatusFilter === "Unscheduled") {
+          if (epicPlanningStatusMeta(epic).label !== "Unscheduled") return false;
+        } else if (epicExecutionStatusMeta(epic).label !== panelStatusFilter) {
+          return false;
+        }
+      }
       return true;
     });
   }, [monthPanelEpics, panelQuarterFilter, panelStatusFilter, panelTeamFilterId]);
@@ -1066,8 +1198,15 @@ export function InitiativeListPanel({
         const hasTeam = (initiative.epics ?? []).some((epic) => epic.team === panelTeamFilterId);
         if (!hasTeam) return false;
       }
-      if (panelStatusFilter !== "all" && initiativeExecutionStatusMeta(initiative).label !== panelStatusFilter) {
-        return false;
+      if (panelStatusFilter !== "all") {
+        if (panelStatusFilter === "Unscheduled") {
+          const hasUnscheduledEpics = (initiative.epics ?? []).some(
+            (epic) => epicPlanningStatusMeta(epic).label === "Unscheduled",
+          );
+          if (initiative.status !== "backlog" && !hasUnscheduledEpics) return false;
+        } else if (initiativeExecutionStatusMeta(initiative).label !== panelStatusFilter) {
+          return false;
+        }
       }
       return true;
     });
@@ -1139,45 +1278,24 @@ export function InitiativeListPanel({
             </datalist>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <select
+            <IconFilterSelect
               value={panelQuarterFilter}
-              onChange={(event) => setPanelQuarterFilter(event.target.value as "all" | "Q1" | "Q2" | "Q3" | "Q4")}
-              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              aria-label="Filter left panel by quarter"
-            >
-              <option value="all">🗓️ All quarters</option>
-              <option value="Q1">Q1</option>
-              <option value="Q2">Q2</option>
-              <option value="Q3">Q3</option>
-              <option value="Q4">Q4</option>
-            </select>
-            <select
+              onChange={setPanelQuarterFilter}
+              options={quarterFilterOptions}
+              ariaLabel="Filter left panel by quarter"
+            />
+            <IconFilterSelect
               value={panelTeamFilterId}
-              onChange={(event) => setPanelTeamFilterId(event.target.value)}
-              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              aria-label="Filter left panel by team"
-            >
-              <option value="all">👥 All teams</option>
-              {MONTH_TEAM_COLUMNS.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.label}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setPanelTeamFilterId}
+              options={teamFilterOptions}
+              ariaLabel="Filter left panel by team"
+            />
+            <IconFilterSelect
               value={panelStatusFilter}
-              onChange={(event) =>
-                setPanelStatusFilter(event.target.value as "all" | "To Do" | "In Progress" | "Done" | "Approved")
-              }
-              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              aria-label="Filter left panel by status"
-            >
-              <option value="all">📈 All statuses</option>
-              <option value="To Do">To Do</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Done">Done</option>
-              <option value="Approved">Approved</option>
-            </select>
+              onChange={setPanelStatusFilter}
+              options={statusFilterOptions}
+              ariaLabel="Filter left panel by status"
+            />
           </div>
           <h3 className="mb-2 text-[14px] font-medium tracking-[0.01em] text-slate-900">
             {epicPanelQuarterLabel
@@ -1247,45 +1365,24 @@ export function InitiativeListPanel({
             </datalist>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <select
+            <IconFilterSelect
               value={panelQuarterFilter}
-              onChange={(event) => setPanelQuarterFilter(event.target.value as "all" | "Q1" | "Q2" | "Q3" | "Q4")}
-              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              aria-label="Filter initiatives by quarter"
-            >
-              <option value="all">🗓️ All quarters</option>
-              <option value="Q1">Q1</option>
-              <option value="Q2">Q2</option>
-              <option value="Q3">Q3</option>
-              <option value="Q4">Q4</option>
-            </select>
-            <select
+              onChange={setPanelQuarterFilter}
+              options={quarterFilterOptions}
+              ariaLabel="Filter initiatives by quarter"
+            />
+            <IconFilterSelect
               value={panelTeamFilterId}
-              onChange={(event) => setPanelTeamFilterId(event.target.value)}
-              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              aria-label="Filter initiatives by team"
-            >
-              <option value="all">👥 All teams</option>
-              {MONTH_TEAM_COLUMNS.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.label}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={setPanelTeamFilterId}
+              options={teamFilterOptions}
+              ariaLabel="Filter initiatives by team"
+            />
+            <IconFilterSelect
               value={panelStatusFilter}
-              onChange={(event) =>
-                setPanelStatusFilter(event.target.value as "all" | "To Do" | "In Progress" | "Done" | "Approved")
-              }
-              className="h-9 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              aria-label="Filter initiatives by status"
-            >
-              <option value="all">📈 All statuses</option>
-              <option value="To Do">To Do</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Done">Done</option>
-              <option value="Approved">Approved</option>
-            </select>
+              onChange={setPanelStatusFilter}
+              options={statusFilterOptions}
+              ariaLabel="Filter initiatives by status"
+            />
           </div>
           <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
             Initiatives ({filteredInitiatives.length})

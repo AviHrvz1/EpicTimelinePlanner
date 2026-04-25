@@ -910,8 +910,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   const roadmapSummary = useMemo(() => {
     const scheduled = initiatives.filter((i) => i.status === "scheduled");
-    const backlog = initiatives.filter((i) => i.status === "backlog");
-    const totalEpics = initiatives.reduce((sum, i) => sum + (i.epics?.length ?? 0), 0);
+    const epics = initiatives.flatMap((initiative) => initiative.epics ?? []);
+    const scheduledEpics = epics.filter(
+      (epic) => epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null,
+    );
+    const unscheduledEpics = epics.length - scheduledEpics.length;
     const totalStories = initiatives.reduce(
       (sum, i) => sum + (i.epics ?? []).reduce((es, e) => es + (e.userStories?.length ?? 0), 0),
       0,
@@ -934,8 +937,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     return {
       totalInitiatives: initiatives.length,
       scheduledInitiatives: scheduled.length,
-      backlogInitiatives: backlog.length,
-      totalEpics,
+      scheduledEpics: scheduledEpics.length,
+      unscheduledEpics,
       totalStories,
       completedStories,
       completionPercent,
