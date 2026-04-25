@@ -153,12 +153,12 @@
   }
 }
 
-@keyframes epic-dialog-panel-out {
+@keyframes epic-dialog-panel-out-left {
   from {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateX(-100%);
+    transform: translate3d(100%, 0, 0);
   }
 }
 
@@ -167,7 +167,8 @@
 }
 
 .epic-dialog-panel--exit {
-  animation: epic-dialog-panel-out 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: epic-dialog-panel-out-left 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: transform;
 }
 
 /**

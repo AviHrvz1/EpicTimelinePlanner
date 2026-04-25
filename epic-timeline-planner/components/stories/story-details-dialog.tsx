@@ -128,6 +128,7 @@ export function StoryDetailsDialog({
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [childStoryDrafts, setChildStoryDrafts] = useState<Record<string, ChildStoryDraft>>({});
   const [nestedStoryId, setNestedStoryId] = useState<string | null>(null);
+  const [nestedStoryOpen, setNestedStoryOpen] = useState(false);
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
     field: "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft";
@@ -734,6 +735,49 @@ export function StoryDetailsDialog({
                 />
               </div>
             </label>
+            <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+              <p className="text-[12px] font-semibold text-slate-600">Quarter</p>
+              <select
+                value={quarterDraft}
+                onChange={(event) => setQuarterDraft(event.target.value)}
+                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+              >
+                <option value="">Not set</option>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+              </select>
+              <p className="text-[12px] font-semibold text-slate-600">Month</p>
+              <select
+                value={monthDraft}
+                onChange={(event) => setMonthDraft(event.target.value)}
+                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+              >
+                <option value="">Not set</option>
+                {MONTHS.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[12px] font-semibold text-slate-600">Year</p>
+              <select
+                value={yearDraft}
+                onChange={(event) => setYearDraft(event.target.value)}
+                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+              >
+                <option value="">Not set</option>
+                {Array.from({ length: 8 }, (_, idx) => {
+                  const year = new Date().getFullYear() - 2 + idx;
+                  return (
+                    <option key={year} value={String(year)}>
+                      {year}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
             <label className="mt-5 block space-y-1">
               <p className="text-sm font-medium text-slate-600">Description</p>
               <textarea
@@ -746,7 +790,7 @@ export function StoryDetailsDialog({
               <p className="text-sm font-medium text-slate-600">User Stories Children</p>
               <div className="overflow-hidden rounded-lg border border-slate-200">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-500">
+                  <thead className="bg-indigo-50/70 text-slate-600">
                     <tr>
                       <th className="px-2 py-1.5 font-medium">ID</th>
                       <th className="px-2 py-1.5 font-medium">Type</th>
@@ -773,6 +817,8 @@ export function StoryDetailsDialog({
                             value={newChildTitle}
                             onChange={(event) => setNewChildTitle(event.target.value)}
                             placeholder="Add child user story title"
+                            autoComplete="off"
+                            spellCheck={false}
                             className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800"
                           />
                           <Button type="button" size="sm" variant="outline" onClick={() => void handleAddChildStory()}>
@@ -797,7 +843,10 @@ export function StoryDetailsDialog({
                           <td className="px-2 py-1.5 text-slate-600">
                             <button
                               type="button"
-                              onClick={() => setNestedStoryId(row.id)}
+                              onClick={() => {
+                                setNestedStoryId(row.id);
+                                setNestedStoryOpen(true);
+                              }}
                               className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline"
                               title={row.title}
                             >
@@ -941,11 +990,13 @@ export function StoryDetailsDialog({
             </div>
           </div>
 
-          <section className="space-y-2.5 rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-3.5">
-            <h3 className="inline-flex w-fit rounded bg-slate-200/70 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600">Details</h3>
+          <section className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+            <h3 className="inline-flex w-fit items-center rounded-md bg-indigo-100 px-2.5 py-1 text-[13px] font-semibold tracking-[0.03em] text-indigo-800 ring-1 ring-indigo-200">
+              Details
+            </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Status</p>
-              <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[15px] text-slate-800">
+              <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-8 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[14px] font-medium text-slate-800">
                 <option value={StoryStatus.todo}>To Do</option>
                 <option value={StoryStatus.inProgress}>In Progress</option>
                 <option value={StoryStatus.done}>Done</option>
@@ -954,89 +1005,44 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Assignee</p>
-              <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[15px] text-slate-800" placeholder="e.g. Avi" />
+              <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800" placeholder="e.g. Avi" />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Team</p>
-              <input value={selectedEpicMeta?.team ?? "Not set"} readOnly className="h-9 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[15px] text-slate-700" />
+              <input value={selectedEpicMeta?.team ?? "Not set"} readOnly className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700" />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Sprint</p>
-              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[15px] text-slate-800">
+              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-8 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[14px] font-medium text-slate-800">
                 <option value="">Not set</option>
                 {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => (
                   <option key={i + 1} value={String(i + 1)}>{`Sprint ${i + 1}`}</option>
                 ))}
               </select>
             </label>
-            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)_4.75rem_minmax(0,1fr)] items-center gap-2 pt-0.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Est Days</p>
+            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2 pt-0.5">
+              <p className="text-[11px] font-semibold tracking-[0.03em] text-slate-500">Estimated Days</p>
               <input
                 type="number"
                 min={0}
                 value={estimatedDays}
                 onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
+                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
               />
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Est Left</p>
+            </div>
+            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
+              <p className="text-[11px] font-semibold tracking-[0.03em] text-slate-500">Est. Days left</p>
               <input
                 type="number"
                 min={0}
                 value={daysLeft}
                 onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
+                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
               />
-            </div>
-            <div className="pt-0.5">
-              <div className="mb-1 grid grid-cols-3 gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Quarter</p>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Month</p>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Year</p>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <select
-                  value={quarterDraft}
-                  onChange={(event) => setQuarterDraft(event.target.value)}
-                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
-                >
-                  <option value="">Not set</option>
-                  <option value="Q1">Q1</option>
-                  <option value="Q2">Q2</option>
-                  <option value="Q3">Q3</option>
-                  <option value="Q4">Q4</option>
-                </select>
-                <select
-                  value={monthDraft}
-                  onChange={(event) => setMonthDraft(event.target.value)}
-                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
-                >
-                  <option value="">Not set</option>
-                  {MONTHS.map((month) => (
-                    <option key={month} value={month}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={yearDraft}
-                  onChange={(event) => setYearDraft(event.target.value)}
-                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
-                >
-                  <option value="">Not set</option>
-                  {Array.from({ length: 8 }, (_, idx) => {
-                    const year = new Date().getFullYear() - 2 + idx;
-                    return (
-                      <option key={year} value={String(year)}>
-                        {year}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Priority</p>
-              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[15px] text-slate-800">
+              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800">
                 <option value="">Not set</option>
                 <option value="P0">P0</option>
                 <option value="P1">P1</option>
@@ -1044,9 +1050,22 @@ export function StoryDetailsDialog({
                 <option value="P3">P3</option>
               </select>
             </label>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
+              <p className="text-[12px] font-semibold text-slate-600">Parent</p>
+              <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
+                <option value="">Select epic</option>
+                {initiatives.map((initiative) => (
+                  <optgroup key={initiative.id} label={initiative.title}>
+                    {(initiative.epics ?? []).map((epic) => (
+                      <option key={epic.id} value={epic.id}>{epic.title}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
               <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <div className="flex min-h-9 flex-wrap gap-1.5 rounded-md border border-slate-300 bg-white p-2">
                   {labelsDraft.length === 0 ? <span className="text-xs text-slate-400">No labels yet.</span> : null}
                   {labelsDraft.map((label) => (
@@ -1068,10 +1087,10 @@ export function StoryDetailsDialog({
                       }
                     }}
                     list="story-label-suggestions"
-                    className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px]"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px]"
                     placeholder="Add label"
                   />
-                  <Button type="button" size="sm" variant="outline" className="h-9 px-3" onClick={() => addLabel(newLabel)}>Add</Button>
+                  <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => addLabel(newLabel)}>Add</Button>
                 </div>
                 <datalist id="story-label-suggestions">
                   {existingLabelSuggestions.map((item) => (
@@ -1079,19 +1098,6 @@ export function StoryDetailsDialog({
                   ))}
                 </datalist>
               </div>
-            </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Parent</p>
-              <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[15px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
-                <option value="">Select epic</option>
-                {initiatives.map((initiative) => (
-                  <optgroup key={initiative.id} label={initiative.title}>
-                    {(initiative.epics ?? []).map((epic) => (
-                      <option key={epic.id} value={epic.id}>{epic.title}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
             </label>
           </section>
           </div>
@@ -1196,19 +1202,25 @@ export function StoryDetailsDialog({
         </div>
         {nestedStoryId != null ? (
           <StoryDetailsDialog
-            open
+            open={nestedStoryOpen}
             story={nestedStory}
             initiatives={initiatives}
             lockParentEpicId={null}
-            onClose={() => setNestedStoryId(null)}
-            onExitComplete={() => setNestedStoryId(null)}
+            onClose={() => setNestedStoryOpen(false)}
+            onExitComplete={() => {
+              setNestedStoryOpen(false);
+              setNestedStoryId(null);
+            }}
             onCreate={onCreate}
             onSave={onSave}
             onDelete={onDelete}
             onAddComment={onAddComment}
             onOpenInitiative={onOpenInitiative}
             onOpenEpic={onOpenEpic}
-            onOpenStory={(storyId) => setNestedStoryId(storyId)}
+            onOpenStory={(storyId) => {
+              setNestedStoryId(storyId);
+              setNestedStoryOpen(true);
+            }}
             storyRef={nestedStoryId}
             surfaceAnchorRef={surfaceAnchorRef}
           />
