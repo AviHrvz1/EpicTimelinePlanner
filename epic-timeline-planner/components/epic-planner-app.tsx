@@ -835,18 +835,68 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   const handleInitiativeAccordionChange = useCallback(
     (initiativeId: string, isOpen: boolean) => {
+      console.log("[accordion->gantt] initiative toggle", {
+        initiativeId,
+        isOpen,
+        topMode,
+        activeMonthPlanTab,
+        activeTimelineMonth,
+        focusedQuarterLabel,
+      });
       if (!isOpen) return;
       const inv = initiatives.find((i) => i.id === initiativeId);
-      if (
-        !inv ||
-        inv.status !== InitiativeStatus.scheduled ||
-        inv.startMonth == null ||
-        inv.endMonth == null
-      ) {
+      if (!inv || inv.status !== InitiativeStatus.scheduled) {
+        console.log("[accordion->gantt] skip emphasis (initiative not scheduled/ranged)", {
+          initiativeId,
+          found: Boolean(inv),
+          status: inv?.status,
+          startMonth: inv?.startMonth ?? null,
+          endMonth: inv?.endMonth ?? null,
+        });
         return;
       }
-      const sm = inv.startMonth;
-      const em = inv.endMonth;
+      const plannedMonthRanges = (inv.epics ?? [])
+        .map((epic) =>
+          epic.planStartMonth != null && epic.planEndMonth != null
+            ? { startMonth: epic.planStartMonth, endMonth: epic.planEndMonth }
+            : null,
+        )
+        .filter((row): row is { startMonth: number; endMonth: number } => row != null);
+      const fallbackStartMonth =
+        plannedMonthRanges.length > 0 ? Math.min(...plannedMonthRanges.map((row) => row.startMonth)) : null;
+      const fallbackEndMonth =
+        plannedMonthRanges.length > 0 ? Math.max(...plannedMonthRanges.map((row) => row.endMonth)) : null;
+      const sm = inv.startMonth ?? fallbackStartMonth;
+      const em = inv.endMonth ?? fallbackEndMonth;
+      if (sm == null || em == null) {
+        console.log("[accordion->gantt] skip emphasis (no month range available)", {
+          initiativeId,
+          startMonth: inv.startMonth,
+          endMonth: inv.endMonth,
+          fallbackStartMonth,
+          fallbackEndMonth,
+          plannedEpicsWithRange: plannedMonthRanges.length,
+        });
+        return;
+      }
+      const epicCount = (inv.epics ?? []).length;
+      const onPlanForActiveMonth =
+        activeTimelineMonth == null
+          ? null
+          : (inv.epics ?? []).filter(
+              (epic) =>
+                epic.planStartMonth != null &&
+                epic.planEndMonth != null &&
+                epic.planStartMonth <= activeTimelineMonth &&
+                epic.planEndMonth >= activeTimelineMonth,
+            ).length;
+      console.log("[accordion->gantt] initiative context", {
+        initiativeId,
+        monthRange: `${sm}-${em}`,
+        monthRangeSource: inv.startMonth != null && inv.endMonth != null ? "initiative" : "epic-fallback",
+        epicCount,
+        onPlanForActiveMonth,
+      });
       const overlappingQuarter =
         QUARTERS.find((q) => {
           const qs = q.months[0];
@@ -865,9 +915,25 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           }
         }
       }
+      const isOnMonthSurface = activeTimelineMonth != null;
+      if (isOnMonthSurface && (activeTimelineMonth < sm || activeTimelineMonth > em)) {
+        console.log("[accordion->gantt] adjust activeTimelineMonth", {
+          from: activeTimelineMonth,
+          to: sm,
+        });
+        setActiveTimelineMonth(sm);
+      }
+      // Only retarget to epic-gantt if user is already on a month surface.
+      if (isOnMonthSurface && activeMonthPlanTab !== "epic-gantt") {
+        console.log("[accordion->gantt] switch month surface to epic-gantt", {
+          from: activeMonthPlanTab,
+        });
+        setActiveMonthPlanTab("epic-gantt");
+      }
 
       ganttEmphasisTickRef.current += 1;
       const tick = ganttEmphasisTickRef.current;
+      console.log("[accordion->gantt] set ganttEmphasis", { initiativeId, tick });
       setGanttEmphasis({ initiativeId, tick });
       if (ganttEmphasisTimeoutRef.current) {
         clearTimeout(ganttEmphasisTimeoutRef.current);
@@ -878,7 +944,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         ganttEmphasisTimeoutRef.current = null;
       }, 2000);
     },
-    [initiatives, focusedQuarterLabel],
+    [initiatives, focusedQuarterLabel, activeTimelineMonth, activeMonthPlanTab],
   );
 
   useEffect(

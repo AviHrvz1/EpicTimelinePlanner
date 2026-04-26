@@ -6,7 +6,31 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Bold, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Heading2, Heading3, History, Italic, Link as LinkIcon, List, ListOrdered, ListTodo, MessageSquare, PlayCircle, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
+import {
+  Activity as ActivityIcon,
+  Bold,
+  CheckCheck,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  FileText,
+  Heading2,
+  Heading3,
+  History,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  ListTodo,
+  MessageSquare,
+  PlayCircle,
+  Quote,
+  Tag,
+  Trash,
+  Underline as UnderlineIcon,
+  X,
+} from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
@@ -597,7 +621,10 @@ export function StoryDetailsDialog({
               </div>
             </label>
             <label className="mt-5 flex min-h-0 flex-1 flex-col gap-1">
-              <p className="shrink-0 text-sm font-medium text-slate-600">Description</p>
+              <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+                <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
+                Description
+              </p>
                 <div className="flex shrink-0 flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
                   <button
                     type="button"
@@ -731,7 +758,8 @@ export function StoryDetailsDialog({
           </div>
 
           <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-            <h3 className="border-b border-slate-200/90 pb-2 text-base font-normal leading-snug tracking-tight text-slate-900">
+            <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
+              <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
               Details
             </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -932,11 +960,12 @@ export function StoryDetailsDialog({
               onClick={() => setActivityOpen((open) => !open)}
               aria-expanded={activityOpen}
             >
-              <span className="flex items-center gap-2 text-base font-normal text-slate-800">
+              <span className="flex items-center gap-2 text-lg font-normal text-slate-800">
                 <ChevronDown
                   className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                   aria-hidden
                 />
+                <ActivityIcon className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Activity
               </span>
               {activityOpen ? (

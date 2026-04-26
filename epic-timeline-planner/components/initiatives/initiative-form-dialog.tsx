@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  Activity as ActivityIcon,
   ArrowUpDown,
   Bold,
   Check,
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  ClipboardList,
+  FileText,
   Folder,
   Heading2,
   Heading3,
@@ -605,13 +608,14 @@ export function InitiativeFormDialog({
                     aria-expanded={descriptionAccordionOpen}
                     aria-controls="initiative-form-description-accordion-panel"
                     onClick={() => setDescriptionAccordionOpen((v) => !v)}
-                    className="flex w-full shrink-0 items-center gap-1.5 rounded-md py-1 text-left text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
+                    className="flex w-full shrink-0 items-center gap-2 rounded-md py-1 text-left text-base font-medium text-slate-600 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
                   >
                     {descriptionAccordionOpen ? (
                       <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
                     ) : (
                       <ChevronRight className="size-4 shrink-0 text-slate-500" aria-hidden />
                     )}
+                    <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
                     Description
                   </button>
                   <div
@@ -862,7 +866,10 @@ export function InitiativeFormDialog({
               </div>
 
               <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <h3 className="border-b border-slate-200/90 pb-2 text-base font-normal leading-snug tracking-tight text-slate-900">Details</h3>
+                <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
+                  <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  Details
+                </h3>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" /></label>
@@ -973,14 +980,22 @@ export function InitiativeFormDialog({
               <button
                 type="button"
                 className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
-                onClick={() => setActivityOpen((open) => !open)}
+                onClick={() => {
+                  setActivityOpen((wasOpen) => {
+                    if (!wasOpen) {
+                      setActivityPanelHeightPx((h) => Math.min(520, h + 96));
+                    }
+                    return !wasOpen;
+                  });
+                }}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-base font-normal text-slate-800">
+                <span className="flex items-center gap-2 text-lg font-normal text-slate-800">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden
                   />
+                  <ActivityIcon className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Activity
                 </span>
                 {activityOpen ? (

@@ -2591,7 +2591,15 @@ export function TimelineGrid({
                               const stories = row.epic.userStories ?? [];
                               const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
                               const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                              const isInitiativeEmphasis =
+                                ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                               const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
+                              const emphasizeFlash = isInitiativeEmphasis || isEpicEmphasis;
+                              const emphasizeTick = isEpicEmphasis
+                                ? ganttEpicEmphasis!.tick
+                                : isInitiativeEmphasis
+                                  ? ganttEmphasis!.tick
+                                  : 0;
                               const resizeEdgeClass =
                                 "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                               return (
@@ -2612,8 +2620,8 @@ export function TimelineGrid({
                                     progressPercent={completionPercent}
                                     progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
                                     isResizing={Boolean(rz)}
-                                    emphasizeFlash={isEpicEmphasis}
-                                    emphasizeTick={isEpicEmphasis ? ganttEpicEmphasis.tick : 0}
+                                    emphasizeFlash={emphasizeFlash}
+                                    emphasizeTick={emphasizeTick}
                                     onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                     onClick={() => onOpenEpic(row.epic.id)}
                                   />
@@ -2871,7 +2879,15 @@ export function TimelineGrid({
                       const stories = row.epic.userStories ?? [];
                       const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
                       const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                      const isInitiativeEmphasis =
+                        ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                       const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
+                      const emphasizeFlash = isInitiativeEmphasis || isEpicEmphasis;
+                      const emphasizeTick = isEpicEmphasis
+                        ? ganttEpicEmphasis!.tick
+                        : isInitiativeEmphasis
+                          ? ganttEmphasis!.tick
+                          : 0;
                       const resizeEdgeClass =
                         "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                       return (
@@ -2892,8 +2908,8 @@ export function TimelineGrid({
                             progressPercent={completionPercent}
                             progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
                             isResizing={Boolean(rz)}
-                            emphasizeFlash={isEpicEmphasis}
-                            emphasizeTick={isEpicEmphasis ? ganttEpicEmphasis.tick : 0}
+                            emphasizeFlash={emphasizeFlash}
+                            emphasizeTick={emphasizeTick}
                             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                             onClick={() => onOpenEpic(row.epic.id)}
                           />
