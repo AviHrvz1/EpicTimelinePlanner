@@ -367,7 +367,7 @@ export function InitiativeFormDialog({
     );
   }, [initiative?.epics]);
   const infoTooltipClass =
-    "pointer-events-none absolute left-1/2 top-0 z-[320] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
+    "pointer-events-none absolute left-1/2 top-0 z-[320] w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
 
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
@@ -671,7 +671,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[0] }}>
                                     <button
                                       type="button"
-                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
                                       onClick={() => toggleChildEpicSort("id")}
                                     >
                                       ID
@@ -682,7 +682,7 @@ export function InitiativeFormDialog({
                                           <ChevronDown className="size-3.5 shrink-0" />
                                         )
                                       ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
                                       )}
                                     </button>
                                     <span
@@ -694,7 +694,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[1] }}>
                                     <button
                                       type="button"
-                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
                                       onClick={() => toggleChildEpicSort("title")}
                                     >
                                       Epic
@@ -705,7 +705,7 @@ export function InitiativeFormDialog({
                                           <ChevronDown className="size-3.5 shrink-0" />
                                         )
                                       ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
                                       )}
                                     </button>
                                     <span
@@ -717,7 +717,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[2] }}>
                                     <button
                                       type="button"
-                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
                                       onClick={() => toggleChildEpicSort("team")}
                                     >
                                       Team
@@ -728,7 +728,7 @@ export function InitiativeFormDialog({
                                           <ChevronDown className="size-3.5 shrink-0" />
                                         )
                                       ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
                                       )}
                                     </button>
                                     <span
@@ -740,7 +740,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[3] }}>
                                     <button
                                       type="button"
-                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
                                       onClick={() => toggleChildEpicSort("assignee")}
                                     >
                                       Assignee
@@ -751,7 +751,7 @@ export function InitiativeFormDialog({
                                           <ChevronDown className="size-3.5 shrink-0" />
                                         )
                                       ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
                                       )}
                                     </button>
                                     <span
@@ -763,7 +763,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[4] }}>
                                     <button
                                       type="button"
-                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
                                       onClick={() => toggleChildEpicSort("originalEstimateDays")}
                                     >
                                       Orig. Est.
@@ -774,7 +774,7 @@ export function InitiativeFormDialog({
                                           <ChevronDown className="size-3.5 shrink-0" />
                                         )
                                       ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
                                       )}
                                     </button>
                                     <span
@@ -790,7 +790,7 @@ export function InitiativeFormDialog({
                                   >
                                     <button
                                       type="button"
-                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
                                       onClick={() => toggleChildEpicSort("childSum")}
                                     >
                                       Σ Child Est.
@@ -801,7 +801,7 @@ export function InitiativeFormDialog({
                                           <ChevronDown className="size-3.5 shrink-0" />
                                         )
                                       ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
                                       )}
                                     </button>
                                     <span
