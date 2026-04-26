@@ -1,16 +1,25 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LucideIcon } from "lucide-react";
-import { CheckCheck, CheckCircle2, ListTodo, PlayCircle, X } from "lucide-react";
+import { CheckCheck, CheckCircle2, ListTodo, PlayCircle, UserRound, Users, UserX, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
-import { InitiativeItem } from "@/lib/types";
+import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+
+function storyAssigneeLabel(story: UserStoryItem): string {
+  return story.assignee?.trim() || "Unassigned";
+}
+
+function assigneeFilterIcon(name: string): LucideIcon {
+  return name === "Unassigned" ? UserX : UserRound;
+}
 
 const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: LucideIcon }[] = [
   { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", Icon: ListTodo },
@@ -120,7 +129,7 @@ function KanbanStoryCard({
           <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
           <div className="mt-2 flex w-full flex-wrap items-center justify-end gap-2">
             <span className="rounded-md bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-700">
-              {story.assignee?.trim() || "Unassigned"}
+              {storyAssigneeLabel(story)}
             </span>
             <span className="rounded-md bg-blue-100 px-2 py-1 text-[12px] font-medium text-blue-700">
               Est: {story.estimatedDays ?? 0}d
@@ -160,6 +169,8 @@ type SprintKanbanProps = {
   /** When set, only stories for epics on this delivery team (same as left panel filter). */
   filterEpicTeamId?: string | null;
   epicAccordionEmphasis?: { epicId: string; tick: number } | null;
+  /** Batch sheen on all visible Kanban cards (e.g. when “Scheduled” summary filter is toggled on). */
+  scheduledStoriesEmphasis?: { tick: number } | null;
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
   onOpenStory: (storyId: string) => void;
@@ -171,11 +182,59 @@ export function SprintKanbanBoard({
   yearSprint,
   filterEpicTeamId = null,
   epicAccordionEmphasis = null,
+  scheduledStoriesEmphasis = null,
   onUnscheduleStory,
   onRequestUnscheduleStory,
   onOpenStory,
 }: SprintKanbanProps) {
-  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId);
+  const allRows = useMemo(
+    () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId),
+    [initiatives, month, yearSprint, filterEpicTeamId],
+  );
+
+  const assigneeOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const row of allRows) names.add(storyAssigneeLabel(row.story));
+    return [...names].sort((a, b) => {
+      if (a === "Unassigned") return 1;
+      if (b === "Unassigned") return -1;
+      return a.localeCompare(b, undefined, { sensitivity: "base" });
+    });
+  }, [allRows]);
+
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+
+  useEffect(() => {
+    const valid = new Set(assigneeOptions);
+    setSelectedAssignees((prev) => {
+      const next = prev.filter((name) => valid.has(name));
+      if (next.length === prev.length && next.every((n, i) => n === prev[i])) return prev;
+      return next;
+    });
+  }, [assigneeOptions]);
+
+  const toggleAssigneeFilter = useCallback((name: string) => {
+    setSelectedAssignees((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  }, []);
+
+  const allAssigneesSelected =
+    assigneeOptions.length > 0 && selectedAssignees.length === assigneeOptions.length;
+
+  const selectAllAssignees = useCallback(() => {
+    setSelectedAssignees((prev) => {
+      if (assigneeOptions.length === 0) return prev;
+      if (prev.length === assigneeOptions.length) return [];
+      return [...assigneeOptions];
+    });
+  }, [assigneeOptions]);
+
+  const rows =
+    selectedAssignees.length === 0
+      ? allRows
+      : allRows.filter((row) => selectedAssignees.includes(storyAssigneeLabel(row.story)));
+
   const byStatus = new Map<StoryStatus, BoardStoryRow[]>();
   for (const col of KANBAN_COLUMNS) {
     byStatus.set(col.status, []);
@@ -186,8 +245,49 @@ export function SprintKanbanBoard({
   }
 
   return (
-    <div className="flex h-full flex-col space-y-3">
-      <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="flex h-full min-h-0 flex-col space-y-3">
+      {assigneeOptions.length > 0 ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            aria-pressed={allAssigneesSelected}
+            title={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
+            aria-label={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
+            onClick={selectAllAssignees}
+            className={cn(
+              "inline-flex size-9 shrink-0 items-center justify-center rounded-full ring-1 transition",
+              allAssigneesSelected
+                ? "bg-sky-600 text-white ring-sky-700 shadow-sm"
+                : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 hover:text-slate-900",
+            )}
+          >
+            <Users className="size-4" strokeWidth={2.25} aria-hidden />
+          </button>
+          {assigneeOptions.map((name) => {
+            const on = selectedAssignees.includes(name);
+            const Icon = assigneeFilterIcon(name);
+            return (
+              <button
+                key={name}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleAssigneeFilter(name)}
+                className={cn(
+                  "inline-flex max-w-[14rem] items-center gap-1.5 truncate rounded-full py-1 pl-2 pr-2.5 text-left text-[12px] font-semibold ring-1 transition",
+                  on
+                    ? "bg-sky-600 text-white ring-sky-700 shadow-sm"
+                    : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-50",
+                )}
+                title={name}
+              >
+                <Icon className="size-3.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+                <span className="min-w-0 truncate">{name}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
           <KanbanColumn
             key={status}
@@ -197,21 +297,28 @@ export function SprintKanbanBoard({
             tone={tone}
             Icon={Icon}
           >
-            {(byStatus.get(status) ?? []).map((row) => (
-              <KanbanStoryCard
-                key={row.story.id}
-                row={row}
-                onOpenStory={onOpenStory}
-                onUnscheduleStory={onUnscheduleStory}
-                onRequestUnscheduleStory={onRequestUnscheduleStory}
-                emphasizeFlash={epicAccordionEmphasis != null && epicAccordionEmphasis.epicId === row.epic.id}
-                emphasizeTick={
-                  epicAccordionEmphasis != null && epicAccordionEmphasis.epicId === row.epic.id
-                    ? epicAccordionEmphasis.tick
-                    : 0
-                }
-              />
-            ))}
+            {(byStatus.get(status) ?? []).map((row) => {
+              const accordionEmphasis =
+                epicAccordionEmphasis != null && epicAccordionEmphasis.epicId === row.epic.id;
+              const scheduledBatch = scheduledStoriesEmphasis != null;
+              const emphasizeFlash = accordionEmphasis || scheduledBatch;
+              const emphasizeTick = accordionEmphasis
+                ? epicAccordionEmphasis!.tick
+                : scheduledBatch
+                  ? scheduledStoriesEmphasis!.tick
+                  : 0;
+              return (
+                <KanbanStoryCard
+                  key={row.story.id}
+                  row={row}
+                  onOpenStory={onOpenStory}
+                  onUnscheduleStory={onUnscheduleStory}
+                  onRequestUnscheduleStory={onRequestUnscheduleStory}
+                  emphasizeFlash={emphasizeFlash}
+                  emphasizeTick={emphasizeTick}
+                />
+              );
+            })}
           </KanbanColumn>
         ))}
       </div>

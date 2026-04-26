@@ -976,6 +976,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     epicId: string;
     tick: number;
   } | null>(null);
+  const ganttScheduledFilterEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ganttScheduledFilterEmphasisTickRef = useRef(0);
+  const [ganttScheduledFilterEmphasis, setGanttScheduledFilterEmphasis] = useState<{ tick: number } | null>(null);
+  const sprintKanbanScheduledStoriesEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sprintKanbanScheduledStoriesEmphasisTickRef = useRef(0);
+  const [sprintKanbanScheduledStoriesEmphasis, setSprintKanbanScheduledStoriesEmphasis] = useState<{
+    tick: number;
+  } | null>(null);
 
   const flashGanttEpicEmphasis = useCallback((epicId: string) => {
     ganttEpicEmphasisTickRef.current += 1;
@@ -1001,6 +1009,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         clearTimeout(sprintEpicAccordionEmphasisTimeoutRef.current);
         sprintEpicAccordionEmphasisTimeoutRef.current = null;
       }
+      if (ganttScheduledFilterEmphasisTimeoutRef.current) {
+        clearTimeout(ganttScheduledFilterEmphasisTimeoutRef.current);
+        ganttScheduledFilterEmphasisTimeoutRef.current = null;
+      }
+      if (sprintKanbanScheduledStoriesEmphasisTimeoutRef.current) {
+        clearTimeout(sprintKanbanScheduledStoriesEmphasisTimeoutRef.current);
+        sprintKanbanScheduledStoriesEmphasisTimeoutRef.current = null;
+      }
     },
     [],
   );
@@ -1018,6 +1034,51 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       sprintEpicAccordionEmphasisTimeoutRef.current = null;
     }, 2000);
   }, []);
+
+  const flashGanttScheduledFilterEmphasis = useCallback(() => {
+    ganttScheduledFilterEmphasisTickRef.current += 1;
+    const tick = ganttScheduledFilterEmphasisTickRef.current;
+    setGanttScheduledFilterEmphasis({ tick });
+    if (ganttScheduledFilterEmphasisTimeoutRef.current) {
+      clearTimeout(ganttScheduledFilterEmphasisTimeoutRef.current);
+      ganttScheduledFilterEmphasisTimeoutRef.current = null;
+    }
+    ganttScheduledFilterEmphasisTimeoutRef.current = setTimeout(() => {
+      setGanttScheduledFilterEmphasis(null);
+      ganttScheduledFilterEmphasisTimeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  const flashSprintKanbanScheduledStoriesEmphasis = useCallback(() => {
+    sprintKanbanScheduledStoriesEmphasisTickRef.current += 1;
+    const tick = sprintKanbanScheduledStoriesEmphasisTickRef.current;
+    setSprintKanbanScheduledStoriesEmphasis({ tick });
+    if (sprintKanbanScheduledStoriesEmphasisTimeoutRef.current) {
+      clearTimeout(sprintKanbanScheduledStoriesEmphasisTimeoutRef.current);
+      sprintKanbanScheduledStoriesEmphasisTimeoutRef.current = null;
+    }
+    sprintKanbanScheduledStoriesEmphasisTimeoutRef.current = setTimeout(() => {
+      setSprintKanbanScheduledStoriesEmphasis(null);
+      sprintKanbanScheduledStoriesEmphasisTimeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  const prevPanelStatusQuickFilterRef = useRef(panelStatusQuickFilter);
+  useEffect(() => {
+    const prev = prevPanelStatusQuickFilterRef.current;
+    prevPanelStatusQuickFilterRef.current = panelStatusQuickFilter;
+    if (panelStatusQuickFilter !== "Scheduled" || prev === "Scheduled") return;
+    flashGanttScheduledFilterEmphasis();
+    if (activeMonthPlanTab === "sprint-kanban" && activeTimelineMonth != null) {
+      flashSprintKanbanScheduledStoriesEmphasis();
+    }
+  }, [
+    panelStatusQuickFilter,
+    activeMonthPlanTab,
+    activeTimelineMonth,
+    flashGanttScheduledFilterEmphasis,
+    flashSprintKanbanScheduledStoriesEmphasis,
+  ]);
 
   const openConfirmDialog = useCallback(
     (opts: {
@@ -3109,7 +3170,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 }}
                 ganttEmphasis={ganttEmphasis}
                 ganttEpicEmphasis={ganttEpicEmphasis}
+                ganttScheduledFilterEmphasis={ganttScheduledFilterEmphasis}
                 sprintEpicAccordionEmphasis={sprintEpicAccordionEmphasis}
+                sprintKanbanScheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
                 onResizeInitiativeRange={async (initiativeId, range) => {
                   const planYear =
                     initiatives.find((i) => i.id === initiativeId)?.year ?? selectedYear;

@@ -16,6 +16,7 @@ import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
+import { computeSprintKanbanSummaryStats } from "@/lib/sprint-plan";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
@@ -151,6 +152,11 @@ function GanttLaneRow({
 function epicPlanOverlapsMonth(epic: EpicItem, month: number): boolean {
   if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
+
+/** Epic is scheduled on the Gantt (matches “Scheduled” quick-filter semantics). */
+function epicIsScheduledOnGantt(epic: EpicItem): boolean {
+  return epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
 }
 
 type EpicGanttLaneRowProps = {
@@ -498,8 +504,12 @@ type TimelineGridProps = {
   ganttEmphasis?: { initiativeId: string; tick: number } | null;
   /** Pulse an epic bar after it is dropped onto the month plan from the left panel. */
   ganttEpicEmphasis?: { epicId: string; tick: number } | null;
+  /** Pulse all Gantt-scheduled epic bars when the “Scheduled” summary filter is turned on. */
+  ganttScheduledFilterEmphasis?: { tick: number } | null;
   /** Pulse all sprint-kanban user story cards for an expanded epic accordion. */
   sprintEpicAccordionEmphasis?: { epicId: string; tick: number } | null;
+  /** Pulse Kanban cards for stories on the active sprint when “Scheduled” filter is turned on (sprint board). */
+  sprintKanbanScheduledStoriesEmphasis?: { tick: number } | null;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -629,7 +639,9 @@ export function TimelineGrid({
   onResizeEpicPlanRange,
   ganttEmphasis = null,
   ganttEpicEmphasis = null,
+  ganttScheduledFilterEmphasis = null,
   sprintEpicAccordionEmphasis = null,
+  sprintKanbanScheduledStoriesEmphasis = null,
   monthPlanTab = "epic-gantt",
   onMonthPlanTabChange,
   monthTeamBoardByKey = {},
@@ -874,6 +886,18 @@ export function TimelineGrid({
   const visibleQuarterHeaders = focusedQuarter ? [focusedQuarter] : QUARTERS;
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
+
+  const sprintKanbanSummaryStats = useMemo(() => {
+    if (activeMonth == null || monthPlanTab !== "sprint-kanban") return null;
+    const fromParent =
+      activeSprintExternal !== undefined && activeSprintExternal != null
+        ? clampYearSprint(activeSprintExternal)
+        : null;
+    const yearSprint =
+      fromParent ?? (activeSprint != null ? clampYearSprint(activeSprint) : firstGlobalSprintForMonth(activeMonth));
+    const teamId = isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null;
+    return computeSprintKanbanSummaryStats(initiatives, activeMonth, yearSprint, teamId);
+  }, [activeMonth, monthPlanTab, initiatives, activeSprint, activeSprintExternal, sprintStoryBoardTeamId]);
 
   const handleResizePointerDown = useCallback(
     (initiativeId: string, side: "left" | "right", event: React.PointerEvent<HTMLDivElement>) => {
@@ -1679,7 +1703,48 @@ export function TimelineGrid({
           </div>
         ) : activeMonth ? (
           <div className="flex w-full flex-wrap items-center justify-end gap-2 pr-3">
-            {summaryBadgesForScope ? (
+            {sprintKanbanSummaryStats ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoadmapBarMode("epics");
+                    onSummaryStatusQuickFilterChange?.(null);
+                  }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                      ? "bg-amber-100 text-amber-800 ring-amber-200"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  {sprintKanbanSummaryStats.epicCount} Epics
+                </button>
+                <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300">
+                  {sprintKanbanSummaryStats.storyUnscheduled} User Stories Unscheduled
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoadmapBarMode("epics");
+                    onSummaryStatusQuickFilterChange?.(
+                      summaryStatusQuickFilter === "Scheduled" ? null : "Scheduled",
+                    );
+                  }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    summaryStatusQuickFilter === "Scheduled"
+                      ? "bg-amber-100 text-amber-800 ring-amber-300"
+                      : "bg-amber-100 text-amber-900 ring-amber-200 hover:bg-amber-200/90",
+                  )}
+                >
+                  {sprintKanbanSummaryStats.storyScheduledOnKanban} US Scheduled
+                </button>
+                <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
+                  {sprintKanbanSummaryStats.storyTotal} User Stories
+                </div>
+              </>
+            ) : summaryBadgesForScope ? (
               <>
                 <button
                   type="button"
@@ -2339,12 +2404,17 @@ export function TimelineGrid({
                               ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
                             const isEpicEmphasis =
                               ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === epic.id;
-                            const emphasize = isInitiativeEmphasis || isEpicEmphasis;
+                            const isScheduledFilterEmphasis =
+                              ganttScheduledFilterEmphasis != null && epicIsScheduledOnGantt(epic);
+                            const emphasize =
+                              isInitiativeEmphasis || isEpicEmphasis || isScheduledFilterEmphasis;
                             const emphasizeTick = isEpicEmphasis
                               ? ganttEpicEmphasis!.tick
                               : isInitiativeEmphasis
                                 ? ganttEmphasis!.tick
-                                : 0;
+                                : isScheduledFilterEmphasis
+                                  ? ganttScheduledFilterEmphasis!.tick
+                                  : 0;
                             return (
                               <EpicGanttLaneRow
                                 key={epic.id}
@@ -2400,6 +2470,7 @@ export function TimelineGrid({
                   yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
+                  scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onRequestUnscheduleStory={onRequestSprintKanbanStoryUnschedule}
                   onOpenStory={onOpenStory ?? (() => {})}
@@ -2602,12 +2673,17 @@ export function TimelineGrid({
                               const isInitiativeEmphasis =
                                 ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                               const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
-                              const emphasizeFlash = isInitiativeEmphasis || isEpicEmphasis;
+                              const isScheduledFilterEmphasis =
+                                ganttScheduledFilterEmphasis != null && epicIsScheduledOnGantt(row.epic);
+                              const emphasizeFlash =
+                                isInitiativeEmphasis || isEpicEmphasis || isScheduledFilterEmphasis;
                               const emphasizeTick = isEpicEmphasis
                                 ? ganttEpicEmphasis!.tick
                                 : isInitiativeEmphasis
                                   ? ganttEmphasis!.tick
-                                  : 0;
+                                  : isScheduledFilterEmphasis
+                                    ? ganttScheduledFilterEmphasis!.tick
+                                    : 0;
                               const resizeEdgeClass =
                                 "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                               return (
@@ -2890,12 +2966,17 @@ export function TimelineGrid({
                       const isInitiativeEmphasis =
                         ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                       const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
-                      const emphasizeFlash = isInitiativeEmphasis || isEpicEmphasis;
+                      const isScheduledFilterEmphasis =
+                        ganttScheduledFilterEmphasis != null && epicIsScheduledOnGantt(row.epic);
+                      const emphasizeFlash =
+                        isInitiativeEmphasis || isEpicEmphasis || isScheduledFilterEmphasis;
                       const emphasizeTick = isEpicEmphasis
                         ? ganttEpicEmphasis!.tick
                         : isInitiativeEmphasis
                           ? ganttEmphasis!.tick
-                          : 0;
+                          : isScheduledFilterEmphasis
+                            ? ganttScheduledFilterEmphasis!.tick
+                            : 0;
                       const resizeEdgeClass =
                         "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                       return (
