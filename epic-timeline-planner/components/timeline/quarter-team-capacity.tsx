@@ -17,9 +17,10 @@ function quarterFromMonth(month: number): string {
 }
 
 function epicPlanningLabel(epic: InitiativeItem["epics"][number]): string {
-  const isPlanned = epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  const start = epic.planStartMonth;
+  const isPlanned = epic.planSprint != null && start != null && epic.planEndMonth != null;
   if (!isPlanned) return "Unscheduled";
-  return quarterFromMonth(epic.planStartMonth);
+  return quarterFromMonth(start);
 }
 
 function epicExecutionStatusMeta(epic: InitiativeItem["epics"][number]): { label: string; className: string } {

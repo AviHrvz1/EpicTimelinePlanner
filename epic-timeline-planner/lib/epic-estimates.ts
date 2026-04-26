@@ -41,6 +41,8 @@ export function epicForBurndown(epic: EpicItem, source: EstimateSource): EpicIte
               icon: "📄",
               description: null,
               assignee: epic.assignee ?? null,
+              labels: null,
+              priority: null,
               planYear: epic.planYear ?? null,
               planQuarter: epic.planQuarter ?? null,
               sprint: null,

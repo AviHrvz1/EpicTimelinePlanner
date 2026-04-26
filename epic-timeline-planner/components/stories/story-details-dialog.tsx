@@ -7,14 +7,13 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Bold, CheckCheck, CheckCircle2, ChevronRight, Heading2, Heading3, History, ImagePlus, Italic, Link as LinkIcon, List, ListOrdered, ListTodo, MessageSquare, PlayCircle, Plus, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
+import { Bold, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Heading2, Heading3, History, ImagePlus, Italic, Link as LinkIcon, List, ListOrdered, ListTodo, MessageSquare, PlayCircle, Plus, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 
 import { Button } from "@/components/ui/button";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
-import { MONTHS } from "@/lib/timeline";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import {
@@ -26,14 +25,6 @@ import { cn } from "@/lib/utils";
 import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type StoryWithEpic = UserStoryItem & { epicTitle: string };
-
-function quarterLabelFromMonth(month: number | null | undefined): string | null {
-  if (month == null) return null;
-  if (month <= 3) return "Q1";
-  if (month <= 6) return "Q2";
-  if (month <= 9) return "Q3";
-  return "Q4";
-}
 
 type StoryDetailsDialogProps = {
   open: boolean;
@@ -114,9 +105,6 @@ export function StoryDetailsDialog({
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
   const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
   const [priority, setPriority] = useState("");
-  const [quarterDraft, setQuarterDraft] = useState("");
-  const [monthDraft, setMonthDraft] = useState("");
-  const [yearDraft, setYearDraft] = useState("");
   const [sprint, setSprint] = useState("");
   const [status, setStatus] = useState<StoryStatus>(StoryStatus.todo);
   const [estimatedDays, setEstimatedDays] = useState("");
@@ -126,7 +114,8 @@ export function StoryDetailsDialog({
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [saving, setSaving] = useState(false);
   const [commenting, setCommenting] = useState(false);
-  const [dialogWidthVw, setDialogWidthVw] = useState(50);
+  const [dialogWidthVw, setDialogWidthVw] = useState(75);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(280);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
@@ -169,15 +158,7 @@ export function StoryDetailsDialog({
       for (const epic of initiative.epics ?? []) {
         if (epic.id !== epicId) continue;
         const team = monthTeamLabelForId(epic.team) ?? "Not set";
-        const quarter = epic.planQuarter != null ? `Q${epic.planQuarter}` : quarterLabelFromMonth(epic.planStartMonth);
-        const month =
-          epic.planStartMonth == null
-            ? null
-            : epic.planEndMonth != null && epic.planEndMonth !== epic.planStartMonth
-              ? `${MONTHS[epic.planStartMonth - 1]}-${MONTHS[epic.planEndMonth - 1]}`
-              : MONTHS[epic.planStartMonth - 1];
-        const year = epic.planYear ?? initiative.year ?? null;
-        return { team, quarter, month, year };
+        return { team };
       }
     }
     return null;
@@ -271,9 +252,6 @@ export function StoryDetailsDialog({
       );
       setPriority(story.priority ?? "");
       setNewLabel("");
-      setQuarterDraft(selectedEpicMeta?.quarter ?? "");
-      setMonthDraft(selectedEpicMeta?.month ?? "");
-      setYearDraft(selectedEpicMeta?.year != null ? String(selectedEpicMeta.year) : "");
       setSprint(story.sprint == null ? "" : String(story.sprint));
       setStatus(story.status ?? StoryStatus.todo);
       setEstimatedDays(story.estimatedDays == null ? "" : String(story.estimatedDays));
@@ -287,9 +265,6 @@ export function StoryDetailsDialog({
       setLabelsDraft([]);
       setPriority("");
       setNewLabel("");
-      setQuarterDraft(selectedEpicMeta?.quarter ?? "");
-      setMonthDraft(selectedEpicMeta?.month ?? "");
-      setYearDraft(selectedEpicMeta?.year != null ? String(selectedEpicMeta.year) : "");
       setSprint("");
       setStatus(StoryStatus.todo);
       setEstimatedDays("");
@@ -298,11 +273,12 @@ export function StoryDetailsDialog({
     }
     setCommentBody("");
     setActivityTab("comments");
-  }, [story, initiatives, lockParentEpicId, firstEpicId, selectedEpicMeta]);
+  }, [story, initiatives, lockParentEpicId, firstEpicId]);
 
   useEffect(() => {
     if (open) {
-      setDialogWidthVw(50);
+      setDialogWidthVw(75);
+      setActivityOpen(false);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(280);
       setDialogOffset({ x: 0, y: 0 });
@@ -314,7 +290,7 @@ export function StoryDetailsDialog({
     if (!descriptionEditor) return;
     const next = description?.trim() ? description : "<p></p>";
     if (descriptionEditor.getHTML() !== next) {
-      descriptionEditor.commands.setContent(next, false);
+      descriptionEditor.commands.setContent(next, { emitUpdate: false });
     }
   }, [descriptionEditor, story?.id, open]);
 
@@ -489,8 +465,10 @@ export function StoryDetailsDialog({
         )}
         style={
           anchored
-            ? planningDetailPanelAnchorStyle(surfaceRect)
-            : { width: `${dialogWidthVw}vw`, maxWidth: `${dialogWidthVw}vw` }
+            ? surfaceRect
+              ? planningDetailPanelAnchorStyle(surfaceRect)
+              : undefined
+            : { width: `min(${dialogWidthVw}vw, 1320px)`, maxWidth: `min(${dialogWidthVw}vw, 1320px)` }
         }
       >
         <div
@@ -597,49 +575,6 @@ export function StoryDetailsDialog({
                 />
               </div>
             </label>
-            <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-              <p className="text-[12px] font-semibold text-slate-600">Quarter</p>
-              <select
-                value={quarterDraft}
-                onChange={(event) => setQuarterDraft(event.target.value)}
-                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
-              >
-                <option value="">Not set</option>
-                <option value="Q1">Q1</option>
-                <option value="Q2">Q2</option>
-                <option value="Q3">Q3</option>
-                <option value="Q4">Q4</option>
-              </select>
-              <p className="text-[12px] font-semibold text-slate-600">Month</p>
-              <select
-                value={monthDraft}
-                onChange={(event) => setMonthDraft(event.target.value)}
-                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
-              >
-                <option value="">Not set</option>
-                {MONTHS.map((month) => (
-                  <option key={month} value={month}>
-                    {month}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[12px] font-semibold text-slate-600">Year</p>
-              <select
-                value={yearDraft}
-                onChange={(event) => setYearDraft(event.target.value)}
-                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
-              >
-                <option value="">Not set</option>
-                {Array.from({ length: 8 }, (_, idx) => {
-                  const year = new Date().getFullYear() - 2 + idx;
-                  return (
-                    <option key={year} value={String(year)}>
-                      {year}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
             <label className="mt-5 block space-y-1">
               <p className="text-sm font-medium text-slate-600">Description</p>
               <div className="space-y-1.5">
@@ -801,12 +736,12 @@ export function StoryDetailsDialog({
             </div>
           </div>
 
-          <section className="relative z-20 space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-            <h3 className="inline-flex w-fit items-center rounded-md bg-indigo-100 px-2.5 py-1 text-[13px] font-semibold tracking-[0.03em] text-indigo-800 ring-1 ring-indigo-200">
+          <section className="relative z-20 space-y-5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+            <h3 className="border-b border-slate-200/90 pb-2 text-base font-semibold leading-snug tracking-tight text-slate-900">
               Details
             </h3>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Status</p>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Status</p>
               <div className="flex h-7 items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2">
                 {(() => {
                   const Icon = statusMeta[status].Icon;
@@ -820,16 +755,16 @@ export function StoryDetailsDialog({
                 </select>
               </div>
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Assignee</p>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Assignee</p>
               <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" placeholder="e.g. Avi" />
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Team</p>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Team</p>
               <input value={selectedEpicMeta?.team ?? "Not set"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" />
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Sprint</p>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Sprint</p>
               <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[13px] font-medium text-slate-800">
                 <option value="">Not set</option>
                 {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => (
@@ -837,8 +772,8 @@ export function StoryDetailsDialog({
                 ))}
               </select>
             </label>
-            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2 pt-0.5">
-              <p className="text-[12px] font-semibold text-slate-600">Estimated Days</p>
+            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
+              <p className="text-sm font-semibold text-slate-700">Estimated Days</p>
               <input
                 type="number"
                 min={0}
@@ -847,8 +782,8 @@ export function StoryDetailsDialog({
                 className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
               />
             </div>
-            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Est. Days left</p>
+            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Est. Days left</p>
               <input
                 type="number"
                 min={0}
@@ -857,8 +792,8 @@ export function StoryDetailsDialog({
                 className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
               />
             </div>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Priority</p>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Priority</p>
               <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800">
                 <option value="">Not set</option>
                 <option value="P0">P0</option>
@@ -867,8 +802,8 @@ export function StoryDetailsDialog({
                 <option value="P3">P3</option>
               </select>
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[12px] font-semibold text-slate-600">Parent</p>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Parent</p>
               <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
                 <option value="">Select epic</option>
                 {initiatives.map((initiative) => (
@@ -880,13 +815,13 @@ export function StoryDetailsDialog({
                 ))}
               </select>
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
-              <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
+            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+              <p className="text-sm font-semibold text-slate-700">Labels</p>
               <div className="relative z-30">
-                <div className="flex min-h-7 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5">
+                <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                   {labelsDraft.map((label) => (
-                    <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                      <Tag className="size-3" />
+                    <span key={label} className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-700">
+                      <Tag className="size-2.5" />
                       {label}
                       <button type="button" onClick={() => removeLabel(label)} className="text-slate-500 hover:text-slate-700">x</button>
                     </span>
@@ -928,7 +863,7 @@ export function StoryDetailsDialog({
                       }
                     }}
                     autoComplete="off"
-                    className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-slate-400"
+                    className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-[12px] outline-none placeholder:text-slate-400"
                     placeholder="Type to search labels..."
                   />
                 </div>
@@ -966,99 +901,126 @@ export function StoryDetailsDialog({
         </div>
 
         <div className="relative z-0 mt-3">
-          <div
-            className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
-            onPointerDown={beginActivityPanelResize}
-            title="Resize activity panel height"
-            aria-label="Resize activity panel height"
-            role="separator"
-          >
-            <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
-            <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
-          </div>
-          <section
-            className="flex min-h-0 flex-col space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200"
-            style={{ height: `${activityPanelHeightPx}px` }}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-800">Activity</h3>
-              <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-slate-200">
-                <button
-                  type="button"
-                  className={`rounded-md px-2.5 py-1 text-sm font-medium transition ${
-                    activityTab === "comments"
-                      ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                  onClick={() => setActivityTab("comments")}
-                >
-                  <MessageSquare className="mr-1 inline size-3.5" />
-                  Comments
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-md px-2.5 py-1 text-sm font-medium transition ${
-                    activityTab === "history"
-                      ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                  onClick={() => setActivityTab("history")}
-                >
-                  <History className="mr-1 inline size-3.5" />
-                  History
-                </button>
-              </div>
+          {activityOpen ? (
+            <div
+              className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
+              onPointerDown={beginActivityPanelResize}
+              title="Resize activity panel height"
+              aria-label="Resize activity panel height"
+              role="separator"
+            >
+              <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
+              <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
             </div>
+          ) : null}
+          <section
+            className={cn(
+              "flex min-h-0 flex-col rounded-xl bg-slate-50 ring-1 ring-slate-200",
+              activityOpen ? "space-y-3 p-3" : "p-3",
+            )}
+            style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+              onClick={() => setActivityOpen((open) => !open)}
+              aria-expanded={activityOpen}
+            >
+              <span className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                <ChevronDown
+                  className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                  aria-hidden
+                />
+                Activity
+              </span>
+              {activityOpen ? (
+                <div
+                  className="inline-flex shrink-0 rounded-lg bg-white p-1 ring-1 ring-slate-200"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  role="presentation"
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-sm font-medium transition",
+                      activityTab === "comments"
+                        ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
+                        : "text-slate-600 hover:bg-slate-100",
+                    )}
+                    onClick={() => setActivityTab("comments")}
+                  >
+                    <MessageSquare className="mr-1 inline size-3.5" />
+                    Comments
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-sm font-medium transition",
+                      activityTab === "history"
+                        ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
+                        : "text-slate-600 hover:bg-slate-100",
+                    )}
+                    onClick={() => setActivityTab("history")}
+                  >
+                    <History className="mr-1 inline size-3.5" />
+                    History
+                  </button>
+                </div>
+              ) : null}
+            </button>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-            {isCreateMode ? (
-              <p className="text-sm text-slate-500">Create the story first to add comments and history.</p>
-            ) : activityTab === "comments" ? (
-              <>
-                <div className="space-y-2">
-                  {story.comments.length === 0 ? (
-                    <p className="text-sm text-slate-500">No comments yet.</p>
-                  ) : (
-                    story.comments.map((comment) => (
-                      <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                        <p className="text-[12px] text-slate-500">
-                          {comment.author ?? "Team"} - {new Date(comment.createdAt).toLocaleString()}
-                        </p>
-                        <p className="mt-1 text-slate-800">{comment.body}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    value={commentBody}
-                    onChange={(event) => setCommentBody(event.target.value)}
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                    placeholder="Write a comment..."
-                  />
-                  <Button size="sm" variant="outline" onClick={handleCommentAdd} disabled={commenting}>
-                    <Plus />
-                    Add
-                  </Button>
-                </div>
-              </>
-            ) : (
-                <div className="space-y-2">
-                {story.history.length === 0 ? (
-                  <p className="text-sm text-slate-500">No history yet.</p>
-                ) : (
-                  story.history.map((entry) => (
-                    <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                      <p className="text-slate-800">{entry.entry}</p>
-                      <p className="mt-1 text-[12px] text-slate-500">
-                        {new Date(entry.createdAt).toLocaleString()}
-                      </p>
+            {activityOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {isCreateMode ? (
+                  <p className="text-sm text-slate-500">Create the story first to add comments and history.</p>
+                ) : activityTab === "comments" ? (
+                  <>
+                    <div className="space-y-2">
+                      {story.comments.length === 0 ? (
+                        <p className="text-sm text-slate-500">No comments yet.</p>
+                      ) : (
+                        story.comments.map((comment) => (
+                          <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                            <p className="text-[12px] text-slate-500">
+                              {comment.author ?? "Team"} - {new Date(comment.createdAt).toLocaleString()}
+                            </p>
+                            <p className="mt-1 text-slate-800">{comment.body}</p>
+                          </div>
+                        ))
+                      )}
                     </div>
-                  ))
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={commentBody}
+                        onChange={(event) => setCommentBody(event.target.value)}
+                        className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                        placeholder="Write a comment..."
+                      />
+                      <Button size="sm" variant="outline" onClick={handleCommentAdd} disabled={commenting}>
+                        <Plus />
+                        Add
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    {story.history.length === 0 ? (
+                      <p className="text-sm text-slate-500">No history yet.</p>
+                    ) : (
+                      story.history.map((entry) => (
+                        <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                          <p className="text-slate-800">{entry.entry}</p>
+                          <p className="mt-1 text-[12px] text-slate-500">
+                            {new Date(entry.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-            </div>
+            ) : null}
           </section>
         </div>
         </div>

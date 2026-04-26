@@ -1498,6 +1498,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     initiativeId: string;
     team: string | null;
     originalEstimateDays: number | null;
+    planStartMonth: number | null;
+    planEndMonth: number | null;
   }) {
     const request = editingEpic
       ? fetch(`/api/epics/${editingEpic.id}`, {
@@ -3249,7 +3251,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         lockInitiativeId={editingEpicInitiativeId}
         onOpenInitiative={(initiativeId) => {
           setTopMode("roadmap");
-          setFocusedInitiativeId(initiativeId);
+          const initiative = initiatives.find((i) => i.id === initiativeId);
+          if (initiative) setEditingInitiative(initiative);
           setInitiativeDialogOpen(true);
           setEpicDialogOpen(false);
         }}
@@ -3354,7 +3357,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         onOpenInitiative={(initiativeId) => {
           pendingStoryDialogNavigationRef.current = () => {
             setTopMode("roadmap");
-            setFocusedInitiativeId(initiativeId);
+            const initiative = initiatives.find((i) => i.id === initiativeId);
+            if (initiative) setEditingInitiative(initiative);
             setInitiativeDialogOpen(true);
           };
           setStoryDialogOpen(false);
@@ -3363,8 +3367,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           pendingStoryDialogNavigationRef.current = () => {
             setTopMode("roadmap");
             const initiative = initiatives.find((item) => (item.epics ?? []).some((epic) => epic.id === epicId));
+            const epic = initiative?.epics?.find((e) => e.id === epicId);
             setEditingEpicInitiativeId(initiative?.id ?? null);
-            setEditingEpicId(epicId);
+            if (epic) setEditingEpic(epic);
             setEpicDialogOpen(true);
           };
           setStoryDialogOpen(false);

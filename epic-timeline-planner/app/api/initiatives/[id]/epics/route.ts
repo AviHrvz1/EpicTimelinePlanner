@@ -13,6 +13,8 @@ const createEpicSchema = z.object({
   color: z.string().regex(/^#([0-9A-Fa-f]{6})$/).optional(),
   team: epicTeamIdSchema.optional().nullable(),
   originalEstimateDays: z.number().int().min(0).max(5000).optional().nullable(),
+  planStartMonth: z.number().int().min(1).max(12).optional().nullable(),
+  planEndMonth: z.number().int().min(1).max(12).optional().nullable(),
 });
 
 function quarterFromMonth(month: number | null | undefined): number | null {
@@ -46,6 +48,9 @@ export async function POST(
     return NextResponse.json({ message: "Initiative not found" }, { status: 404 });
   }
 
+  const planStartMonth = parsed.data.planStartMonth ?? null;
+  const planEndMonth = parsed.data.planEndMonth ?? planStartMonth;
+  const planQuarterSeed = planStartMonth ?? initiative.startMonth;
   const epic = await db.epic.create({
     data: {
       title: parsed.data.title,
@@ -57,7 +62,9 @@ export async function POST(
       originalEstimateDays: parsed.data.originalEstimateDays ?? null,
       initiativeId: id,
       planYear: initiative.year,
-      planQuarter: quarterFromMonth(initiative.startMonth),
+      planQuarter: quarterFromMonth(planQuarterSeed),
+      planStartMonth,
+      planEndMonth,
       planEndSprint: 2,
       timelineRow: 0,
       history: { create: { entry: "Epic created" } },

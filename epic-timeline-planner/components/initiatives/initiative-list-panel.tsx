@@ -259,7 +259,9 @@ function epicCompletionMeta(epic: EpicItem): {
 }
 
 function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: string } {
-  const isPlanned = epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  const start = epic.planStartMonth;
+  const end = epic.planEndMonth;
+  const isPlanned = epic.planSprint != null && start != null && end != null;
   if (!isPlanned) {
     return {
       label: "Unscheduled",
@@ -267,7 +269,7 @@ function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: str
     };
   }
   return {
-    label: quarterFromMonth(epic.planStartMonth),
+    label: quarterFromMonth(start),
     className: "border border-violet-200/90 bg-violet-50 text-violet-800",
   };
 }

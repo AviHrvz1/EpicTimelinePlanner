@@ -97,7 +97,10 @@ export async function PATCH(
       where: { id: nextInitiativeId },
       select: { year: true, startMonth: true, color: true },
     });
-    const nextPlanStartMonth = patch.planStartMonth ?? existing.planStartMonth ?? initiative?.startMonth ?? null;
+    const nextPlanStartMonth =
+      patch.planStartMonth !== undefined
+        ? patch.planStartMonth
+        : existing.planStartMonth ?? initiative?.startMonth ?? null;
     const nextPlanYear = initiative?.year ?? existing.planYear ?? null;
     const nextPlanQuarter = quarterFromMonth(nextPlanStartMonth);
 

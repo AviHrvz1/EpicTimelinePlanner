@@ -1,6 +1,6 @@
 "use client";
 
-import { Bold, Check, CheckCheck, CheckCircle2, ChevronRight, Heading2, Heading3, History, ImagePlus, Italic, Link as LinkIcon, List, ListOrdered, ListTodo, MessageSquare, PlayCircle, Plus, Quote, Trash, Underline as UnderlineIcon, X } from "lucide-react";
+import { Bold, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Heading2, Heading3, History, ImagePlus, Info, Italic, Link as LinkIcon, List, ListOrdered, ListTree, ListTodo, MessageSquare, PlayCircle, Plus, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
@@ -17,6 +17,27 @@ import { EpicItem, InitiativeItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
+
+function quarterNumFromMonth(month: number): 1 | 2 | 3 | 4 {
+  if (month <= 3) return 1;
+  if (month <= 6) return 2;
+  if (month <= 9) return 3;
+  return 4;
+}
+
+function parseQuarterSelect(value: string): 1 | 2 | 3 | 4 | null {
+  if (value === "Q1") return 1;
+  if (value === "Q2") return 2;
+  if (value === "Q3") return 3;
+  if (value === "Q4") return 4;
+  return null;
+}
+
+function monthIndicesForQuarter(q: 1 | 2 | 3 | 4 | null): number[] {
+  if (q === null) return Array.from({ length: 12 }, (_, i) => i + 1);
+  const start = (q - 1) * 3 + 1;
+  return [start, start + 1, start + 2];
+}
 
 type ChildStoryDraft = {
   title: string;
@@ -43,6 +64,8 @@ type EpicFormDialogProps = {
     initiativeId: string;
     team: string | null;
     originalEstimateDays: number | null;
+    planStartMonth: number | null;
+    planEndMonth: number | null;
   }) => Promise<void> | void;
   onDelete?: (epicId: string) => Promise<void> | void;
   storyRefById?: Record<string, string>;
@@ -92,10 +115,13 @@ export function EpicFormDialog({
     epic?.originalEstimateDays == null ? "" : String(epic.originalEstimateDays),
   );
   const [initiativeId, setInitiativeId] = useState(epic?.initiativeId ?? lockInitiativeId ?? "");
+  const [planQuarterDraft, setPlanQuarterDraft] = useState("");
+  const [planMonthDraft, setPlanMonthDraft] = useState("");
   const [teamDraft, setTeamDraft] = useState("");
   const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
+  const [activityOpen, setActivityOpen] = useState(false);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
@@ -137,7 +163,29 @@ export function EpicFormDialog({
     setAssignee(epic?.assignee ?? "");
     setColor(epic?.color ?? "#3B82F6");
     setOriginalEstimateDaysDraft(epic?.originalEstimateDays == null ? "" : String(epic.originalEstimateDays));
-    setInitiativeId(epic?.initiativeId ?? lockInitiativeId ?? initiatives[0]?.id ?? "");
+    const nextInitiativeId = epic?.initiativeId ?? lockInitiativeId ?? initiatives[0]?.id ?? "";
+    setInitiativeId(nextInitiativeId);
+    const init = initiatives.find((i) => i.id === nextInitiativeId) ?? null;
+    if (epic) {
+      const q =
+        epic.planQuarter != null
+          ? epic.planQuarter
+          : epic.planStartMonth != null
+            ? quarterNumFromMonth(epic.planStartMonth)
+            : null;
+      setPlanQuarterDraft(q != null ? `Q${q}` : "");
+      if (epic.planStartMonth != null) {
+        setPlanMonthDraft(MONTHS[epic.planStartMonth - 1] ?? "");
+      } else {
+        setPlanMonthDraft("");
+      }
+    } else if (init?.startMonth != null) {
+      setPlanQuarterDraft(`Q${quarterNumFromMonth(init.startMonth)}`);
+      setPlanMonthDraft(MONTHS[init.startMonth - 1] ?? "");
+    } else {
+      setPlanQuarterDraft("");
+      setPlanMonthDraft("");
+    }
     setForceTeamFieldEdit(false);
     setTeamDraft(epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : "");
     setCommentBody("");
@@ -166,6 +214,7 @@ export function EpicFormDialog({
       setIsDraggingDialog(false);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(220);
+      setActivityOpen(false);
       dragStartRef.current = null;
     }
   }, [open]);
@@ -173,7 +222,7 @@ export function EpicFormDialog({
     if (!descriptionEditor) return;
     const next = description?.trim() ? description : "<p></p>";
     if (descriptionEditor.getHTML() !== next) {
-      descriptionEditor.commands.setContent(next, false);
+      descriptionEditor.commands.setContent(next, { emitUpdate: false });
     }
   }, [descriptionEditor, epic?.id, open]);
 
@@ -192,6 +241,10 @@ export function EpicFormDialog({
     () => initiatives.find((initiative) => initiative.id === initiativeId) ?? null,
     [initiativeId, initiatives],
   );
+  const allowedMonthNames = useMemo(() => {
+    const indices = monthIndicesForQuarter(parseQuarterSelect(planQuarterDraft));
+    return indices.map((i) => MONTHS[i - 1]);
+  }, [planQuarterDraft]);
   const orderedInitiatives = useMemo(
     () =>
       [...initiatives].sort((a, b) => {
@@ -250,20 +303,20 @@ export function EpicFormDialog({
       .slice(0, 8);
   }, [existingLabelSuggestions, labelsDraft, newLabel]);
 
+  const totalUserStoryEstimate = useMemo(() => {
+    return (epic?.userStories ?? []).reduce((sum, row) => sum + (row.estimatedDays ?? 0), 0);
+  }, [epic?.userStories]);
+  const infoTooltipClass =
+    "pointer-events-none absolute left-1/2 top-0 z-[320] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
+
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
   }, [newLabel, labelsDraft, filteredLabelSuggestions.length]);
 
   const persistedTeam = epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : null;
   const showTeamSelect = !persistedTeam || forceTeamFieldEdit;
-  const planningQuarter = epic?.planQuarter != null ? `Q${epic.planQuarter}` : "Not set";
-  const planningMonth =
-    epic?.planStartMonth == null
-      ? "Not set"
-      : epic.planEndMonth != null && epic.planEndMonth !== epic.planStartMonth
-        ? `${MONTHS[epic.planStartMonth - 1]}-${MONTHS[epic.planEndMonth - 1]}`
-        : MONTHS[epic.planStartMonth - 1];
-  const planningYear = epic?.planYear ?? "Not set";
+  const planningYearDisplay =
+    selectedInitiative?.year != null ? String(selectedInitiative.year) : epic?.planYear != null ? String(epic.planYear) : "Not set";
 
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
@@ -309,6 +362,9 @@ export function EpicFormDialog({
 
     setIsSaving(true);
     try {
+      const monthIdx = planMonthDraft.trim() === "" ? -1 : MONTHS.indexOf(planMonthDraft as (typeof MONTHS)[number]);
+      const planStartMonth = monthIdx >= 0 ? monthIdx + 1 : null;
+      const planEndMonth = planStartMonth;
       await onSubmit({
         title: normalizedTitle,
         icon: icon.trim() || "📁",
@@ -319,6 +375,8 @@ export function EpicFormDialog({
         team: teamDraft === "" ? null : teamDraft,
         originalEstimateDays:
           originalEstimateDaysDraft.trim() === "" ? null : Math.max(0, Math.round(Number(originalEstimateDaysDraft) || 0)),
+        planStartMonth,
+        planEndMonth,
       });
       onClose();
     } finally {
@@ -484,9 +542,9 @@ export function EpicFormDialog({
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
           anchored
             ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06]"
-            : "relative h-full w-[50vw] max-w-[50vw] shrink-0",
+            : "relative h-full w-[min(75vw,1320px)] max-w-[min(75vw,1320px)] shrink-0",
         )}
-        style={anchored ? planningDetailPanelAnchorStyle(surfaceRect) : undefined}
+        style={anchored ? (surfaceRect ? planningDetailPanelAnchorStyle(surfaceRect) : undefined) : undefined}
       >
         <div
           className={cn(
@@ -570,6 +628,57 @@ export function EpicFormDialog({
                   </div>
                 </label>
 
+                <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
+                  <p className="text-sm font-semibold text-slate-700">Quarter</p>
+                  <select
+                    value={planQuarterDraft}
+                    onChange={(event) => {
+                      const nextQ = event.target.value;
+                      setPlanQuarterDraft(nextQ);
+                      if (!planMonthDraft) return;
+                      const allowed = monthIndicesForQuarter(parseQuarterSelect(nextQ)).map((i) => MONTHS[i - 1]);
+                      if (!allowed.includes(planMonthDraft as (typeof MONTHS)[number])) {
+                        setPlanMonthDraft("");
+                      }
+                    }}
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+                  >
+                    <option value="">Not set</option>
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
+                  <p className="text-sm font-semibold text-slate-700">Month</p>
+                  <select
+                    value={planMonthDraft}
+                    onChange={(event) => {
+                      const name = event.target.value;
+                      setPlanMonthDraft(name);
+                      if (!name) return;
+                      const idx = MONTHS.indexOf(name as (typeof MONTHS)[number]);
+                      if (idx >= 0) {
+                        setPlanQuarterDraft(`Q${quarterNumFromMonth(idx + 1)}`);
+                      }
+                    }}
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+                  >
+                    <option value="">Not set</option>
+                    {allowedMonthNames.map((month) => (
+                      <option key={month} value={month}>
+                        {month}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm font-semibold text-slate-700">Year</p>
+                  <input
+                    readOnly
+                    value={planningYearDisplay}
+                    title="Year comes from the parent initiative"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800"
+                  />
+                </div>
+
                 <label className="mt-5 block space-y-1">
                   <p className="text-sm font-medium text-slate-600">Description</p>
                   <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
@@ -599,7 +708,10 @@ export function EpicFormDialog({
 
                 <section className="mt-5 space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-slate-800">Child user stories</h3>
+                    <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                      <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
+                      Child User Stories
+                    </h3>
                     <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">
                       {epic?.userStories?.length ?? 0}
                     </span>
@@ -835,25 +947,37 @@ export function EpicFormDialog({
                 </div>
               </div>
 
-              <section className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <h3 className="inline-flex w-fit items-center rounded-md bg-indigo-100 px-2.5 py-1 text-[13px] font-semibold tracking-[0.03em] text-indigo-800 ring-1 ring-indigo-200">
+              <section className="relative z-20 space-y-5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <h3 className="border-b border-slate-200/90 pb-2 text-base font-semibold leading-snug tracking-tight text-slate-900">
                   Details
                 </h3>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-                  <p className="text-[12px] font-semibold text-slate-600">Assignee</p>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-semibold text-slate-700">Assignee</p>
                   <input
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
+                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
                     placeholder="e.g. Avi"
                     value={assignee}
                     onChange={(event) => setAssignee(event.target.value)}
                   />
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-                  <p className="text-[12px] font-semibold text-slate-600">Parent</p>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-semibold text-slate-700">Parent</p>
                   <select
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800 disabled:bg-muted/40"
+                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40"
                     value={initiativeId}
-                    onChange={(event) => setInitiativeId(event.target.value)}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      setInitiativeId(next);
+                      if (epic) return;
+                      const nextInit = initiatives.find((i) => i.id === next);
+                      if (nextInit?.startMonth != null) {
+                        setPlanQuarterDraft(`Q${quarterNumFromMonth(nextInit.startMonth)}`);
+                        setPlanMonthDraft(MONTHS[nextInit.startMonth - 1] ?? "");
+                      } else {
+                        setPlanQuarterDraft("");
+                        setPlanMonthDraft("");
+                      }
+                    }}
                     disabled={Boolean(lockInitiativeId)}
                   >
                     <option value="">Select initiative</option>
@@ -864,11 +988,11 @@ export function EpicFormDialog({
                     ))}
                   </select>
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-                  <p className="text-[12px] font-semibold text-slate-600">Team</p>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-semibold text-slate-700">Team</p>
                   {showTeamSelect ? (
                     <select
-                      className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
+                      className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
                       value={teamDraft}
                       onChange={(event) => setTeamDraft(event.target.value)}
                     >
@@ -884,13 +1008,13 @@ export function EpicFormDialog({
                       <input
                         value={MONTH_TEAM_COLUMNS.find((t) => t.id === persistedTeam)?.label ?? persistedTeam ?? "Not set"}
                         readOnly
-                        className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700"
+                        className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700"
                       />
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="h-8 shrink-0 px-2 text-[12px]"
+                        className="h-7 shrink-0 px-2 text-[12px]"
                         onClick={() => {
                           setForceTeamFieldEdit(true);
                           setTeamDraft("");
@@ -901,35 +1025,45 @@ export function EpicFormDialog({
                     </div>
                   )}
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-                  <p className="text-[12px] font-semibold text-slate-600">Color</p>
-                  <input
-                    type="color"
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-1.5"
-                    value={color}
-                    onChange={(event) => setColor(event.target.value)}
-                  />
-                </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-                  <p className="text-[12px] font-semibold text-slate-600">Orig. Est.</p>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-semibold text-slate-700">Orig. Est.</p>
                   <input
                     type="number"
                     min={0}
                     max={5000}
                     step={1}
-                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
                     placeholder="e.g. 40"
                     value={originalEstimateDaysDraft}
                     onChange={(event) => setOriginalEstimateDaysDraft(event.target.value)}
                   />
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
-                  <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
-                  <div className="relative">
-                    <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white p-2">
-                      {labelsDraft.length === 0 ? <span className="text-xs text-slate-400">No labels yet.</span> : null}
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <div className="inline-flex items-center gap-1">
+                    <p className="text-sm font-semibold text-slate-700">Σ Child Est.</p>
+                    <span className="group relative inline-flex items-center">
+                      <Info
+                        className="size-3.5 text-slate-400"
+                        aria-label="About sum of child estimates (user stories)"
+                      />
+                      <span role="tooltip" className={infoTooltipClass}>
+                        Sum of estimated days from all child user stories.
+                      </span>
+                    </span>
+                  </div>
+                  <input
+                    value={totalUserStoryEstimate}
+                    readOnly
+                    className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] font-medium text-slate-700"
+                  />
+                </label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-semibold text-slate-700">Labels</p>
+                  <div className="relative z-30">
+                    <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                       {labelsDraft.map((label) => (
-                        <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                        <span key={label} className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-700">
+                          <Tag className="size-2.5 shrink-0" />
                           {label}
                           <button type="button" onClick={() => removeLabel(label)} className="text-slate-500 hover:text-slate-700">x</button>
                         </span>
@@ -971,7 +1105,7 @@ export function EpicFormDialog({
                           }
                         }}
                         autoComplete="off"
-                        className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-slate-400"
+                        className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-[12px] outline-none placeholder:text-slate-400"
                         placeholder="Type to search labels..."
                       />
                     </div>
@@ -1004,129 +1138,141 @@ export function EpicFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
-                  <p className="pt-1 text-[12px] font-semibold text-slate-600">Context</p>
-                  <div className="grid gap-1.5 sm:grid-cols-3">
-                    <div className="rounded-md border bg-slate-50 px-2 py-1.5 text-[12px] text-slate-700">
-                      <p className="text-[11px] text-slate-500">Quarter</p>
-                      <p className="font-medium">{planningQuarter}</p>
-                    </div>
-                    <div className="rounded-md border bg-slate-50 px-2 py-1.5 text-[12px] text-slate-700">
-                      <p className="text-[11px] text-slate-500">Month</p>
-                      <p className="font-medium">{planningMonth}</p>
-                    </div>
-                    <div className="rounded-md border bg-slate-50 px-2 py-1.5 text-[12px] text-slate-700">
-                      <p className="text-[11px] text-slate-500">Year</p>
-                      <p className="font-medium">{planningYear}</p>
-                    </div>
-                  </div>
-                </div>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-                  <p className="text-[12px] font-semibold text-slate-600">Epic ID</p>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-semibold text-slate-700">Epic ID</p>
                   <input
                     value={epic?.id ?? "Will be created on save"}
                     readOnly
-                    className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700"
+                    className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700"
                   />
                 </label>
               </section>
             </div>
           </div>
 
-          <div className="mt-3">
-            <div
-              className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
-              onPointerDown={beginActivityPanelResize}
-              title="Resize activity panel height"
-              aria-label="Resize activity panel height"
-              role="separator"
-            >
-              <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
-              <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
-            </div>
-            <section
-              className="flex min-h-0 flex-col space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200"
-              style={{ height: `${hasChildren ? Math.max(180, Math.min(440, activityPanelHeightPx - 40)) : activityPanelHeightPx}px` }}
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-slate-800">Activity</h3>
-                <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-slate-200">
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-sm font-medium transition",
-                      activityTab === "comments"
-                        ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
-                        : "text-slate-600 hover:bg-slate-100",
-                    )}
-                    onClick={() => setActivityTab("comments")}
-                  >
-                    <MessageSquare className="mr-1 inline size-3.5" />
-                    Comments
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-sm font-medium transition",
-                      activityTab === "history"
-                        ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
-                        : "text-slate-600 hover:bg-slate-100",
-                    )}
-                    onClick={() => setActivityTab("history")}
-                  >
-                    <History className="mr-1 inline size-3.5" />
-                    History
-                  </button>
-                </div>
+          <div className="relative z-0 mt-3">
+            {activityOpen ? (
+              <div
+                className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
+                onPointerDown={beginActivityPanelResize}
+                title="Resize activity panel height"
+                aria-label="Resize activity panel height"
+                role="separator"
+              >
+                <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
+                <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
               </div>
+            ) : null}
+            <section
+              className={cn(
+                "flex min-h-0 flex-col rounded-xl bg-slate-50 ring-1 ring-slate-200",
+                activityOpen ? "space-y-3 p-3" : "p-3",
+              )}
+              style={
+                activityOpen
+                  ? { height: `${hasChildren ? Math.max(180, Math.min(440, activityPanelHeightPx - 40)) : activityPanelHeightPx}px` }
+                  : undefined
+              }
+            >
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+                onClick={() => setActivityOpen((open) => !open)}
+                aria-expanded={activityOpen}
+              >
+                <span className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                  <ChevronDown
+                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                    aria-hidden
+                  />
+                  Activity
+                </span>
+                {activityOpen ? (
+                  <div
+                    className="inline-flex shrink-0 rounded-lg bg-white p-1 ring-1 ring-slate-200"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    role="presentation"
+                  >
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md px-2.5 py-1 text-sm font-medium transition",
+                        activityTab === "comments"
+                          ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
+                          : "text-slate-600 hover:bg-slate-100",
+                      )}
+                      onClick={() => setActivityTab("comments")}
+                    >
+                      <MessageSquare className="mr-1 inline size-3.5" />
+                      Comments
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-md px-2.5 py-1 text-sm font-medium transition",
+                        activityTab === "history"
+                          ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200"
+                          : "text-slate-600 hover:bg-slate-100",
+                      )}
+                      onClick={() => setActivityTab("history")}
+                    >
+                      <History className="mr-1 inline size-3.5" />
+                      History
+                    </button>
+                  </div>
+                ) : null}
+              </button>
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {!epic ? (
-                  <p className="text-sm text-slate-500">Save this epic first to add comments and history.</p>
-                ) : activityTab === "comments" ? (
-                  <>
+              {activityOpen ? (
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {!epic ? (
+                    <p className="text-sm text-slate-500">Save this epic first to add comments and history.</p>
+                  ) : activityTab === "comments" ? (
+                    <>
+                      <div className="space-y-2">
+                        {(epic.comments ?? []).length === 0 ? (
+                          <p className="text-sm text-slate-500">No comments yet.</p>
+                        ) : (
+                          epic.comments.map((comment) => (
+                            <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                              <p className="text-[12px] text-slate-500">
+                                {comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}
+                              </p>
+                              <p className="mt-1 text-slate-800">{comment.body}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          value={commentBody}
+                          onChange={(event) => setCommentBody(event.target.value)}
+                          className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                          placeholder="Write a comment..."
+                        />
+                        <Button size="sm" variant="outline" onClick={handleAddComment} disabled={isAddingComment}>
+                          <Plus />
+                          Add
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
                     <div className="space-y-2">
-                      {(epic.comments ?? []).length === 0 ? (
-                        <p className="text-sm text-slate-500">No comments yet.</p>
+                      {(epic.history ?? []).length === 0 ? (
+                        <p className="text-sm text-slate-500">No history yet.</p>
                       ) : (
-                        epic.comments.map((comment) => (
-                          <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                            <p className="text-[12px] text-slate-500">
-                              {comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}
-                            </p>
-                            <p className="mt-1 text-slate-800">{comment.body}</p>
+                        epic.history.map((entry) => (
+                          <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                            <p className="text-slate-800">{entry.entry}</p>
+                            <p className="mt-1 text-[12px] text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
                           </div>
                         ))
                       )}
                     </div>
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        value={commentBody}
-                        onChange={(event) => setCommentBody(event.target.value)}
-                        className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                        placeholder="Write a comment..."
-                      />
-                      <Button size="sm" variant="outline" onClick={handleAddComment} disabled={isAddingComment}>
-                        <Plus />
-                        Add
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-2">
-                    {(epic.history ?? []).length === 0 ? (
-                      <p className="text-sm text-slate-500">No history yet.</p>
-                    ) : (
-                      epic.history.map((entry) => (
-                        <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                          <p className="text-slate-800">{entry.entry}</p>
-                          <p className="mt-1 text-[12px] text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              ) : null}
             </section>
           </div>
         </div>

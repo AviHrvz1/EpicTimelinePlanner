@@ -1,6 +1,6 @@
 "use client";
 
-import { Bold, Check, ChevronRight, Folder, Heading2, Heading3, History, ImagePlus, Italic, Link as LinkIcon, List, ListOrdered, MessageSquare, Plus, Quote, Underline as UnderlineIcon, X } from "lucide-react";
+import { Bold, Check, ChevronDown, ChevronRight, Folder, Heading2, Heading3, History, ImagePlus, Info, Italic, Link as LinkIcon, List, ListOrdered, MessageSquare, Plus, Quote, Tag, Underline as UnderlineIcon, X } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
@@ -11,10 +11,15 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { Button } from "@/components/ui/button";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
-import { InitiativeItem } from "@/lib/types";
+import { MONTHS } from "@/lib/timeline";
+import { type EpicItem, InitiativeItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
+
+function sumUserStoryEstDaysForEpic(epic: EpicItem): number {
+  return (epic.userStories ?? []).reduce((sum, story) => sum + (story.estimatedDays ?? 0), 0);
+}
 
 type ChildEpicDraft = {
   title: string;
@@ -75,6 +80,7 @@ export function InitiativeFormDialog({
   const [color, setColor] = useState(initiative?.color ?? "#3B82F6");
   const [commentBody, setCommentBody] = useState("");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
+  const [activityOpen, setActivityOpen] = useState(false);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
@@ -88,7 +94,7 @@ export function InitiativeFormDialog({
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
-    field: "title" | "assignee" | "team" | "originalEstimateDays" | "color";
+    field: "title" | "assignee" | "team" | "originalEstimateDays";
   } | null>(null);
   const [childEditingValue, setChildEditingValue] = useState("");
   const [newChildEpicTitle, setNewChildEpicTitle] = useState("");
@@ -141,6 +147,7 @@ export function InitiativeFormDialog({
       setIsDraggingDialog(false);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(180);
+      setActivityOpen(false);
       dragStartRef.current = null;
     }
   }, [open]);
@@ -148,14 +155,7 @@ export function InitiativeFormDialog({
     if (!descriptionEditor) return;
     const next = description?.trim() ? description : "<p></p>";
     if (descriptionEditor.getHTML() !== next) {
-      descriptionEditor.commands.setContent(next, false);
-    }
-  }, [descriptionEditor, initiative?.id, open]);
-  useEffect(() => {
-    if (!descriptionEditor) return;
-    const next = description?.trim() ? description : "<p></p>";
-    if (descriptionEditor.getHTML() !== next) {
-      descriptionEditor.commands.setContent(next, false);
+      descriptionEditor.commands.setContent(next, { emitUpdate: false });
     }
   }, [descriptionEditor, initiative?.id, open]);
 
@@ -209,6 +209,28 @@ export function InitiativeFormDialog({
   }, [initiatives]);
 
   const hasChildren = (initiative?.epics?.length ?? 0) > 0;
+
+  const initiativePlanningQuarter = useMemo(() => {
+    const m = initiative?.startMonth;
+    if (m == null) return "Not set";
+    if (m <= 3) return "Q1";
+    if (m <= 6) return "Q2";
+    if (m <= 9) return "Q3";
+    return "Q4";
+  }, [initiative?.startMonth]);
+
+  const initiativePlanningMonth = useMemo(() => {
+    if (initiative?.startMonth == null) return "Not set";
+    const s = initiative.startMonth;
+    const e = initiative.endMonth;
+    if (e != null && e !== s) return `${MONTHS[s - 1]}-${MONTHS[e - 1]}`;
+    return MONTHS[s - 1];
+  }, [initiative?.startMonth, initiative?.endMonth]);
+
+  const initiativePlanningYear = useMemo(() => {
+    if (initiative == null) return "Not set";
+    return String(initiative.year);
+  }, [initiative]);
   const existingLabelSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const row of initiative?.epics ?? []) {
@@ -224,6 +246,15 @@ export function InitiativeFormDialog({
       .filter((item) => item.toLowerCase().includes(q) && !labelsDraft.includes(item))
       .slice(0, 8);
   }, [existingLabelSuggestions, labelsDraft, newLabel]);
+
+  const totalUserStoryEstimate = useMemo(() => {
+    return (initiative?.epics ?? []).reduce(
+      (sum, row) => sum + (row.userStories ?? []).reduce((storySum, story) => storySum + (story.estimatedDays ?? 0), 0),
+      0,
+    );
+  }, [initiative?.epics]);
+  const infoTooltipClass =
+    "pointer-events-none absolute left-1/2 top-0 z-[320] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
 
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
@@ -348,7 +379,7 @@ export function InitiativeFormDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
-  function beginChildCellEdit(storyId: string, field: "title" | "assignee" | "team" | "originalEstimateDays" | "color") {
+  function beginChildCellEdit(storyId: string, field: "title" | "assignee" | "team" | "originalEstimateDays") {
     const draft = childEpicDrafts[storyId];
     if (!draft) return;
     setChildEditingCell({ rowId: storyId, field });
@@ -394,9 +425,9 @@ export function InitiativeFormDialog({
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
           anchored
             ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06]"
-            : "relative h-full w-[50vw] max-w-[50vw] shrink-0",
+            : "relative h-full w-[min(75vw,1320px)] max-w-[min(75vw,1320px)] shrink-0",
         )}
-        style={anchored ? planningDetailPanelAnchorStyle(surfaceRect) : undefined}
+        style={anchored ? (surfaceRect ? planningDetailPanelAnchorStyle(surfaceRect) : undefined) : undefined}
       >
         <div
           className={cn(
@@ -436,6 +467,16 @@ export function InitiativeFormDialog({
                     <input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full bg-transparent px-3 py-2 text-base outline-none" placeholder="Initiative title" />
                   </div>
                 </label>
+
+                <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
+                  <p className="text-sm font-semibold text-slate-700">Quarter</p>
+                  <input readOnly value={initiativePlanningQuarter} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
+                  <p className="text-sm font-semibold text-slate-700">Month</p>
+                  <input readOnly value={initiativePlanningMonth} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
+                  <p className="text-sm font-semibold text-slate-700">Year</p>
+                  <input readOnly value={initiativePlanningYear} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
+                </div>
+
                 <label className="mt-5 block space-y-1">
                   <p className="text-sm font-medium text-slate-600">Description</p>
                   <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
@@ -478,7 +519,7 @@ export function InitiativeFormDialog({
                           <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">No epics yet.</p>
                         ) : (
                           <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
-                            <table className="w-full min-w-[860px] text-left text-sm">
+                            <table className="w-full min-w-[820px] text-left text-sm">
                               <thead className="bg-indigo-50/70 text-slate-600">
                                 <tr>
                                   <th className="px-2 py-1.5 font-medium">ID</th>
@@ -486,8 +527,13 @@ export function InitiativeFormDialog({
                                   <th className="px-2 py-1.5 font-medium">Epic</th>
                                   <th className="px-2 py-1.5 font-medium">Team</th>
                                   <th className="px-2 py-1.5 font-medium">Assignee</th>
-                                  <th className="px-2 py-1.5 font-medium">Color</th>
                                   <th className="px-2 py-1.5 font-medium">Orig. Est.</th>
+                                  <th
+                                    className="px-2 py-1.5 font-medium"
+                                    title="Sum of estimated days from all user stories under this epic"
+                                  >
+                                    Σ Child Est.
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -525,8 +571,10 @@ export function InitiativeFormDialog({
                                     <td className="px-2 py-1.5 text-slate-800">{childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? <div className="flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.title ?? row.title}</button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "team" ? <div className="flex items-center gap-1"><select value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700"><option value="">Not set</option>{MONTH_TEAM_COLUMNS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "team")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{MONTH_TEAM_COLUMNS.find((t) => t.id === (childEpicDrafts[row.id]?.team ?? row.team))?.label ?? (childEpicDrafts[row.id]?.team ?? row.team) ?? "Not set"}</button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "assignee" ? <div className="flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{(childEpicDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}</button>}</td>
-                                    <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "color" ? <div className="flex items-center gap-1"><input type="color" value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="h-7 w-10 rounded border bg-white p-0.5" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "color")} className="inline-flex rounded px-1 py-0.5 hover:bg-slate-100"><span className="inline-block h-4 w-8 rounded border" style={{ backgroundColor: childEpicDrafts[row.id]?.color ?? row.color ?? "#3B82F6" }} /></button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "originalEstimateDays" ? <div className="flex items-center gap-1"><input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "originalEstimateDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.originalEstimateDays || (row.originalEstimateDays == null ? "-" : String(row.originalEstimateDays))}</button>}</td>
+                                    <td className="px-2 py-1.5 text-slate-600 tabular-nums" title="Sum of estimated days from child user stories">
+                                      {sumUserStoryEstDaysForEpic(row)}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -547,18 +595,19 @@ export function InitiativeFormDialog({
                 </div>
               </div>
 
-              <section className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <h3 className="inline-flex w-fit items-center rounded-md bg-indigo-100 px-2.5 py-1 text-[13px] font-semibold tracking-[0.03em] text-indigo-800 ring-1 ring-indigo-200">Details</h3>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700" /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
-                  <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
-                  <div className="relative">
-                    <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white p-2">
-                      {labelsDraft.length === 0 ? <span className="text-xs text-slate-400">No labels yet.</span> : null}
+              <section className="relative z-20 space-y-5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <h3 className="border-b border-slate-200/90 pb-2 text-base font-semibold leading-snug tracking-tight text-slate-900">Details</h3>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-semibold text-slate-700">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-semibold text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-semibold text-slate-700">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-sm font-semibold text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] font-medium text-slate-700" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-semibold text-slate-700">Labels</p>
+                  <div className="relative z-30">
+                    <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                       {labelsDraft.map((label) => (
-                        <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                        <span key={label} className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-700">
+                          <Tag className="size-2.5 shrink-0" />
                           {label}
                           <button type="button" onClick={() => removeLabel(label)} className="text-slate-500 hover:text-slate-700">x</button>
                         </span>
@@ -600,7 +649,7 @@ export function InitiativeFormDialog({
                           }
                         }}
                         autoComplete="off"
-                        className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-slate-400"
+                        className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-[12px] outline-none placeholder:text-slate-400"
                         placeholder="Type to search labels..."
                       />
                     </div>
@@ -633,54 +682,85 @@ export function InitiativeFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <div className="rounded-md border bg-slate-50 px-2 py-1.5 text-[12px] text-slate-700"><p className="text-[11px] text-slate-500">Epics</p><p className="font-medium">{initiative?.epics?.length ?? 0}</p></div>
               </section>
             </div>
           </div>
 
-          <div className="mt-3">
-            <div className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center" onPointerDown={beginActivityPanelResize} title="Resize activity panel height" aria-label="Resize activity panel height" role="separator">
-              <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
-              <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
-            </div>
-            <section className="flex min-h-0 flex-col space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200" style={{ height: `${hasChildren ? Math.max(160, Math.min(420, activityPanelHeightPx - 30)) : activityPanelHeightPx}px` }}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-slate-800">Activity</h3>
-                <div className="inline-flex rounded-lg bg-white p-1 ring-1 ring-slate-200">
-                  <button type="button" className={cn("rounded-md px-2.5 py-1 text-sm font-medium transition", activityTab === "comments" ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200" : "text-slate-600 hover:bg-slate-100")} onClick={() => setActivityTab("comments")}><MessageSquare className="mr-1 inline size-3.5" />Comments</button>
-                  <button type="button" className={cn("rounded-md px-2.5 py-1 text-sm font-medium transition", activityTab === "history" ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200" : "text-slate-600 hover:bg-slate-100")} onClick={() => setActivityTab("history")}><History className="mr-1 inline size-3.5" />History</button>
-                </div>
+          <div className="relative z-0 mt-3">
+            {activityOpen ? (
+              <div className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center" onPointerDown={beginActivityPanelResize} title="Resize activity panel height" aria-label="Resize activity panel height" role="separator">
+                <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
+                <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
               </div>
+            ) : null}
+            <section
+              className={cn(
+                "flex min-h-0 flex-col rounded-xl bg-slate-50 ring-1 ring-slate-200",
+                activityOpen ? "space-y-3 p-3" : "p-3",
+              )}
+              style={
+                activityOpen
+                  ? { height: `${hasChildren ? Math.max(160, Math.min(420, activityPanelHeightPx - 30)) : activityPanelHeightPx}px` }
+                  : undefined
+              }
+            >
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+                onClick={() => setActivityOpen((open) => !open)}
+                aria-expanded={activityOpen}
+              >
+                <span className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                  <ChevronDown
+                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                    aria-hidden
+                  />
+                  Activity
+                </span>
+                {activityOpen ? (
+                  <div
+                    className="inline-flex shrink-0 rounded-lg bg-white p-1 ring-1 ring-slate-200"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    role="presentation"
+                  >
+                    <button type="button" className={cn("rounded-md px-2.5 py-1 text-sm font-medium transition", activityTab === "comments" ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200" : "text-slate-600 hover:bg-slate-100")} onClick={() => setActivityTab("comments")}><MessageSquare className="mr-1 inline size-3.5" />Comments</button>
+                    <button type="button" className={cn("rounded-md px-2.5 py-1 text-sm font-medium transition", activityTab === "history" ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200" : "text-slate-600 hover:bg-slate-100")} onClick={() => setActivityTab("history")}><History className="mr-1 inline size-3.5" />History</button>
+                  </div>
+                ) : null}
+              </button>
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {!initiative ? (
-                  <p className="text-sm text-slate-500">Save this initiative first to add comments and history.</p>
-                ) : activityTab === "comments" ? (
-                  <>
+              {activityOpen ? (
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {!initiative ? (
+                    <p className="text-sm text-slate-500">Save this initiative first to add comments and history.</p>
+                  ) : activityTab === "comments" ? (
+                    <>
+                      <div className="space-y-2">
+                        {(initiative.comments ?? []).length === 0 ? <p className="text-sm text-slate-500">No comments yet.</p> : initiative.comments.map((comment) => (
+                          <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                            <p className="text-[12px] text-slate-500">{comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}</p>
+                            <p className="mt-1 text-slate-800">{comment.body}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <input value={commentBody} onChange={(event) => setCommentBody(event.target.value)} className="w-full rounded-md border bg-background px-2 py-1.5 text-sm" placeholder="Write a comment..." />
+                        <Button size="sm" variant="outline" onClick={handleAddComment} disabled={isAddingComment}><Plus />Add</Button>
+                      </div>
+                    </>
+                  ) : (
                     <div className="space-y-2">
-                      {(initiative.comments ?? []).length === 0 ? <p className="text-sm text-slate-500">No comments yet.</p> : initiative.comments.map((comment) => (
-                        <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                          <p className="text-[12px] text-slate-500">{comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}</p>
-                          <p className="mt-1 text-slate-800">{comment.body}</p>
+                      {(initiative.history ?? []).length === 0 ? <p className="text-sm text-slate-500">No history yet.</p> : initiative.history.map((entry) => (
+                        <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                          <p className="text-slate-800">{entry.entry}</p>
+                          <p className="mt-1 text-[12px] text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 flex gap-2">
-                      <input value={commentBody} onChange={(event) => setCommentBody(event.target.value)} className="w-full rounded-md border bg-background px-2 py-1.5 text-sm" placeholder="Write a comment..." />
-                      <Button size="sm" variant="outline" onClick={handleAddComment} disabled={isAddingComment}><Plus />Add</Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-2">
-                    {(initiative.history ?? []).length === 0 ? <p className="text-sm text-slate-500">No history yet.</p> : initiative.history.map((entry) => (
-                      <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                        <p className="text-slate-800">{entry.entry}</p>
-                        <p className="mt-1 text-[12px] text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              ) : null}
             </section>
           </div>
         </div>
