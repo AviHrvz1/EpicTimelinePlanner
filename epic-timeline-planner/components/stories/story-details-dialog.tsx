@@ -28,6 +28,7 @@ import {
   Quote,
   Tag,
   Trash,
+  Type,
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
@@ -560,11 +561,15 @@ export function StoryDetailsDialog({
               className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 py-0.5 text-slate-800"
               title={(story?.title ?? title) || "User story"}
             >
-              <UserStoryIcon className="size-3.5" />
               {story ? (displayIds.byStoryId.get(story.id) ?? "User Story") : "User Story"}
             </span>
             <ChevronRight className="size-4 shrink-0 text-slate-400" />
-            <span className="truncate text-slate-900">{title || (isCreateMode ? "Create User Story" : "Untitled")}</span>
+            <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-slate-900">
+              <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                <UserStoryIcon />
+              </span>
+              <span className="truncate">{title || (isCreateMode ? "Create User Story" : "Untitled")}</span>
+            </span>
           </div>
           <div className="flex items-center gap-2">
             {!isCreateMode ? (
@@ -605,7 +610,10 @@ export function StoryDetailsDialog({
             >
           <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
             <label className="block shrink-0 space-y-1">
-              <p className="text-sm font-medium text-slate-600">Title</p>
+              <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+                <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
+                Title
+              </p>
               <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
                 <input
                   value={icon}
@@ -746,14 +754,14 @@ export function StoryDetailsDialog({
           </section>
           <div className="relative mx-1.5">
             <div
-              className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-1/2 cursor-col-resize items-stretch justify-center"
+              className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-[calc(50%+2px)] cursor-col-resize items-stretch justify-center"
               onPointerDown={beginDetailsPanelResize}
               title="Resize details panel"
               aria-label="Resize details panel"
               role="separator"
             >
               <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
-              <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+              <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-[calc(50%+2px)]" />
             </div>
           </div>
 

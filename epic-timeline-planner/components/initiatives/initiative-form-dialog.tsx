@@ -19,9 +19,12 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  ListTree,
   MessageSquare,
   Quote,
   Tag,
+  Target,
+  Type,
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
@@ -571,7 +574,10 @@ export function InitiativeFormDialog({
                 {initiative ? (displayIds.byInitiativeId.get(initiative.id) ?? "Initiative") : "Initiative"}
               </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
-              <span className="truncate text-slate-900">{title || (initiative ? "Initiative details" : "Create initiative")}</span>
+              <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-slate-900">
+                <Target className="size-4 shrink-0 text-slate-600" aria-hidden />
+                <span className="truncate">{title || (initiative ? "Initiative details" : "Create initiative")}</span>
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium" onClick={onClose}>Cancel</Button>
@@ -585,7 +591,10 @@ export function InitiativeFormDialog({
               <div ref={splitLayoutRef} className="grid h-full min-h-0 gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
               <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
                 <label className="block shrink-0 space-y-1">
-                  <p className="text-sm font-medium text-slate-600">Title</p>
+                  <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+                    <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    Title
+                  </p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
                     <input value={icon} onChange={(event) => setIcon(event.target.value)} maxLength={2} placeholder="⚡" className="w-12 border-r border-slate-200 bg-transparent px-2 py-2 text-center text-xl outline-none" />
                     <input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full bg-transparent px-3 py-2 text-base outline-none" placeholder="Initiative title" />
@@ -647,7 +656,10 @@ export function InitiativeFormDialog({
 
                 <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
                   <div className="flex shrink-0 items-center justify-between">
-                    <h3 className="text-base font-semibold text-slate-800">Child epics</h3>
+                    <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
+                      <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
+                      Child Epics
+                    </h3>
                     <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">{initiative?.epics?.length ?? 0}</span>
                   </div>
 
@@ -859,9 +871,9 @@ export function InitiativeFormDialog({
               </section>
 
               <div className="relative mx-1.5">
-                <div className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-1/2 cursor-col-resize items-stretch justify-center" onPointerDown={beginDetailsPanelResize} title="Resize details panel" aria-label="Resize details panel" role="separator">
+                <div className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-[calc(50%+2px)] cursor-col-resize items-stretch justify-center" onPointerDown={beginDetailsPanelResize} title="Resize details panel" aria-label="Resize details panel" role="separator">
                   <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
-                  <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+                  <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-[calc(50%+2px)]" />
                 </div>
               </div>
 
@@ -872,7 +884,6 @@ export function InitiativeFormDialog({
                 </h3>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-sm font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] font-medium text-slate-700" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-sm font-normal text-slate-700">Labels</p>

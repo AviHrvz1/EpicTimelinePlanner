@@ -10,6 +10,7 @@ import {
   ChevronUp,
   ClipboardList,
   FileText,
+  Folder,
   Heading2,
   Heading3,
   History,
@@ -23,6 +24,7 @@ import {
   Quote,
   Tag,
   Trash,
+  Type,
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
@@ -712,7 +714,10 @@ export function EpicFormDialog({
                 {epic ? (displayIds.byEpicId.get(epic.id) ?? "Epic") : "Epic"}
               </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
-              <span className="truncate text-slate-900">{title || (epic ? "Epic details" : "Create epic")}</span>
+              <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-slate-900">
+                <Folder className="size-4 shrink-0 text-slate-600" aria-hidden />
+                <span className="truncate">{title || (epic ? "Epic details" : "Create epic")}</span>
+              </span>
             </div>
             <div className="flex items-center gap-2">
               {epic ? (
@@ -747,7 +752,10 @@ export function EpicFormDialog({
               >
               <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
                 <label className="block shrink-0 space-y-1">
-                  <p className="text-sm font-medium text-slate-600">Title</p>
+                  <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+                    <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    Title
+                  </p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
                     <input
                       className="w-12 border-r border-slate-200 bg-transparent px-2 py-2 text-center text-xl outline-none"
@@ -1243,14 +1251,14 @@ export function EpicFormDialog({
 
               <div className="relative mx-1.5">
                 <div
-                  className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-1/2 cursor-col-resize items-stretch justify-center"
+                  className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-[calc(50%+2px)] cursor-col-resize items-stretch justify-center"
                   onPointerDown={beginDetailsPanelResize}
                   title="Resize details panel"
                   aria-label="Resize details panel"
                   role="separator"
                 >
                   <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
-                  <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+                  <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-[calc(50%+2px)]" />
                 </div>
               </div>
 
