@@ -1,25 +1,55 @@
 "use client";
 
-import { Bold, Check, ChevronDown, ChevronRight, Folder, Heading2, Heading3, History, ImagePlus, Info, Italic, Link as LinkIcon, List, ListOrdered, MessageSquare, Plus, Quote, Tag, Underline as UnderlineIcon, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  Bold,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Folder,
+  Heading2,
+  Heading3,
+  History,
+  Info,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  MessageSquare,
+  Quote,
+  Tag,
+  Underline as UnderlineIcon,
+  X,
+} from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
-import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
+import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { Button } from "@/components/ui/button";
+import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
 import { type EpicItem, InitiativeItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
+import { useResizableTableColumns } from "@/lib/use-resizable-table-columns";
 import { cn } from "@/lib/utils";
 
 function sumUserStoryEstDaysForEpic(epic: EpicItem): number {
   return (epic.userStories ?? []).reduce((sum, story) => sum + (story.estimatedDays ?? 0), 0);
 }
+
+const INIT_CHILD_TABLE_DEFAULT_WIDTHS = [72, 220, 116, 120, 96, 96] as const;
+
+type InitChildEpicSortKey = "id" | "title" | "team" | "assignee" | "originalEstimateDays" | "childSum";
+
+const CHILD_TABLE_RESIZE_HANDLE =
+  "absolute right-0 top-0 z-[1] h-full w-1.5 cursor-col-resize select-none hover:bg-slate-400/50";
 
 type ChildEpicDraft = {
   title: string;
@@ -78,9 +108,9 @@ export function InitiativeFormDialog({
   const [description, setDescription] = useState(initiative?.description ?? "");
   const [assignee, setAssignee] = useState(initiative?.assignee ?? "");
   const [color, setColor] = useState(initiative?.color ?? "#3B82F6");
-  const [commentBody, setCommentBody] = useState("");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [activityOpen, setActivityOpen] = useState(false);
+  const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
@@ -98,6 +128,12 @@ export function InitiativeFormDialog({
   } | null>(null);
   const [childEditingValue, setChildEditingValue] = useState("");
   const [newChildEpicTitle, setNewChildEpicTitle] = useState("");
+  const [childEpicSortKey, setChildEpicSortKey] = useState<InitChildEpicSortKey>("title");
+  const [childEpicSortDir, setChildEpicSortDir] = useState<"asc" | "desc">("asc");
+  const { widths: initChildTableWidths, onColumnResizeStart: onInitChildTableColResize } = useResizableTableColumns(
+    `${open ? "1" : "0"}-${initiative?.id ?? "none"}`,
+    INIT_CHILD_TABLE_DEFAULT_WIDTHS,
+  );
 
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
@@ -105,8 +141,12 @@ export function InitiativeFormDialog({
     extensions: [
       StarterKit,
       Underline,
-      Link.configure({ openOnClick: false }),
-      Image,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "text-blue-600 underline decoration-blue-600/40 underline-offset-2",
+        },
+      }),
       Placeholder.configure({ placeholder: "Description" }),
     ],
     content: description?.trim() ? description : "<p></p>",
@@ -121,7 +161,6 @@ export function InitiativeFormDialog({
     setDescription(initiative?.description ?? "");
     setAssignee(initiative?.assignee ?? "");
     setColor(initiative?.color ?? "#3B82F6");
-    setCommentBody("");
     setActivityTab("comments");
     if (initiative?.id) {
       const raw = window.localStorage.getItem(`initiative-labels:${initiative.id}`) ?? "";
@@ -148,6 +187,7 @@ export function InitiativeFormDialog({
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(180);
       setActivityOpen(false);
+      setDescriptionAccordionOpen(true);
       dragStartRef.current = null;
     }
   }, [open]);
@@ -207,6 +247,76 @@ export function InitiativeFormDialog({
     });
     return { byInitiativeId, byEpicId };
   }, [initiatives]);
+
+  function toggleChildEpicSort(key: InitChildEpicSortKey) {
+    if (key === childEpicSortKey) {
+      setChildEpicSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setChildEpicSortKey(key);
+      setChildEpicSortDir("asc");
+    }
+  }
+
+  const sortedInitiativeChildEpics = useMemo(() => {
+    const raw = initiative?.epics ?? [];
+    if (raw.length === 0) return raw;
+    const list = [...raw];
+    const asc = childEpicSortDir === "asc";
+    const mul = asc ? 1 : -1;
+    const ids = displayIds.byEpicId;
+    const drafts = childEpicDrafts;
+
+    const cmpStr = (a: string, b: string) => {
+      if (a < b) return -1 * mul;
+      if (a > b) return 1 * mul;
+      return 0;
+    };
+    const cmpNum = (a: number, b: number) => {
+      if (a < b) return -1 * mul;
+      if (a > b) return 1 * mul;
+      return 0;
+    };
+
+    const teamLabel = (row: EpicItem) => {
+      const tid = drafts[row.id]?.team ?? row.team ?? "";
+      return (MONTH_TEAM_COLUMNS.find((t) => t.id === tid)?.label ?? tid).toLowerCase();
+    };
+
+    list.sort((ra, rb) => {
+      switch (childEpicSortKey) {
+        case "id": {
+          const la = (ids.get(ra.id) ?? ra.id).toLowerCase();
+          const lb = (ids.get(rb.id) ?? rb.id).toLowerCase();
+          return la.localeCompare(lb, undefined, { numeric: true }) * mul;
+        }
+        case "title":
+          return cmpStr(
+            (drafts[ra.id]?.title ?? ra.title).toLowerCase(),
+            (drafts[rb.id]?.title ?? rb.title).toLowerCase(),
+          );
+        case "team":
+          return cmpStr(teamLabel(ra), teamLabel(rb));
+        case "assignee":
+          return cmpStr(
+            (drafts[ra.id]?.assignee ?? ra.assignee ?? "").toLowerCase(),
+            (drafts[rb.id]?.assignee ?? rb.assignee ?? "").toLowerCase(),
+          );
+        case "originalEstimateDays": {
+          const parseO = (row: EpicItem) => {
+            const d = drafts[row.id]?.originalEstimateDays?.trim();
+            const n = d ? Number(d) : row.originalEstimateDays;
+            return Number.isFinite(Number(n)) ? Number(n) : -1;
+          };
+          return cmpNum(parseO(ra), parseO(rb));
+        }
+        case "childSum":
+          return cmpNum(sumUserStoryEstDaysForEpic(ra), sumUserStoryEstDaysForEpic(rb));
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [initiative?.epics, childEpicSortKey, childEpicSortDir, childEpicDrafts, displayIds]);
 
   const hasChildren = (initiative?.epics?.length ?? 0) > 0;
 
@@ -290,14 +400,11 @@ export function InitiativeFormDialog({
     setLabelsDraft((prev) => prev.filter((item) => item !== label));
   }
 
-  async function handleAddComment() {
+  async function handleAddComment(html: string) {
     if (!initiative || !onAddComment) return;
-    const normalized = commentBody.trim();
-    if (!normalized) return;
     setIsAddingComment(true);
     try {
-      await onAddComment(initiative.id, normalized);
-      setCommentBody("");
+      await onAddComment(initiative.id, html);
     } finally {
       setIsAddingComment(false);
     }
@@ -390,17 +497,30 @@ export function InitiativeFormDialog({
     if (!onPatchEpic || !childEditingCell || childEditingCell.rowId !== epicId) return;
     const existing = childEpicDrafts[epicId];
     if (!existing) return;
-    const next: ChildEpicDraft = { ...existing, [childEditingCell.field]: childEditingValue };
+    const field = childEditingCell.field;
+    const next: ChildEpicDraft = { ...existing, [field]: childEditingValue };
     setChildEpicDrafts((prev) => ({ ...prev, [epicId]: next }));
     setChildEditingCell(null);
     setChildEditingValue("");
-    await onPatchEpic(epicId, {
-      title: next.title.trim(),
-      assignee: next.assignee.trim() || null,
-      team: next.team.trim() || null,
-      originalEstimateDays: next.originalEstimateDays.trim() === "" ? null : Number(next.originalEstimateDays),
-      color: next.color,
-    });
+
+    const patch: {
+      title?: string;
+      assignee?: string | null;
+      team?: string | null;
+      originalEstimateDays?: number | null;
+    } = {};
+    if (field === "title") {
+      patch.title = next.title.trim();
+    } else if (field === "assignee") {
+      patch.assignee = next.assignee.trim() || null;
+    } else if (field === "team") {
+      const t = next.team.trim();
+      patch.team = t && MONTH_TEAM_IDS.includes(t as (typeof MONTH_TEAM_IDS)[number]) ? t : null;
+    } else if (field === "originalEstimateDays") {
+      patch.originalEstimateDays =
+        next.originalEstimateDays.trim() === "" ? null : Number(next.originalEstimateDays);
+    }
+    await onPatchEpic(epicId, patch);
   }
 
   function handleAddChildEpic() {
@@ -457,10 +577,11 @@ export function InitiativeFormDialog({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div ref={splitLayoutRef} className="grid min-h-0 gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
-              <section className="h-full min-h-0 overflow-y-auto space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                <label className="block space-y-1">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <div ref={splitLayoutRef} className="grid h-full min-h-0 gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
+              <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+                <label className="block shrink-0 space-y-1">
                   <p className="text-sm font-medium text-slate-600">Title</p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
                     <input value={icon} onChange={(event) => setIcon(event.target.value)} maxLength={2} placeholder="⚡" className="w-12 border-r border-slate-200 bg-transparent px-2 py-2 text-center text-xl outline-none" />
@@ -468,82 +589,228 @@ export function InitiativeFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
-                  <p className="text-sm font-semibold text-slate-700">Quarter</p>
+                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
+                  <p className="text-sm font-normal text-slate-700">Quarter</p>
                   <input readOnly value={initiativePlanningQuarter} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
-                  <p className="text-sm font-semibold text-slate-700">Month</p>
+                  <p className="text-sm font-normal text-slate-700">Month</p>
                   <input readOnly value={initiativePlanningMonth} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
-                  <p className="text-sm font-semibold text-slate-700">Year</p>
+                  <p className="text-sm font-normal text-slate-700">Year</p>
                   <input readOnly value={initiativePlanningYear} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
                 </div>
 
-                <label className="mt-5 block space-y-1">
-                  <p className="text-sm font-medium text-slate-600">Description</p>
-                  <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><List className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><ListOrdered className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Quote className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading2 className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (!descriptionEditor) return; const picker = document.createElement("input"); picker.type = "file"; picker.accept = "image/*"; picker.onchange = () => { const file = picker.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const src = typeof reader.result === "string" ? reader.result : ""; if (!src) return; descriptionEditor.chain().focus().setImage({ src }).run(); }; reader.readAsDataURL(file); }; picker.click(); }} className="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-slate-700 hover:bg-white"><ImagePlus className="size-3.5" /></button>
-                  </div>
-                  <div
-                    className={cn(
-                      "w-full rounded-md border bg-background px-3 py-2",
-                      hasChildren ? "min-h-[11rem]" : "min-h-[16rem]",
-                    )}
+                <div className="mt-5 flex shrink-0 flex-col gap-1">
+                  <button
+                    type="button"
+                    id="initiative-form-description-accordion-trigger"
+                    aria-expanded={descriptionAccordionOpen}
+                    aria-controls="initiative-form-description-accordion-panel"
+                    onClick={() => setDescriptionAccordionOpen((v) => !v)}
+                    className="flex w-full shrink-0 items-center gap-1.5 rounded-md py-1 text-left text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
                   >
-                    <EditorContent
-                      editor={descriptionEditor}
-                      className="focus:outline-none [&_.ProseMirror]:min-h-[9rem] [&_.ProseMirror]:outline-none"
-                    />
+                    {descriptionAccordionOpen ? (
+                      <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    )}
+                    Description
+                  </button>
+                  <div
+                    id="initiative-form-description-accordion-panel"
+                    role="region"
+                    aria-labelledby="initiative-form-description-accordion-trigger"
+                    hidden={!descriptionAccordionOpen}
+                    className="flex flex-col gap-1"
+                  >
+                    <div className="flex shrink-0 flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><List className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><ListOrdered className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Quote className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading2 className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
+                    </div>
+                    <div className="overflow-y-auto rounded-md border bg-background px-3 py-2">
+                      <EditorContent
+                        editor={descriptionEditor}
+                        className="focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none"
+                      />
+                    </div>
                   </div>
-                </label>
+                </div>
 
-                <section className="mt-5 space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                  <div className="flex items-center justify-between">
+                <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                  <div className="flex shrink-0 items-center justify-between">
                     <h3 className="text-base font-semibold text-slate-800">Child epics</h3>
                     <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">{initiative?.epics?.length ?? 0}</span>
                   </div>
 
                   {!initiative ? (
-                    <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">Save this initiative first, then add and manage epics here.</p>
+                    <p className="shrink-0 rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">Save this initiative first, then add and manage epics here.</p>
                   ) : (
                     <>
-                      <div className="max-h-56 space-y-2 overflow-y-auto">
+                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
                         {(initiative.epics ?? []).length === 0 ? (
                           <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">No epics yet.</p>
                         ) : (
                           <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
-                            <table className="w-full min-w-[820px] text-left text-sm">
+                            <table className="w-full table-fixed text-left text-sm">
+                              <colgroup>
+                                {initChildTableWidths.map((w, i) => (
+                                  <col key={i} style={{ width: w }} />
+                                ))}
+                              </colgroup>
                               <thead className="bg-indigo-50/70 text-slate-600">
                                 <tr>
-                                  <th className="px-2 py-1.5 font-medium">ID</th>
-                                  <th className="px-2 py-1.5 font-medium">Type</th>
-                                  <th className="px-2 py-1.5 font-medium">Epic</th>
-                                  <th className="px-2 py-1.5 font-medium">Team</th>
-                                  <th className="px-2 py-1.5 font-medium">Assignee</th>
-                                  <th className="px-2 py-1.5 font-medium">Orig. Est.</th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[0] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildEpicSort("id")}
+                                    >
+                                      ID
+                                      {childEpicSortKey === "id" ? (
+                                        childEpicSortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onInitChildTableColResize(0, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[1] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildEpicSort("title")}
+                                    >
+                                      Epic
+                                      {childEpicSortKey === "title" ? (
+                                        childEpicSortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onInitChildTableColResize(1, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[2] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildEpicSort("team")}
+                                    >
+                                      Team
+                                      {childEpicSortKey === "team" ? (
+                                        childEpicSortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onInitChildTableColResize(2, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[3] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildEpicSort("assignee")}
+                                    >
+                                      Assignee
+                                      {childEpicSortKey === "assignee" ? (
+                                        childEpicSortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onInitChildTableColResize(3, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[4] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildEpicSort("originalEstimateDays")}
+                                    >
+                                      Orig. Est.
+                                      {childEpicSortKey === "originalEstimateDays" ? (
+                                        childEpicSortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onInitChildTableColResize(4, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
                                   <th
-                                    className="px-2 py-1.5 font-medium"
+                                    className="relative px-2 py-1.5 text-left font-medium"
+                                    style={{ width: initChildTableWidths[5] }}
                                     title="Sum of estimated days from all user stories under this epic"
                                   >
-                                    Σ Child Est.
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildEpicSort("childSum")}
+                                    >
+                                      Σ Child Est.
+                                      {childEpicSortKey === "childSum" ? (
+                                        childEpicSortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onInitChildTableColResize(5, e)}
+                                      aria-hidden
+                                    />
                                   </th>
                                 </tr>
                               </thead>
                               <tbody>
                                 <tr className="border-t border-slate-100 bg-blue-50/40">
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
-                                  <td className="px-2 py-1.5">
-                                    <span className="inline-flex rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                                      Epic
-                                    </span>
-                                  </td>
                                   <td className="px-2 py-1.5">
                                     <div className="flex gap-1">
                                       <input
@@ -564,12 +831,11 @@ export function InitiativeFormDialog({
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                 </tr>
-                                {initiative.epics.map((row) => (
+                                {sortedInitiativeChildEpics.map((row) => (
                                   <tr key={row.id} className="border-t border-slate-100">
                                     <td className="px-2 py-1.5 text-slate-600"><button type="button" onClick={() => onOpenEpic?.(row.id)} className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline">{displayIds.byEpicId.get(row.id) ?? row.id}</button></td>
-                                    <td className="px-2 py-1.5 text-slate-600"><span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">Epic</span></td>
                                     <td className="px-2 py-1.5 text-slate-800">{childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? <div className="flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.title ?? row.title}</button>}</td>
-                                    <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "team" ? <div className="flex items-center gap-1"><select value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700"><option value="">Not set</option>{MONTH_TEAM_COLUMNS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "team")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{MONTH_TEAM_COLUMNS.find((t) => t.id === (childEpicDrafts[row.id]?.team ?? row.team))?.label ?? (childEpicDrafts[row.id]?.team ?? row.team) ?? "Not set"}</button>}</td>
+                                    <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "team" ? <div className="flex items-center gap-1"><select value={childEditingValue} onPointerDown={(event) => event.stopPropagation()} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700"><option value="">Not set</option>{MONTH_TEAM_COLUMNS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "team")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{MONTH_TEAM_COLUMNS.find((t) => t.id === (childEpicDrafts[row.id]?.team ?? row.team))?.label ?? (childEpicDrafts[row.id]?.team ?? row.team) ?? "Not set"}</button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "assignee" ? <div className="flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{(childEpicDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}</button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "originalEstimateDays" ? <div className="flex items-center gap-1"><input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "originalEstimateDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.originalEstimateDays || (row.originalEstimateDays == null ? "-" : String(row.originalEstimateDays))}</button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600 tabular-nums" title="Sum of estimated days from child user stories">
@@ -595,14 +861,14 @@ export function InitiativeFormDialog({
                 </div>
               </div>
 
-              <section className="relative z-20 space-y-5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <h3 className="border-b border-slate-200/90 pb-2 text-base font-semibold leading-snug tracking-tight text-slate-900">Details</h3>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-semibold text-slate-700">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-semibold text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-semibold text-slate-700">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-sm font-semibold text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] font-medium text-slate-700" /></label>
+              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <h3 className="border-b border-slate-200/90 pb-2 text-base font-normal leading-snug tracking-tight text-slate-900">Details</h3>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-sm font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] font-medium text-slate-700" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-semibold text-slate-700">Labels</p>
+                  <p className="text-sm font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
                     <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                       {labelsDraft.map((label) => (
@@ -684,9 +950,9 @@ export function InitiativeFormDialog({
                 </label>
               </section>
             </div>
-          </div>
+            </div>
 
-          <div className="relative z-0 mt-3">
+          <div className="relative z-0 mt-3 shrink-0">
             {activityOpen ? (
               <div className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center" onPointerDown={beginActivityPanelResize} title="Resize activity panel height" aria-label="Resize activity panel height" role="separator">
                 <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
@@ -740,14 +1006,15 @@ export function InitiativeFormDialog({
                         {(initiative.comments ?? []).length === 0 ? <p className="text-sm text-slate-500">No comments yet.</p> : initiative.comments.map((comment) => (
                           <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
                             <p className="text-[12px] text-slate-500">{comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}</p>
-                            <p className="mt-1 text-slate-800">{comment.body}</p>
+                            <RichCommentBody body={comment.body} className="mt-1" />
                           </div>
                         ))}
                       </div>
-                      <div className="mt-2 flex gap-2">
-                        <input value={commentBody} onChange={(event) => setCommentBody(event.target.value)} className="w-full rounded-md border bg-background px-2 py-1.5 text-sm" placeholder="Write a comment..." />
-                        <Button size="sm" variant="outline" onClick={handleAddComment} disabled={isAddingComment}><Plus />Add</Button>
-                      </div>
+                      <ActivityCommentComposer
+                        key={`${open}-${initiative.id}-comment`}
+                        onSubmit={(html) => handleAddComment(html)}
+                        disabled={isAddingComment}
+                      />
                     </>
                   ) : (
                     <div className="space-y-2">
@@ -762,6 +1029,7 @@ export function InitiativeFormDialog({
                 </div>
               ) : null}
             </section>
+          </div>
           </div>
         </div>
       </div>

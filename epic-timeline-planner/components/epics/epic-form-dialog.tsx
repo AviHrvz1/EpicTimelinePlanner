@@ -1,19 +1,43 @@
 "use client";
 
-import { Bold, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Heading2, Heading3, History, ImagePlus, Info, Italic, Link as LinkIcon, List, ListOrdered, ListTree, ListTodo, MessageSquare, PlayCircle, Plus, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  Bold,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Heading2,
+  Heading3,
+  History,
+  Info,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  ListTree,
+  MessageSquare,
+  Quote,
+  Tag,
+  Trash,
+  Underline as UnderlineIcon,
+  X,
+} from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
-import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
+import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { Button } from "@/components/ui/button";
+import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
-import { EpicItem, InitiativeItem } from "@/lib/types";
+import { useResizableTableColumns } from "@/lib/use-resizable-table-columns";
+import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
@@ -38,6 +62,20 @@ function monthIndicesForQuarter(q: 1 | 2 | 3 | 4 | null): number[] {
   const start = (q - 1) * 3 + 1;
   return [start, start + 1, start + 2];
 }
+
+const EPIC_CHILD_TABLE_DEFAULT_WIDTHS = [72, 200, 80, 104, 116, 88, 80, 80] as const;
+
+type EpicChildStorySortKey = "id" | "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft";
+
+const STORY_STATUS_SORT_RANK: Record<string, number> = {
+  todo: 0,
+  inProgress: 1,
+  done: 2,
+  approved: 3,
+};
+
+const CHILD_TABLE_RESIZE_HANDLE =
+  "absolute right-0 top-0 z-[1] h-full w-1.5 cursor-col-resize select-none hover:bg-slate-400/50";
 
 type ChildStoryDraft = {
   title: string;
@@ -119,9 +157,9 @@ export function EpicFormDialog({
   const [planMonthDraft, setPlanMonthDraft] = useState("");
   const [teamDraft, setTeamDraft] = useState("");
   const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
-  const [commentBody, setCommentBody] = useState("");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [activityOpen, setActivityOpen] = useState(false);
+  const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
@@ -139,14 +177,24 @@ export function EpicFormDialog({
   } | null>(null);
   const [childEditingValue, setChildEditingValue] = useState("");
   const [newChildTitle, setNewChildTitle] = useState("");
+  const [childStorySortKey, setChildStorySortKey] = useState<EpicChildStorySortKey>("title");
+  const [childStorySortDir, setChildStorySortDir] = useState<"asc" | "desc">("asc");
+  const { widths: childTableWidths, onColumnResizeStart: onChildTableColResize } = useResizableTableColumns(
+    `${open ? "1" : "0"}-${epic?.id ?? "none"}`,
+    EPIC_CHILD_TABLE_DEFAULT_WIDTHS,
+  );
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
   const descriptionEditor = useEditor({
     extensions: [
       StarterKit,
       Underline,
-      Link.configure({ openOnClick: false }),
-      Image,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "text-blue-600 underline decoration-blue-600/40 underline-offset-2",
+        },
+      }),
       Placeholder.configure({ placeholder: "Description" }),
     ],
     content: description?.trim() ? description : "<p></p>",
@@ -188,7 +236,6 @@ export function EpicFormDialog({
     }
     setForceTeamFieldEdit(false);
     setTeamDraft(epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : "");
-    setCommentBody("");
     setActivityTab("comments");
     if (epic?.id) {
       const raw = window.localStorage.getItem(`epic-labels:${epic.id}`) ?? "";
@@ -215,6 +262,7 @@ export function EpicFormDialog({
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(220);
       setActivityOpen(false);
+      setDescriptionAccordionOpen(true);
       dragStartRef.current = null;
     }
   }, [open]);
@@ -283,6 +331,95 @@ export function EpicFormDialog({
     });
     return { byInitiativeId, byEpicId, byStoryId };
   }, [orderedInitiatives]);
+
+  function toggleChildStorySort(key: EpicChildStorySortKey) {
+    if (key === childStorySortKey) {
+      setChildStorySortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setChildStorySortKey(key);
+      setChildStorySortDir("asc");
+    }
+  }
+
+  const sortedEpicChildStories = useMemo(() => {
+    const raw = epic?.userStories ?? [];
+    if (raw.length === 0) return raw;
+    const list = [...raw] as UserStoryItem[];
+    const asc = childStorySortDir === "asc";
+    const mul = asc ? 1 : -1;
+    const ids = displayIds.byStoryId;
+    const drafts = childStoryDrafts;
+    const missingNum = asc ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+
+    const cmpStr = (a: string, b: string) => {
+      if (a < b) return -1 * mul;
+      if (a > b) return 1 * mul;
+      return 0;
+    };
+    const cmpNum = (a: number, b: number) => {
+      if (a < b) return -1 * mul;
+      if (a > b) return 1 * mul;
+      return 0;
+    };
+
+    list.sort((sa, sb) => {
+      switch (childStorySortKey) {
+        case "id": {
+          const la = (ids.get(sa.id) ?? storyRefById?.[sa.id] ?? sa.id).toLowerCase();
+          const lb = (ids.get(sb.id) ?? storyRefById?.[sb.id] ?? sb.id).toLowerCase();
+          return la.localeCompare(lb, undefined, { numeric: true }) * mul;
+        }
+        case "title":
+          return cmpStr(
+            (drafts[sa.id]?.title ?? sa.title).toLowerCase(),
+            (drafts[sb.id]?.title ?? sb.title).toLowerCase(),
+          );
+        case "sprint": {
+          const parseS = (s: UserStoryItem) => {
+            const d = drafts[s.id]?.sprint?.trim();
+            const n = d ? Number(d) : s.sprint;
+            return Number.isFinite(Number(n)) ? Number(n) : missingNum;
+          };
+          return cmpNum(parseS(sa), parseS(sb));
+        }
+        case "status": {
+          const ra = STORY_STATUS_SORT_RANK[drafts[sa.id]?.status ?? sa.status] ?? 99;
+          const rb = STORY_STATUS_SORT_RANK[drafts[sb.id]?.status ?? sb.status] ?? 99;
+          return cmpNum(ra, rb);
+        }
+        case "assignee":
+          return cmpStr(
+            (drafts[sa.id]?.assignee ?? sa.assignee ?? "").toLowerCase(),
+            (drafts[sb.id]?.assignee ?? sb.assignee ?? "").toLowerCase(),
+          );
+        case "priority": {
+          const pa = (drafts[sa.id]?.priority ?? sa.priority ?? "").trim() || "zzz";
+          const pb = (drafts[sb.id]?.priority ?? sb.priority ?? "").trim() || "zzz";
+          return cmpStr(pa.toLowerCase(), pb.toLowerCase());
+        }
+        case "estimatedDays": {
+          const parseE = (s: UserStoryItem) => {
+            const d = drafts[s.id]?.estimatedDays?.trim();
+            const n = d ? Number(d) : s.estimatedDays;
+            return Number.isFinite(Number(n)) ? Number(n) : -1;
+          };
+          return cmpNum(parseE(sa), parseE(sb));
+        }
+        case "daysLeft": {
+          const parseD = (s: UserStoryItem) => {
+            const d = drafts[s.id]?.daysLeft?.trim();
+            const n = d ? Number(d) : s.daysLeft;
+            return Number.isFinite(Number(n)) ? Number(n) : -1;
+          };
+          return cmpNum(parseD(sa), parseD(sb));
+        }
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [epic?.userStories, childStorySortKey, childStorySortDir, childStoryDrafts, displayIds, storyRefById]);
+
   const hasChildren = (epic?.userStories?.length ?? 0) > 0;
   const existingLabelSuggestions = useMemo(() => {
     const set = new Set<string>();
@@ -393,14 +530,11 @@ export function EpicFormDialog({
     setLabelsDraft((prev) => prev.filter((item) => item !== label));
   }
 
-  async function handleAddComment() {
+  async function handleAddComment(html: string) {
     if (!epic || !onAddComment) return;
-    const normalized = commentBody.trim();
-    if (!normalized) return;
     setIsAddingComment(true);
     try {
-      await onAddComment(epic.id, normalized);
-      setCommentBody("");
+      await onAddComment(epic.id, html);
     } finally {
       setIsAddingComment(false);
     }
@@ -568,14 +702,12 @@ export function EpicFormDialog({
                 {selectedInitiative ? (displayIds.byInitiativeId.get(selectedInitiative.id) ?? "Initiative") : "Initiative"}
               </button>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
-              <button
-                type="button"
-                onClick={() => undefined}
-                className="inline-flex min-w-0 items-center gap-1 truncate cursor-pointer rounded px-1 py-0.5 text-blue-700 underline decoration-blue-300 underline-offset-2 hover:bg-blue-50"
-                title={(epic?.title ?? title) || "Open epic"}
+              <span
+                className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 py-0.5 text-slate-800"
+                title={(epic?.title ?? title) || "Epic"}
               >
                 {epic ? (displayIds.byEpicId.get(epic.id) ?? "Epic") : "Epic"}
-              </button>
+              </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
               <span className="truncate text-slate-900">{title || (epic ? "Epic details" : "Create epic")}</span>
             </div>
@@ -603,14 +735,15 @@ export function EpicFormDialog({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div
-              ref={splitLayoutRef}
-              className="grid min-h-0 gap-0"
-              style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
-            >
-              <section className="h-full min-h-0 overflow-y-auto space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                <label className="block space-y-1">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <div
+                ref={splitLayoutRef}
+                className="grid h-full min-h-0 gap-0"
+                style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
+              >
+              <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+                <label className="block shrink-0 space-y-1">
                   <p className="text-sm font-medium text-slate-600">Title</p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
                     <input
@@ -628,8 +761,8 @@ export function EpicFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
-                  <p className="text-sm font-semibold text-slate-700">Quarter</p>
+                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
+                  <p className="text-sm font-normal text-slate-700">Quarter</p>
                   <select
                     value={planQuarterDraft}
                     onChange={(event) => {
@@ -649,7 +782,7 @@ export function EpicFormDialog({
                     <option value="Q3">Q3</option>
                     <option value="Q4">Q4</option>
                   </select>
-                  <p className="text-sm font-semibold text-slate-700">Month</p>
+                  <p className="text-sm font-normal text-slate-700">Month</p>
                   <select
                     value={planMonthDraft}
                     onChange={(event) => {
@@ -670,7 +803,7 @@ export function EpicFormDialog({
                       </option>
                     ))}
                   </select>
-                  <p className="text-sm font-semibold text-slate-700">Year</p>
+                  <p className="text-sm font-normal text-slate-700">Year</p>
                   <input
                     readOnly
                     value={planningYearDisplay}
@@ -679,35 +812,54 @@ export function EpicFormDialog({
                   />
                 </div>
 
-                <label className="mt-5 block space-y-1">
-                  <p className="text-sm font-medium text-slate-600">Description</p>
-                  <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><List className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><ListOrdered className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Quote className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading2 className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (!descriptionEditor) return; const picker = document.createElement("input"); picker.type = "file"; picker.accept = "image/*"; picker.onchange = () => { const file = picker.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const src = typeof reader.result === "string" ? reader.result : ""; if (!src) return; descriptionEditor.chain().focus().setImage({ src }).run(); }; reader.readAsDataURL(file); }; picker.click(); }} className="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-slate-700 hover:bg-white"><ImagePlus className="size-3.5" /></button>
-                  </div>
-                  <div
-                    className={cn(
-                      "w-full rounded-md border bg-background px-3 py-2",
-                      hasChildren ? "min-h-[11rem]" : "min-h-[16rem]",
-                    )}
+                <div className="mt-5 flex shrink-0 flex-col gap-1">
+                  <button
+                    type="button"
+                    id="epic-form-description-accordion-trigger"
+                    aria-expanded={descriptionAccordionOpen}
+                    aria-controls="epic-form-description-accordion-panel"
+                    onClick={() => setDescriptionAccordionOpen((v) => !v)}
+                    className="flex w-full items-center gap-1.5 rounded-md py-1 text-left text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
                   >
-                    <EditorContent
-                      editor={descriptionEditor}
-                      className="focus:outline-none [&_.ProseMirror]:min-h-[9rem] [&_.ProseMirror]:outline-none"
-                    />
+                    {descriptionAccordionOpen ? (
+                      <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    )}
+                    Description
+                  </button>
+                  <div
+                    id="epic-form-description-accordion-panel"
+                    role="region"
+                    aria-labelledby="epic-form-description-accordion-trigger"
+                    hidden={!descriptionAccordionOpen}
+                    className="flex flex-col gap-1"
+                  >
+                    <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><List className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><ListOrdered className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Quote className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading2 className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
+                    </div>
+                    <div
+                      className="min-h-[14rem] max-h-[min(70vh,640px)] resize-y overflow-y-auto rounded-md border bg-background px-3 py-2"
+                      title="Drag the bottom edge to resize height"
+                    >
+                      <EditorContent
+                        editor={descriptionEditor}
+                        className="focus:outline-none [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:outline-none"
+                      />
+                    </div>
                   </div>
-                </label>
+                </div>
 
-                <section className="mt-5 space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                  <div className="flex items-center justify-between">
+                <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                  <div className="flex shrink-0 items-center justify-between">
                     <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
                       <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
                       Child User Stories
@@ -718,40 +870,215 @@ export function EpicFormDialog({
                   </div>
 
                   {!epic ? (
-                    <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
+                    <p className="shrink-0 rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
                       Save this epic first, then add and manage user stories here.
                     </p>
                   ) : (
                     <>
-                      <div className="max-h-56 space-y-2 overflow-y-auto">
+                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
                         {(epic.userStories ?? []).length === 0 ? (
                           <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
                             No user stories yet.
                           </p>
                         ) : (
                           <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
-                            <table className="w-full min-w-[860px] text-left text-sm">
+                            <table className="w-full table-fixed text-left text-sm">
+                              <colgroup>
+                                {childTableWidths.map((w, i) => (
+                                  <col key={i} style={{ width: w }} />
+                                ))}
+                              </colgroup>
                               <thead className="bg-indigo-50/70 text-slate-600">
                                 <tr>
-                                  <th className="px-2 py-1.5 font-medium">ID</th>
-                                  <th className="px-2 py-1.5 font-medium">Type</th>
-                                  <th className="px-2 py-1.5 font-medium">Story</th>
-                                  <th className="px-2 py-1.5 font-medium">Sprint</th>
-                                  <th className="px-3 py-2 font-semibold">Status</th>
-                                  <th className="px-3 py-2 font-semibold">Assignee</th>
-                                  <th className="px-2 py-1.5 font-medium">Priority</th>
-                                  <th className="px-3 py-2 font-semibold">Est. days</th>
-                                  <th className="px-3 py-2 font-semibold">Days left</th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[0] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("id")}
+                                    >
+                                      ID
+                                      {childStorySortKey === "id" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(0, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[1] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("title")}
+                                    >
+                                      Story
+                                      {childStorySortKey === "title" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(1, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[2] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("sprint")}
+                                    >
+                                      Sprint
+                                      {childStorySortKey === "sprint" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(2, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[3] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("status")}
+                                    >
+                                      Status
+                                      {childStorySortKey === "status" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(3, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[4] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("assignee")}
+                                    >
+                                      Assignee
+                                      {childStorySortKey === "assignee" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(4, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[5] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("priority")}
+                                    >
+                                      Priority
+                                      {childStorySortKey === "priority" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(5, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[6] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("estimatedDays")}
+                                    >
+                                      Est. days
+                                      {childStorySortKey === "estimatedDays" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(6, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
+                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[7] }}>
+                                    <button
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      onClick={() => toggleChildStorySort("daysLeft")}
+                                    >
+                                      Days left
+                                      {childStorySortKey === "daysLeft" ? (
+                                        childStorySortDir === "asc" ? (
+                                          <ChevronUp className="size-3.5 shrink-0" />
+                                        ) : (
+                                          <ChevronDown className="size-3.5 shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="size-3 shrink-0 opacity-40" />
+                                      )}
+                                    </button>
+                                    <span
+                                      className={CHILD_TABLE_RESIZE_HANDLE}
+                                      onPointerDown={(e) => onChildTableColResize(7, e)}
+                                      aria-hidden
+                                    />
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>
                                 <tr className="border-t border-slate-100 bg-blue-50/40">
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
-                                  <td className="px-2 py-1.5">
-                                    <span className="inline-flex rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                                      User Story
-                                    </span>
-                                  </td>
                                   <td className="px-2 py-1.5">
                                     <div className="flex gap-1">
                                       <input
@@ -782,7 +1109,7 @@ export function EpicFormDialog({
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                 </tr>
-                                {epic.userStories.map((story) => (
+                                {sortedEpicChildStories.map((story) => (
                                   <tr key={story.id} className="border-t border-slate-100 align-middle">
                                     <td className="px-2 py-1.5 text-slate-600">
                                       <button
@@ -793,11 +1120,6 @@ export function EpicFormDialog({
                                       >
                                         {displayIds.byStoryId.get(story.id) ?? storyRefById?.[story.id] ?? story.id}
                                       </button>
-                                    </td>
-                                    <td className="px-2 py-1.5 text-slate-600">
-                                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                                        User Story
-                                      </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-slate-800">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "title" ? (
@@ -839,11 +1161,7 @@ export function EpicFormDialog({
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "status")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          <span className={cn("inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]", statusTone[childStoryDrafts[story.id]?.status ?? story.status] ?? "bg-muted text-muted-foreground")}>
-                                            {(childStoryDrafts[story.id]?.status ?? story.status) === "todo" ? <ListTodo className="size-3" /> : null}
-                                            {(childStoryDrafts[story.id]?.status ?? story.status) === "inProgress" ? <PlayCircle className="size-3" /> : null}
-                                            {(childStoryDrafts[story.id]?.status ?? story.status) === "done" ? <CheckCheck className="size-3" /> : null}
-                                            {(childStoryDrafts[story.id]?.status ?? story.status) === "approved" ? <CheckCircle2 className="size-3" /> : null}
+                                          <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]", statusTone[childStoryDrafts[story.id]?.status ?? story.status] ?? "bg-muted text-muted-foreground")}>
                                             {storyStatusLabel[childStoryDrafts[story.id]?.status ?? story.status] ?? (childStoryDrafts[story.id]?.status ?? story.status)}
                                           </span>
                                         </button>
@@ -914,21 +1232,6 @@ export function EpicFormDialog({
                           </div>
                         )}
                       </div>
-
-                      <div className="flex justify-start">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            if (!epic || !onRequestCreateStory) return;
-                            onRequestCreateStory(epic.id);
-                          }}
-                          disabled={!onRequestCreateStory}
-                        >
-                          <Plus />
-                          Add user story
-                        </Button>
-                      </div>
                     </>
                   )}
                 </section>
@@ -947,12 +1250,12 @@ export function EpicFormDialog({
                 </div>
               </div>
 
-              <section className="relative z-20 space-y-5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <h3 className="border-b border-slate-200/90 pb-2 text-base font-semibold leading-snug tracking-tight text-slate-900">
+              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <h3 className="border-b border-slate-200/90 pb-2 text-base font-normal leading-snug tracking-tight text-slate-900">
                   Details
                 </h3>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-semibold text-slate-700">Assignee</p>
+                  <p className="text-sm font-normal text-slate-700">Assignee</p>
                   <input
                     className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
                     placeholder="e.g. Avi"
@@ -961,7 +1264,7 @@ export function EpicFormDialog({
                   />
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-semibold text-slate-700">Parent</p>
+                  <p className="text-sm font-normal text-slate-700">Parent</p>
                   <select
                     className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40"
                     value={initiativeId}
@@ -989,7 +1292,7 @@ export function EpicFormDialog({
                   </select>
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-semibold text-slate-700">Team</p>
+                  <p className="text-sm font-normal text-slate-700">Team</p>
                   {showTeamSelect ? (
                     <select
                       className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
@@ -1026,7 +1329,7 @@ export function EpicFormDialog({
                   )}
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-semibold text-slate-700">Orig. Est.</p>
+                  <p className="text-sm font-normal text-slate-700">Orig. Est.</p>
                   <input
                     type="number"
                     min={0}
@@ -1040,7 +1343,7 @@ export function EpicFormDialog({
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <div className="inline-flex items-center gap-1">
-                    <p className="text-sm font-semibold text-slate-700">Σ Child Est.</p>
+                    <p className="text-sm font-normal text-slate-700">Σ Child Est.</p>
                     <span className="group relative inline-flex items-center">
                       <Info
                         className="size-3.5 text-slate-400"
@@ -1058,7 +1361,7 @@ export function EpicFormDialog({
                   />
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-semibold text-slate-700">Labels</p>
+                  <p className="text-sm font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
                     <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                       {labelsDraft.map((label) => (
@@ -1138,19 +1441,11 @@ export function EpicFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-semibold text-slate-700">Epic ID</p>
-                  <input
-                    value={epic?.id ?? "Will be created on save"}
-                    readOnly
-                    className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700"
-                  />
-                </label>
               </section>
             </div>
-          </div>
+            </div>
 
-          <div className="relative z-0 mt-3">
+          <div className="relative z-0 mt-3 shrink-0">
             {activityOpen ? (
               <div
                 className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
@@ -1239,23 +1534,16 @@ export function EpicFormDialog({
                               <p className="text-[12px] text-slate-500">
                                 {comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}
                               </p>
-                              <p className="mt-1 text-slate-800">{comment.body}</p>
+                              <RichCommentBody body={comment.body} className="mt-1" />
                             </div>
                           ))
                         )}
                       </div>
-                      <div className="mt-2 flex gap-2">
-                        <input
-                          value={commentBody}
-                          onChange={(event) => setCommentBody(event.target.value)}
-                          className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                          placeholder="Write a comment..."
-                        />
-                        <Button size="sm" variant="outline" onClick={handleAddComment} disabled={isAddingComment}>
-                          <Plus />
-                          Add
-                        </Button>
-                      </div>
+                      <ActivityCommentComposer
+                        key={`${open}-${epic.id}-comment`}
+                        onSubmit={(html) => handleAddComment(html)}
+                        disabled={isAddingComment}
+                      />
                     </>
                   ) : (
                     <div className="space-y-2">
@@ -1274,6 +1562,7 @@ export function EpicFormDialog({
                 </div>
               ) : null}
             </section>
+          </div>
           </div>
         </div>
       </div>

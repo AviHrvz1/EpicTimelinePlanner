@@ -277,3 +277,18 @@
   pointer-events: none;
   color: var(--muted-foreground);
 }
+
+/**
+ * Tiptap / ProseMirror: visible links (Tailwind preflight removes default <a> color/underline).
+ * Matches rich-comment-body `[&_a]` styling (blue-600 + underline).
+ */
+.ProseMirror a {
+  color: rgb(37 99 235);
+  text-decoration: underline;
+  text-decoration-color: rgb(37 99 235 / 0.4);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ProseMirror a:hover {
+  color: rgb(29 78 216);
+}

@@ -1833,6 +1833,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     await refresh();
   }
 
+  async function patchEpicTeamFromStoryDialog(epicId: string, team: string | null) {
+    const response = await fetch(`/api/epics/${epicId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to update epic team");
+    }
+    await refresh();
+  }
+
   async function addStoryComment(storyId: string, body: string) {
     const response = await fetch(`/api/stories/${storyId}/comments`, {
       method: "POST",
@@ -3344,6 +3356,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             toast.success("Comment added");
           } catch {
             toast.error("Failed to add comment");
+          }
+        }}
+        onPatchEpicTeam={async (epicId, team) => {
+          try {
+            await patchEpicTeamFromStoryDialog(epicId, team);
+          } catch {
+            toast.error("Failed to update team on epic");
+            throw new Error("Failed to update epic team");
           }
         }}
         onDelete={async (storyId) => {

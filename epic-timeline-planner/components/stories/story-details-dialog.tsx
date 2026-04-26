@@ -1,19 +1,20 @@
 "use client";
 
-import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Bold, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Heading2, Heading3, History, ImagePlus, Italic, Link as LinkIcon, List, ListOrdered, ListTodo, MessageSquare, PlayCircle, Plus, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
+import { Bold, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Heading2, Heading3, History, Italic, Link as LinkIcon, List, ListOrdered, ListTodo, MessageSquare, PlayCircle, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 
+import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { Button } from "@/components/ui/button";
+import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
-import { monthTeamLabelForId } from "@/lib/month-team-board";
+import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import {
@@ -63,6 +64,8 @@ type StoryDetailsDialogProps = {
   ) => Promise<void>;
   onDelete?: (storyId: string) => Promise<void>;
   onAddComment: (storyId: string, body: string) => Promise<void>;
+  /** Updates the parent epic’s delivery team (saved with the story). */
+  onPatchEpicTeam?: (epicId: string, team: string | null) => Promise<void>;
   onOpenInitiative?: (initiativeId: string) => void;
   onOpenEpic?: (epicId: string) => void;
   onOpenStory?: (storyId: string) => void;
@@ -84,6 +87,7 @@ export function StoryDetailsDialog({
   onSave,
   onDelete,
   onAddComment,
+  onPatchEpicTeam,
   onOpenInitiative,
   onOpenEpic,
   onOpenStory,
@@ -110,12 +114,12 @@ export function StoryDetailsDialog({
   const [estimatedDays, setEstimatedDays] = useState("");
   const [daysLeft, setDaysLeft] = useState("");
   const [epicId, setEpicId] = useState("");
-  const [commentBody, setCommentBody] = useState("");
+  const [epicTeamDraft, setEpicTeamDraft] = useState("");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [saving, setSaving] = useState(false);
   const [commenting, setCommenting] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(75);
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(true);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(280);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
@@ -126,8 +130,12 @@ export function StoryDetailsDialog({
     extensions: [
       StarterKit,
       Underline,
-      Link.configure({ openOnClick: false }),
-      Image,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "text-blue-600 underline decoration-blue-600/40 underline-offset-2",
+        },
+      }),
       Placeholder.configure({
         placeholder: "Description",
       }),
@@ -152,17 +160,6 @@ export function StoryDetailsDialog({
   );
 
   const firstEpicId = allEpics[0]?.id ?? "";
-  const selectedEpicMeta = useMemo(() => {
-    if (!epicId) return null;
-    for (const initiative of initiatives) {
-      for (const epic of initiative.epics ?? []) {
-        if (epic.id !== epicId) continue;
-        const team = monthTeamLabelForId(epic.team) ?? "Not set";
-        return { team };
-      }
-    }
-    return null;
-  }, [initiatives, epicId]);
   const selectedBreadcrumbMeta = useMemo(() => {
     for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
@@ -198,6 +195,21 @@ export function StoryDetailsDialog({
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
   }, [newLabel, labelsDraft, filteredLabelSuggestions.length]);
+
+  useEffect(() => {
+    if (!epicId) {
+      setEpicTeamDraft("");
+      return;
+    }
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        if (epic.id !== epicId) continue;
+        setEpicTeamDraft(epic.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : "");
+        return;
+      }
+    }
+    setEpicTeamDraft("");
+  }, [epicId, initiatives]);
   const displayIds = useMemo(() => {
     const byInitiativeId = new Map<string, string>();
     const byEpicId = new Map<string, string>();
@@ -271,14 +283,13 @@ export function StoryDetailsDialog({
       setDaysLeft("");
       setEpicId(lockParentEpicId ?? firstEpicId);
     }
-    setCommentBody("");
     setActivityTab("comments");
   }, [story, initiatives, lockParentEpicId, firstEpicId]);
 
   useEffect(() => {
     if (open) {
       setDialogWidthVw(75);
-      setActivityOpen(false);
+      setActivityOpen(true);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(280);
       setDialogOffset({ x: 0, y: 0 });
@@ -322,6 +333,21 @@ export function StoryDetailsDialog({
     if (!payload) return;
     setSaving(true);
     try {
+      if (onPatchEpicTeam) {
+        let prevTeam: string | null = null;
+        outer: for (const initiative of initiatives) {
+          for (const epic of initiative.epics ?? []) {
+            if (epic.id !== payload.epicId) continue;
+            prevTeam = epic.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : null;
+            break outer;
+          }
+        }
+        const t = epicTeamDraft.trim();
+        const nextTeam = t && MONTH_TEAM_IDS.includes(t) ? t : null;
+        if (prevTeam !== nextTeam) {
+          await onPatchEpicTeam(payload.epicId, nextTeam);
+        }
+      }
       if (isCreateMode) {
         await onCreate(payload);
       } else {
@@ -333,21 +359,17 @@ export function StoryDetailsDialog({
     }
   }
 
-  if (!visible) return null;
-
-  async function handleCommentAdd() {
-    const normalizedComment = commentBody.trim();
-    if (!normalizedComment) return;
-
+  async function handleCommentAdd(html: string) {
     setCommenting(true);
     try {
       if (!story) return;
-      await onAddComment(story.id, normalizedComment);
-      setCommentBody("");
+      await onAddComment(story.id, html);
     } finally {
       setCommenting(false);
     }
   }
+
+  if (!visible) return null;
 
   async function handleDelete() {
     if (isCreateMode || !story || !onDelete) return;
@@ -510,15 +532,13 @@ export function StoryDetailsDialog({
                 : "Epic"}
             </button>
             <ChevronRight className="size-4 shrink-0 text-slate-400" />
-            <button
-              type="button"
-              onClick={() => story && onOpenStory?.(story.id)}
-              className="inline-flex min-w-0 items-center gap-1 truncate cursor-pointer rounded px-1 py-0.5 text-blue-700 underline decoration-blue-300 underline-offset-2 hover:bg-blue-50"
-              title={(story?.title ?? title) || "Open user story"}
+            <span
+              className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 py-0.5 text-slate-800"
+              title={(story?.title ?? title) || "User story"}
             >
               <UserStoryIcon className="size-3.5" />
               {story ? (displayIds.byStoryId.get(story.id) ?? "User Story") : "User Story"}
-            </button>
+            </span>
             <ChevronRight className="size-4 shrink-0 text-slate-400" />
             <span className="truncate text-slate-900">{title || (isCreateMode ? "Create User Story" : "Untitled")}</span>
           </div>
@@ -552,14 +572,15 @@ export function StoryDetailsDialog({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div
-            ref={splitLayoutRef}
-            className="grid min-h-0 gap-0"
-            style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
-          >
-          <section className="h-full min-h-0 overflow-y-auto space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-            <label className="block space-y-1">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <div
+              ref={splitLayoutRef}
+              className="grid h-full min-h-0 gap-0"
+              style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
+            >
+          <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+            <label className="block shrink-0 space-y-1">
               <p className="text-sm font-medium text-slate-600">Title</p>
               <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
                 <input
@@ -575,10 +596,9 @@ export function StoryDetailsDialog({
                 />
               </div>
             </label>
-            <label className="mt-5 block space-y-1">
-              <p className="text-sm font-medium text-slate-600">Description</p>
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+            <label className="mt-5 flex min-h-0 flex-1 flex-col gap-1">
+              <p className="shrink-0 text-sm font-medium text-slate-600">Description</p>
+                <div className="flex shrink-0 flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
                   <button
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
@@ -636,31 +656,6 @@ export function StoryDetailsDialog({
                   <button
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      if (!descriptionEditor) return;
-                      const picker = document.createElement("input");
-                      picker.type = "file";
-                      picker.accept = "image/*";
-                      picker.onchange = () => {
-                        const file = picker.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          const src = typeof reader.result === "string" ? reader.result : "";
-                          if (!src) return;
-                          descriptionEditor.chain().focus().setImage({ src }).run();
-                        };
-                        reader.readAsDataURL(file);
-                      };
-                      picker.click();
-                    }}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-slate-700 hover:bg-white"
-                  >
-                    <ImagePlus className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
@@ -714,13 +709,12 @@ export function StoryDetailsDialog({
                     <Quote className="size-3.5" />
                   </button>
                 </div>
-                <div className="min-h-0 rounded-md border bg-background px-3 py-2">
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-background px-3 py-2">
                   <EditorContent
                     editor={descriptionEditor}
-                    className="focus:outline-none [&_.ProseMirror]:min-h-[16rem] [&_.ProseMirror]:outline-none"
+                    className="focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none"
                   />
                 </div>
-              </div>
             </label>
           </section>
           <div className="relative mx-1.5">
@@ -736,12 +730,12 @@ export function StoryDetailsDialog({
             </div>
           </div>
 
-          <section className="relative z-20 space-y-5 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-            <h3 className="border-b border-slate-200/90 pb-2 text-base font-semibold leading-snug tracking-tight text-slate-900">
+          <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+            <h3 className="border-b border-slate-200/90 pb-2 text-base font-normal leading-snug tracking-tight text-slate-900">
               Details
             </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Status</p>
+              <p className="text-sm font-normal text-slate-700">Status</p>
               <div className="flex h-7 items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2">
                 {(() => {
                   const Icon = statusMeta[status].Icon;
@@ -756,15 +750,27 @@ export function StoryDetailsDialog({
               </div>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Assignee</p>
+              <p className="text-sm font-normal text-slate-700">Assignee</p>
               <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" placeholder="e.g. Avi" />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Team</p>
-              <input value={selectedEpicMeta?.team ?? "Not set"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" />
+              <p className="text-sm font-normal text-slate-700">Team</p>
+              <select
+                value={epicTeamDraft}
+                onChange={(event) => setEpicTeamDraft(event.target.value)}
+                disabled={!epicId}
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40"
+              >
+                <option value="">Not set</option>
+                {MONTH_TEAM_COLUMNS.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Sprint</p>
+              <p className="text-sm font-normal text-slate-700">Sprint</p>
               <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[13px] font-medium text-slate-800">
                 <option value="">Not set</option>
                 {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => (
@@ -773,7 +779,7 @@ export function StoryDetailsDialog({
               </select>
             </label>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
-              <p className="text-sm font-semibold text-slate-700">Estimated Days</p>
+              <p className="text-sm font-normal text-slate-700">Estimated Days</p>
               <input
                 type="number"
                 min={0}
@@ -783,7 +789,7 @@ export function StoryDetailsDialog({
               />
             </div>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Est. Days left</p>
+              <p className="text-sm font-normal text-slate-700">Est. Days left</p>
               <input
                 type="number"
                 min={0}
@@ -793,7 +799,7 @@ export function StoryDetailsDialog({
               />
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Priority</p>
+              <p className="text-sm font-normal text-slate-700">Priority</p>
               <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800">
                 <option value="">Not set</option>
                 <option value="P0">P0</option>
@@ -803,7 +809,7 @@ export function StoryDetailsDialog({
               </select>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Parent</p>
+              <p className="text-sm font-normal text-slate-700">Parent</p>
               <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
                 <option value="">Select epic</option>
                 {initiatives.map((initiative) => (
@@ -816,7 +822,7 @@ export function StoryDetailsDialog({
               </select>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-semibold text-slate-700">Labels</p>
+              <p className="text-sm font-normal text-slate-700">Labels</p>
               <div className="relative z-30">
                 <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                   {labelsDraft.map((label) => (
@@ -897,10 +903,10 @@ export function StoryDetailsDialog({
               </div>
             </label>
           </section>
-          </div>
-        </div>
+            </div>
+            </div>
 
-        <div className="relative z-0 mt-3">
+        <div className="relative z-0 mt-3 shrink-0">
           {activityOpen ? (
             <div
               className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
@@ -985,23 +991,16 @@ export function StoryDetailsDialog({
                             <p className="text-[12px] text-slate-500">
                               {comment.author ?? "Team"} - {new Date(comment.createdAt).toLocaleString()}
                             </p>
-                            <p className="mt-1 text-slate-800">{comment.body}</p>
+                            <RichCommentBody body={comment.body} className="mt-1" />
                           </div>
                         ))
                       )}
                     </div>
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        value={commentBody}
-                        onChange={(event) => setCommentBody(event.target.value)}
-                        className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                        placeholder="Write a comment..."
-                      />
-                      <Button size="sm" variant="outline" onClick={handleCommentAdd} disabled={commenting}>
-                        <Plus />
-                        Add
-                      </Button>
-                    </div>
+                    <ActivityCommentComposer
+                      key={`${open}-${story.id}-comment`}
+                      onSubmit={(html) => handleCommentAdd(html)}
+                      disabled={commenting}
+                    />
                   </>
                 ) : (
                   <div className="space-y-2">
@@ -1025,6 +1024,7 @@ export function StoryDetailsDialog({
         </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }
