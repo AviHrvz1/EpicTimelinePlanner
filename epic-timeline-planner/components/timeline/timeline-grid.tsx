@@ -14,6 +14,7 @@ import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
 import { QuarterTeamCapacityBoard } from "@/components/timeline/quarter-team-capacity";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
+import { SprintEndCountdown } from "@/components/timeline/sprint-end-countdown";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { computeSprintKanbanSummaryStats } from "@/lib/sprint-plan";
@@ -887,17 +888,27 @@ export function TimelineGrid({
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
 
-  const sprintKanbanSummaryStats = useMemo(() => {
-    if (activeMonth == null || monthPlanTab !== "sprint-kanban") return null;
+  const activeYearSprintForMonthDrill = useMemo(() => {
+    if (activeMonth == null) return null;
     const fromParent =
       activeSprintExternal !== undefined && activeSprintExternal != null
         ? clampYearSprint(activeSprintExternal)
         : null;
-    const yearSprint =
-      fromParent ?? (activeSprint != null ? clampYearSprint(activeSprint) : firstGlobalSprintForMonth(activeMonth));
+    return fromParent ?? (activeSprint != null ? clampYearSprint(activeSprint) : firstGlobalSprintForMonth(activeMonth));
+  }, [activeMonth, activeSprint, activeSprintExternal]);
+
+  const sprintKanbanSummaryStats = useMemo(() => {
+    if (activeMonth == null || monthPlanTab !== "sprint-kanban" || activeYearSprintForMonthDrill == null) return null;
     const teamId = isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null;
-    return computeSprintKanbanSummaryStats(initiatives, activeMonth, yearSprint, teamId);
-  }, [activeMonth, monthPlanTab, initiatives, activeSprint, activeSprintExternal, sprintStoryBoardTeamId]);
+    return computeSprintKanbanSummaryStats(initiatives, activeMonth, activeYearSprintForMonthDrill, teamId);
+  }, [activeMonth, monthPlanTab, initiatives, activeYearSprintForMonthDrill, sprintStoryBoardTeamId]);
+
+  const showSprintEndCountdown =
+    activeMonth != null &&
+    (monthPlanTab === "sprint-kanban" ||
+      monthPlanTab === "sprint-status" ||
+      monthPlanTab === "sprint-capacity" ||
+      monthPlanTab === "sprint-retrospective");
 
   const handleResizePointerDown = useCallback(
     (initiativeId: string, side: "left" | "right", event: React.PointerEvent<HTMLDivElement>) => {
@@ -1486,8 +1497,6 @@ export function TimelineGrid({
   );
   const selectedSprintTeamOption =
     sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
-  const suppressMainVerticalScroll = activeMonth != null && monthPlanTab === "sprint-kanban";
-
   useEffect(() => {
     if (!isSprintTeamMenuOpen) return;
     const handlePointerDown = (event: PointerEvent) => {
@@ -1511,15 +1520,10 @@ export function TimelineGrid({
   }, [showSprintTeamPicker]);
 
   return (
-    <div
-      className={cn(
-        "h-full min-h-0 w-full overflow-x-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5",
-        suppressMainVerticalScroll ? "overflow-y-hidden" : "overflow-y-auto",
-      )}
-    >
+    <div className="flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
-          "relative z-30 mb-4 flex items-center gap-3 overflow-visible",
+          "relative z-30 mb-4 shrink-0 flex items-center gap-3 overflow-visible",
           hasBreadcrumbs ? "px-0 py-1" : "rounded-lg bg-slate-100 px-0 py-2.5",
           hasBreadcrumbs ? "justify-between" : "justify-start",
         )}
@@ -1702,120 +1706,125 @@ export function TimelineGrid({
             ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="flex w-full flex-wrap items-center justify-end gap-2 pr-3">
-            {sprintKanbanSummaryStats ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoadmapBarMode("epics");
-                    onSummaryStatusQuickFilterChange?.(null);
-                  }}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                      ? "bg-amber-100 text-amber-800 ring-amber-200"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                  )}
-                >
-                  {sprintKanbanSummaryStats.epicCount} Epics
-                </button>
-                <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300">
-                  {sprintKanbanSummaryStats.storyUnscheduled} User Stories Unscheduled
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoadmapBarMode("epics");
-                    onSummaryStatusQuickFilterChange?.(
-                      summaryStatusQuickFilter === "Scheduled" ? null : "Scheduled",
-                    );
-                  }}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    summaryStatusQuickFilter === "Scheduled"
-                      ? "bg-amber-100 text-amber-800 ring-amber-300"
-                      : "bg-amber-100 text-amber-900 ring-amber-200 hover:bg-amber-200/90",
-                  )}
-                >
-                  {sprintKanbanSummaryStats.storyScheduledOnKanban} US Scheduled
-                </button>
-                <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
-                  {sprintKanbanSummaryStats.storyTotal} User Stories
-                </div>
-              </>
-            ) : summaryBadgesForScope ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoadmapBarMode("initiatives");
-                    onSummaryStatusQuickFilterChange?.(null);
-                  }}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    roadmapBarMode === "initiatives"
-                      ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                  )}
-                >
-                  {summaryBadgesForScope.totalInitiatives} Initiatives
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoadmapBarMode("epics");
-                    onSummaryStatusQuickFilterChange?.(null);
-                  }}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                      ? "bg-amber-100 text-amber-800 ring-amber-200"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                  )}
-                >
-                  {("totalEpics" in summaryBadgesForScope
-                    ? summaryBadgesForScope.totalEpics
-                    : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
-                  Epics
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onSummaryStatusQuickFilterChange?.(
-                      summaryStatusQuickFilter === "Unscheduled" ? null : "Unscheduled",
-                    )
-                  }
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    summaryStatusQuickFilter === "Unscheduled"
-                      ? "bg-slate-300 text-slate-900 ring-slate-400"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                  )}
-                >
-                  {summaryBadgesForScope.unscheduledEpics} Unscheduled
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoadmapBarMode("epics");
-                    onSummaryStatusQuickFilterChange?.(
-                      summaryStatusQuickFilter === "Scheduled" ? null : "Scheduled",
-                    );
-                  }}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    summaryStatusQuickFilter === "Scheduled"
-                      ? "bg-amber-100 text-amber-800 ring-amber-300"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                  )}
-                >
-                  {summaryBadgesForScope.scheduledEpics} Scheduled
-                </button>
-                <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
-                  {summaryBadgesForScope.totalStories} User Stories
-                </div>
-              </>
+          <div className="flex w-full flex-wrap items-center gap-2 pr-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+              {sprintKanbanSummaryStats ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoadmapBarMode("epics");
+                      onSummaryStatusQuickFilterChange?.(null);
+                    }}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                        ? "bg-amber-100 text-amber-800 ring-amber-200"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    {sprintKanbanSummaryStats.epicCount} Epics
+                  </button>
+                  <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300">
+                    {sprintKanbanSummaryStats.storyUnscheduled} User Stories Unscheduled
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoadmapBarMode("epics");
+                      onSummaryStatusQuickFilterChange?.(
+                        summaryStatusQuickFilter === "Scheduled" ? null : "Scheduled",
+                      );
+                    }}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryStatusQuickFilter === "Scheduled"
+                        ? "bg-amber-100 text-amber-800 ring-amber-300"
+                        : "bg-amber-100 text-amber-900 ring-amber-200 hover:bg-amber-200/90",
+                    )}
+                  >
+                    {sprintKanbanSummaryStats.storyScheduledOnKanban} US Scheduled
+                  </button>
+                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
+                    {sprintKanbanSummaryStats.storyTotal} User Stories
+                  </div>
+                </>
+              ) : summaryBadgesForScope ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoadmapBarMode("initiatives");
+                      onSummaryStatusQuickFilterChange?.(null);
+                    }}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      roadmapBarMode === "initiatives"
+                        ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    {summaryBadgesForScope.totalInitiatives} Initiatives
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoadmapBarMode("epics");
+                      onSummaryStatusQuickFilterChange?.(null);
+                    }}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                        ? "bg-amber-100 text-amber-800 ring-amber-200"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    {("totalEpics" in summaryBadgesForScope
+                      ? summaryBadgesForScope.totalEpics
+                      : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
+                    Epics
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSummaryStatusQuickFilterChange?.(
+                        summaryStatusQuickFilter === "Unscheduled" ? null : "Unscheduled",
+                      )
+                    }
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryStatusQuickFilter === "Unscheduled"
+                        ? "bg-slate-300 text-slate-900 ring-slate-400"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    {summaryBadgesForScope.unscheduledEpics} Unscheduled
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoadmapBarMode("epics");
+                      onSummaryStatusQuickFilterChange?.(
+                        summaryStatusQuickFilter === "Scheduled" ? null : "Scheduled",
+                      );
+                    }}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryStatusQuickFilter === "Scheduled"
+                        ? "bg-amber-100 text-amber-800 ring-amber-300"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    {summaryBadgesForScope.scheduledEpics} Scheduled
+                  </button>
+                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
+                    {summaryBadgesForScope.totalStories} User Stories
+                  </div>
+                </>
+              ) : null}
+            </div>
+            {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+              <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
             ) : null}
           </div>
         ) : focusedQuarter ? (
@@ -1824,6 +1833,7 @@ export function TimelineGrid({
           <div className="flex items-center gap-2" />
         )}
       </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-scroll overscroll-y-contain [scrollbar-gutter:stable]">
       {activeMonth ? (
         <div className="relative z-30 h-0">
           <div
@@ -2272,11 +2282,11 @@ export function TimelineGrid({
         >
           <div
             className={cn(
-              "flex flex-col overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
+              "flex flex-col rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
+              monthPlanTab === "sprint-kanban" ? "min-h-0 overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||
               monthPlanTab === "team-queue" ||
               monthPlanTab === "month-capacity" ||
-              monthPlanTab === "sprint-kanban" ||
               monthPlanTab === "sprint-retrospective"
                 ? "min-h-[56rem]"
                 : "min-h-0",
@@ -2463,7 +2473,7 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
-              <div className="flex-1 p-3 sm:p-5">
+              <div className="px-3 pb-3 pt-1.5 sm:px-5 sm:pb-5 sm:pt-2">
                 <SprintKanbanBoard
                   initiatives={initiatives}
                   month={activeMonth}
@@ -3036,6 +3046,7 @@ export function TimelineGrid({
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

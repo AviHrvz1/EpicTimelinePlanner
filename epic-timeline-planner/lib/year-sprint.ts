@@ -14,6 +14,19 @@ export function monthLaneFromGlobalSprint(globalSprint: number): { month: number
   return { month, lane };
 }
 
+/**
+ * Last instant of a calendar sprint window in local time (lane 1: 1–15, lane 2: 16–end of month).
+ */
+export function sprintEndDate(planYear: number, globalSprint: number): Date {
+  const g = clampYearSprint(globalSprint);
+  const { month, lane } = monthLaneFromGlobalSprint(g);
+  if (lane === 1) {
+    return new Date(planYear, month - 1, 15, 23, 59, 59, 999);
+  }
+  const lastDay = new Date(planYear, month, 0).getDate();
+  return new Date(planYear, month - 1, lastDay, 23, 59, 59, 999);
+}
+
 export function firstGlobalSprintForMonth(month: number): number {
   return globalSprintFromMonthLane(month, 1);
 }

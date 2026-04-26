@@ -50,7 +50,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex h-full min-h-0 flex-col rounded-xl border p-2 transition",
+        "flex min-h-0 w-full flex-col rounded-xl border p-2 transition",
         tone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
@@ -59,7 +59,7 @@ function KanbanColumn({
         <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
         <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
       </div>
-      <div className="flex flex-1 flex-col gap-2">{children}</div>
+      <div className="flex flex-col gap-2">{children}</div>
     </div>
   );
 }
@@ -88,7 +88,7 @@ function KanbanStoryCard({
     <div
       ref={setNodeRef}
       className={cn(
-        "group/story-card relative rounded-lg border border-slate-200/90 bg-white px-3 py-2.5 shadow-sm transition",
+        "group/story-card relative rounded-lg border border-slate-200/90 bg-white py-2.5 pl-2.5 pr-1.5 shadow-sm transition",
         emphasizeFlash && "ring-2 ring-sky-300/70",
         isDragging && "opacity-60",
       )}
@@ -104,59 +104,61 @@ function KanbanStoryCard({
           aria-hidden
         />
       ) : null}
-      <div className="flex items-start gap-2.5">
-        <button
-          type="button"
-          className="mt-1 shrink-0 cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-          aria-label="Drag story"
-          {...attributes}
-          {...listeners}
-        >
-          <DragHandleIcon size="sm" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenStory(story.id)}
-          className="min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-left transition hover:bg-slate-50"
-          aria-label="Open user story details"
-        >
-          <p className="min-w-0 text-[15px] font-semibold leading-snug text-slate-900">
-            <span className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center align-middle" aria-hidden>
-              <UserStoryIcon />
-            </span>
-            {story.title}
-          </p>
-          <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
-          <div className="mt-2 flex w-full flex-wrap items-center justify-end gap-2">
-            <span className="rounded-md bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-700">
-              {storyAssigneeLabel(story)}
-            </span>
-            <span className="rounded-md bg-blue-100 px-2 py-1 text-[12px] font-medium text-blue-700">
-              Est: {story.estimatedDays ?? 0}d
-            </span>
-            <span className="rounded-md bg-amber-100 px-2 py-1 text-[12px] font-medium text-amber-700">
-              Left: {story.daysLeft ?? 0}d
-            </span>
-          </div>
-        </button>
-        {onUnscheduleStory ? (
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start gap-1.5">
           <button
             type="button"
-            className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition group-hover/story-card:opacity-100 hover:bg-slate-100 hover:text-rose-600"
-            aria-label="Unschedule story"
-            title="Move story to unscheduled backlog"
-            onClick={(event) => {
-              event.stopPropagation();
-              if (onRequestUnscheduleStory) {
-                onRequestUnscheduleStory(story.id, story.title);
-              } else {
-                onUnscheduleStory(story.id);
-              }
-            }}
+            className="mt-1 shrink-0 cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            aria-label="Drag story"
+            {...attributes}
+            {...listeners}
           >
-            <X className="size-3.5" aria-hidden />
+            <DragHandleIcon size="sm" />
           </button>
-        ) : null}
+          <button
+            type="button"
+            onClick={() => onOpenStory(story.id)}
+            className="min-w-0 flex-1 rounded-md py-0.5 pl-0 pr-1 text-left transition hover:bg-slate-50"
+            aria-label="Open user story details"
+          >
+            <p className="min-w-0 text-[15px] font-semibold leading-snug text-slate-900">
+              <span className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center align-middle" aria-hidden>
+                <UserStoryIcon />
+              </span>
+              {story.title}
+            </p>
+            <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
+          </button>
+          {onUnscheduleStory ? (
+            <button
+              type="button"
+              className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition group-hover/story-card:opacity-100 hover:bg-slate-100 hover:text-rose-600"
+              aria-label="Unschedule story"
+              title="Move story to unscheduled backlog"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (onRequestUnscheduleStory) {
+                  onRequestUnscheduleStory(story.id, story.title);
+                } else {
+                  onUnscheduleStory(story.id);
+                }
+              }}
+            >
+              <X className="size-3.5" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+        <div className="flex w-full flex-wrap items-center justify-end gap-1.5 pr-0">
+          <span className="rounded-md bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-700">
+            {storyAssigneeLabel(story)}
+          </span>
+          <span className="rounded-md bg-blue-100 px-2 py-1 text-[12px] font-medium text-blue-700">
+            Est: {story.estimatedDays ?? 0}d
+          </span>
+          <span className="rounded-md bg-amber-100 px-2 py-1 text-[12px] font-medium text-amber-700">
+            Left: {story.daysLeft ?? 0}d
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -245,49 +247,51 @@ export function SprintKanbanBoard({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col space-y-3">
+    <div className="flex w-full min-h-0 flex-col gap-2">
       {assigneeOptions.length > 0 ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            aria-pressed={allAssigneesSelected}
-            title={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
-            aria-label={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
-            onClick={selectAllAssignees}
-            className={cn(
-              "inline-flex size-9 shrink-0 items-center justify-center rounded-full ring-1 transition",
-              allAssigneesSelected
-                ? "bg-sky-600 text-white ring-sky-700 shadow-sm"
-                : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 hover:text-slate-900",
-            )}
-          >
-            <Users className="size-4" strokeWidth={2.25} aria-hidden />
-          </button>
-          {assigneeOptions.map((name) => {
-            const on = selectedAssignees.includes(name);
-            const Icon = assigneeFilterIcon(name);
-            return (
-              <button
-                key={name}
-                type="button"
-                aria-pressed={on}
-                onClick={() => toggleAssigneeFilter(name)}
-                className={cn(
-                  "inline-flex max-w-[14rem] items-center gap-1.5 truncate rounded-full py-1 pl-2 pr-2.5 text-left text-[12px] font-semibold ring-1 transition",
-                  on
-                    ? "bg-sky-600 text-white ring-sky-700 shadow-sm"
-                    : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-50",
-                )}
-                title={name}
-              >
-                <Icon className="size-3.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
-                <span className="min-w-0 truncate">{name}</span>
-              </button>
-            );
-          })}
+        <div className="shrink-0 rounded-xl bg-slate-50/90 px-2.5 py-1">
+          <div className="flex min-w-0 flex-row flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              aria-pressed={allAssigneesSelected}
+              title={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
+              aria-label={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
+              onClick={selectAllAssignees}
+              className={cn(
+                "inline-flex shrink-0 items-center justify-center rounded-full px-2.5 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                allAssigneesSelected
+                  ? "bg-sky-600 text-white ring-sky-700"
+                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
+              )}
+            >
+              <Users className="size-[15px]" strokeWidth={2.25} aria-hidden />
+            </button>
+            {assigneeOptions.map((name) => {
+              const on = selectedAssignees.includes(name);
+              const Icon = assigneeFilterIcon(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleAssigneeFilter(name)}
+                  className={cn(
+                    "inline-flex max-w-[14rem] items-center gap-1.5 truncate rounded-full px-2.5 py-1.5 text-left text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    on
+                      ? "bg-sky-600 text-white ring-sky-700"
+                      : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-100",
+                  )}
+                  title={name}
+                >
+                  <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+                  <span className="min-w-0 truncate">{name}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
           <KanbanColumn
             key={status}
