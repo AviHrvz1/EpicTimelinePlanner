@@ -750,7 +750,7 @@ export function EpicFormDialog({
                 className="grid h-full min-h-0 gap-0"
                 style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
               >
-              <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+              <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 border-r-0 bg-white p-4">
                 <label className="block shrink-0 space-y-1">
                   <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
                     <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1262,7 +1262,7 @@ export function EpicFormDialog({
                 </div>
               </div>
 
-              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 border-l-0 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
                   <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Details
