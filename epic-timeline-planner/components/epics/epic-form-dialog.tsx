@@ -860,7 +860,7 @@ export function EpicFormDialog({
 
                 <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
                   <div className="flex shrink-0 items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                    <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
                       <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
                       Child User Stories
                     </h3>
@@ -1475,7 +1475,7 @@ export function EpicFormDialog({
                 onClick={() => setActivityOpen((open) => !open)}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                <span className="flex items-center gap-2 text-base font-normal text-slate-800">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden

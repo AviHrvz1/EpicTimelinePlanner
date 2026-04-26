@@ -976,7 +976,7 @@ export function InitiativeFormDialog({
                 onClick={() => setActivityOpen((open) => !open)}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-base font-semibold text-slate-800">
+                <span className="flex items-center gap-2 text-base font-normal text-slate-800">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden

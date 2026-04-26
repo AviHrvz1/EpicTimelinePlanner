@@ -698,6 +698,17 @@ function buildStoryRefMaps(initiatives: InitiativeItem[]): {
   return { byId, idByRef };
 }
 
+/** Map URL `story` param (e.g. `09`, `9`, `US-09`, or raw id) to a story primary key. */
+function resolveStoryIdFromUrlParam(storyParam: string, maps: ReturnType<typeof buildStoryRefMaps>): string {
+  const raw = storyParam.trim();
+  if (!raw) return raw;
+  const direct = maps.idByRef[raw];
+  if (direct) return direct;
+  const stripped = raw.replace(/^US-/i, "");
+  const padded = stripped.padStart(2, "0");
+  return maps.idByRef[stripped] ?? maps.idByRef[padded] ?? raw;
+}
+
 export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -946,18 +957,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       completionPercent,
     };
   }, [initiatives]);
-  const selectedStory = (() => {
-    if (!selectedStoryId) return null;
-    for (const initiative of initiatives) {
-      for (const epic of initiative.epics ?? []) {
-        const story = (epic.userStories ?? []).find((s) => s.id === selectedStoryId);
-        if (story) {
-          return { ...story, epicTitle: epic.title };
-        }
-      }
-    }
-    return null;
-  })();
   const storyRefMaps = useMemo(() => buildStoryRefMaps(initiatives), [initiatives]);
 
   const currentEditingInitiative = useMemo(() => {
@@ -973,6 +972,26 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
     return editingEpic;
   }, [initiatives, editingEpic]);
+
+  const selectedStory = useMemo(() => {
+    if (!selectedStoryId) return null;
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        const story = (epic.userStories ?? []).find((s) => s.id === selectedStoryId);
+        if (story) {
+          return { ...story, epicTitle: epic.title };
+        }
+      }
+    }
+    const epic = currentEditingEpic;
+    if (epic) {
+      const story = (epic.userStories ?? []).find((s) => s.id === selectedStoryId);
+      if (story) {
+        return { ...story, epicTitle: epic.title };
+      }
+    }
+    return null;
+  }, [selectedStoryId, initiatives, currentEditingEpic]);
 
   useEffect(() => {
     if (selectedStoryId != null || creatingStoryEpicId != null) {
@@ -1067,8 +1086,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const storyRef = params.get("story");
     if (storyRef) {
       const initialMaps = buildStoryRefMaps(initialInitiatives);
-      const resolvedStoryId = initialMaps.idByRef[storyRef] ?? storyRef;
-      setSelectedStoryId(resolvedStoryId);
+      setSelectedStoryId(resolveStoryIdFromUrlParam(storyRef, initialMaps));
     }
     setIsUrlHydrated(true);
   }, [initialInitiatives]);
