@@ -1,7 +1,13 @@
 "use client";
 
-import { Check, ChevronRight, Folder, History, MessageSquare, Plus, X } from "lucide-react";
+import { Bold, Check, ChevronRight, Folder, Heading2, Heading3, History, ImagePlus, Italic, Link as LinkIcon, List, ListOrdered, MessageSquare, Plus, Quote, Underline as UnderlineIcon, X } from "lucide-react";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import Placeholder from "@tiptap/extension-placeholder";
+import Underline from "@tiptap/extension-underline";
+import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 
 import { Button } from "@/components/ui/button";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
@@ -69,6 +75,8 @@ export function InitiativeFormDialog({
   const [color, setColor] = useState(initiative?.color ?? "#3B82F6");
   const [commentBody, setCommentBody] = useState("");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
+  const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
+  const [newLabel, setNewLabel] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
@@ -85,7 +93,20 @@ export function InitiativeFormDialog({
 
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
-
+  const descriptionEditor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({ openOnClick: false }),
+      Image,
+      Placeholder.configure({ placeholder: "Description" }),
+    ],
+    content: description?.trim() ? description : "<p></p>",
+    onUpdate: ({ editor }) => {
+      setDescription(editor.getHTML());
+    },
+    immediatelyRender: false,
+  });
   useEffect(() => {
     setTitle(initiative?.title ?? "");
     setIcon(initiative?.icon === "🎯" ? "" : (initiative?.icon ?? ""));
@@ -94,7 +115,23 @@ export function InitiativeFormDialog({
     setColor(initiative?.color ?? "#3B82F6");
     setCommentBody("");
     setActivityTab("comments");
+    if (initiative?.id) {
+      const raw = window.localStorage.getItem(`initiative-labels:${initiative.id}`) ?? "";
+      setLabelsDraft(
+        raw
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      );
+    } else {
+      setLabelsDraft([]);
+    }
+    setNewLabel("");
   }, [initiative, open]);
+  useEffect(() => {
+    if (!initiative?.id) return;
+    window.localStorage.setItem(`initiative-labels:${initiative.id}`, labelsDraft.join(", "));
+  }, [initiative?.id, labelsDraft]);
 
   useEffect(() => {
     if (open) {
@@ -105,6 +142,20 @@ export function InitiativeFormDialog({
       dragStartRef.current = null;
     }
   }, [open]);
+  useEffect(() => {
+    if (!descriptionEditor) return;
+    const next = description?.trim() ? description : "<p></p>";
+    if (descriptionEditor.getHTML() !== next) {
+      descriptionEditor.commands.setContent(next, false);
+    }
+  }, [descriptionEditor, initiative?.id, open]);
+  useEffect(() => {
+    if (!descriptionEditor) return;
+    const next = description?.trim() ? description : "<p></p>";
+    if (descriptionEditor.getHTML() !== next) {
+      descriptionEditor.commands.setContent(next, false);
+    }
+  }, [descriptionEditor, initiative?.id, open]);
 
   useEffect(() => {
     if (!initiative) {
@@ -156,6 +207,21 @@ export function InitiativeFormDialog({
   }, [initiatives]);
 
   const hasChildren = (initiative?.epics?.length ?? 0) > 0;
+  const existingLabelSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of initiative?.epics ?? []) {
+      if (row.team && MONTH_TEAM_IDS.includes(row.team)) set.add(MONTH_TEAM_COLUMNS.find((t) => t.id === row.team)?.label ?? row.team);
+      if (row.assignee?.trim()) set.add(row.assignee.trim());
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [initiative?.epics]);
+  const filteredLabelSuggestions = useMemo(() => {
+    const q = newLabel.trim().toLowerCase();
+    if (!q) return existingLabelSuggestions.filter((item) => !labelsDraft.includes(item)).slice(0, 8);
+    return existingLabelSuggestions
+      .filter((item) => item.toLowerCase().includes(q) && !labelsDraft.includes(item))
+      .slice(0, 8);
+  }, [existingLabelSuggestions, labelsDraft, newLabel]);
 
   async function handleSave() {
     const normalizedTitle = title.trim();
@@ -176,6 +242,15 @@ export function InitiativeFormDialog({
     } finally {
       setIsSaving(false);
     }
+  }
+  function addLabel(label: string) {
+    const normalized = label.trim();
+    if (!normalized) return;
+    setLabelsDraft((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]));
+    setNewLabel("");
+  }
+  function removeLabel(label: string) {
+    setLabelsDraft((prev) => prev.filter((item) => item !== label));
   }
 
   async function handleAddComment() {
@@ -347,7 +422,7 @@ export function InitiativeFormDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div ref={splitLayoutRef} className="grid min-h-0 gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
-              <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+              <section className="h-full min-h-0 overflow-y-auto space-y-3 rounded-xl border border-slate-200 bg-white p-4">
                 <label className="block space-y-1">
                   <p className="text-sm font-medium text-slate-600">Title</p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
@@ -357,7 +432,29 @@ export function InitiativeFormDialog({
                 </label>
                 <label className="mt-5 block space-y-1">
                   <p className="text-sm font-medium text-slate-600">Description</p>
-                  <textarea value={description} onChange={(event) => setDescription(event.target.value)} className={cn("w-full rounded-md border bg-background px-3 py-2 text-base", hasChildren ? "h-44" : "h-64")} placeholder="Description" />
+                  <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><List className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><ListOrdered className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Quote className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading2 className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (!descriptionEditor) return; const picker = document.createElement("input"); picker.type = "file"; picker.accept = "image/*"; picker.onchange = () => { const file = picker.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const src = typeof reader.result === "string" ? reader.result : ""; if (!src) return; descriptionEditor.chain().focus().setImage({ src }).run(); }; reader.readAsDataURL(file); }; picker.click(); }} className="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-slate-700 hover:bg-white"><ImagePlus className="size-3.5" /></button>
+                  </div>
+                  <div
+                    className={cn(
+                      "w-full rounded-md border bg-background px-3 py-2",
+                      hasChildren ? "min-h-[11rem]" : "min-h-[16rem]",
+                    )}
+                  >
+                    <EditorContent
+                      editor={descriptionEditor}
+                      className="focus:outline-none [&_.ProseMirror]:min-h-[9rem] [&_.ProseMirror]:outline-none"
+                    />
+                  </div>
                 </label>
 
                 <section className="mt-5 space-y-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
@@ -446,9 +543,52 @@ export function InitiativeFormDialog({
 
               <section className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <h3 className="inline-flex w-fit items-center rounded-md bg-indigo-100 px-2.5 py-1 text-[13px] font-semibold tracking-[0.03em] text-indigo-800 ring-1 ring-indigo-200">Details</h3>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Assignee</p><input className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Color</p><input type="color" className="h-8 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
+                  <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
+                  <div className="space-y-1.5">
+                    <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white p-2">
+                      {labelsDraft.length === 0 ? <span className="text-xs text-slate-400">No labels yet.</span> : null}
+                      {labelsDraft.map((label) => (
+                        <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                          {label}
+                          <button type="button" onClick={() => removeLabel(label)} className="text-slate-500 hover:text-slate-700">x</button>
+                        </span>
+                      ))}
+                      <input
+                        value={newLabel}
+                        onChange={(event) => setNewLabel(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addLabel(newLabel);
+                          }
+                        }}
+                        className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-slate-400"
+                        placeholder="Type label..."
+                      />
+                    </div>
+                    {filteredLabelSuggestions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {filteredLabelSuggestions.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              addLabel(item);
+                            }}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
+                          >
+                            {item}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </label>
                 <div className="rounded-md border bg-slate-50 px-2 py-1.5 text-[12px] text-slate-700"><p className="text-[11px] text-slate-500">Epics</p><p className="font-medium">{initiative?.epics?.length ?? 0}</p></div>
               </section>
             </div>

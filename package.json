@@ -2,6 +2,7 @@
   "private": true,
   "description": "Run the app from epic-timeline-planner/ (npm install && npm run dev there). Root dependencies were removed to avoid a second Prisma client under SDLC/node_modules.",
   "dependencies": {
+    "@tiptap/extension-image": "^3.22.4",
     "recharts": "^3.8.1"
   }
 }

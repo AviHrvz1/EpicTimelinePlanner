@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import { YEAR_SPRINT_MAX, YEAR_SPRINT_MIN } from "@/lib/year-sprint";
 
 const updateStorySchema = z.object({
-  title: z.string().trim().min(2).max(160).optional(),
+  // Allow legacy one-character titles during incremental inline edits.
+  title: z.string().trim().min(1).max(160).optional(),
   icon: z.string().trim().min(1).max(4).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   assignee: z.string().trim().max(120).optional().nullable(),

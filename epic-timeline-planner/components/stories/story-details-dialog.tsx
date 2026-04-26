@@ -1,7 +1,13 @@
 "use client";
 
+import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import Underline from "@tiptap/extension-underline";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, History, MessageSquare, Plus, Tag, Trash, X } from "lucide-react";
+import { Bold, CheckCheck, CheckCircle2, ChevronRight, Heading2, Heading3, History, ImagePlus, Italic, Link as LinkIcon, List, ListOrdered, ListTodo, MessageSquare, PlayCircle, Plus, Quote, Tag, Trash, Underline as UnderlineIcon, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 
 import { Button } from "@/components/ui/button";
@@ -93,6 +99,12 @@ export function StoryDetailsDialog({
   storyRef: _storyRef,
   surfaceAnchorRef,
 }: StoryDetailsDialogProps) {
+  const statusMeta: Record<StoryStatus, { Icon: typeof ListTodo }> = {
+    [StoryStatus.todo]: { Icon: ListTodo },
+    [StoryStatus.inProgress]: { Icon: PlayCircle },
+    [StoryStatus.done]: { Icon: CheckCheck },
+    [StoryStatus.approved]: { Icon: CheckCircle2 },
+  };
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState("📄");
   const [description, setDescription] = useState("");
@@ -120,6 +132,22 @@ export function StoryDetailsDialog({
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const lastAutosavePayloadRef = useRef<string>("");
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
+  const descriptionEditor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({ openOnClick: false }),
+      Image,
+      Placeholder.configure({
+        placeholder: "Description",
+      }),
+    ],
+    content: description?.trim() ? description : "<p></p>",
+    onUpdate: ({ editor }) => {
+      setDescription(editor.getHTML());
+    },
+    immediatelyRender: false,
+  });
 
   const allEpics = useMemo(
     () =>
@@ -177,6 +205,13 @@ export function StoryDetailsDialog({
     }
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [initiatives]);
+  const filteredLabelSuggestions = useMemo(() => {
+    const q = newLabel.trim().toLowerCase();
+    if (!q) return existingLabelSuggestions.filter((item) => !labelsDraft.includes(item)).slice(0, 8);
+    return existingLabelSuggestions
+      .filter((item) => item.toLowerCase().includes(q) && !labelsDraft.includes(item))
+      .slice(0, 8);
+  }, [existingLabelSuggestions, labelsDraft, newLabel]);
   const displayIds = useMemo(() => {
     const byInitiativeId = new Map<string, string>();
     const byEpicId = new Map<string, string>();
@@ -270,6 +305,13 @@ export function StoryDetailsDialog({
       dragStartRef.current = null;
     }
   }, [open]);
+  useEffect(() => {
+    if (!descriptionEditor) return;
+    const next = description?.trim() ? description : "<p></p>";
+    if (descriptionEditor.getHTML() !== next) {
+      descriptionEditor.commands.setContent(next, false);
+    }
+  }, [descriptionEditor, story?.id, open]);
 
   const { visible, leaving } = useDialogPresence(open, onExitComplete);
   const surfaceRect = usePlanningSurfaceRect(surfaceAnchorRef, visible);
@@ -566,7 +608,7 @@ export function StoryDetailsDialog({
             className="grid min-h-0 gap-0"
             style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
           >
-          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+          <section className="h-full min-h-0 overflow-y-auto space-y-3 rounded-xl border border-slate-200 bg-white p-4">
             <label className="block space-y-1">
               <p className="text-sm font-medium text-slate-600">Title</p>
               <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
@@ -628,11 +670,150 @@ export function StoryDetailsDialog({
             </div>
             <label className="mt-5 block space-y-1">
               <p className="text-sm font-medium text-slate-600">Description</p>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                className="h-64 w-full rounded-md border bg-background px-3 py-2 text-base"
-              />
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleBold().run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <Bold className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <Heading2 className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <Heading3 className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? "";
+                      const url = window.prompt("Link URL", prev || "https://");
+                      if (!descriptionEditor || url == null) return;
+                      const trimmed = url.trim();
+                      if (!trimmed) {
+                        descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run();
+                        return;
+                      }
+                      descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+                    }}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <LinkIcon className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      if (!descriptionEditor) return;
+                      const picker = document.createElement("input");
+                      picker.type = "file";
+                      picker.accept = "image/*";
+                      picker.onchange = () => {
+                        const file = picker.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          const src = typeof reader.result === "string" ? reader.result : "";
+                          if (!src) return;
+                          descriptionEditor.chain().focus().setImage({ src }).run();
+                        };
+                        reader.readAsDataURL(file);
+                      };
+                      picker.click();
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded border border-transparent text-slate-700 hover:bg-white"
+                  >
+                    <ImagePlus className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <Italic className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <UnderlineIcon className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <List className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <ListOrdered className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
+                      descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                    )}
+                  >
+                    <Quote className="size-3.5" />
+                  </button>
+                </div>
+                <div className="min-h-0 rounded-md border bg-background px-3 py-2">
+                  <EditorContent
+                    editor={descriptionEditor}
+                    className="focus:outline-none [&_.ProseMirror]:min-h-[16rem] [&_.ProseMirror]:outline-none"
+                  />
+                </div>
+              </div>
             </label>
           </section>
           <div className="relative mx-1.5">
@@ -654,12 +835,18 @@ export function StoryDetailsDialog({
             </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Status</p>
-              <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-8 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[14px] font-medium text-slate-800">
-                <option value={StoryStatus.todo}>To Do</option>
-                <option value={StoryStatus.inProgress}>In Progress</option>
-                <option value={StoryStatus.done}>Done</option>
-                <option value={StoryStatus.approved}>Approved</option>
-              </select>
+              <div className="flex items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2">
+                {(() => {
+                  const Icon = statusMeta[status].Icon;
+                  return <Icon className="size-3.5 shrink-0 text-slate-600" />;
+                })()}
+                <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-8 w-full bg-transparent text-[14px] font-medium text-slate-800 outline-none">
+                  <option value={StoryStatus.todo}>To Do</option>
+                  <option value={StoryStatus.inProgress}>In Progress</option>
+                  <option value={StoryStatus.done}>Done</option>
+                  <option value={StoryStatus.approved}>Approved</option>
+                </select>
+              </div>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Assignee</p>
@@ -679,23 +866,23 @@ export function StoryDetailsDialog({
               </select>
             </label>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2 pt-0.5">
-              <p className="text-[11px] font-semibold tracking-[0.03em] text-slate-500">Estimated Days</p>
+              <p className="text-[12px] font-semibold text-slate-600">Estimated Days</p>
               <input
                 type="number"
                 min={0}
                 value={estimatedDays}
                 onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
               />
             </div>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
-              <p className="text-[11px] font-semibold tracking-[0.03em] text-slate-500">Est. Days left</p>
+              <p className="text-[12px] font-semibold text-slate-600">Est. Days left</p>
               <input
                 type="number"
                 min={0}
                 value={daysLeft}
                 onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
               />
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
@@ -724,7 +911,7 @@ export function StoryDetailsDialog({
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
               <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
               <div className="space-y-1.5">
-                <div className="flex min-h-9 flex-wrap gap-1.5 rounded-md border border-slate-300 bg-white p-2">
+                <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white p-2">
                   {labelsDraft.length === 0 ? <span className="text-xs text-slate-400">No labels yet.</span> : null}
                   {labelsDraft.map((label) => (
                     <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
@@ -733,8 +920,6 @@ export function StoryDetailsDialog({
                       <button type="button" onClick={() => removeLabel(label)} className="text-slate-500 hover:text-slate-700">x</button>
                     </span>
                   ))}
-                </div>
-                <div className="flex gap-2">
                   <input
                     value={newLabel}
                     onChange={(event) => setNewLabel(event.target.value)}
@@ -744,17 +929,27 @@ export function StoryDetailsDialog({
                         addLabel(newLabel);
                       }
                     }}
-                    list="story-label-suggestions"
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px]"
-                    placeholder="Add label"
+                    className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-slate-400"
+                    placeholder="Type label..."
                   />
-                  <Button type="button" size="sm" variant="outline" className="h-8 px-3" onClick={() => addLabel(newLabel)}>Add</Button>
                 </div>
-                <datalist id="story-label-suggestions">
-                  {existingLabelSuggestions.map((item) => (
-                    <option key={item} value={item} />
-                  ))}
-                </datalist>
+                {filteredLabelSuggestions.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {filteredLabelSuggestions.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          addLabel(item);
+                        }}
+                        className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </label>
           </section>
