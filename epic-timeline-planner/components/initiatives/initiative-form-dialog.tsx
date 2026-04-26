@@ -77,6 +77,8 @@ export function InitiativeFormDialog({
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
+  const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
+  const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
@@ -217,11 +219,15 @@ export function InitiativeFormDialog({
   }, [initiative?.epics]);
   const filteredLabelSuggestions = useMemo(() => {
     const q = newLabel.trim().toLowerCase();
-    if (!q) return existingLabelSuggestions.filter((item) => !labelsDraft.includes(item)).slice(0, 8);
+    if (!q) return [];
     return existingLabelSuggestions
       .filter((item) => item.toLowerCase().includes(q) && !labelsDraft.includes(item))
       .slice(0, 8);
   }, [existingLabelSuggestions, labelsDraft, newLabel]);
+
+  useEffect(() => {
+    setLabelsAutocompleteIndex(-1);
+  }, [newLabel, labelsDraft, filteredLabelSuggestions.length]);
 
   async function handleSave() {
     const normalizedTitle = title.trim();
@@ -548,7 +554,7 @@ export function InitiativeFormDialog({
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2"><p className="text-[12px] font-semibold text-slate-600">Initiative ID</p><input value={initiative?.id ?? "Will be created on save"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
                   <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
-                  <div className="space-y-1.5">
+                  <div className="relative">
                     <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white p-2">
                       {labelsDraft.length === 0 ? <span className="text-xs text-slate-400">No labels yet.</span> : null}
                       {labelsDraft.map((label) => (
@@ -560,32 +566,70 @@ export function InitiativeFormDialog({
                       <input
                         value={newLabel}
                         onChange={(event) => setNewLabel(event.target.value)}
+                        onFocus={() => setLabelsAutocompleteOpen(true)}
+                        onBlur={() => {
+                          window.setTimeout(() => {
+                            setLabelsAutocompleteOpen(false);
+                            setLabelsAutocompleteIndex(-1);
+                          }, 120);
+                        }}
                         onKeyDown={(event) => {
+                          const list = filteredLabelSuggestions;
+                          if (event.key === "ArrowDown" && list.length > 0) {
+                            event.preventDefault();
+                            setLabelsAutocompleteIndex((i) => (i + 1) % list.length);
+                            return;
+                          }
+                          if (event.key === "ArrowUp" && list.length > 0) {
+                            event.preventDefault();
+                            setLabelsAutocompleteIndex((i) => (i <= 0 ? list.length - 1 : i - 1));
+                            return;
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            setLabelsAutocompleteOpen(false);
+                            setLabelsAutocompleteIndex(-1);
+                            return;
+                          }
                           if (event.key === "Enter") {
                             event.preventDefault();
-                            addLabel(newLabel);
+                            const pick = labelsAutocompleteIndex >= 0 ? list[labelsAutocompleteIndex] : null;
+                            if (pick) addLabel(pick);
+                            else addLabel(newLabel);
+                            setLabelsAutocompleteIndex(-1);
                           }
                         }}
+                        autoComplete="off"
                         className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-slate-400"
-                        placeholder="Type label..."
+                        placeholder="Type to search labels..."
                       />
                     </div>
-                    {filteredLabelSuggestions.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {filteredLabelSuggestions.map((item) => (
-                          <button
-                            key={item}
-                            type="button"
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              addLabel(item);
-                            }}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
-                          >
-                            {item}
-                          </button>
+                    {labelsAutocompleteOpen && filteredLabelSuggestions.length > 0 ? (
+                      <ul
+                        className="absolute left-0 right-0 top-full z-[200] mt-1 max-h-44 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black/5"
+                        role="listbox"
+                      >
+                        {filteredLabelSuggestions.map((item, i) => (
+                          <li key={item} role="presentation">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={i === labelsAutocompleteIndex}
+                              className={cn(
+                                "flex w-full px-3 py-2 text-left text-[13px] text-slate-800 hover:bg-slate-50",
+                                i === labelsAutocompleteIndex && "bg-indigo-50 text-indigo-900",
+                              )}
+                              onMouseEnter={() => setLabelsAutocompleteIndex(i)}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                addLabel(item);
+                              }}
+                            >
+                              {item}
+                            </button>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     ) : null}
                   </div>
                 </label>

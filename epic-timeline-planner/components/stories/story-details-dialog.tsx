@@ -111,6 +111,8 @@ export function StoryDetailsDialog({
   const [assignee, setAssignee] = useState("");
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
+  const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
+  const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
   const [priority, setPriority] = useState("");
   const [quarterDraft, setQuarterDraft] = useState("");
   const [monthDraft, setMonthDraft] = useState("");
@@ -130,7 +132,6 @@ export function StoryDetailsDialog({
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
-  const lastAutosavePayloadRef = useRef<string>("");
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
   const descriptionEditor = useEditor({
     extensions: [
@@ -207,11 +208,15 @@ export function StoryDetailsDialog({
   }, [initiatives]);
   const filteredLabelSuggestions = useMemo(() => {
     const q = newLabel.trim().toLowerCase();
-    if (!q) return existingLabelSuggestions.filter((item) => !labelsDraft.includes(item)).slice(0, 8);
+    if (!q) return [];
     return existingLabelSuggestions
       .filter((item) => item.toLowerCase().includes(q) && !labelsDraft.includes(item))
       .slice(0, 8);
   }, [existingLabelSuggestions, labelsDraft, newLabel]);
+
+  useEffect(() => {
+    setLabelsAutocompleteIndex(-1);
+  }, [newLabel, labelsDraft, filteredLabelSuggestions.length]);
   const displayIds = useMemo(() => {
     const byInitiativeId = new Map<string, string>();
     const byEpicId = new Map<string, string>();
@@ -351,39 +356,6 @@ export function StoryDetailsDialog({
       setSaving(false);
     }
   }
-
-  useEffect(() => {
-    if (!open || isCreateMode || !story) return;
-    const payload = buildStoryPayload();
-    if (!payload) return;
-    const payloadKey = JSON.stringify(payload);
-    if (payloadKey === lastAutosavePayloadRef.current) return;
-    const timer = window.setTimeout(async () => {
-      try {
-        await onSave(story.id, payload);
-        lastAutosavePayloadRef.current = payloadKey;
-      } catch {
-        // Keep editing; next change will retry autosave.
-      }
-    }, 450);
-    return () => window.clearTimeout(timer);
-  }, [
-    open,
-    isCreateMode,
-    story,
-    title,
-    icon,
-    description,
-    assignee,
-    labelsDraft,
-    priority,
-    sprint,
-    estimatedDays,
-    daysLeft,
-    status,
-    epicId,
-    onSave,
-  ]);
 
   if (!visible) return null;
 
@@ -829,18 +801,18 @@ export function StoryDetailsDialog({
             </div>
           </div>
 
-          <section className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+          <section className="relative z-20 space-y-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
             <h3 className="inline-flex w-fit items-center rounded-md bg-indigo-100 px-2.5 py-1 text-[13px] font-semibold tracking-[0.03em] text-indigo-800 ring-1 ring-indigo-200">
               Details
             </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Status</p>
-              <div className="flex items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2">
+              <div className="flex h-7 items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2">
                 {(() => {
                   const Icon = statusMeta[status].Icon;
                   return <Icon className="size-3.5 shrink-0 text-slate-600" />;
                 })()}
-                <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-8 w-full bg-transparent text-[14px] font-medium text-slate-800 outline-none">
+                <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-7 w-full bg-transparent text-[13px] font-medium text-slate-800 outline-none">
                   <option value={StoryStatus.todo}>To Do</option>
                   <option value={StoryStatus.inProgress}>In Progress</option>
                   <option value={StoryStatus.done}>Done</option>
@@ -850,15 +822,15 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Assignee</p>
-              <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800" placeholder="e.g. Avi" />
+              <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" placeholder="e.g. Avi" />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Team</p>
-              <input value={selectedEpicMeta?.team ?? "Not set"} readOnly className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[14px] text-slate-700" />
+              <input value={selectedEpicMeta?.team ?? "Not set"} readOnly className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700" />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Sprint</p>
-              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-8 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[14px] font-medium text-slate-800">
+              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[13px] font-medium text-slate-800">
                 <option value="">Not set</option>
                 {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => (
                   <option key={i + 1} value={String(i + 1)}>{`Sprint ${i + 1}`}</option>
@@ -872,7 +844,7 @@ export function StoryDetailsDialog({
                 min={0}
                 value={estimatedDays}
                 onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
+                className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
               />
             </div>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
@@ -882,12 +854,12 @@ export function StoryDetailsDialog({
                 min={0}
                 value={daysLeft}
                 onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800"
+                className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
               />
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Priority</p>
-              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800">
+              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800">
                 <option value="">Not set</option>
                 <option value="P0">P0</option>
                 <option value="P1">P1</option>
@@ -897,7 +869,7 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2">
               <p className="text-[12px] font-semibold text-slate-600">Parent</p>
-              <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[14px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
+              <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
                 <option value="">Select epic</option>
                 {initiatives.map((initiative) => (
                   <optgroup key={initiative.id} label={initiative.title}>
@@ -910,9 +882,8 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-2">
               <p className="pt-2 text-[12px] font-semibold text-slate-600">Labels</p>
-              <div className="space-y-1.5">
-                <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white p-2">
-                  {labelsDraft.length === 0 ? <span className="text-xs text-slate-400">No labels yet.</span> : null}
+              <div className="relative z-30">
+                <div className="flex min-h-7 flex-wrap items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5">
                   {labelsDraft.map((label) => (
                     <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                       <Tag className="size-3" />
@@ -923,32 +894,70 @@ export function StoryDetailsDialog({
                   <input
                     value={newLabel}
                     onChange={(event) => setNewLabel(event.target.value)}
+                    onFocus={() => setLabelsAutocompleteOpen(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => {
+                        setLabelsAutocompleteOpen(false);
+                        setLabelsAutocompleteIndex(-1);
+                      }, 120);
+                    }}
                     onKeyDown={(event) => {
+                      const list = filteredLabelSuggestions;
+                      if (event.key === "ArrowDown" && list.length > 0) {
+                        event.preventDefault();
+                        setLabelsAutocompleteIndex((i) => (i + 1) % list.length);
+                        return;
+                      }
+                      if (event.key === "ArrowUp" && list.length > 0) {
+                        event.preventDefault();
+                        setLabelsAutocompleteIndex((i) => (i <= 0 ? list.length - 1 : i - 1));
+                        return;
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setLabelsAutocompleteOpen(false);
+                        setLabelsAutocompleteIndex(-1);
+                        return;
+                      }
                       if (event.key === "Enter") {
                         event.preventDefault();
-                        addLabel(newLabel);
+                        const pick = labelsAutocompleteIndex >= 0 ? list[labelsAutocompleteIndex] : null;
+                        if (pick) addLabel(pick);
+                        else addLabel(newLabel);
+                        setLabelsAutocompleteIndex(-1);
                       }
                     }}
+                    autoComplete="off"
                     className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-slate-400"
-                    placeholder="Type label..."
+                    placeholder="Type to search labels..."
                   />
                 </div>
-                {filteredLabelSuggestions.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {filteredLabelSuggestions.map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          addLabel(item);
-                        }}
-                        className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
-                      >
-                        {item}
-                      </button>
+                {labelsAutocompleteOpen && filteredLabelSuggestions.length > 0 ? (
+                  <ul
+                    className="absolute left-0 right-0 top-full z-[200] mt-1 max-h-44 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black/5"
+                    role="listbox"
+                  >
+                    {filteredLabelSuggestions.map((item, i) => (
+                      <li key={item} role="presentation">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={i === labelsAutocompleteIndex}
+                          className={cn(
+                            "flex w-full px-3 py-2 text-left text-[13px] text-slate-800 hover:bg-slate-50",
+                            i === labelsAutocompleteIndex && "bg-indigo-50 text-indigo-900",
+                          )}
+                          onMouseEnter={() => setLabelsAutocompleteIndex(i)}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            addLabel(item);
+                          }}
+                        >
+                          {item}
+                        </button>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 ) : null}
               </div>
             </label>
@@ -956,7 +965,7 @@ export function StoryDetailsDialog({
           </div>
         </div>
 
-        <div className="mt-3">
+        <div className="relative z-0 mt-3">
           <div
             className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
             onPointerDown={beginActivityPanelResize}
