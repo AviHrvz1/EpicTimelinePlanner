@@ -482,6 +482,7 @@ type TimelineGridProps = {
   onSprintCapacityChange?: (member: string, days: number) => void;
   onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
   onSprintCapacityStoryUnschedule?: (storyId: string) => void;
+  onRequestSprintKanbanStoryUnschedule?: (storyId: string, storyTitle: string) => void;
   sprintRetrospective?: (SprintRetrospectiveDoc & { updatedAt: string }) | null;
   onSaveSprintRetrospective?: (doc: SprintRetrospectiveDoc) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
@@ -497,6 +498,8 @@ type TimelineGridProps = {
   ganttEmphasis?: { initiativeId: string; tick: number } | null;
   /** Pulse an epic bar after it is dropped onto the month plan from the left panel. */
   ganttEpicEmphasis?: { epicId: string; tick: number } | null;
+  /** Pulse all sprint-kanban user story cards for an expanded epic accordion. */
+  sprintEpicAccordionEmphasis?: { epicId: string; tick: number } | null;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -626,6 +629,7 @@ export function TimelineGrid({
   onResizeEpicPlanRange,
   ganttEmphasis = null,
   ganttEpicEmphasis = null,
+  sprintEpicAccordionEmphasis = null,
   monthPlanTab = "epic-gantt",
   onMonthPlanTabChange,
   monthTeamBoardByKey = {},
@@ -642,6 +646,7 @@ export function TimelineGrid({
   onSprintCapacityChange,
   onSprintCapacityStoryEstimateChange,
   onSprintCapacityStoryUnschedule,
+  onRequestSprintKanbanStoryUnschedule,
   sprintRetrospective = null,
   onSaveSprintRetrospective,
 }: TimelineGridProps) {
@@ -2394,6 +2399,9 @@ export function TimelineGrid({
                   month={activeMonth}
                   yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  epicAccordionEmphasis={sprintEpicAccordionEmphasis}
+                  onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
+                  onRequestUnscheduleStory={onRequestSprintKanbanStoryUnschedule}
                   onOpenStory={onOpenStory ?? (() => {})}
                 />
               </div>
@@ -2904,6 +2912,7 @@ export function TimelineGrid({
                             id={row.epic.id}
                             title={row.epic.title}
                             icon={row.epic.icon}
+                            hideIcon
                             color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
                             progressPercent={completionPercent}
                             progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}

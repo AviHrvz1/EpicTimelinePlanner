@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LucideIcon } from "lucide-react";
-import { CheckCheck, CheckCircle2, ListTodo, PlayCircle } from "lucide-react";
+import { CheckCheck, CheckCircle2, ListTodo, PlayCircle, X } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
@@ -58,9 +58,17 @@ function KanbanColumn({
 function KanbanStoryCard({
   row,
   onOpenStory,
+  onUnscheduleStory,
+  onRequestUnscheduleStory,
+  emphasizeFlash = false,
+  emphasizeTick = 0,
 }: {
   row: BoardStoryRow;
   onOpenStory: (storyId: string) => void;
+  onUnscheduleStory?: (storyId: string) => void;
+  onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
+  emphasizeFlash?: boolean;
+  emphasizeTick?: number;
 }) {
   const { story, epic } = row;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -71,7 +79,8 @@ function KanbanStoryCard({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-lg border border-slate-200/90 bg-white px-3 py-2.5 shadow-sm",
+        "group/story-card relative rounded-lg border border-slate-200/90 bg-white px-3 py-2.5 shadow-sm transition",
+        emphasizeFlash && "ring-2 ring-sky-300/70",
         isDragging && "opacity-60",
       )}
       style={{
@@ -79,6 +88,13 @@ function KanbanStoryCard({
         zIndex: isDragging ? 20 : undefined,
       }}
     >
+      {emphasizeFlash ? (
+        <div
+          key={emphasizeTick}
+          className="pointer-events-none absolute inset-0 z-[2] rounded-[inherit] animate-initiative-bar-emphasis-sheen"
+          aria-hidden
+        />
+      ) : null}
       <div className="flex items-start gap-2.5">
         <button
           type="button"
@@ -96,8 +112,8 @@ function KanbanStoryCard({
           aria-label="Open user story details"
         >
           <p className="min-w-0 text-[15px] font-semibold leading-snug text-slate-900">
-            <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-sm bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 align-middle" aria-hidden>
-              <UserStoryIcon className="size-3.5" />
+            <span className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center align-middle" aria-hidden>
+              <UserStoryIcon />
             </span>
             {story.title}
           </p>
@@ -114,6 +130,24 @@ function KanbanStoryCard({
             </span>
           </div>
         </button>
+        {onUnscheduleStory ? (
+          <button
+            type="button"
+            className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition group-hover/story-card:opacity-100 hover:bg-slate-100 hover:text-rose-600"
+            aria-label="Unschedule story"
+            title="Move story to unscheduled backlog"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (onRequestUnscheduleStory) {
+                onRequestUnscheduleStory(story.id, story.title);
+              } else {
+                onUnscheduleStory(story.id);
+              }
+            }}
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -125,6 +159,9 @@ type SprintKanbanProps = {
   yearSprint: number;
   /** When set, only stories for epics on this delivery team (same as left panel filter). */
   filterEpicTeamId?: string | null;
+  epicAccordionEmphasis?: { epicId: string; tick: number } | null;
+  onUnscheduleStory?: (storyId: string) => void;
+  onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
   onOpenStory: (storyId: string) => void;
 };
 
@@ -133,6 +170,9 @@ export function SprintKanbanBoard({
   month,
   yearSprint,
   filterEpicTeamId = null,
+  epicAccordionEmphasis = null,
+  onUnscheduleStory,
+  onRequestUnscheduleStory,
   onOpenStory,
 }: SprintKanbanProps) {
   const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId);
@@ -158,7 +198,19 @@ export function SprintKanbanBoard({
             Icon={Icon}
           >
             {(byStatus.get(status) ?? []).map((row) => (
-              <KanbanStoryCard key={row.story.id} row={row} onOpenStory={onOpenStory} />
+              <KanbanStoryCard
+                key={row.story.id}
+                row={row}
+                onOpenStory={onOpenStory}
+                onUnscheduleStory={onUnscheduleStory}
+                onRequestUnscheduleStory={onRequestUnscheduleStory}
+                emphasizeFlash={epicAccordionEmphasis != null && epicAccordionEmphasis.epicId === row.epic.id}
+                emphasizeTick={
+                  epicAccordionEmphasis != null && epicAccordionEmphasis.epicId === row.epic.id
+                    ? epicAccordionEmphasis.tick
+                    : 0
+                }
+              />
             ))}
           </KanbanColumn>
         ))}

@@ -376,6 +376,8 @@ type InitiativeListPanelProps = {
   panelQuarterFilterLocked?: boolean;
   /** Fires when an initiative accordion opens or closes (initiative list mode). */
   onInitiativeAccordionChange?: (initiativeId: string, isOpen: boolean) => void;
+  /** Fires when an epic accordion opens or closes under an initiative card. */
+  onEpicAccordionChange?: (epicId: string, isOpen: boolean) => void;
   /** Optional top-chip quick filter sync (Scheduled / Unscheduled epics). */
   panelStatusQuickFilter?: "Scheduled" | "Unscheduled" | null;
 };
@@ -449,6 +451,8 @@ function InitiativeTreeEpicRow({
   const completion = epicCompletionMeta(epic);
   const epicPlanStatus = epicPlanningStatusMeta(epic);
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
+  const isEpicScheduledOnGantt =
+    epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
 
   return (
     <div
@@ -464,7 +468,7 @@ function InitiativeTreeEpicRow({
       }}
     >
       <div className="flex items-start gap-2">
-        {epicPlanDragEnabled ? (
+        {epicPlanDragEnabled && !isEpicScheduledOnGantt ? (
           <button
             type="button"
             className="mt-0.5 shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
@@ -474,6 +478,14 @@ function InitiativeTreeEpicRow({
           >
             <DragHandleIcon size="sm" />
           </button>
+        ) : isEpicScheduledOnGantt ? (
+          <span
+            className="mt-0.5 inline-flex shrink-0 rounded-md p-1 text-emerald-600"
+            title="Scheduled on Gantt"
+            aria-label="Scheduled on Gantt"
+          >
+            <CheckCircle2 className="size-4" aria-hidden />
+          </span>
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="group/epic flex items-start justify-between gap-2">
@@ -598,6 +610,7 @@ function InitiativeTreeCard({
   onOpenStory,
   onDeleteEpic,
   onCreateEpicQuick,
+  onEpicAccordionChange,
   backlogDropIndex,
   planContextMonth,
   epicPlanDragEnabled,
@@ -611,6 +624,7 @@ function InitiativeTreeCard({
   onOpenStory: (storyId: string) => void;
   onDeleteEpic: (epicId: string) => void;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
+  onEpicAccordionChange?: (epicId: string, isOpen: boolean) => void;
   backlogDropIndex?: number;
   planContextMonth: number | null;
   epicPlanDragEnabled: boolean;
@@ -761,10 +775,14 @@ function InitiativeTreeCard({
                           initiative={initiative}
                           isEpicOpen={isEpicOpen}
                           onToggleEpic={() =>
-                            setOpenEpicIds((prev) => ({
-                              ...prev,
-                              [epic.id]: !(prev[epic.id] ?? false),
-                            }))
+                            setOpenEpicIds((prev) => {
+                              const next = !(prev[epic.id] ?? false);
+                              onEpicAccordionChange?.(epic.id, next);
+                              return {
+                                ...prev,
+                                [epic.id]: next,
+                              };
+                            })
                           }
                           planContextMonth={planContextMonth}
                           epicPlanDragEnabled={epicPlanDragEnabled}
@@ -824,6 +842,8 @@ function SprintEpicCard({
   initiative,
   epicPlanDragEnabled,
   storyDragEnabled,
+  activeYearSprint,
+  onEpicAccordionChange,
   onOpenEpic,
   onOpenStory,
   onDeleteEpic,
@@ -835,6 +855,8 @@ function SprintEpicCard({
   initiative: InitiativeItem;
   epicPlanDragEnabled: boolean;
   storyDragEnabled: boolean;
+  activeYearSprint: number | null;
+  onEpicAccordionChange?: (epicId: string, isOpen: boolean) => void;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onOpenStory: (storyId: string) => void;
   onDeleteEpic: (epicId: string) => void;
@@ -854,6 +876,8 @@ function SprintEpicCard({
   const epicPlanStatus = epicPlanningStatusMeta(epic);
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
   const completion = epicCompletionMeta(epic);
+  const isEpicScheduledOnGantt =
+    epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
   const [isOpen, setIsOpen] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
@@ -892,7 +916,7 @@ function SprintEpicCard({
       }}
     >
       <div className="flex items-start gap-2">
-        {epicPlanDragEnabled ? (
+        {epicPlanDragEnabled && !isEpicScheduledOnGantt ? (
           <button
             type="button"
             className="shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
@@ -902,12 +926,26 @@ function SprintEpicCard({
           >
             <DragHandleIcon size="sm" />
           </button>
+        ) : isEpicScheduledOnGantt ? (
+          <span
+            className="inline-flex shrink-0 rounded-md p-1.5 text-emerald-600"
+            title="Scheduled on Gantt"
+            aria-label="Scheduled on Gantt"
+          >
+            <CheckCircle2 className="size-4" aria-hidden />
+          </span>
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start gap-1.5 text-left">
             <button
               type="button"
-              onClick={() => setIsOpen((prev) => !prev)}
+              onClick={() =>
+                setIsOpen((prev) => {
+                  const next = !prev;
+                  onEpicAccordionChange?.(epic.id, next);
+                  return next;
+                })
+              }
               className="mt-0.5 inline-flex shrink-0 rounded-sm text-slate-500 transition-colors hover:text-slate-700"
               aria-label={isOpen ? "Collapse epic" : "Expand epic"}
               aria-expanded={isOpen}
@@ -987,13 +1025,31 @@ function SprintEpicCard({
             stories.map((story) => {
               const meta = storyStatusMeta(story, planContextMonth);
               const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
+              const resolvedStorySprint =
+                planContextMonth == null ? story.sprint : resolveStoryYearSprint(story, planContextMonth);
+              const isScheduledInActiveSprint =
+                activeYearSprint != null &&
+                resolvedStorySprint != null &&
+                resolvedStorySprint === activeYearSprint;
               const a11y = [story.title, statusLabel, sprintLabel].filter(Boolean).join(", ");
               return (
                 <div
                   key={story.id}
                   className="group/story flex min-h-[28px] w-full items-center gap-1.5 rounded-md py-0.5 pr-0.5 transition-colors hover:bg-muted/40"
                 >
-                  {storyDragEnabled ? <StoryDragHandle storyId={story.id} /> : null}
+                  {storyDragEnabled ? (
+                    isScheduledInActiveSprint ? (
+                      <span
+                        className="inline-flex shrink-0 rounded-md p-1 text-emerald-600"
+                        title="Scheduled in active sprint"
+                        aria-label="Scheduled in active sprint"
+                      >
+                        <CheckCircle2 className="size-4" aria-hidden />
+                      </span>
+                    ) : (
+                      <StoryDragHandle storyId={story.id} />
+                    )
+                  ) : null}
                   <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                     <UserStoryIcon />
                   </span>
@@ -1114,6 +1170,7 @@ export function InitiativeListPanel({
   panelQuarterQuickFilter = null,
   panelQuarterFilterLocked = false,
   onInitiativeAccordionChange,
+  onEpicAccordionChange,
   panelStatusQuickFilter = null,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef } = useDroppable({
@@ -1570,6 +1627,8 @@ export function InitiativeListPanel({
                     initiative={initiative}
                     epicPlanDragEnabled={epicPlanDragEnabled}
                     storyDragEnabled={isSprintModeActive && storyDragEnabled}
+                    activeYearSprint={activeYearSprint}
+                    onEpicAccordionChange={onEpicAccordionChange}
                     onOpenEpic={onOpenEpic}
                     onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
@@ -1698,6 +1757,7 @@ export function InitiativeListPanel({
                     onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
                     onCreateEpicQuick={onCreateEpicQuick}
+                    onEpicAccordionChange={onEpicAccordionChange}
                   />
                   <BacklogDropSlot index={idx + 1} />
                 </div>

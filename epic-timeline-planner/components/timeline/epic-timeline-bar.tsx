@@ -145,6 +145,7 @@ type EpicPlanTimelineBarProps = {
   id: string;
   title: string;
   icon?: string | null;
+  hideIcon?: boolean;
   color: string;
   progressPercent?: number;
   progressLabel?: string;
@@ -160,6 +161,7 @@ export function EpicPlanTimelineBar({
   id,
   title,
   icon,
+  hideIcon = false,
   color,
   progressPercent = 0,
   progressLabel,
@@ -246,7 +248,9 @@ export function EpicPlanTimelineBar({
             emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
           )}
         >
-          <EpicPlanBarIcon icon={icon} className="mr-0 text-[12px] [&_svg]:size-3.5 [&_svg]:text-white/95" />
+          {!hideIcon ? (
+            <EpicPlanBarIcon icon={icon} className="mr-0 text-[12px] [&_svg]:size-3.5 [&_svg]:text-white/95" />
+          ) : null}
           <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>

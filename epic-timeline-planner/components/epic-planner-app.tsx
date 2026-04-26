@@ -16,6 +16,7 @@ import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
 import { DragContext } from "@/components/timeline/drag-context";
 import { type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { TimelineGrid, type MonthPlanSurfaceTab } from "@/components/timeline/timeline-grid";
+import { Button } from "@/components/ui/button";
 import {
   EPICS_UNPLAN_DROP_ID,
   STORIES_UNSCHEDULE_DROP_ID,
@@ -822,6 +823,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
   /** Separate from selection so `open` can go false before IDs clear, allowing exit animation. */
   const [storyDialogOpen, setStoryDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+  const [isConfirmingDialog, setIsConfirmingDialog] = useState(false);
   const pendingStoryDialogNavigationRef = useRef<null | (() => void)>(null);
   const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -962,6 +970,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [ganttEpicEmphasis, setGanttEpicEmphasis] = useState<{ epicId: string; tick: number } | null>(
     null,
   );
+  const sprintEpicAccordionEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sprintEpicAccordionEmphasisTickRef = useRef(0);
+  const [sprintEpicAccordionEmphasis, setSprintEpicAccordionEmphasis] = useState<{
+    epicId: string;
+    tick: number;
+  } | null>(null);
 
   const flashGanttEpicEmphasis = useCallback((epicId: string) => {
     ganttEpicEmphasisTickRef.current += 1;
@@ -983,6 +997,41 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         clearTimeout(ganttEpicEmphasisTimeoutRef.current);
         ganttEpicEmphasisTimeoutRef.current = null;
       }
+      if (sprintEpicAccordionEmphasisTimeoutRef.current) {
+        clearTimeout(sprintEpicAccordionEmphasisTimeoutRef.current);
+        sprintEpicAccordionEmphasisTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const flashSprintEpicAccordionEmphasis = useCallback((epicId: string) => {
+    sprintEpicAccordionEmphasisTickRef.current += 1;
+    const tick = sprintEpicAccordionEmphasisTickRef.current;
+    setSprintEpicAccordionEmphasis({ epicId, tick });
+    if (sprintEpicAccordionEmphasisTimeoutRef.current) {
+      clearTimeout(sprintEpicAccordionEmphasisTimeoutRef.current);
+      sprintEpicAccordionEmphasisTimeoutRef.current = null;
+    }
+    sprintEpicAccordionEmphasisTimeoutRef.current = setTimeout(() => {
+      setSprintEpicAccordionEmphasis(null);
+      sprintEpicAccordionEmphasisTimeoutRef.current = null;
+    }, 2000);
+  }, []);
+
+  const openConfirmDialog = useCallback(
+    (opts: {
+      title: string;
+      message: string;
+      confirmLabel?: string;
+      onConfirm: () => void | Promise<void>;
+    }) => {
+      setConfirmDialog({
+        title: opts.title,
+        message: opts.message,
+        confirmLabel: opts.confirmLabel ?? "Confirm",
+        onConfirm: opts.onConfirm,
+      });
     },
     [],
   );
@@ -2924,6 +2973,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
                 panelQuarterFilterLocked={focusedQuarterLabel != null && activeTimelineMonth == null}
                 onInitiativeAccordionChange={handleInitiativeAccordionChange}
+                onEpicAccordionChange={(epicId, isOpen) => {
+                  if (!isOpen) return;
+                  if (activeMonthPlanTab !== "sprint-kanban") return;
+                  flashSprintEpicAccordionEmphasis(epicId);
+                }}
                 panelStatusQuickFilter={panelStatusQuickFilter}
               />
               <div
@@ -2978,6 +3032,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
                 onSprintCapacityStoryUnschedule={unscheduleStoryFromCapacity}
+                onRequestSprintKanbanStoryUnschedule={(storyId, storyTitle) => {
+                  openConfirmDialog({
+                    title: "Move user story back to backlog?",
+                    message: `Remove "${storyTitle}" from sprint and move it back to unscheduled backlog?`,
+                    confirmLabel: "Move to backlog",
+                    onConfirm: async () => {
+                      await unscheduleStoryFromCapacity(storyId);
+                    },
+                  });
+                }}
                 sprintRetrospective={activeSprintRetrospective}
                 onSaveSprintRetrospective={saveSprintRetrospective}
                 onEnterSprintStoryBoard={openSprintStoryBoard}
@@ -3009,29 +3073,43 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   const alreadyUnscheduled =
                     target.planSprint == null && target.planStartMonth == null && target.planEndMonth == null;
                   if (alreadyUnscheduled) return;
-                  flushSync(() => {
-                    setInitiatives((prev) =>
-                      prev.map((initiative) => ({
-                        ...initiative,
-                        epics: (initiative.epics ?? []).map((epic) =>
-                          epic.id === epicId
-                            ? { ...epic, planSprint: null, planEndSprint: null, planStartMonth: null, planEndMonth: null }
-                            : epic,
-                        ),
-                      })),
-                    );
+                  openConfirmDialog({
+                    title: "Move epic back to backlog?",
+                    message: `Remove "${target.title}" from Gantt and move it back to unscheduled backlog?`,
+                    confirmLabel: "Move to backlog",
+                    onConfirm: async () => {
+                      flushSync(() => {
+                        setInitiatives((prev) =>
+                          prev.map((initiative) => ({
+                            ...initiative,
+                            epics: (initiative.epics ?? []).map((epic) =>
+                              epic.id === epicId
+                                ? {
+                                    ...epic,
+                                    planSprint: null,
+                                    planEndSprint: null,
+                                    planStartMonth: null,
+                                    planEndMonth: null,
+                                  }
+                                : epic,
+                            ),
+                          })),
+                        );
+                      });
+                      try {
+                        await patchEpicClearPlan(epicId);
+                        toast.success("Epic moved to unscheduled");
+                      } catch (err) {
+                        await refresh();
+                        const description = err instanceof Error ? err.message : undefined;
+                        toast.error("Failed to unschedule epic", description ? { description } : undefined);
+                      }
+                    },
                   });
-                  try {
-                    await patchEpicClearPlan(epicId);
-                    toast.success("Epic moved to unscheduled");
-                  } catch (err) {
-                    await refresh();
-                    const description = err instanceof Error ? err.message : undefined;
-                    toast.error("Failed to unschedule epic", description ? { description } : undefined);
-                  }
                 }}
                 ganttEmphasis={ganttEmphasis}
                 ganttEpicEmphasis={ganttEpicEmphasis}
+                sprintEpicAccordionEmphasis={sprintEpicAccordionEmphasis}
                 onResizeInitiativeRange={async (initiativeId, range) => {
                   const planYear =
                     initiatives.find((i) => i.id === initiativeId)?.year ?? selectedYear;
@@ -3489,6 +3567,41 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         storyRef={selectedStoryId ? storyRefMaps.byId[selectedStoryId] : undefined}
         surfaceAnchorRef={planningRightSurfaceRef}
       />
+      {confirmDialog ? (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/35 backdrop-blur-[1px] p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-2xl ring-1 ring-black/10">
+            <h3 className="text-base font-semibold text-slate-900">{confirmDialog.title}</h3>
+            <p className="mt-2 text-sm text-slate-600">{confirmDialog.message}</p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-xs font-medium"
+                disabled={isConfirmingDialog}
+                onClick={() => setConfirmDialog(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 px-3 text-xs font-medium bg-slate-900 text-white hover:bg-slate-800"
+                disabled={isConfirmingDialog}
+                onClick={async () => {
+                  setIsConfirmingDialog(true);
+                  try {
+                    await confirmDialog.onConfirm();
+                    setConfirmDialog(null);
+                  } finally {
+                    setIsConfirmingDialog(false);
+                  }
+                }}
+              >
+                {isConfirmingDialog ? "Working..." : confirmDialog.confirmLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </DragContext>
   );
 }
