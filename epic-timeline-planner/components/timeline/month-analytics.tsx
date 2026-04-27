@@ -331,6 +331,7 @@ export function MonthAnalytics({
   const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
   const [epicInput, setEpicInput] = useState("");
   const [isEpicDropdownOpen, setIsEpicDropdownOpen] = useState(false);
+  const [showAllEpicSuggestions, setShowAllEpicSuggestions] = useState(false);
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
@@ -356,10 +357,11 @@ export function MonthAnalytics({
     [monthEpics, selectedEpicId],
   );
   const filteredEpicOptions = useMemo(() => {
+    if (showAllEpicSuggestions) return epicComboOptions;
     const query = epicInput.trim().toLowerCase();
     if (!query) return epicComboOptions;
     return epicComboOptions.filter((opt) => opt.label.toLowerCase().includes(query));
-  }, [epicComboOptions, epicInput]);
+  }, [epicComboOptions, epicInput, showAllEpicSuggestions]);
   const selectedWorkloadStatuses = useMemo<WorkloadStatusKey[]>(
     () =>
       workloadStatusFilters.includes("all")
@@ -994,12 +996,26 @@ export function MonthAnalytics({
             <input
               id="month-insights-epic-filter"
               value={epicInput}
-              onFocus={() => setIsEpicDropdownOpen(true)}
-              onBlur={() => window.setTimeout(() => setIsEpicDropdownOpen(false), 100)}
+              autoComplete="off"
+              onFocus={() => {
+                setIsEpicDropdownOpen(true);
+                setShowAllEpicSuggestions(true);
+              }}
+              onClick={() => {
+                setIsEpicDropdownOpen(true);
+                setShowAllEpicSuggestions(true);
+              }}
+              onBlur={() =>
+                window.setTimeout(() => {
+                  setIsEpicDropdownOpen(false);
+                  setShowAllEpicSuggestions(false);
+                }, 100)
+              }
               onChange={(e) => {
                 const v = e.target.value;
                 setEpicInput(v);
                 setIsEpicDropdownOpen(true);
+                setShowAllEpicSuggestions(false);
                 if (!v.trim()) {
                   setSelectedEpicId("all");
                   return;
@@ -1023,6 +1039,7 @@ export function MonthAnalytics({
                         setSelectedEpicId(opt.id);
                         setEpicInput(opt.label);
                         setIsEpicDropdownOpen(false);
+                        setShowAllEpicSuggestions(false);
                       }}
                       className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
                     >
@@ -1042,7 +1059,7 @@ export function MonthAnalytics({
               onClick={() => onOpenEpic?.(selectedEpicOption.epic.id)}
               className="h-9 shrink-0 rounded-md px-2.5 text-[13px] font-semibold text-blue-700 underline-offset-2 transition hover:bg-blue-50 hover:underline"
             >
-              Open epic details
+              Epic Details
             </button>
           ) : null}
         </div>
