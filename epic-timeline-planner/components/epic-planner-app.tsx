@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { Archive, Map as MapIcon } from "lucide-react";
+import { Archive, Map as MapIcon, PanelLeftOpen } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
@@ -833,6 +833,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const pendingStoryDialogNavigationRef = useRef<null | (() => void)>(null);
   const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
+  const [isLeftPanelHidden, setIsLeftPanelHidden] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const planningRightSurfaceRef = useRef<HTMLDivElement | null>(null);
   const ganttEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2846,6 +2847,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     };
   }, [isResizingPanel]);
 
+  useEffect(() => {
+    if (isLeftPanelHidden && isResizingPanel) {
+      setIsResizingPanel(false);
+    }
+  }, [isLeftPanelHidden, isResizingPanel]);
+
   const [isModeRailExpanded, setIsModeRailExpanded] = useState(false);
   const modeRailLabelClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
@@ -2955,109 +2962,133 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             <div
               ref={layoutRef}
               className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
-              style={{ gridTemplateColumns: `54px ${panelWidth}px 14px minmax(0, 1fr)` }}
+              style={{
+                gridTemplateColumns: isLeftPanelHidden
+                  ? "54px minmax(0, 1fr)"
+                  : `54px ${panelWidth}px 14px minmax(0, 1fr)`,
+              }}
             >
               {modeSwitchMenu}
-              <InitiativeListPanel
-                initiatives={initiatives}
-                activeMonth={activeTimelineMonth}
-                activeYearSprint={activeYearSprint}
-                storyDragEnabled={isSprintModeActive}
-                isSprintModeActive={isSprintModeActive}
-                onCreateInitiative={() => {
-                  setEditingInitiative(undefined);
-                  setInitiativeDialogOpen(true);
-                }}
-                onCreateEpic={() => {
-                  setEditingEpic(undefined);
-                  const m = activeTimelineMonth;
-                  const firstForMonth =
-                    m == null
-                      ? undefined
-                      : initiatives.find(
-                          (i) =>
-                            i.status === InitiativeStatus.scheduled &&
-                            i.startMonth != null &&
-                            i.endMonth != null &&
-                            i.startMonth <= m &&
-                            i.endMonth >= m,
-                        );
-                  if (!firstForMonth) {
-                    if (m != null) {
-                      toast.message("No scheduled initiative for this month. Plan an initiative in this month first.");
-                    } else {
-                      toast.message("Create an initiative first, then add an epic.");
+              {!isLeftPanelHidden ? (
+                <InitiativeListPanel
+                  initiatives={initiatives}
+                  activeMonth={activeTimelineMonth}
+                  activeYearSprint={activeYearSprint}
+                  storyDragEnabled={isSprintModeActive}
+                  isSprintModeActive={isSprintModeActive}
+                  onCreateInitiative={() => {
+                    setEditingInitiative(undefined);
+                    setInitiativeDialogOpen(true);
+                  }}
+                  onCreateEpic={() => {
+                    setEditingEpic(undefined);
+                    const m = activeTimelineMonth;
+                    const firstForMonth =
+                      m == null
+                        ? undefined
+                        : initiatives.find(
+                            (i) =>
+                              i.status === InitiativeStatus.scheduled &&
+                              i.startMonth != null &&
+                              i.endMonth != null &&
+                              i.startMonth <= m &&
+                              i.endMonth >= m,
+                          );
+                    if (!firstForMonth) {
+                      if (m != null) {
+                        toast.message("No scheduled initiative for this month. Plan an initiative in this month first.");
+                      } else {
+                        toast.message("Create an initiative first, then add an epic.");
+                      }
+                      return;
                     }
-                    return;
+                    setEditingEpicInitiativeId(firstForMonth.id);
+                    setEpicDialogOpen(true);
+                  }}
+                  onEditInitiative={(initiative) => {
+                    setEditingInitiative(initiative);
+                    setInitiativeDialogOpen(true);
+                  }}
+                  onOpenEpic={(epic, initiative) => {
+                    setEditingEpic(epic);
+                    setEditingEpicInitiativeId(initiative.id);
+                    setEpicDialogOpen(true);
+                  }}
+                  onOpenStory={(storyId) => {
+                    setSelectedStoryId(storyId);
+                  }}
+                  onDeleteEpic={handleDeleteEpic}
+                  onDeleteInitiative={handleDeleteInitiative}
+                  onCreateEpicQuick={async (initiativeId, title) => {
+                    try {
+                      await createEpicQuick(initiativeId, title);
+                      toast.success("Epic added");
+                    } catch {
+                      toast.error("Failed to add epic");
+                    }
+                  }}
+                  onCreateStoryQuick={async (epicId, title) => {
+                    try {
+                      await createStoryQuick(epicId, title);
+                      toast.success("User story added");
+                    } catch {
+                      toast.error("Failed to add user story");
+                    }
+                  }}
+                  epicBacklogOrderByMonth={epicBacklogOrderByMonth}
+                  monthEpicTeamFilterId={
+                    activeTimelineMonth != null &&
+                    (activeMonthPlanTab === "sprint-kanban" || activeMonthPlanTab === "sprint-capacity") &&
+                    isKnownEpicTeamId(sprintStoryBoardTeamId)
+                      ? sprintStoryBoardTeamId
+                      : null
                   }
-                  setEditingEpicInitiativeId(firstForMonth.id);
-                  setEpicDialogOpen(true);
-                }}
-                onEditInitiative={(initiative) => {
-                  setEditingInitiative(initiative);
-                  setInitiativeDialogOpen(true);
-                }}
-                onOpenEpic={(epic, initiative) => {
-                  setEditingEpic(epic);
-                  setEditingEpicInitiativeId(initiative.id);
-                  setEpicDialogOpen(true);
-                }}
-                onOpenStory={(storyId) => {
-                  setSelectedStoryId(storyId);
-                }}
-                onDeleteEpic={handleDeleteEpic}
-                onDeleteInitiative={handleDeleteInitiative}
-                onCreateEpicQuick={async (initiativeId, title) => {
-                  try {
-                    await createEpicQuick(initiativeId, title);
-                    toast.success("Epic added");
-                  } catch {
-                    toast.error("Failed to add epic");
-                  }
-                }}
-                onCreateStoryQuick={async (epicId, title) => {
-                  try {
-                    await createStoryQuick(epicId, title);
-                    toast.success("User story added");
-                  } catch {
-                    toast.error("Failed to add user story");
-                  }
-                }}
-                epicBacklogOrderByMonth={epicBacklogOrderByMonth}
-                monthEpicTeamFilterId={
-                  activeTimelineMonth != null &&
-                  (activeMonthPlanTab === "sprint-kanban" || activeMonthPlanTab === "sprint-capacity") &&
-                  isKnownEpicTeamId(sprintStoryBoardTeamId)
-                    ? sprintStoryBoardTeamId
-                    : null
-                }
-                panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
-                panelQuarterFilterLocked={focusedQuarterLabel != null && activeTimelineMonth == null}
-                onInitiativeAccordionChange={handleInitiativeAccordionChange}
-                onEpicAccordionChange={(epicId, isOpen) => {
-                  if (!isOpen) return;
-                  if (activeMonthPlanTab !== "sprint-kanban") return;
-                  flashSprintEpicAccordionEmphasis(epicId);
-                }}
-                panelStatusQuickFilter={panelStatusQuickFilter}
-              />
-              <div
-                className="group relative flex cursor-col-resize items-stretch justify-center"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setIsResizingPanel(true);
-                }}
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize panel"
-              >
-                <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
-                <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
-              </div>
+                  panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
+                  panelQuarterFilterLocked={focusedQuarterLabel != null && activeTimelineMonth == null}
+                  onInitiativeAccordionChange={handleInitiativeAccordionChange}
+                  onEpicAccordionChange={(epicId, isOpen) => {
+                    if (!isOpen) return;
+                    if (activeMonthPlanTab !== "sprint-kanban") return;
+                    flashSprintEpicAccordionEmphasis(epicId);
+                  }}
+                  panelStatusQuickFilter={panelStatusQuickFilter}
+                  onHidePanel={() => setIsLeftPanelHidden(true)}
+                />
+              ) : null}
+              {!isLeftPanelHidden ? (
+                <div
+                  className="group relative flex cursor-col-resize items-stretch justify-center"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setIsResizingPanel(true);
+                  }}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize panel"
+                >
+                  <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
+                  <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+                </div>
+              ) : null}
               <div
                 ref={planningRightSurfaceRef}
                 className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"
               >
+                {isLeftPanelHidden ? (
+                  <div className="mb-2 flex justify-start">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setIsLeftPanelHidden(false)}
+                      aria-label="Show left panel"
+                      title="Show left panel"
+                    >
+                      <PanelLeftOpen className="size-4" aria-hidden />
+                    </Button>
+                  </div>
+                ) : null}
                 <TimelineGrid
                 initiatives={initiatives}
                 zoom={1}

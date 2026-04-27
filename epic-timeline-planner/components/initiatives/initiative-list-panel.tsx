@@ -13,6 +13,7 @@ import {
   ListTodo,
   PlayCircle,
   Plus,
+  PanelLeftClose,
   Search,
   Eraser,
   Users,
@@ -380,6 +381,8 @@ type InitiativeListPanelProps = {
   onEpicAccordionChange?: (epicId: string, isOpen: boolean) => void;
   /** Optional top-chip quick filter sync (Scheduled / Unscheduled epics). */
   panelStatusQuickFilter?: "Scheduled" | "Unscheduled" | null;
+  /** Optional action to hide this entire left panel. */
+  onHidePanel?: () => void;
 };
 
 function DraggableInitiativeCard({
@@ -1172,6 +1175,7 @@ export function InitiativeListPanel({
   onInitiativeAccordionChange,
   onEpicAccordionChange,
   panelStatusQuickFilter = null,
+  onHidePanel,
 }: InitiativeListPanelProps) {
   const { setNodeRef: setBacklogDropRef } = useDroppable({
     id: "initiatives:backlog-drop",
@@ -1501,16 +1505,31 @@ export function InitiativeListPanel({
             )}
           </h2>
         </div>
-        {showNewButton ? (
-          <Button
-            size="sm"
-            className="h-8 px-3 text-[13px] font-bold"
-            onClick={inMonthView ? onCreateEpic : onCreateInitiative}
-          >
-            <Plus className="size-3.5" />
-            {inMonthView ? "Epic" : "Initiative"}
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-1.5">
+          {showNewButton ? (
+            <Button
+              size="sm"
+              className="h-8 px-3 text-[13px] font-bold"
+              onClick={inMonthView ? onCreateEpic : onCreateInitiative}
+            >
+              <Plus className="size-3.5" />
+              {inMonthView ? "Epic" : "Initiative"}
+            </Button>
+          ) : null}
+          {onHidePanel ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onHidePanel}
+              aria-label="Hide left panel"
+              title="Hide left panel"
+            >
+              <PanelLeftClose className="size-4" aria-hidden />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {showInitiativeBacklogDrop ? (
