@@ -205,6 +205,7 @@ export function SprintKanbanBoard({
   }, [allRows]);
 
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);
 
   useEffect(() => {
     const valid = new Set(assigneeOptions);
@@ -246,11 +247,23 @@ export function SprintKanbanBoard({
     if (list) list.push(row);
   }
 
+  const assigneeBadgeLabel = useCallback((name: string) => {
+    if (name === "Unassigned") return "U";
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  }, []);
+
   return (
     <div className="flex w-full min-h-0 flex-col gap-2">
       {assigneeOptions.length > 0 ? (
         <div className="shrink-0 rounded-xl bg-slate-50/90 px-2.5 py-1">
-          <div className="flex min-w-0 flex-row flex-wrap items-center gap-1.5">
+          <div
+            className="flex min-w-0 items-center py-0.5"
+            onMouseEnter={() => setAssigneeFilterExpanded(true)}
+            onMouseLeave={() => setAssigneeFilterExpanded(false)}
+          >
             <button
               type="button"
               aria-pressed={allAssigneesSelected}
@@ -258,7 +271,7 @@ export function SprintKanbanBoard({
               aria-label={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
               onClick={selectAllAssignees}
               className={cn(
-                "inline-flex shrink-0 items-center justify-center rounded-full px-2.5 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                "relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                 allAssigneesSelected
                   ? "bg-sky-600 text-white ring-sky-700"
                   : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
@@ -266,7 +279,7 @@ export function SprintKanbanBoard({
             >
               <Users className="size-[15px]" strokeWidth={2.25} aria-hidden />
             </button>
-            {assigneeOptions.map((name) => {
+            {assigneeOptions.map((name, idx) => {
               const on = selectedAssignees.includes(name);
               const Icon = assigneeFilterIcon(name);
               return (
@@ -276,15 +289,23 @@ export function SprintKanbanBoard({
                   aria-pressed={on}
                   onClick={() => toggleAssigneeFilter(name)}
                   className={cn(
-                    "inline-flex max-w-[14rem] items-center gap-1.5 truncate rounded-full px-2.5 py-1.5 text-left text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    "relative inline-flex h-9 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
+                    assigneeFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-9 justify-center px-0",
                     on
                       ? "bg-sky-600 text-white ring-sky-700"
                       : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-100",
                   )}
                   title={name}
+                  style={{
+                    marginLeft: assigneeFilterExpanded ? 6 : -12,
+                    zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
+                  }}
                 >
-                  <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
-                  <span className="min-w-0 truncate">{name}</span>
+                  {name === "Unassigned" ? <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden /> : null}
+                  {name !== "Unassigned" && !assigneeFilterExpanded ? <span>{assigneeBadgeLabel(name)}</span> : null}
+                  {assigneeFilterExpanded ? (
+                    <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
+                  ) : null}
                 </button>
               );
             })}
