@@ -211,6 +211,7 @@ type MonthAnalyticsProps = {
   month: number;
   planYear: number;
   filterEpicTeamId?: string | null;
+  onOpenEpic?: (epicId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onOpenSprintKanban?: (yearSprint: number, teamId: string | null) => void;
 };
@@ -319,6 +320,7 @@ export function MonthAnalytics({
   month,
   planYear,
   filterEpicTeamId = null,
+  onOpenEpic,
   onOpenStory,
   onOpenSprintKanban,
 }: MonthAnalyticsProps) {
@@ -328,6 +330,7 @@ export function MonthAnalytics({
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
   const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
   const [epicInput, setEpicInput] = useState("");
+  const [isEpicDropdownOpen, setIsEpicDropdownOpen] = useState(false);
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
@@ -352,6 +355,11 @@ export function MonthAnalytics({
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
     [monthEpics, selectedEpicId],
   );
+  const filteredEpicOptions = useMemo(() => {
+    const query = epicInput.trim().toLowerCase();
+    if (!query) return epicComboOptions;
+    return epicComboOptions.filter((opt) => opt.label.toLowerCase().includes(query));
+  }, [epicComboOptions, epicInput]);
   const selectedWorkloadStatuses = useMemo<WorkloadStatusKey[]>(
     () =>
       workloadStatusFilters.includes("all")
@@ -847,9 +855,25 @@ export function MonthAnalytics({
   const allBurndownKeysSelected =
     burndownLegendItems.length > 0 && burndownLegendItems.every((item) => burndownVisibleKeys.includes(item.key));
   const burndownLegendScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollBurndownUp, setCanScrollBurndownUp] = useState(false);
+  const [canScrollBurndownDown, setCanScrollBurndownDown] = useState(false);
+  const updateBurndownArrowState = () => {
+    const node = burndownLegendScrollRef.current;
+    if (!node) {
+      setCanScrollBurndownUp(false);
+      setCanScrollBurndownDown(false);
+      return;
+    }
+    const epsilon = 2;
+    setCanScrollBurndownUp(node.scrollTop > epsilon);
+    setCanScrollBurndownDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
+  };
   const scrollBurndownLegendBy = (delta: number) => {
     burndownLegendScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   };
+  useEffect(() => {
+    updateBurndownArrowState();
+  }, [burndownLegendItems, selectedEpicOption]);
   const flowFromSnapshots = useMemo(() => {
     const sourceStories = selectedEpicOption != null
       ? (selectedEpicOption.epic.userStories ?? [])
@@ -928,6 +952,31 @@ export function MonthAnalytics({
   const showAllCfdKeys = () => setCfdVisibleKeys(CFD_FLOW_SEGMENTS.map((seg) => seg.key));
   const allCfdKeysSelected =
     CFD_FLOW_SEGMENTS.length > 0 && CFD_FLOW_SEGMENTS.every((seg) => cfdVisibleKeys.includes(seg.key));
+  const workloadStoriesScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollWorkloadUp, setCanScrollWorkloadUp] = useState(false);
+  const [canScrollWorkloadDown, setCanScrollWorkloadDown] = useState(false);
+  const updateWorkloadArrowState = () => {
+    const node = workloadStoriesScrollRef.current;
+    if (!node) {
+      setCanScrollWorkloadUp(false);
+      setCanScrollWorkloadDown(false);
+      return;
+    }
+    const epsilon = 2;
+    setCanScrollWorkloadUp(node.scrollTop > epsilon);
+    setCanScrollWorkloadDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
+  };
+  const scrollWorkloadStoriesBy = (delta: number) => {
+    workloadStoriesScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+  };
+  useEffect(() => {
+    if (workloadView !== "stories") {
+      setCanScrollWorkloadUp(false);
+      setCanScrollWorkloadDown(false);
+      return;
+    }
+    updateWorkloadArrowState();
+  }, [workloadView, analytics.workloadByAssignee.length, workloadStatusFilters]);
 
   const chartLegendColumnClass = "max-h-[15rem] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
@@ -935,45 +984,67 @@ export function MonthAnalytics({
 
   return (
     <section className="mb-2 flex flex-col gap-3.5">
-      <div className="-mt-1 px-1 py-1">
+      <div className="-mt-1 rounded-xl bg-slate-100/70 px-2 py-2">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
             <Folder className="size-4 text-slate-500" aria-hidden />
             Epic Scope
           </label>
-          <input
-            id="month-insights-epic-filter"
-            list="month-insights-epic-options"
-            value={epicInput}
-            onChange={(e) => {
-              const v = e.target.value;
-              setEpicInput(v);
-              if (!v.trim()) {
-                setSelectedEpicId("all");
-                return;
-              }
-              const exact = epicComboOptions.find((opt) => opt.label === v);
-              if (exact) setSelectedEpicId(exact.id);
-            }}
-            placeholder="Type epic name to filter all charts (leave empty for all epics)"
-            className="h-9 min-w-[22rem] flex-1 rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700"
-            aria-label="Filter month insights by epic across all charts"
-          />
-          <datalist id="month-insights-epic-options">
-            {epicComboOptions.map((opt) => (
-              <option key={opt.id} value={opt.label} />
-            ))}
-          </datalist>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedEpicId("all");
-              setEpicInput("");
-            }}
-            className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            All Epics
-          </button>
+          <div className="relative min-w-[22rem] flex-1 max-w-[34rem]">
+            <input
+              id="month-insights-epic-filter"
+              value={epicInput}
+              onFocus={() => setIsEpicDropdownOpen(true)}
+              onBlur={() => window.setTimeout(() => setIsEpicDropdownOpen(false), 100)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setEpicInput(v);
+                setIsEpicDropdownOpen(true);
+                if (!v.trim()) {
+                  setSelectedEpicId("all");
+                  return;
+                }
+                const exact = epicComboOptions.find((opt) => opt.label === v);
+                if (exact) setSelectedEpicId(exact.id);
+              }}
+              placeholder="Select a specific epic to filter all charts"
+              className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700"
+              aria-label="Filter month insights by epic across all charts"
+            />
+            {isEpicDropdownOpen ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-56 overflow-auto rounded-xl bg-white p-1.5 shadow-xl">
+                {filteredEpicOptions.length > 0 ? (
+                  filteredEpicOptions.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setSelectedEpicId(opt.id);
+                        setEpicInput(opt.label);
+                        setIsEpicDropdownOpen(false);
+                      }}
+                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
+                    >
+                      <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                      {opt.label}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-2 py-1.5 text-[12px] text-slate-500">No matching epics</p>
+                )}
+              </div>
+            ) : null}
+          </div>
+          {selectedEpicOption ? (
+            <button
+              type="button"
+              onClick={() => onOpenEpic?.(selectedEpicOption.epic.id)}
+              className="h-9 shrink-0 rounded-md px-2.5 text-[13px] font-semibold text-blue-700 underline-offset-2 transition hover:bg-blue-50 hover:underline"
+            >
+              Open epic details
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
@@ -1297,6 +1368,7 @@ export function MonthAnalytics({
           <div className="relative max-h-[12rem]">
             <div
               ref={burndownLegendScrollRef}
+              onScroll={updateBurndownArrowState}
               className="max-h-[12rem] space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
@@ -1348,7 +1420,10 @@ export function MonthAnalytics({
             <button
               type="button"
               onClick={() => scrollBurndownLegendBy(-96)}
-              className="absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800"
+              className={cn(
+                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollBurndownUp && "bg-slate-200/70 text-slate-800",
+              )}
               aria-label="Scroll up burndown legend"
             >
               <ChevronUp className="size-3.5" />
@@ -1356,7 +1431,10 @@ export function MonthAnalytics({
             <button
               type="button"
               onClick={() => scrollBurndownLegendBy(96)}
-              className="absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800"
+              className={cn(
+                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollBurndownDown && "bg-slate-200/70 text-slate-800",
+              )}
               aria-label="Scroll down burndown legend"
             >
               <ChevronDown className="size-3.5" />
@@ -1397,8 +1475,14 @@ export function MonthAnalytics({
           </div>
         </div>
         {workloadView === "stories" ? (
-          <div className="grid min-h-0 max-h-[13rem] flex-1 gap-2 overflow-y-auto overflow-x-hidden pr-0.5 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
-            <div className="min-h-0 space-y-2.5">
+          <div className="relative min-h-0 max-h-[13rem] flex-1">
+            <div className="grid min-h-0 max-h-[13rem] gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
+            <div
+              ref={workloadStoriesScrollRef}
+              onScroll={updateWorkloadArrowState}
+              className="min-h-0 max-h-[13rem] space-y-2.5 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
               {analytics.workloadByAssignee.length > 0 ? (
                 analytics.workloadByAssignee.map((item) => {
                 const { storiesByStatus: st } = item;
@@ -1489,6 +1573,29 @@ export function MonthAnalytics({
                 <span className="font-medium">Unassigned</span>
               </button>
             </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollWorkloadStoriesBy(-96)}
+              className={cn(
+                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollWorkloadUp && "bg-slate-200/70 text-slate-800",
+              )}
+              aria-label="Scroll up workload list"
+            >
+              <ChevronUp className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollWorkloadStoriesBy(96)}
+              className={cn(
+                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollWorkloadDown && "bg-slate-200/70 text-slate-800",
+              )}
+              aria-label="Scroll down workload list"
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
           </div>
         ) : (
           <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
