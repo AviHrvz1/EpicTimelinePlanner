@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ChartNoAxesCombined, PieChart as PieChartIcon } from "lucide-react";
+import { Activity, ChartNoAxesCombined, Folder, PieChart as PieChartIcon } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 type BurndownMetric = "daysLeft" | "storyCount";
 type WorkloadViewMode = "stories" | "monthLoad";
+type WorkloadStatusKey = "todo" | "inProgress" | "done" | "approved";
 
 const STATUS_COLORS: Record<string, string> = {
   Unscheduled: "#94a3b8",
@@ -55,6 +56,70 @@ const WORKLOAD_LIST_MAX =
   "max-h-[min(12rem,30dvh)] overflow-y-auto overflow-x-hidden overscroll-contain md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
+
+function isStoryOpen(status: UserStoryItem["status"] | null | undefined) {
+  return status === "todo" || status === "inProgress";
+}
+
+function latestSnapshotAtDay(story: UserStoryItem, day: Date) {
+  const snapshots = story.snapshots ?? [];
+  if (snapshots.length === 0) return null;
+  const cutoff = day.getTime();
+  for (let i = snapshots.length - 1; i >= 0; i -= 1) {
+    const ts = new Date(snapshots[i].snapshotDate).getTime();
+    if (ts <= cutoff) return snapshots[i];
+  }
+  return null;
+}
+
+type BurndownTooltipPayload = {
+  name?: string;
+  value?: number | string | null;
+  color?: string;
+  dataKey?: string;
+};
+
+function formatBurndownValue(value: number | string | null | undefined, metric: BurndownMetric) {
+  if (typeof value !== "number") return "n/a";
+  return metric === "storyCount" ? `${Math.round(value)} stories` : `${value.toFixed(1)}d`;
+}
+
+function BurndownTooltip({
+  active,
+  payload,
+  label,
+  metric,
+}: {
+  active?: boolean;
+  payload?: BurndownTooltipPayload[];
+  label?: string;
+  metric: BurndownMetric;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const rows = payload.filter((item) => item.value != null);
+  if (rows.length === 0) return null;
+  return (
+    <div className="min-w-[12rem] rounded-xl border border-white/50 bg-slate-900/55 px-3 py-2 text-[12px] text-slate-100 shadow-xl backdrop-blur-md">
+      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">{label ?? "Burndown"}</p>
+      <div className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={String(row.dataKey ?? row.name)} className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-1.5 truncate text-slate-100/95">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30"
+                style={{ backgroundColor: row.color ?? "#cbd5e1" }}
+              />
+              <span className="truncate">{row.name ?? row.dataKey ?? "Series"}</span>
+            </span>
+            <span className="shrink-0 tabular-nums font-semibold text-white">
+              {formatBurndownValue(row.value, metric)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 type MonthAnalyticsProps = {
   initiatives: InitiativeItem[];
@@ -109,8 +174,9 @@ function collectMonthEpics(
 
 export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId = null }: MonthAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
-  const [estimateSource, setEstimateSource] = useState<EstimateSource>("auto");
+  const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
+  const [workloadStatusFilters, setWorkloadStatusFilters] = useState<Array<"all" | WorkloadStatusKey>>(["all"]);
   const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
   const [epicInput, setEpicInput] = useState("");
 
@@ -130,6 +196,24 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
     [monthEpics, selectedEpicId],
   );
+  const selectedWorkloadStatuses = useMemo<WorkloadStatusKey[]>(
+    () =>
+      workloadStatusFilters.includes("all")
+        ? ["todo", "inProgress", "done", "approved"]
+        : (workloadStatusFilters as WorkloadStatusKey[]),
+    [workloadStatusFilters],
+  );
+  const toggleWorkloadStatusFilter = (value: "all" | WorkloadStatusKey) => {
+    setWorkloadStatusFilters((prev) => {
+      if (value === "all") return ["all"];
+      const base = prev.filter((v) => v !== "all") as WorkloadStatusKey[];
+      if (base.includes(value)) {
+        const next = base.filter((v) => v !== value);
+        return next.length > 0 ? next : ["all"];
+      }
+      return [...base, value];
+    });
+  };
   useEffect(() => {
     if (selectedEpicId === "all") {
       setEpicInput("");
@@ -149,7 +233,14 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     const scopeStories =
       selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories;
     const scheduledStories = scopeStories.filter((story) => story.sprint != null);
-    const openStories = scheduledStories.filter((story) => story.status === "todo" || story.status === "inProgress");
+    // Month burndown/flow scope: stories that are open at month start.
+    const openAtMonthStartStories = scheduledStories.filter(
+      (story) => story.status === "todo" || story.status === "inProgress",
+    );
+    const openStories = openAtMonthStartStories;
+    const completedStories = scheduledStories.filter(
+      (story) => story.status === "done" || story.status === "approved",
+    );
 
     const statusCounts = {
       unscheduled: scopeStories.filter((story) => story.sprint == null).length,
@@ -180,12 +271,12 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
 
     const startValue =
       metric === "daysLeft"
-        ? scheduledStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
-        : scheduledStories.length;
+        ? openAtMonthStartStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
+        : openAtMonthStartStories.length;
     const actualRemaining =
       metric === "daysLeft"
-        ? scheduledStories.reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0)
-        : scheduledStories.filter((s) => s.status !== "done" && s.status !== "approved").length;
+        ? openAtMonthStartStories.reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0)
+        : openAtMonthStartStories.length;
     const roundBurndown = (n: number) => (metric === "storyCount" ? Math.round(n) : Number(n.toFixed(1)));
     const burndown = dayDates.map((cal, idx) => {
       const dayIdx = idx + 1;
@@ -232,17 +323,21 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       byAssignee.set(assignee, row);
     }
     const workloadByAssignee = [...byAssignee.entries()]
-      .filter(([, v]) => v.openCount > 0)
-      .map(([assignee, v]) => ({ assignee, ...v }))
-      .sort((a, b) => b.daysLeftTotal - a.daysLeftTotal || b.openCount - a.openCount || a.assignee.localeCompare(b.assignee));
+      .map(([assignee, v]) => {
+        const selectedStoryCount = selectedWorkloadStatuses.reduce((sum, key) => sum + v.storiesByStatus[key], 0);
+        return { assignee, ...v, selectedStoryCount };
+      })
+      .filter((v) => v.selectedStoryCount > 0)
+      .sort(
+        (a, b) =>
+          b.selectedStoryCount - a.selectedStoryCount ||
+          b.daysLeftTotal - a.daysLeftTotal ||
+          a.assignee.localeCompare(b.assignee),
+      );
     const workloadMaxStoryTotal = Math.max(
       1,
       ...workloadByAssignee.map(
-        (item) =>
-          item.storiesByStatus.todo +
-          item.storiesByStatus.inProgress +
-          item.storiesByStatus.done +
-          item.storiesByStatus.approved,
+        (item) => item.selectedStoryCount,
       ),
     );
     const monthDaysLeft = Math.max(0, totalDays - (today1Based - 1));
@@ -260,23 +355,31 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       })
       .sort((a, b) => b.utilizationPct - a.utilizationPct || b.daysLeftTotal - a.daysLeftTotal);
 
-    const total = scheduledStories.length;
+    const total = openAtMonthStartStories.length;
+    const doneFinal = Math.min(total, completedStories.filter((s) => s.status === "done").length);
+    const approvedFinal = Math.min(Math.max(0, total - doneFinal), completedStories.filter((s) => s.status === "approved").length);
+    const inProgressBaseNow = openAtMonthStartStories.filter((s) => s.status === "inProgress").length;
+    const isCurrentMonth =
+      new Date().getFullYear() === planYear && new Date().getMonth() + 1 === month;
     const flowSprintTrendData = dayDates.map((dayDate, dayIndex) => {
       const dayInMonth = dayIndex + 1;
-      const progress = dayInMonth <= today1Based ? (dayInMonth - 1) / Math.max(today1Based - 1, 1) : 1;
-      const approved = Math.round(statusCounts.approved * progress);
-      const done = Math.round(statusCounts.done * progress);
-      const inProgressBase = Math.round(statusCounts.inProgress * Math.min(1, progress * 1.1));
-      const inProgress = Math.min(Math.max(0, total - approved - done), inProgressBase);
-      const todo = Math.max(0, total - approved - done - inProgress);
+      const elapsedDays = isCurrentMonth ? today1Based : totalDays;
+      const progress = dayInMonth <= elapsedDays ? (dayInMonth - 1) / Math.max(elapsedDays - 1, 1) : null;
+      const approved = progress == null ? null : Math.round(approvedFinal * progress);
+      const done = progress == null ? null : Math.round(doneFinal * progress);
+      const inProgressBase = progress == null ? null : Math.round(inProgressBaseNow * (1 - progress * 0.55));
+      const doneSafe = done ?? 0;
+      const approvedSafe = approved ?? 0;
+      const inProgressSafe = inProgressBase == null ? 0 : Math.min(Math.max(0, total - approvedSafe - doneSafe), inProgressBase);
+      const todoSafe = Math.max(0, total - approvedSafe - doneSafe - inProgressSafe);
       return {
         dayInMonth,
         labelShort: flowChartDayLabel(dayDate),
         isToday: new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime() === startToday,
-        todo,
-        inProgress,
-        done,
-        approved,
+        todo: progress == null ? null : todoSafe,
+        inProgress: progress == null ? null : inProgressSafe,
+        done: progress == null ? null : doneSafe,
+        approved: progress == null ? null : approvedSafe,
       };
     });
 
@@ -291,14 +394,27 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       workloadCapacityByAssignee,
       monthDaysLeft,
     };
-  }, [initiatives, month, planYear, filterEpicTeamId, metric, selectedEpicOption]);
+  }, [initiatives, month, planYear, filterEpicTeamId, metric, selectedEpicOption, selectedWorkloadStatuses]);
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const topSlice = pieData[0] ?? null;
   const monthBurndownEpics = useMemo(() => {
     const source = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
-    return source.map((epic) => epicForBurndown(epic, estimateSource));
+    return source.map((epic) => ({
+      ...epicForBurndown(
+        {
+          ...epic,
+          // Burndown scope includes open stories at month start, including unscheduled stories.
+          userStories: (epic.userStories ?? []).filter(
+            (s) => s.status === "todo" || s.status === "inProgress",
+          ),
+        },
+        // When "Original Estimation" is selected but original estimate is missing,
+        // fall back to story estimates instead of collapsing the line to zero.
+        estimateSource === "original" && (epic.originalEstimateDays ?? 0) <= 0 ? "stories" : estimateSource,
+      ),
+    }));
   }, [monthEpics, selectedEpicOption, estimateSource]);
 
   const monthBurndown = useMemo(
@@ -312,6 +428,72 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       ),
     [monthBurndownEpics, metric, month, planYear],
   );
+  const monthBurndownFilledToToday = useMemo(() => {
+    const horizon = monthBurndown.length;
+    if (horizon === 0) return monthBurndown;
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === planYear && now.getMonth() + 1 === month;
+    const elapsedDays = isCurrentMonth ? Math.max(1, Math.min(horizon, now.getDate())) : horizon;
+    const seriesKeys = ["actual", ...monthBurndownEpics.map((epic) => epic.id)];
+    const nextRows = monthBurndown.map((row) => ({ ...row })) as Array<
+      (typeof monthBurndown)[number] & Record<string, number | string | boolean | null | undefined>
+    >;
+    for (const key of seriesKeys) {
+      let lastSeen: number | null = null;
+      for (let i = 0; i < nextRows.length; i += 1) {
+        const dayIdx = i + 1;
+        const current = nextRows[i][key];
+        if (typeof current === "number") {
+          lastSeen = current;
+          continue;
+        }
+        if (dayIdx <= elapsedDays && lastSeen != null) {
+          nextRows[i][key] = lastSeen;
+        }
+      }
+      for (let i = elapsedDays; i < nextRows.length; i += 1) {
+        if (i + 1 > elapsedDays) nextRows[i][key] = null;
+      }
+    }
+    return nextRows;
+  }, [monthBurndown, monthBurndownEpics, planYear, month]);
+  const monthBurndownFromSnapshots = useMemo(() => {
+    if (monthBurndown.length === 0) return null;
+    const sourceEpics = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
+    const hasSnapshots = sourceEpics.some((epic) => (epic.userStories ?? []).some((story) => (story.snapshots?.length ?? 0) > 0));
+    if (!hasSnapshots) return null;
+
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === planYear && now.getMonth() + 1 === month;
+    const elapsedDays = isCurrentMonth ? Math.max(1, Math.min(monthBurndown.length, now.getDate())) : monthBurndown.length;
+    const rows = monthBurndown.map((row) => ({ ...row })) as Array<Record<string, number | string | boolean | null | undefined>>;
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const dayIdx = i + 1;
+      const day = new Date(planYear, month - 1, dayIdx, 23, 59, 59, 999);
+      let dayTotal = 0;
+      for (const epic of sourceEpics) {
+        const epicStories = epic.userStories ?? [];
+        let epicValue = 0;
+        for (const story of epicStories) {
+          const snapshot = latestSnapshotAtDay(story, day);
+          const status = snapshot?.status ?? story.status;
+          if (!isStoryOpen(status)) continue;
+          if (metric === "storyCount") {
+            epicValue += 1;
+          } else {
+            const daysLeft = snapshot?.daysLeft ?? snapshot?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
+            epicValue += Math.max(0, daysLeft);
+          }
+        }
+        rows[i][epic.id] = dayIdx <= elapsedDays ? (metric === "storyCount" ? Math.round(epicValue) : Number(epicValue.toFixed(1))) : null;
+        dayTotal += epicValue;
+      }
+      rows[i].actual = dayIdx <= elapsedDays ? (metric === "storyCount" ? Math.round(dayTotal) : Number(dayTotal.toFixed(1))) : null;
+    }
+    return rows as typeof monthBurndownFilledToToday;
+  }, [monthBurndown, monthBurndownFilledToToday, selectedEpicOption, monthEpics, planYear, month, metric]);
+  const monthBurndownResolved = monthBurndownFromSnapshots ?? monthBurndownFilledToToday;
   const selectedEpicDueDate = useMemo(() => {
     if (!selectedEpicOption) return null;
     const dueMonth = selectedEpicOption.epic.planEndMonth ?? month;
@@ -320,9 +502,9 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [selectedEpicOption, month, planYear]);
   const monthBurndownWithDueTarget = useMemo(() => {
-    if (!selectedEpicOption || selectedEpicDueDate == null) return monthBurndown;
-    const totalDays = monthBurndown.length;
-    if (totalDays === 0) return monthBurndown;
+    if (!selectedEpicOption || selectedEpicDueDate == null) return monthBurndownResolved;
+    const totalDays = monthBurndownResolved.length;
+    if (totalDays === 0) return monthBurndownResolved;
     const startValue =
       metric === "daysLeft"
         ? (selectedEpicOption.epic.userStories ?? []).reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
@@ -330,7 +512,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     const monthStart = new Date(planYear, month - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
-    return monthBurndown.map((row, idx) => {
+    return monthBurndownResolved.map((row, idx) => {
       const dayIdx = idx + 1;
       let epicIdealRaw: number;
       if (dueDayIndex <= 1) epicIdealRaw = 0;
@@ -340,7 +522,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         : Number(Math.max(0, epicIdealRaw).toFixed(1));
       return { ...row, epicIdeal };
     });
-  }, [monthBurndown, selectedEpicOption, selectedEpicDueDate, metric, planYear, month]);
+  }, [monthBurndownResolved, selectedEpicOption, selectedEpicDueDate, metric, planYear, month]);
   const selectedEpicDueAxisLabel = useMemo(() => {
     if (!selectedEpicDueDate) return null;
     if (selectedEpicDueDate.getFullYear() !== planYear || selectedEpicDueDate.getMonth() + 1 !== month) return null;
@@ -351,6 +533,64 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     });
     return point?.axisLabel ?? null;
   }, [selectedEpicDueDate, planYear, month, monthBurndown]);
+  const flowFromSnapshots = useMemo(() => {
+    const sourceStories = selectedEpicOption != null
+      ? (selectedEpicOption.epic.userStories ?? [])
+      : monthEpics.flatMap((row) => row.epic.userStories ?? []);
+    const hasSnapshots = sourceStories.some((story) => (story.snapshots?.length ?? 0) > 0);
+    if (!hasSnapshots) return null;
+
+    const totalDays = new Date(planYear, month, 0).getDate();
+    const dayDates = Array.from({ length: totalDays }, (_, idx) => new Date(planYear, month - 1, idx + 1, 23, 59, 59, 999));
+    const monthStartDay = dayDates[0];
+    const storiesOpenAtStart = sourceStories.filter((story) => {
+      const snapshot = latestSnapshotAtDay(story, monthStartDay);
+      const status = snapshot?.status ?? story.status;
+      return isStoryOpen(status);
+    });
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === planYear && now.getMonth() + 1 === month;
+    const elapsedDays = isCurrentMonth ? Math.max(1, Math.min(totalDays, now.getDate())) : totalDays;
+
+    return dayDates.map((dayDate, index) => {
+      const dayInMonth = index + 1;
+      if (dayInMonth > elapsedDays) {
+        return {
+          dayInMonth,
+          labelShort: flowChartDayLabel(dayDate),
+          isToday: false,
+          todo: null,
+          inProgress: null,
+          done: null,
+          approved: null,
+        };
+      }
+      let todo = 0;
+      let inProgress = 0;
+      let done = 0;
+      let approved = 0;
+      for (const story of storiesOpenAtStart) {
+        const snapshot = latestSnapshotAtDay(story, dayDate);
+        const status = snapshot?.status ?? story.status;
+        if (status === "todo") todo += 1;
+        else if (status === "inProgress") inProgress += 1;
+        else if (status === "done") done += 1;
+        else if (status === "approved") approved += 1;
+      }
+      const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime();
+      const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      return {
+        dayInMonth,
+        labelShort: flowChartDayLabel(dayDate),
+        isToday: dayStart === nowStart,
+        todo,
+        inProgress,
+        done,
+        approved,
+      };
+    });
+  }, [selectedEpicOption, monthEpics, planYear, month]);
+  const flowResolved = flowFromSnapshots ?? analytics.flowSprintTrendData;
 
   const chartLegendColumnClass = `space-y-1.5 md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-0`;
   const legendRowClass =
@@ -362,8 +602,9 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     <section className="mb-2 flex flex-col gap-4">
       <div className="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2.5 shadow-sm ring-1 ring-slate-100/80">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-[12px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
-            Epic scope (applies to all charts)
+          <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
+            <Folder className="size-3.5 text-slate-500" aria-hidden />
+            Epic Scope
           </label>
           <input
             id="month-insights-epic-filter"
@@ -396,7 +637,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             }}
             className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
           >
-            All epics
+            All Epics
           </button>
           <span className="text-[12px] text-slate-500">Current: {epicScopeLabel}</span>
         </div>
@@ -446,6 +687,12 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 />
               </PieChart>
               </ResponsiveContainer>
+            </div>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Σ Stories</p>
+                <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
+              </div>
             </div>
           </div>
           <div className={`space-y-1.5 ${PIE_LEGEND_CAP}`}>
@@ -502,16 +749,32 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 Stories
               </button>
             </div>
-            <select
-              value={estimateSource}
-              onChange={(e) => setEstimateSource(e.target.value as EstimateSource)}
-              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
-              aria-label="Burndown estimate source"
-            >
-              <option value="auto">Auto (stories, else original)</option>
-              <option value="original">Original estimate</option>
-              <option value="stories">Σ Stories only</option>
-            </select>
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setEstimateSource("stories")}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                  estimateSource === "stories"
+                    ? "bg-white text-slate-900 ring-1 ring-slate-300"
+                    : "text-slate-600",
+                )}
+              >
+                Σ Stories
+              </button>
+              <button
+                type="button"
+                onClick={() => setEstimateSource("original")}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                  estimateSource === "original"
+                    ? "bg-white text-slate-900 ring-1 ring-slate-300"
+                    : "text-slate-600",
+                )}
+              >
+                Original Estimation
+              </button>
+            </div>
           </div>
         </div>
         <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
@@ -532,10 +795,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                     <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 10 }} width={44} />
                     <Tooltip
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.dayLabel ?? ""}
-                      formatter={(value, name) => [
-                        metric === "storyCount" && typeof value === "number" ? Math.round(value) : value,
-                        name,
-                      ]}
+                      content={(props) => <BurndownTooltip {...props} metric={metric} />}
+                      cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
                     <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
                     {selectedEpicOption ? (
@@ -623,7 +884,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <ChartNoAxesCombined className="size-4 text-slate-600" />
-            Workload balance
+            Workload Balance
           </h3>
           <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
             <button
@@ -649,13 +910,41 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
           </div>
         </div>
         {workloadView === "stories" ? (
-          <div className="mb-2 flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto text-[10px] leading-tight whitespace-nowrap text-slate-600 sm:text-[11px]">
-            {WORKLOAD_BAR_SEGMENTS.map((s) => (
-              <span key={s.key} className="inline-flex min-w-0 items-center gap-1">
-                <span className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-black/10" style={{ backgroundColor: s.color }} />
-                <span className="truncate">{s.label}</span>
-              </span>
-            ))}
+          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2 text-[11px] text-slate-700">
+            <button
+              type="button"
+              onClick={() => toggleWorkloadStatusFilter("all")}
+              className={cn(
+                "rounded-md border px-2 py-1 font-semibold transition",
+                workloadStatusFilters.includes("all")
+                  ? "border-slate-400 bg-slate-200 text-slate-900"
+                  : "border-slate-200 bg-white hover:bg-slate-50",
+              )}
+            >
+              All
+            </button>
+            {WORKLOAD_BAR_SEGMENTS.map((s) => {
+              const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => toggleWorkloadStatusFilter(s.key)}
+                  className={cn(
+                    "inline-flex min-w-0 items-center gap-1 rounded-md border px-2 py-1 font-medium transition",
+                    on
+                      ? "border-slate-300 bg-slate-100 text-slate-900"
+                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                  )}
+                >
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-black/10"
+                    style={{ backgroundColor: s.color, opacity: on ? 1 : 0.35 }}
+                  />
+                  <span className="truncate">{s.label}</span>
+                </button>
+              );
+            })}
           </div>
         ) : null}
         <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
@@ -663,7 +952,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             analytics.workloadByAssignee.length > 0 ? (
               analytics.workloadByAssignee.map((item) => {
                 const { storiesByStatus: st } = item;
-                const storyTotal = st.todo + st.inProgress + st.done + st.approved;
+                const storyTotal = item.selectedStoryCount;
                 const barWidthPct = Math.max(12, Math.min(100, (storyTotal / analytics.workloadMaxStoryTotal) * 100));
                 return (
                   <div key={item.assignee}>
@@ -675,6 +964,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                         style={{ width: `${barWidthPct}%` }}
                       >
                         {WORKLOAD_BAR_SEGMENTS.map(({ key, color }) => {
+                          if (!selectedWorkloadStatuses.includes(key)) return null;
                           const n = st[key];
                           if (n <= 0) return null;
                           return (
@@ -688,7 +978,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       </div>
                     </div>
                     <span className="shrink-0 tabular-nums text-slate-600">
-                      {item.daysLeftTotal}d left · {item.openCount} open
+                      {item.selectedStoryCount} stories
                     </span>
                     </div>
                   </div>
@@ -739,10 +1029,10 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         </h3>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
-            {analytics.flowSprintTrendData.length > 0 ? (
+            {flowResolved.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 4, right: 4, left: 18, bottom: 28 }}>
+                  <AreaChart data={flowResolved} margin={{ top: 4, right: 4, left: 18, bottom: 28 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="labelShort"

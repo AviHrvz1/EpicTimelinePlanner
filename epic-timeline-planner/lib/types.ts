@@ -15,6 +15,18 @@ export type StoryHistoryItem = {
   createdAt: string | Date;
 };
 
+export type StoryDailySnapshotItem = {
+  id: string;
+  storyId: string;
+  snapshotDate: string | Date;
+  status: StoryStatus;
+  sprint: number | null;
+  estimatedDays: number | null;
+  daysLeft: number | null;
+  assignee: string | null;
+  createdAt: string | Date;
+};
+
 export type EpicCommentItem = {
   id: string;
   body: string;
@@ -62,6 +74,7 @@ export type UserStoryItem = {
   epicId: string;
   comments: StoryCommentItem[];
   history: StoryHistoryItem[];
+  snapshots?: StoryDailySnapshotItem[];
   createdAt: string | Date;
   updatedAt: string | Date;
 };

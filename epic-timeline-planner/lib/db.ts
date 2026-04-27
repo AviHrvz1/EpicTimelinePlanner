@@ -4,7 +4,7 @@ import { PrismaClient } from "@/lib/generated/prisma";
  * Bump when the Prisma schema changes. In development, disconnects a stale client
  * so the next import gets a new `PrismaClient` after `prisma generate`.
  */
-const PRISMA_CLIENT_CACHE_VERSION = 3;
+const PRISMA_CLIENT_CACHE_VERSION = 4;
 
 type LegacyGlobal = typeof globalThis & { prisma?: PrismaClient };
 

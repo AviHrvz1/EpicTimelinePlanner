@@ -19,6 +19,7 @@ export default async function Home() {
             include: {
               comments: { orderBy: { createdAt: "desc" } },
               history: { orderBy: { createdAt: "desc" } },
+              snapshots: { orderBy: { snapshotDate: "asc" } },
             },
           },
         },

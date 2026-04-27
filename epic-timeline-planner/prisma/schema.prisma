@@ -123,6 +123,7 @@ model UserStory {
   epic          Epic           @relation(fields: [epicId], references: [id], onDelete: Cascade)
   comments      StoryComment[]
   history       StoryHistory[]
+  snapshots     StoryDailySnapshot[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -142,4 +143,20 @@ model StoryHistory {
   storyId   String
   story     UserStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
+}
+
+model StoryDailySnapshot {
+  id           String     @id @default(uuid())
+  storyId      String
+  story        UserStory  @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  snapshotDate DateTime
+  status       StoryStatus
+  sprint       Int?
+  estimatedDays Int?
+  daysLeft     Int?
+  assignee     String?
+  createdAt    DateTime   @default(now())
+
+  @@unique([storyId, snapshotDate])
+  @@index([snapshotDate])
 }

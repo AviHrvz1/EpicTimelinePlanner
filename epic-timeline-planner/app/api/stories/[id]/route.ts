@@ -3,6 +3,7 @@ import { StoryStatus } from "@/lib/generated/prisma";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { captureStoryDailySnapshot } from "@/lib/story-daily-snapshots";
 import { YEAR_SPRINT_MAX, YEAR_SPRINT_MIN } from "@/lib/year-sprint";
 
 const updateStorySchema = z.object({
@@ -131,8 +132,12 @@ export async function PATCH(
       history: {
         orderBy: { createdAt: "desc" },
       },
+      snapshots: {
+        orderBy: { snapshotDate: "asc" },
+      },
     },
   });
+  await captureStoryDailySnapshot(story);
 
   return NextResponse.json(story);
 }

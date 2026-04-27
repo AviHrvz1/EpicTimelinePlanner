@@ -41,6 +41,7 @@ function epic(title, assignee, color, startMonth, endMonth, sprint, stories) {
 async function main() {
   await prisma.storyComment.deleteMany();
   await prisma.storyHistory.deleteMany();
+  await prisma.storyDailySnapshot.deleteMany();
   await prisma.userStory.deleteMany();
   await prisma.epicComment.deleteMany();
   await prisma.epicHistory.deleteMany();
