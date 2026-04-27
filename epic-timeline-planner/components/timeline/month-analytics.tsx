@@ -220,6 +220,9 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
   const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
   const [epicInput, setEpicInput] = useState("");
+  const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
+  const [statusPieVisibleNames, setStatusPieVisibleNames] = useState<string[]>([]);
+  const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
 
   const monthEpics = useMemo(
     () => collectMonthEpics(initiatives, month, filterEpicTeamId),
@@ -450,9 +453,29 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     selectedShowUnassigned,
   ]);
 
-  const pieData = analytics.statusPie.filter((x) => x.value > 0);
+  const pieLegendItems = useMemo(() => analytics.statusPie.filter((x) => x.value > 0), [analytics.statusPie]);
+  useEffect(() => {
+    setStatusPieVisibleNames((prev) => {
+      const available = new Set(pieLegendItems.map((item) => item.name));
+      const retained = prev.filter((name) => available.has(name));
+      if (retained.length > 0) return retained;
+      return pieLegendItems.map((item) => item.name);
+    });
+  }, [pieLegendItems]);
+  const pieData = pieLegendItems.filter((x) => statusPieVisibleNames.includes(x.name));
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
-  const topSlice = pieData[0] ?? null;
+  const toggleStatusPieName = (name: string) => {
+    setStatusPieVisibleNames((prev) => {
+      if (prev.includes(name)) {
+        const next = prev.filter((n) => n !== name);
+        return next.length > 0 ? next : prev;
+      }
+      return [...prev, name];
+    });
+  };
+  const showAllStatusPieNames = () => setStatusPieVisibleNames(pieLegendItems.map((item) => item.name));
+  const allStatusPieSelected =
+    pieLegendItems.length > 0 && pieLegendItems.every((item) => statusPieVisibleNames.includes(item.name));
   const monthBurndownEpics = useMemo(() => {
     const source = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
     return source.map((epic) => ({
@@ -619,6 +642,42 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       label: `Month end (${String(last.dayLabel ?? "")})`,
     };
   }, [selectedEpicOption, monthBurndownWithDueTarget]);
+  const burndownLegendItems = useMemo(() => {
+    if (selectedEpicOption) {
+      return [
+        { key: selectedEpicOption.epic.id, label: selectedEpicOption.epic.title, color: LINE_PALETTE[0] },
+        { key: "epicIdeal", label: "Epic ideal to due", color: "#f97316" },
+      ];
+    }
+    return [
+      { key: "actual", label: "Actual", color: "#94a3b8" },
+      ...monthBurndownEpics.slice(0, 6).map((epic, idx) => ({
+        key: epic.id,
+        label: epic.title,
+        color: LINE_PALETTE[idx % LINE_PALETTE.length],
+      })),
+    ];
+  }, [selectedEpicOption, monthBurndownEpics]);
+  useEffect(() => {
+    setBurndownVisibleKeys((prev) => {
+      const available = new Set(burndownLegendItems.map((item) => item.key));
+      const retained = prev.filter((k) => available.has(k));
+      if (retained.length > 0) return retained;
+      return burndownLegendItems.map((item) => item.key);
+    });
+  }, [burndownLegendItems]);
+  const toggleBurndownKey = (key: string) => {
+    setBurndownVisibleKeys((prev) => {
+      if (prev.includes(key)) {
+        const next = prev.filter((k) => k !== key);
+        return next.length > 0 ? next : prev;
+      }
+      return [...prev, key];
+    });
+  };
+  const showAllBurndownKeys = () => setBurndownVisibleKeys(burndownLegendItems.map((item) => item.key));
+  const allBurndownKeysSelected =
+    burndownLegendItems.length > 0 && burndownLegendItems.every((item) => burndownVisibleKeys.includes(item.key));
   const flowFromSnapshots = useMemo(() => {
     const sourceStories = selectedEpicOption != null
       ? (selectedEpicOption.epic.userStories ?? [])
@@ -677,12 +736,30 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     });
   }, [selectedEpicOption, monthEpics, planYear, month]);
   const flowResolved = flowFromSnapshots ?? analytics.flowSprintTrendData;
+  useEffect(() => {
+    setCfdVisibleKeys((prev) => {
+      const allKeys = CFD_FLOW_SEGMENTS.map((seg) => seg.key);
+      const retained = prev.filter((k) => allKeys.includes(k));
+      if (retained.length > 0) return retained;
+      return allKeys;
+    });
+  }, []);
+  const toggleCfdKey = (key: (typeof CFD_FLOW_SEGMENTS)[number]["key"]) => {
+    setCfdVisibleKeys((prev) => {
+      if (prev.includes(key)) {
+        const next = prev.filter((k) => k !== key);
+        return next.length > 0 ? next : prev;
+      }
+      return [...prev, key];
+    });
+  };
+  const showAllCfdKeys = () => setCfdVisibleKeys(CFD_FLOW_SEGMENTS.map((seg) => seg.key));
+  const allCfdKeysSelected =
+    CFD_FLOW_SEGMENTS.length > 0 && CFD_FLOW_SEGMENTS.every((seg) => cfdVisibleKeys.includes(seg.key));
 
   const chartLegendColumnClass = "max-h-[15rem] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
-  const epicScopeLabel =
-    selectedEpicOption != null ? `${selectedEpicOption.epic.title} (${selectedEpicOption.initiative.title})` : "All epics";
 
   return (
     <section className="mb-2 flex flex-col gap-3.5">
@@ -725,7 +802,6 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
           >
             All Epics
           </button>
-          <span className="text-[13px] text-slate-500">Current: {epicScopeLabel}</span>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
@@ -751,13 +827,14 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
-                  cy="50%"
+                  cy="46%"
                   innerRadius="38%"
                   outerRadius="68%"
                   paddingAngle={3}
                   cornerRadius={8}
                   stroke="#ffffff"
                   strokeWidth={2}
+                  label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
                   labelLine={false}
                   filter="url(#monthPieShadow)"
                 >
@@ -781,29 +858,45 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               </div>
             </div>
           </div>
-          <div className={`space-y-1.5 ${PIE_LEGEND_CAP}`}>
-            {pieData.map((slice) => {
+          <div className={`space-y-0.5 ${PIE_LEGEND_CAP}`}>
+            <button
+              type="button"
+              onClick={showAllStatusPieNames}
+              className={cn(
+                "mb-0.5 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                allStatusPieSelected
+                  ? "text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
+              )}
+            >
+              All
+            </button>
+            {pieLegendItems.map((slice) => {
+              const on = statusPieVisibleNames.includes(slice.name);
               const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
               return (
-                <div key={slice.name} className="flex items-center justify-between rounded-lg bg-slate-50/80 px-2 py-1.5">
-                  <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+                <button
+                  key={slice.name}
+                  type="button"
+                  onClick={() => toggleStatusPieName(slice.name)}
+                  className={cn(
+                    "mb-0.5 flex w-full items-center justify-between gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                    on ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                  )}
+                >
+                  <span className="inline-flex items-center gap-1.5 font-medium">
                     <span
                       className="inline-block h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8" }}
+                      style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8", opacity: on ? 1 : 0.35 }}
                     />
                     {slice.name}
                   </span>
-                  <span className="text-[12px] font-semibold text-slate-900">
+                  <span className={cn("text-[12px] font-semibold", on ? "text-slate-900" : "text-slate-500")}>
                     {slice.value} <span className="text-slate-500">({pct}%)</span>
                   </span>
-                </div>
+                </button>
               );
             })}
-            {topSlice ? (
-              <p className="pt-0.5 text-[11px] text-slate-600">
-                Largest: <span className="font-semibold text-slate-800">{topSlice.name}</span>
-              </p>
-            ) : null}
           </div>
         </div>
       </article>
@@ -887,7 +980,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                         angle: -90,
                         position: "insideLeft",
                         fill: "#64748b",
-                        fontSize: 10,
+                        fontSize: 13,
                       }}
                     />
                     <Tooltip
@@ -895,10 +988,10 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       content={(props) => <BurndownTooltip {...props} metric={metric} />}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
-                    {!selectedEpicOption ? (
+                    {!selectedEpicOption && burndownVisibleKeys.includes("actual") ? (
                       <Line type="monotone" dataKey="actual" stroke="#94a3b8" strokeWidth={2} dot={false} name="Actual" />
                     ) : null}
-                    {selectedEpicOption ? (
+                    {selectedEpicOption && burndownVisibleKeys.includes(selectedEpicOption.epic.id) ? (
                       <Line
                         type="monotone"
                         dataKey={selectedEpicOption.epic.id}
@@ -907,7 +1000,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                         dot={false}
                         name={selectedEpicOption.epic.title}
                       />
-                    ) : monthBurndownEpics.map((epic, idx) => (
+                    ) : monthBurndownEpics.map((epic, idx) =>
+                      burndownVisibleKeys.includes(epic.id) ? (
                       <Line
                         key={epic.id}
                         type="monotone"
@@ -917,8 +1011,9 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                         dot={false}
                         name={epic.title}
                       />
-                    ))}
-                    {selectedEpicOption ? (
+                      ) : null,
+                    )}
+                    {selectedEpicOption && burndownVisibleKeys.includes("epicIdeal") ? (
                       <Line
                         type="monotone"
                         dataKey="epicIdeal"
@@ -961,31 +1056,44 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             )}
           </div>
           <div className={chartLegendColumnClass}>
-            {!selectedEpicOption ? (
-              <div className={legendRowClass}>
-                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#94a3b8]" />
-                Actual
-              </div>
-            ) : null}
-            {(selectedEpicOption ? [selectedEpicOption.epic] : monthBurndownEpics.slice(0, 6)).map((epic, idx) => (
-              <div key={epic.id} className={legendRowClass}>
-                <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: LINE_PALETTE[idx % LINE_PALETTE.length] }}
-                />
-                <span className="truncate">{epic.title}</span>
-              </div>
-            ))}
+            <button
+              type="button"
+              onClick={showAllBurndownKeys}
+              className={cn(
+                "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                allBurndownKeysSelected
+                  ? "text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
+              )}
+            >
+              All
+            </button>
+            {burndownLegendItems.map((item) => {
+              const on = burndownVisibleKeys.includes(item.key);
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => toggleBurndownKey(item.key)}
+                  className={cn(
+                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                    on
+                      ? "text-slate-900 hover:bg-slate-100/70"
+                      : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                  )}
+                >
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.color, opacity: on ? 1 : 0.35 }}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
             {selectedEpicOption ? (
-              <>
-                <div className={legendRowClass}>
-                  <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500" />
-                  Epic ideal to due
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
-                </p>
-              </>
+              <p className="text-[11px] text-slate-500">
+                Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
+              </p>
             ) : monthBurndownEpics.length > 6 ? (
               <p className="text-[11px] text-slate-500">+{monthBurndownEpics.length - 6} more epics</p>
             ) : null}
@@ -1036,7 +1144,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   <div key={item.assignee}>
                   <div className="flex items-center gap-2 text-[12px] text-slate-700">
                     <span className="w-16 shrink-0 truncate font-medium">{item.assignee}</span>
-                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
+                    <div className="h-2.5 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
                       <div
                         className="flex h-full min-w-0 overflow-hidden rounded-full shadow-sm ring-1 ring-slate-300/40"
                         style={{ width: `${barWidthPct}%` }}
@@ -1067,67 +1175,52 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               )}
             </div>
             <div className="space-y-1.5 pr-0.5">
-              <label className="flex cursor-pointer items-center gap-2 px-1 py-1 text-[12px] font-semibold text-slate-800">
-                <input
-                  type="checkbox"
-                  checked={workloadStatusFilters.includes("all")}
-                  onChange={() => toggleWorkloadStatusFilter("all")}
-                  className="peer sr-only"
-                />
-                <span className="mt-0.5 inline-flex size-3 shrink-0 items-center justify-center rounded-sm border border-slate-400 bg-white">
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full bg-blue-500/70 transition-opacity",
-                      workloadStatusFilters.includes("all") ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                </span>
-                <span>All</span>
-              </label>
+              <button
+                type="button"
+                onClick={() => toggleWorkloadStatusFilter("all")}
+                className={cn(
+                  "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                  workloadStatusFilters.includes("all")
+                    ? "text-slate-900"
+                    : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
+                )}
+              >
+                All
+              </button>
               {WORKLOAD_BAR_SEGMENTS.map((s) => {
                 const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
                 return (
-                  <label
+                  <button
                     key={s.key}
-                    className={cn("flex cursor-pointer items-center gap-2 px-1 py-1 text-[12px]", on ? "text-slate-900" : "text-slate-500")}
+                    type="button"
+                    onClick={() => toggleWorkloadStatusFilter(s.key)}
+                    className={cn(
+                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                      on ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                    )}
                   >
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => toggleWorkloadStatusFilter(s.key)}
-                      className="peer sr-only"
+                    <span
+                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: s.color, opacity: on ? 1 : 0.35 }}
                     />
-                    <span className="mt-0.5 inline-flex size-3 shrink-0 items-center justify-center rounded-sm border border-slate-400 bg-white">
-                      <span
-                        className={cn("size-1.5 rounded-full bg-blue-500/70 transition-opacity", on ? "opacity-100" : "opacity-0")}
-                      />
-                    </span>
                     <span className="font-medium">{s.label}</span>
-                  </label>
+                  </button>
                 );
               })}
-              <label
+              <button
+                type="button"
+                onClick={() => toggleWorkloadStatusFilter("unassigned")}
                 className={cn(
-                  "flex cursor-pointer items-center gap-2 px-1 py-1 text-[12px]",
-                  selectedShowUnassigned ? "text-slate-900" : "text-slate-500",
+                  "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                  selectedShowUnassigned ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
                 )}
               >
-                <input
-                  type="checkbox"
-                  checked={selectedShowUnassigned}
-                  onChange={() => toggleWorkloadStatusFilter("unassigned")}
-                  className="peer sr-only"
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: STATUS_COLORS.Unscheduled, opacity: selectedShowUnassigned ? 1 : 0.35 }}
                 />
-                <span className="mt-0.5 inline-flex size-3 shrink-0 items-center justify-center rounded-sm border border-slate-400 bg-white">
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full bg-blue-500/70 transition-opacity",
-                      selectedShowUnassigned ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                </span>
                 <span className="font-medium">Unassigned</span>
-              </label>
+              </button>
             </div>
           </div>
         ) : (
@@ -1141,7 +1234,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 <div key={row.assignee}>
                   <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
                     <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
-                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ring-slate-200/80">
+                    <div className="h-2.5 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full ring-1 ring-slate-200/80">
                       <div
                         className={cn("h-full rounded-full transition-colors", row.isOverCapacity ? "bg-red-600" : "bg-emerald-500")}
                         style={{ width: `${barW}%` }}
@@ -1193,7 +1286,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       allowDecimals={false}
                       tick={{ fontSize: 10, fill: "#64748b" }}
                       width={40}
-                      label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 10 }}
+                      label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
                     />
                     <Tooltip
                       labelFormatter={(_, payload) => {
@@ -1204,7 +1297,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       content={(props) => <CumulativeFlowTooltip {...props} />}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
-                    {CFD_FLOW_SEGMENTS.map(({ key, label, color }) => (
+                    {CFD_FLOW_SEGMENTS.map(({ key, label, color }) =>
+                      cfdVisibleKeys.includes(key) ? (
                       <Area
                         key={key}
                         type="monotone"
@@ -1218,7 +1312,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                         strokeWidth={1.5}
                         isAnimationActive={false}
                       />
-                    ))}
+                      ) : null,
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -1227,15 +1322,38 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             )}
           </div>
           <div className={chartLegendColumnClass}>
-            {[...CFD_FLOW_SEGMENTS].reverse().map(({ label, color }) => (
-              <div key={label} className={legendRowClass}>
-                <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
-                  style={{ backgroundColor: color }}
-                />
-                {label}
-              </div>
-            ))}
+            <button
+              type="button"
+              onClick={showAllCfdKeys}
+              className={cn(
+                "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                allCfdKeysSelected
+                  ? "text-slate-900"
+                  : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
+              )}
+            >
+              All
+            </button>
+            {[...CFD_FLOW_SEGMENTS].reverse().map(({ key, label, color }) => {
+              const on = cfdVisibleKeys.includes(key);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleCfdKey(key)}
+                  className={cn(
+                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                    on ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                  )}
+                >
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
+                    style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
+                  />
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </article>
