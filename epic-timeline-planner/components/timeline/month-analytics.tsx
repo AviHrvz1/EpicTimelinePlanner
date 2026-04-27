@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowLeft, ChartNoAxesCombined, Folder, Layers, PieChart as PieChartIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  ArrowLeft,
+  ChartNoAxesCombined,
+  ChevronDown,
+  ChevronUp,
+  Folder,
+  Layers,
+  PieChart as PieChartIcon,
+} from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -837,6 +846,10 @@ export function MonthAnalytics({
   const showAllBurndownKeys = () => setBurndownVisibleKeys(burndownLegendItems.map((item) => item.key));
   const allBurndownKeysSelected =
     burndownLegendItems.length > 0 && burndownLegendItems.every((item) => burndownVisibleKeys.includes(item.key));
+  const burndownLegendScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollBurndownLegendBy = (delta: number) => {
+    burndownLegendScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+  };
   const flowFromSnapshots = useMemo(() => {
     const sourceStories = selectedEpicOption != null
       ? (selectedEpicOption.epic.userStories ?? [])
@@ -1281,51 +1294,73 @@ export function MonthAnalytics({
               </div>
             )}
           </div>
-          <div className={chartLegendColumnClass}>
+          <div className="relative max-h-[12rem]">
+            <div
+              ref={burndownLegendScrollRef}
+              className="max-h-[12rem] space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              <button
+                type="button"
+                onClick={showAllBurndownKeys}
+                className={cn(
+                  "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                  allBurndownKeysSelected
+                    ? "text-slate-900 hover:bg-slate-200/70"
+                    : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+                )}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Layers className="size-3.5" aria-hidden />
+                  All
+                </span>
+              </button>
+              {burndownLegendItems.map((item) => {
+                const on = burndownVisibleKeys.includes(item.key);
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => toggleBurndownKey(item.key)}
+                    className={cn(
+                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                      on
+                        ? "text-slate-900 hover:bg-slate-200/70"
+                        : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
+                    )}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.color, opacity: on ? 1 : 0.35 }}
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+              {selectedEpicOption ? (
+                <p className="text-[11px] text-slate-500">
+                  Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
+                </p>
+              ) : monthBurndownEpics.length > 6 ? (
+                <p className="text-[11px] text-slate-500">+{monthBurndownEpics.length - 6} more epics</p>
+              ) : null}
+            </div>
             <button
               type="button"
-              onClick={showAllBurndownKeys}
-              className={cn(
-                "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
-                allBurndownKeysSelected
-                  ? "text-slate-900"
-                  : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-              )}
+              onClick={() => scrollBurndownLegendBy(-96)}
+              className="absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800"
+              aria-label="Scroll up burndown legend"
             >
-              <span className="inline-flex items-center gap-1.5">
-                <Layers className="size-3.5" aria-hidden />
-                All
-              </span>
+              <ChevronUp className="size-3.5" />
             </button>
-            {burndownLegendItems.map((item) => {
-              const on = burndownVisibleKeys.includes(item.key);
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => toggleBurndownKey(item.key)}
-                  className={cn(
-                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
-                    on
-                      ? "text-slate-900 hover:bg-slate-200/70"
-                      : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
-                  )}
-                >
-                  <span
-                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: item.color, opacity: on ? 1 : 0.35 }}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })}
-            {selectedEpicOption ? (
-              <p className="text-[11px] text-slate-500">
-                Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
-              </p>
-            ) : monthBurndownEpics.length > 6 ? (
-              <p className="text-[11px] text-slate-500">+{monthBurndownEpics.length - 6} more epics</p>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => scrollBurndownLegendBy(96)}
+              className="absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800"
+              aria-label="Scroll down burndown legend"
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
           </div>
         </div>
       </article>
@@ -1410,7 +1445,7 @@ export function MonthAnalytics({
                 className={cn(
                   "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
                   workloadStatusFilters.includes("all")
-                    ? "text-slate-900"
+                    ? "text-slate-900 hover:bg-slate-200/70"
                     : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
                 )}
               >
@@ -1560,7 +1595,7 @@ export function MonthAnalytics({
               className={cn(
                 "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
                 allCfdKeysSelected
-                  ? "text-slate-900"
+                  ? "text-slate-900 hover:bg-slate-200/70"
                   : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
               )}
             >
