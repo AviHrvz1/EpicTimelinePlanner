@@ -88,7 +88,7 @@ function KanbanStoryCard({
     <div
       ref={setNodeRef}
       className={cn(
-        "group/story-card relative rounded-lg border border-slate-200/90 bg-white py-2.5 pl-2.5 pr-1.5 shadow-sm transition",
+        "group/story-card relative rounded-lg border border-slate-200/90 bg-white py-2.5 pl-2.5 pr-1.5 shadow-sm transition hover:bg-sky-50/70",
         emphasizeFlash && "ring-2 ring-sky-300/70",
         isDragging && "opacity-60",
       )}
