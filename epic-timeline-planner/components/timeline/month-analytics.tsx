@@ -7,6 +7,7 @@ import {
   ChartNoAxesCombined,
   ChevronDown,
   ChevronUp,
+  Eraser,
   Folder,
   Layers,
   PieChart as PieChartIcon,
@@ -971,6 +972,23 @@ export function MonthAnalytics({
   const scrollWorkloadStoriesBy = (delta: number) => {
     workloadStoriesScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   };
+  const monthLoadScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollMonthLoadUp, setCanScrollMonthLoadUp] = useState(false);
+  const [canScrollMonthLoadDown, setCanScrollMonthLoadDown] = useState(false);
+  const updateMonthLoadArrowState = () => {
+    const node = monthLoadScrollRef.current;
+    if (!node) {
+      setCanScrollMonthLoadUp(false);
+      setCanScrollMonthLoadDown(false);
+      return;
+    }
+    const epsilon = 2;
+    setCanScrollMonthLoadUp(node.scrollTop > epsilon);
+    setCanScrollMonthLoadDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
+  };
+  const scrollMonthLoadBy = (delta: number) => {
+    monthLoadScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+  };
   useEffect(() => {
     if (workloadView !== "stories") {
       setCanScrollWorkloadUp(false);
@@ -979,6 +997,14 @@ export function MonthAnalytics({
     }
     updateWorkloadArrowState();
   }, [workloadView, analytics.workloadByAssignee.length, workloadStatusFilters]);
+  useEffect(() => {
+    if (workloadView !== "monthLoad") {
+      setCanScrollMonthLoadUp(false);
+      setCanScrollMonthLoadDown(false);
+      return;
+    }
+    updateMonthLoadArrowState();
+  }, [workloadView, analytics.workloadCapacityByAssignee.length, analytics.monthDaysLeft]);
 
   const chartLegendColumnClass = "max-h-[15rem] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
@@ -1027,6 +1053,21 @@ export function MonthAnalytics({
               className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700"
               aria-label="Filter month insights by epic across all charts"
             />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setSelectedEpicId("all");
+                setEpicInput("");
+                setIsEpicDropdownOpen(true);
+                setShowAllEpicSuggestions(true);
+              }}
+              className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Clear epic scope filter"
+              title="Clear filter (show all epics)"
+            >
+              <Eraser className="size-3.5" aria-hidden />
+            </button>
             {isEpicDropdownOpen ? (
               <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-56 overflow-auto rounded-xl bg-white p-1.5 shadow-xl">
                 {filteredEpicOptions.length > 0 ? (
@@ -1615,36 +1656,74 @@ export function MonthAnalytics({
             </button>
           </div>
         ) : (
-          <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
-            {analytics.workloadCapacityByAssignee.length > 0 ? (
-              analytics.workloadCapacityByAssignee.map((row) => {
-              const pct = row.utilizationPct;
-              const barW = analytics.monthDaysLeft > 0 ? Math.min(pct, 100) : row.daysLeftTotal > 0 ? 100 : 0;
-              const pctRounded = Math.round(pct);
-              return (
-                <div key={row.assignee}>
-                  <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
-                    <div className="h-2.5 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full ring-1 ring-slate-200/80">
-                      <div
-                        className={cn("h-full rounded-full transition-colors", row.isOverCapacity ? "bg-red-600" : "bg-emerald-500")}
-                        style={{ width: `${barW}%` }}
-                        role="presentation"
-                      />
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={monthLoadScrollRef}
+              onScroll={updateMonthLoadArrowState}
+              className={`min-h-0 space-y-2.5 pr-5 [&::-webkit-scrollbar]:hidden ${WORKLOAD_LIST_MAX}`}
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              {analytics.workloadCapacityByAssignee.length > 0 ? (
+                analytics.workloadCapacityByAssignee.map((row) => {
+                const pct = row.utilizationPct;
+                const barW = analytics.monthDaysLeft > 0 ? Math.min(pct, 100) : row.daysLeftTotal > 0 ? 100 : 0;
+                const pctRounded = Math.round(pct);
+                return (
+                  <div key={row.assignee}>
+                    <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
+                      <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
+                      <div className="relative h-4 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full ring-1 ring-slate-200/80">
+                        <div
+                          className={cn("h-full rounded-full transition-colors", row.isOverCapacity ? "bg-red-600" : "bg-emerald-500")}
+                          style={{ width: `${barW}%` }}
+                          role="presentation"
+                        />
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-1">
+                          <span
+                            className={cn(
+                              "rounded-full px-1.5 py-[1px] text-[10px] font-semibold tabular-nums shadow-sm",
+                              row.isOverCapacity
+                                ? "bg-slate-900/25 text-white"
+                                : "bg-white/80 text-slate-800 ring-1 ring-slate-200/80",
+                            )}
+                          >
+                            {analytics.monthDaysLeft > 0 ? `${pctRounded}% of remaining month capacity` : "Month ended"}
+                          </span>
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-[11px] tabular-nums text-slate-600">
+                        {row.estimatedTotal}d est · {row.daysLeftTotal}d left
+                      </span>
                     </div>
-                    <span className="shrink-0 text-[11px] tabular-nums text-slate-600">
-                      {row.estimatedTotal}d est · {row.daysLeftTotal}d left
-                    </span>
                   </div>
-                  <p className={cn("mt-0.5 text-[11px] tabular-nums", row.isOverCapacity ? "text-red-600" : "text-slate-500")}>
-                    {analytics.monthDaysLeft > 0 ? `${pctRounded}% of remaining month capacity` : "Month ended"}
-                  </p>
-                </div>
-              );
-              })
-            ) : (
-              <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
-            )}
+                );
+                })
+              ) : (
+                <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollMonthLoadBy(-96)}
+              className={cn(
+                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollMonthLoadUp && "bg-slate-200/70 text-slate-800",
+              )}
+              aria-label="Scroll up month load list"
+            >
+              <ChevronUp className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollMonthLoadBy(96)}
+              className={cn(
+                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollMonthLoadDown && "bg-slate-200/70 text-slate-800",
+              )}
+              aria-label="Scroll down month load list"
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
           </div>
         )}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">
