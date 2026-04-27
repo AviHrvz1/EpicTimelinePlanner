@@ -355,9 +355,52 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   const chartLegendColumnClass = `space-y-1.5 md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-0`;
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
+  const epicScopeLabel =
+    selectedEpicOption != null ? `${selectedEpicOption.epic.title} (${selectedEpicOption.initiative.title})` : "All epics";
 
   return (
     <section className="mb-2 flex flex-col gap-4">
+      <div className="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2.5 shadow-sm ring-1 ring-slate-100/80">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-[12px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
+            Epic scope (applies to all charts)
+          </label>
+          <input
+            id="month-insights-epic-filter"
+            list="month-insights-epic-options"
+            value={epicInput}
+            onChange={(e) => {
+              const v = e.target.value;
+              setEpicInput(v);
+              if (!v.trim()) {
+                setSelectedEpicId("all");
+                return;
+              }
+              const exact = epicComboOptions.find((opt) => opt.label === v);
+              if (exact) setSelectedEpicId(exact.id);
+            }}
+            placeholder="Type epic name to filter all charts (leave empty for all epics)"
+            className="h-9 min-w-[22rem] flex-1 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
+            aria-label="Filter month insights by epic across all charts"
+          />
+          <datalist id="month-insights-epic-options">
+            {epicComboOptions.map((opt) => (
+              <option key={opt.id} value={opt.label} />
+            ))}
+          </datalist>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedEpicId("all");
+              setEpicInput("");
+            }}
+            className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            All epics
+          </button>
+          <span className="text-[12px] text-slate-500">Current: {epicScopeLabel}</span>
+        </div>
+      </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
         <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
@@ -439,30 +482,6 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             Burndown
           </h3>
           <div className="flex items-center gap-2">
-            <div className="flex min-w-[19rem] flex-col gap-1">
-              <input
-                list="month-insights-epic-options"
-                value={epicInput}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEpicInput(v);
-                  if (!v.trim()) {
-                    setSelectedEpicId("all");
-                    return;
-                  }
-                  const exact = epicComboOptions.find((opt) => opt.label === v);
-                  if (exact) setSelectedEpicId(exact.id);
-                }}
-                placeholder="Type epic name to filter burndown"
-                className="h-9 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
-                aria-label="Filter month insights by epic"
-              />
-              <datalist id="month-insights-epic-options">
-                {epicComboOptions.map((opt) => (
-                  <option key={opt.id} value={opt.label} />
-                ))}
-              </datalist>
-            </div>
             <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
               <button
                 type="button"
