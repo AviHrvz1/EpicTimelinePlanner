@@ -4,13 +4,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowLeft,
+  CheckCheck,
+  CheckCircle2,
   ChartNoAxesCombined,
   ChevronDown,
   ChevronUp,
+  Circle,
   Eraser,
   Folder,
   Layers,
+  ListTodo,
   PieChart as PieChartIcon,
+  PlayCircle,
+  UserX,
 } from "lucide-react";
 import {
   Area,
@@ -279,6 +285,20 @@ function storySprintDisplayLabel(storySprint: number | null | undefined, month: 
   return `Sprint ${lane}`;
 }
 
+function statusDrilldownIcon(status: string | null) {
+  if (status === "To do") return ListTodo;
+  if (status === "In progress") return PlayCircle;
+  if (status === "Done") return CheckCheck;
+  if (status === "Approved") return CheckCircle2;
+  if (status === "Unscheduled") return UserX;
+  return Circle;
+}
+
+function statusDrilldownDisplayLabel(status: string | null): string {
+  if (status === "To do") return "To Do";
+  return status ?? "";
+}
+
 function collectMonthStories(
   initiatives: InitiativeItem[],
   month: number,
@@ -336,6 +356,7 @@ export function MonthAnalytics({
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
+  const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
 
   const monthEpics = useMemo(
     () => collectMonthEpics(initiatives, month, filterEpicTeamId),
@@ -594,6 +615,13 @@ export function MonthAnalytics({
       return false;
     });
   }, [statusDrilldownFilter, scopedStories]);
+  const workloadDrilldownStories = useMemo(() => {
+    if (workloadDrilldownAssignee == null) return [];
+    return scopedStories
+      .filter((story) => story.sprint != null)
+      .filter((story) => (story.assignee?.trim() || "Unassigned") === workloadDrilldownAssignee)
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [workloadDrilldownAssignee, scopedStories]);
   const scopedStoryDisplayIds = useMemo(() => {
     const rows = [...scopedStories].sort((a, b) => {
       const aTs = new Date(a.createdAt).getTime();
@@ -972,6 +1000,23 @@ export function MonthAnalytics({
   const scrollWorkloadStoriesBy = (delta: number) => {
     workloadStoriesScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   };
+  const workloadDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollWorkloadDrilldownUp, setCanScrollWorkloadDrilldownUp] = useState(false);
+  const [canScrollWorkloadDrilldownDown, setCanScrollWorkloadDrilldownDown] = useState(false);
+  const updateWorkloadDrilldownArrowState = () => {
+    const node = workloadDrilldownScrollRef.current;
+    if (!node) {
+      setCanScrollWorkloadDrilldownUp(false);
+      setCanScrollWorkloadDrilldownDown(false);
+      return;
+    }
+    const epsilon = 2;
+    setCanScrollWorkloadDrilldownUp(node.scrollTop > epsilon);
+    setCanScrollWorkloadDrilldownDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
+  };
+  const scrollWorkloadDrilldownBy = (delta: number) => {
+    workloadDrilldownScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+  };
   const monthLoadScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollMonthLoadUp, setCanScrollMonthLoadUp] = useState(false);
   const [canScrollMonthLoadDown, setCanScrollMonthLoadDown] = useState(false);
@@ -1005,6 +1050,14 @@ export function MonthAnalytics({
     }
     updateMonthLoadArrowState();
   }, [workloadView, analytics.workloadCapacityByAssignee.length, analytics.monthDaysLeft]);
+  useEffect(() => {
+    if (!workloadDrilldownAssignee) {
+      setCanScrollWorkloadDrilldownUp(false);
+      setCanScrollWorkloadDrilldownDown(false);
+      return;
+    }
+    updateWorkloadDrilldownArrowState();
+  }, [workloadDrilldownAssignee, workloadDrilldownStories.length]);
 
   const chartLegendColumnClass = "max-h-[15rem] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
@@ -1114,8 +1167,12 @@ export function MonthAnalytics({
         {statusDrilldownFilter ? (
           <div className="mt-2 rounded-lg border border-slate-200/80 bg-white/80 p-2">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[12px] font-semibold text-slate-700">
-                Stories in <span className="text-slate-900">{statusDrilldownFilter}</span> ({statusDrilldownStories.length})
+              <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-700">
+                {(() => {
+                  const Icon = statusDrilldownIcon(statusDrilldownFilter);
+                  return <Icon className="size-3.5 text-slate-600" aria-hidden />;
+                })()}
+                Stories in <span className="text-slate-900">{statusDrilldownDisplayLabel(statusDrilldownFilter)}</span> ({statusDrilldownStories.length})
               </p>
               <button
                 type="button"
@@ -1532,13 +1589,118 @@ export function MonthAnalytics({
             </button>
           </div>
         </div>
-        {workloadView === "stories" ? (
+        {workloadDrilldownAssignee ? (
+          <div className="mt-1 rounded-lg border border-slate-200/80 bg-white/80 p-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[12px] font-semibold text-slate-700">
+                Stories assigned to <span className="text-slate-900">{workloadDrilldownAssignee}</span> ({workloadDrilldownStories.length})
+              </p>
+              <button
+                type="button"
+                onClick={() => setWorkloadDrilldownAssignee(null)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                aria-label="Back to workload chart"
+                title="Back to workload chart"
+              >
+                <ArrowLeft className="size-3.5" aria-hidden />
+              </button>
+            </div>
+            <div className="relative">
+            <div
+              ref={workloadDrilldownScrollRef}
+              onScroll={updateWorkloadDrilldownArrowState}
+              className="max-h-[11rem] overflow-auto pr-5 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              <table className="w-full border-collapse text-left text-[12px]">
+                <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-2 py-1 font-semibold">Story ID</th>
+                    <th className="px-2 py-1 font-semibold">Story name</th>
+                    <th className="px-2 py-1 font-semibold">Sprint</th>
+                    <th className="px-2 py-1 font-semibold">Assignee</th>
+                    <th className="px-2 py-1 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workloadDrilldownStories.map((story) => (
+                    <tr key={story.id} className="border-t border-slate-100 text-slate-700">
+                      <td className="px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => onOpenStory?.(story.id)}
+                          className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                        >
+                          {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
+                        </button>
+                      </td>
+                      <td className="px-2 py-1">{story.title}</td>
+                      <td className="px-2 py-1">
+                        {normalizeStoryYearSprint(story.sprint, month) != null ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, month);
+                              if (targetYearSprint == null) return;
+                              onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                            }}
+                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          >
+                            {storySprintDisplayLabel(story.sprint, month)}
+                          </button>
+                        ) : (
+                          "Unscheduled"
+                        )}
+                      </td>
+                      <td className="px-2 py-1">
+                        {story.assignee?.trim() || "Unassigned"}
+                      </td>
+                      <td className="px-2 py-1">
+                        {story.status === "todo"
+                          ? "To do"
+                          : story.status === "inProgress"
+                            ? "In progress"
+                            : story.status === "done"
+                              ? "Done"
+                              : "Approved"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollWorkloadDrilldownBy(-96)}
+              className={cn(
+                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollWorkloadDrilldownUp && "bg-slate-200/70 text-slate-800",
+              )}
+              aria-label="Scroll up workload stories table"
+            >
+              <ChevronUp className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollWorkloadDrilldownBy(96)}
+              className={cn(
+                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                canScrollWorkloadDrilldownDown && "bg-slate-200/70 text-slate-800",
+              )}
+              aria-label="Scroll down workload stories table"
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
+            </div>
+          </div>
+        ) : null}
+        {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
           <div className="relative min-h-0 max-h-[13rem] flex-1">
             <div className="grid min-h-0 max-h-[13rem] gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
             <div
               ref={workloadStoriesScrollRef}
               onScroll={updateWorkloadArrowState}
-              className="min-h-0 max-h-[13rem] space-y-2.5 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
+              className="min-h-0 max-h-[13rem] space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {analytics.workloadByAssignee.length > 0 ? (
@@ -1547,7 +1709,12 @@ export function MonthAnalytics({
                 const storyTotal = item.selectedStoryCount;
                 const barWidthPct = Math.max(12, Math.min(100, (storyTotal / analytics.workloadMaxStoryTotal) * 100));
                 return (
-                  <div key={item.assignee}>
+                  <button
+                    key={item.assignee}
+                    type="button"
+                    onClick={() => setWorkloadDrilldownAssignee(item.assignee)}
+                    className="block w-full rounded-md px-1 py-0.5 text-left transition hover:bg-sky-100/70"
+                  >
                   <div className="flex items-center gap-2 text-[12px] text-slate-700">
                     <span className="w-16 shrink-0 truncate font-medium">{item.assignee}</span>
                     <div className="h-2.5 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
@@ -1573,7 +1740,7 @@ export function MonthAnalytics({
                       {item.selectedStoryCount} stories
                     </span>
                     </div>
-                  </div>
+                  </button>
                 );
                 })
               ) : (
@@ -1660,7 +1827,7 @@ export function MonthAnalytics({
             <div
               ref={monthLoadScrollRef}
               onScroll={updateMonthLoadArrowState}
-              className={`min-h-0 space-y-2.5 pr-5 [&::-webkit-scrollbar]:hidden ${WORKLOAD_LIST_MAX}`}
+              className={`min-h-0 space-y-1 pr-5 [&::-webkit-scrollbar]:hidden ${WORKLOAD_LIST_MAX}`}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {analytics.workloadCapacityByAssignee.length > 0 ? (
@@ -1669,7 +1836,12 @@ export function MonthAnalytics({
                 const barW = analytics.monthDaysLeft > 0 ? Math.min(pct, 100) : row.daysLeftTotal > 0 ? 100 : 0;
                 const pctRounded = Math.round(pct);
                 return (
-                  <div key={row.assignee}>
+                  <button
+                    key={row.assignee}
+                    type="button"
+                    onClick={() => setWorkloadDrilldownAssignee(row.assignee)}
+                    className="block w-full rounded-md px-1 py-0.5 text-left transition hover:bg-sky-100/70"
+                  >
                     <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
                       <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
                       <div className="relative h-4 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full ring-1 ring-slate-200/80">
@@ -1695,7 +1867,7 @@ export function MonthAnalytics({
                         {row.estimatedTotal}d est · {row.daysLeftTotal}d left
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
                 })
               ) : (
@@ -1725,7 +1897,7 @@ export function MonthAnalytics({
               <ChevronDown className="size-3.5" />
             </button>
           </div>
-        )}
+        )) : null}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">
           {analytics.openStories} open stories, <span className="text-amber-700">{analytics.atRiskStories} at risk</span>.
         </p>

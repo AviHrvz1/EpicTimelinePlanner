@@ -464,7 +464,7 @@ function InitiativeTreeEpicRow({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-md py-2.5 pl-0.5 pr-0.5 font-sans transition-colors hover:bg-white/70",
+        "rounded-md py-2.5 pl-0.5 pr-0.5 font-sans transition-colors hover:bg-sky-50/70",
         isDragging && "opacity-60",
       )}
       style={{
@@ -912,7 +912,7 @@ function SprintEpicCard({
         setDropRef(node);
       }}
       className={cn(
-        "group rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5",
+        "group rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5 transition-colors hover:bg-sky-50/70",
         isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
