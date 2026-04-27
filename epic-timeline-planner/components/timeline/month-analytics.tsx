@@ -176,6 +176,48 @@ function flowChartDayLabel(dayDate: Date): string {
   return `${d}/${m}(${w})`;
 }
 
+function piePercentLabel({
+  cx,
+  cy,
+  midAngle,
+  outerRadius,
+  percent,
+}: {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  outerRadius?: number;
+  percent?: number;
+}) {
+  if (
+    cx == null ||
+    cy == null ||
+    midAngle == null ||
+    outerRadius == null ||
+    percent == null ||
+    percent <= 0
+  ) {
+    return null;
+  }
+  const RAD = Math.PI / 180;
+  const r = outerRadius + 6;
+  const x = cx + r * Math.cos(-midAngle * RAD);
+  const y = cy + r * Math.sin(-midAngle * RAD);
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#475569"
+      fontSize={10}
+      fontWeight={600}
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+    >
+      {`${Math.round(percent * 100)}%`}
+    </text>
+  );
+}
+
 function collectMonthStories(
   initiatives: InitiativeItem[],
   month: number,
@@ -827,14 +869,14 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
-                  cy="46%"
+                  cy="43%"
                   innerRadius="38%"
                   outerRadius="68%"
                   paddingAngle={3}
                   cornerRadius={8}
                   stroke="#ffffff"
                   strokeWidth={2}
-                  label={({ percent }) => `${Math.round((percent ?? 0) * 100)}%`}
+                  label={piePercentLabel}
                   labelLine={false}
                   filter="url(#monthPieShadow)"
                 >
@@ -851,8 +893,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 text-center">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Σ Stories</p>
                 <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
               </div>
