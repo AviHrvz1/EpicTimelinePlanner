@@ -81,6 +81,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --scrollbar-track: oklch(0.95 0.01 255 / 0.45);
+  --scrollbar-thumb: oklch(0.67 0.02 255 / 0.7);
+  --scrollbar-thumb-hover: oklch(0.58 0.03 255 / 0.86);
+  --scrollbar-thumb-active: oklch(0.5 0.03 255 / 0.94);
 }
 
 .dark {
@@ -115,6 +119,10 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --scrollbar-track: oklch(0.26 0 0 / 0.45);
+  --scrollbar-thumb: oklch(0.5 0.02 255 / 0.75);
+  --scrollbar-thumb-hover: oklch(0.6 0.02 255 / 0.9);
+  --scrollbar-thumb-active: oklch(0.68 0.02 255 / 0.95);
 }
 
 @keyframes epic-dialog-backdrop-in {
@@ -256,6 +264,48 @@
 }
 
 @layer base {
+  /**
+   * Global professional thin scrollbars (Firefox + WebKit).
+   * Keeps UI lightweight while preserving clear hover/active affordances.
+   */
+  html,
+  body,
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--scrollbar-thumb), color-mix(in oklab, var(--scrollbar-thumb), black 6%));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+      180deg,
+      var(--scrollbar-thumb-hover),
+      color-mix(in oklab, var(--scrollbar-thumb-hover), black 7%)
+    );
+  }
+  *::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(
+      180deg,
+      var(--scrollbar-thumb-active),
+      color-mix(in oklab, var(--scrollbar-thumb-active), black 8%)
+    );
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }

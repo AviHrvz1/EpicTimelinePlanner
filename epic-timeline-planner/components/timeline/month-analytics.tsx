@@ -15,6 +15,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  ReferenceDot,
   ReferenceLine,
 } from "recharts";
 
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 type BurndownMetric = "daysLeft" | "storyCount";
 type WorkloadViewMode = "stories" | "monthLoad";
 type WorkloadStatusKey = "todo" | "inProgress" | "done" | "approved";
+type WorkloadFilterKey = "all" | WorkloadStatusKey | "unassigned";
 
 const STATUS_COLORS: Record<string, string> = {
   Unscheduled: "#94a3b8",
@@ -36,8 +38,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const WORKLOAD_BAR_SEGMENTS = [
-  { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
-  { key: "inProgress" as const, label: "In progress", color: STATUS_COLORS["In progress"] },
+  { key: "todo" as const, label: "To Do", color: STATUS_COLORS["To do"] },
+  { key: "inProgress" as const, label: "In Progress", color: STATUS_COLORS["In progress"] },
   { key: "done" as const, label: "Done", color: STATUS_COLORS["Done"] },
   { key: "approved" as const, label: "Approved", color: STATUS_COLORS["Approved"] },
 ] as const;
@@ -49,11 +51,9 @@ const CFD_FLOW_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
 
-const SPRINT_CHART_BOX =
-  "min-h-40 h-40 w-full md:min-h-40 md:h-[clamp(10.5rem,27dvh,14.5rem)] md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
-const PIE_LEGEND_CAP = "md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-1";
-const WORKLOAD_LIST_MAX =
-  "max-h-[min(12rem,30dvh)] overflow-y-auto overflow-x-hidden overscroll-contain md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
+const SPRINT_CHART_BOX = "h-[15rem] min-h-[15rem] max-h-[15rem] w-full";
+const PIE_LEGEND_CAP = "max-h-[15rem] overflow-y-auto pr-1";
+const WORKLOAD_LIST_MAX = "max-h-[15rem] overflow-y-auto overflow-x-hidden overscroll-contain";
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
 
@@ -73,15 +73,19 @@ function latestSnapshotAtDay(story: UserStoryItem, day: Date) {
 }
 
 type BurndownTooltipPayload = {
-  name?: string;
-  value?: number | string | null;
+  name?: string | number;
+  value?: number | string | readonly (number | string)[] | null | undefined;
   color?: string;
-  dataKey?: string;
+  dataKey?: unknown;
 };
 
-function formatBurndownValue(value: number | string | null | undefined, metric: BurndownMetric) {
-  if (typeof value !== "number") return "n/a";
-  return metric === "storyCount" ? `${Math.round(value)} stories` : `${value.toFixed(1)}d`;
+function formatBurndownValue(
+  value: number | string | readonly (number | string)[] | null | undefined,
+  metric: BurndownMetric,
+) {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  if (typeof normalized !== "number") return "n/a";
+  return metric === "storyCount" ? `${Math.round(normalized)} stories` : `${normalized.toFixed(1)}d`;
 }
 
 function BurndownTooltip({
@@ -91,8 +95,8 @@ function BurndownTooltip({
   metric,
 }: {
   active?: boolean;
-  payload?: BurndownTooltipPayload[];
-  label?: string;
+  payload?: readonly BurndownTooltipPayload[];
+  label?: string | number;
   metric: BurndownMetric;
 }) {
   if (!active || !payload || payload.length === 0) return null;
@@ -100,7 +104,7 @@ function BurndownTooltip({
   if (rows.length === 0) return null;
   return (
     <div className="min-w-[12rem] rounded-xl border border-white/50 bg-slate-900/55 px-3 py-2 text-[12px] text-slate-100 shadow-xl backdrop-blur-md">
-      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">{label ?? "Burndown"}</p>
+      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">{String(label ?? "Burndown")}</p>
       <div className="space-y-1.5">
         {rows.map((row) => (
           <div key={String(row.dataKey ?? row.name)} className="flex items-center justify-between gap-3">
@@ -109,7 +113,7 @@ function BurndownTooltip({
                 className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30"
                 style={{ backgroundColor: row.color ?? "#cbd5e1" }}
               />
-              <span className="truncate">{row.name ?? row.dataKey ?? "Series"}</span>
+              <span className="truncate">{String(row.name ?? row.dataKey ?? "Series")}</span>
             </span>
             <span className="shrink-0 tabular-nums font-semibold text-white">
               {formatBurndownValue(row.value, metric)}
@@ -176,7 +180,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
-  const [workloadStatusFilters, setWorkloadStatusFilters] = useState<Array<"all" | WorkloadStatusKey>>(["all"]);
+  const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
   const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
   const [epicInput, setEpicInput] = useState("");
 
@@ -200,13 +204,17 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
     () =>
       workloadStatusFilters.includes("all")
         ? ["todo", "inProgress", "done", "approved"]
-        : (workloadStatusFilters as WorkloadStatusKey[]),
+        : (workloadStatusFilters.filter((v) => v !== "unassigned") as WorkloadStatusKey[]),
     [workloadStatusFilters],
   );
-  const toggleWorkloadStatusFilter = (value: "all" | WorkloadStatusKey) => {
+  const selectedShowUnassigned = useMemo(
+    () => workloadStatusFilters.includes("all") || workloadStatusFilters.includes("unassigned"),
+    [workloadStatusFilters],
+  );
+  const toggleWorkloadStatusFilter = (value: WorkloadFilterKey) => {
     setWorkloadStatusFilters((prev) => {
       if (value === "all") return ["all"];
-      const base = prev.filter((v) => v !== "all") as WorkloadStatusKey[];
+      const base = prev.filter((v) => v !== "all") as WorkloadFilterKey[];
       if (base.includes(value)) {
         const next = base.filter((v) => v !== value);
         return next.length > 0 ? next : ["all"];
@@ -327,7 +335,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         const selectedStoryCount = selectedWorkloadStatuses.reduce((sum, key) => sum + v.storiesByStatus[key], 0);
         return { assignee, ...v, selectedStoryCount };
       })
-      .filter((v) => v.selectedStoryCount > 0)
+      .filter((v) => v.selectedStoryCount > 0 || (selectedShowUnassigned && v.assignee === "Unassigned"))
       .sort(
         (a, b) =>
           b.selectedStoryCount - a.selectedStoryCount ||
@@ -394,7 +402,16 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       workloadCapacityByAssignee,
       monthDaysLeft,
     };
-  }, [initiatives, month, planYear, filterEpicTeamId, metric, selectedEpicOption, selectedWorkloadStatuses]);
+  }, [
+    initiatives,
+    month,
+    planYear,
+    filterEpicTeamId,
+    metric,
+    selectedEpicOption,
+    selectedWorkloadStatuses,
+    selectedShowUnassigned,
+  ]);
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
@@ -523,16 +540,48 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       return { ...row, epicIdeal };
     });
   }, [monthBurndownResolved, selectedEpicOption, selectedEpicDueDate, metric, planYear, month]);
-  const selectedEpicDueAxisLabel = useMemo(() => {
-    if (!selectedEpicDueDate) return null;
-    if (selectedEpicDueDate.getFullYear() !== planYear || selectedEpicDueDate.getMonth() + 1 !== month) return null;
+  const selectedEpicDueMarker = useMemo(() => {
+    if (!selectedEpicDueDate || !selectedEpicOption) return null;
+    const inCurrentMonth =
+      selectedEpicDueDate.getFullYear() === planYear && selectedEpicDueDate.getMonth() + 1 === month;
+    if (!inCurrentMonth) {
+      const last = monthBurndownWithDueTarget[monthBurndownWithDueTarget.length - 1] as
+        | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string })
+        | undefined;
+      if (!last?.axisLabel) return null;
+      const lastIdeal = last.epicIdeal;
+      return {
+        axisLabel: String(last.axisLabel),
+        y: typeof lastIdeal === "number" ? lastIdeal : 0,
+        label: `Epic due ${selectedEpicDueDate.toLocaleDateString()}`,
+      };
+    }
     const day = selectedEpicDueDate.getDate();
-    const point = monthBurndown.find((row) => {
+    const point = monthBurndownWithDueTarget.find((row) => {
       const label = String(row.dayLabel ?? "");
       return label.startsWith(`${day}/${month} `);
-    });
-    return point?.axisLabel ?? null;
-  }, [selectedEpicDueDate, planYear, month, monthBurndown]);
+    }) as (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string }) | undefined;
+    if (!point?.axisLabel) return null;
+    const y = point.epicIdeal;
+    return {
+      axisLabel: String(point.axisLabel),
+      y: typeof y === "number" ? y : 0,
+      label: "Epic due",
+    };
+  }, [selectedEpicDueDate, selectedEpicOption, planYear, month, monthBurndownWithDueTarget]);
+  const monthEndMarker = useMemo(() => {
+    if (!selectedEpicOption) return null;
+    const last = monthBurndownWithDueTarget[monthBurndownWithDueTarget.length - 1] as
+      | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string; dayLabel?: string })
+      | undefined;
+    if (!last?.axisLabel) return null;
+    const y = last.epicIdeal;
+    return {
+      axisLabel: String(last.axisLabel),
+      y: typeof y === "number" ? y : 0,
+      label: `Month end (${String(last.dayLabel ?? "")})`,
+    };
+  }, [selectedEpicOption, monthBurndownWithDueTarget]);
   const flowFromSnapshots = useMemo(() => {
     const sourceStories = selectedEpicOption != null
       ? (selectedEpicOption.epic.userStories ?? [])
@@ -592,18 +641,18 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   }, [selectedEpicOption, monthEpics, planYear, month]);
   const flowResolved = flowFromSnapshots ?? analytics.flowSprintTrendData;
 
-  const chartLegendColumnClass = `space-y-1.5 md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-0`;
+  const chartLegendColumnClass = "max-h-[15rem] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
   const epicScopeLabel =
     selectedEpicOption != null ? `${selectedEpicOption.epic.title} (${selectedEpicOption.initiative.title})` : "All epics";
 
   return (
-    <section className="mb-2 flex flex-col gap-4">
-      <div className="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2.5 shadow-sm ring-1 ring-slate-100/80">
+    <section className="mb-2 flex flex-col gap-3.5">
+      <div className="-mt-1 px-1 py-1">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
-            <Folder className="size-3.5 text-slate-500" aria-hidden />
+          <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
+            <Folder className="size-4 text-slate-500" aria-hidden />
             Epic Scope
           </label>
           <input
@@ -621,7 +670,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               if (exact) setSelectedEpicId(exact.id);
             }}
             placeholder="Type epic name to filter all charts (leave empty for all epics)"
-            className="h-9 min-w-[22rem] flex-1 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
+            className="h-9 min-w-[22rem] flex-1 rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700"
             aria-label="Filter month insights by epic across all charts"
           />
           <datalist id="month-insights-epic-options">
@@ -635,11 +684,11 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               setSelectedEpicId("all");
               setEpicInput("");
             }}
-            className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+            className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
           >
             All Epics
           </button>
-          <span className="text-[12px] text-slate-500">Current: {epicScopeLabel}</span>
+          <span className="text-[13px] text-slate-500">Current: {epicScopeLabel}</span>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
@@ -723,7 +772,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2 pl-[18px]">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
@@ -798,7 +847,9 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       content={(props) => <BurndownTooltip {...props} metric={metric} />}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
-                    <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
+                    {!selectedEpicOption ? (
+                      <Line type="monotone" dataKey="actual" stroke="#94a3b8" strokeWidth={2} dot={false} name="Actual" />
+                    ) : null}
                     {selectedEpicOption ? (
                       <Line
                         type="monotone"
@@ -830,12 +881,26 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                         name="Epic ideal to due"
                       />
                     ) : null}
-                    {selectedEpicOption && selectedEpicDueAxisLabel ? (
-                      <ReferenceLine
-                        x={selectedEpicDueAxisLabel}
-                        stroke="#ef4444"
-                        strokeDasharray="3 3"
-                        label={{ value: "Epic due", position: "insideTopRight", fill: "#b91c1c", fontSize: 11 }}
+                    {selectedEpicOption && monthEndMarker ? (
+                      <ReferenceDot
+                        x={monthEndMarker.axisLabel}
+                        y={monthEndMarker.y}
+                        r={4}
+                        fill="#2563eb"
+                        stroke="#ffffff"
+                        strokeWidth={1.5}
+                        label={{ value: monthEndMarker.label, position: "top", fill: "#1e3a8a", fontSize: 11 }}
+                      />
+                    ) : null}
+                    {selectedEpicOption && selectedEpicDueMarker ? (
+                      <ReferenceDot
+                        x={selectedEpicDueMarker.axisLabel}
+                        y={selectedEpicDueMarker.y}
+                        r={4}
+                        fill="#ef4444"
+                        stroke="#ffffff"
+                        strokeWidth={1.5}
+                        label={{ value: selectedEpicDueMarker.label, position: "top", fill: "#b91c1c", fontSize: 11 }}
                       />
                     ) : null}
                   </LineChart>
@@ -848,10 +913,12 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             )}
           </div>
           <div className={chartLegendColumnClass}>
-            <div className={legendRowClass}>
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#94a3b8]" />
-              Ideal
-            </div>
+            {!selectedEpicOption ? (
+              <div className={legendRowClass}>
+                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#94a3b8]" />
+                Actual
+              </div>
+            ) : null}
             {(selectedEpicOption ? [selectedEpicOption.epic] : monthBurndownEpics.slice(0, 6)).map((epic, idx) => (
               <div key={epic.id} className={legendRowClass}>
                 <span
@@ -910,47 +977,10 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
           </div>
         </div>
         {workloadView === "stories" ? (
-          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2 text-[11px] text-slate-700">
-            <button
-              type="button"
-              onClick={() => toggleWorkloadStatusFilter("all")}
-              className={cn(
-                "rounded-md border px-2 py-1 font-semibold transition",
-                workloadStatusFilters.includes("all")
-                  ? "border-slate-400 bg-slate-200 text-slate-900"
-                  : "border-slate-200 bg-white hover:bg-slate-50",
-              )}
-            >
-              All
-            </button>
-            {WORKLOAD_BAR_SEGMENTS.map((s) => {
-              const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => toggleWorkloadStatusFilter(s.key)}
-                  className={cn(
-                    "inline-flex min-w-0 items-center gap-1 rounded-md border px-2 py-1 font-medium transition",
-                    on
-                      ? "border-slate-300 bg-slate-100 text-slate-900"
-                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
-                  )}
-                >
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-black/10"
-                    style={{ backgroundColor: s.color, opacity: on ? 1 : 0.35 }}
-                  />
-                  <span className="truncate">{s.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-        <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
-          {workloadView === "stories" ? (
-            analytics.workloadByAssignee.length > 0 ? (
-              analytics.workloadByAssignee.map((item) => {
+          <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+            <div className={`min-h-0 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
+              {analytics.workloadByAssignee.length > 0 ? (
+                analytics.workloadByAssignee.map((item) => {
                 const { storiesByStatus: st } = item;
                 const storyTotal = item.selectedStoryCount;
                 const barWidthPct = Math.max(12, Math.min(100, (storyTotal / analytics.workloadMaxStoryTotal) * 100));
@@ -983,12 +1013,61 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                     </div>
                   </div>
                 );
-              })
-            ) : (
-              <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
-            )
-          ) : analytics.workloadCapacityByAssignee.length > 0 ? (
-            analytics.workloadCapacityByAssignee.map((row) => {
+                })
+              ) : (
+                <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
+              )}
+            </div>
+            <div className="max-h-[15rem] space-y-1.5 overflow-y-auto rounded-lg bg-slate-50/80 p-2 ring-1 ring-slate-200/70">
+              <label className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[12px] font-semibold text-slate-800 hover:bg-slate-100/80">
+                <input
+                  type="checkbox"
+                  checked={workloadStatusFilters.includes("all")}
+                  onChange={() => toggleWorkloadStatusFilter("all")}
+                  className="mt-0.5 size-3.5 shrink-0 rounded border-slate-300 bg-white text-indigo-600 accent-indigo-600 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                />
+                <span>All</span>
+              </label>
+              {WORKLOAD_BAR_SEGMENTS.map((s) => {
+                const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
+                return (
+                  <label
+                    key={s.key}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[12px] hover:bg-slate-100/80",
+                      on ? "text-slate-900" : "text-slate-500",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => toggleWorkloadStatusFilter(s.key)}
+                      className="mt-0.5 size-3.5 shrink-0 rounded border-slate-300 bg-white text-indigo-600 accent-indigo-600 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                    />
+                    <span className="font-medium">{s.label}</span>
+                  </label>
+                );
+              })}
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[12px] hover:bg-slate-100/80",
+                  selectedShowUnassigned ? "text-slate-900" : "text-slate-500",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedShowUnassigned}
+                  onChange={() => toggleWorkloadStatusFilter("unassigned")}
+                  className="mt-0.5 size-3.5 shrink-0 rounded border-slate-300 bg-white text-indigo-600 accent-indigo-600 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                />
+                <span className="font-medium">Unassigned</span>
+              </label>
+            </div>
+          </div>
+        ) : (
+          <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
+            {analytics.workloadCapacityByAssignee.length > 0 ? (
+              analytics.workloadCapacityByAssignee.map((row) => {
               const pct = row.utilizationPct;
               const barW = analytics.monthDaysLeft > 0 ? Math.min(pct, 100) : row.daysLeftTotal > 0 ? 100 : 0;
               const pctRounded = Math.round(pct);
@@ -1012,18 +1091,19 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   </p>
                 </div>
               );
-            })
-          ) : (
-            <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
-          )}
-        </div>
+              })
+            ) : (
+              <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
+            )}
+          </div>
+        )}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">
           {analytics.openStories} open stories, <span className="text-amber-700">{analytics.atRiskStories} at risk</span>.
         </p>
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2">
-        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 pl-[18px] text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
