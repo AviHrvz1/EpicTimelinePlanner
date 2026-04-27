@@ -1513,7 +1513,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setActiveYearSprint(clamped);
     setActiveSprintTab("kanban");
     setActiveMonthPlanTab("sprint-kanban");
-    setSprintStoryBoardTeamId(teamId?.trim() ? teamId.trim() : null);
+    const normalizedTeamId = teamId?.trim() ? teamId.trim() : null;
+    setSprintStoryBoardTeamId(normalizedTeamId && isKnownEpicTeamId(normalizedTeamId) ? normalizedTeamId : null);
   }, []);
 
   const activeSprintCapacityKey = useMemo(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ChartNoAxesCombined, Folder, PieChart as PieChartIcon } from "lucide-react";
+import { Activity, ArrowLeft, ChartNoAxesCombined, Folder, Layers, PieChart as PieChartIcon } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -23,6 +23,7 @@ import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint } from "@/lib/year-sprint";
 
 type BurndownMetric = "daysLeft" | "storyCount";
 type WorkloadViewMode = "stories" | "monthLoad";
@@ -162,11 +163,47 @@ function CumulativeFlowTooltip({
   );
 }
 
+function StatusPieTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean;
+  payload?: readonly BurndownTooltipPayload[];
+  total: number;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload.find((item) => item.value != null);
+  if (!row) return null;
+  const normalized = Array.isArray(row.value) ? row.value[0] : row.value;
+  const value = typeof normalized === "number" ? Math.round(normalized) : Number(normalized ?? 0);
+  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="min-w-[12rem] rounded-xl border border-white/50 bg-slate-900/55 px-3 py-2 text-[12px] text-slate-100 shadow-xl backdrop-blur-md">
+      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">User stories status</p>
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 truncate text-slate-100/95">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30"
+            style={{ backgroundColor: row.color ?? "#cbd5e1" }}
+          />
+          <span className="truncate">{String(row.name ?? "Status")}</span>
+        </span>
+        <span className="shrink-0 tabular-nums font-semibold text-white">
+          {value} ({percent}%)
+        </span>
+      </div>
+    </div>
+  );
+}
+
 type MonthAnalyticsProps = {
   initiatives: InitiativeItem[];
   month: number;
   planYear: number;
   filterEpicTeamId?: string | null;
+  onOpenStory?: (storyId: string) => void;
+  onOpenSprintKanban?: (yearSprint: number, teamId: string | null) => void;
 };
 
 function flowChartDayLabel(dayDate: Date): string {
@@ -218,6 +255,19 @@ function piePercentLabel({
   );
 }
 
+function normalizeStoryYearSprint(storySprint: number | null | undefined, month: number): number | null {
+  if (storySprint == null) return null;
+  if (storySprint === 1 || storySprint === 2) return globalSprintFromMonthLane(month, storySprint);
+  return clampYearSprint(storySprint);
+}
+
+function storySprintDisplayLabel(storySprint: number | null | undefined, month: number): string {
+  const normalized = normalizeStoryYearSprint(storySprint, month);
+  if (normalized == null) return "Unscheduled";
+  const { lane } = monthLaneFromGlobalSprint(normalized);
+  return `Sprint ${lane}`;
+}
+
 function collectMonthStories(
   initiatives: InitiativeItem[],
   month: number,
@@ -255,7 +305,14 @@ function collectMonthEpics(
   return rows.sort((a, b) => a.epic.title.localeCompare(b.epic.title));
 }
 
-export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId = null }: MonthAnalyticsProps) {
+export function MonthAnalytics({
+  initiatives,
+  month,
+  planYear,
+  filterEpicTeamId = null,
+  onOpenStory,
+  onOpenSprintKanban,
+}: MonthAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
@@ -263,11 +320,15 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
   const [epicInput, setEpicInput] = useState("");
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
-  const [statusPieVisibleNames, setStatusPieVisibleNames] = useState<string[]>([]);
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
+  const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
 
   const monthEpics = useMemo(
     () => collectMonthEpics(initiatives, month, filterEpicTeamId),
+    [initiatives, month, filterEpicTeamId],
+  );
+  const monthStories = useMemo(
+    () => collectMonthStories(initiatives, month, filterEpicTeamId),
     [initiatives, month, filterEpicTeamId],
   );
   const epicComboOptions = useMemo(
@@ -319,7 +380,6 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   }, [selectedEpicId, epicComboOptions]);
 
   const analytics = useMemo(() => {
-    const monthStories = collectMonthStories(initiatives, month, filterEpicTeamId);
     const scopeStories =
       selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories;
     const scheduledStories = scopeStories.filter((story) => story.sprint != null);
@@ -496,28 +556,85 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
   ]);
 
   const pieLegendItems = useMemo(() => analytics.statusPie.filter((x) => x.value > 0), [analytics.statusPie]);
-  useEffect(() => {
-    setStatusPieVisibleNames((prev) => {
-      const available = new Set(pieLegendItems.map((item) => item.name));
-      const retained = prev.filter((name) => available.has(name));
-      if (retained.length > 0) return retained;
-      return pieLegendItems.map((item) => item.name);
-    });
-  }, [pieLegendItems]);
-  const pieData = pieLegendItems.filter((x) => statusPieVisibleNames.includes(x.name));
+  const pieData = pieLegendItems;
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
-  const toggleStatusPieName = (name: string) => {
-    setStatusPieVisibleNames((prev) => {
-      if (prev.includes(name)) {
-        const next = prev.filter((n) => n !== name);
-        return next.length > 0 ? next : prev;
-      }
-      return [...prev, name];
+  const scopedStories = useMemo(
+    () => (selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories),
+    [selectedEpicOption, monthStories],
+  );
+  const statusDrilldownStories = useMemo(() => {
+    if (statusDrilldownFilter == null) return [];
+    if (statusDrilldownFilter === "All") return scopedStories;
+    return scopedStories.filter((story) => {
+      if (statusDrilldownFilter === "Unscheduled") return story.sprint == null;
+      if (statusDrilldownFilter === "To do") return story.sprint != null && story.status === "todo";
+      if (statusDrilldownFilter === "In progress") return story.sprint != null && story.status === "inProgress";
+      if (statusDrilldownFilter === "Done") return story.sprint != null && story.status === "done";
+      if (statusDrilldownFilter === "Approved") return story.sprint != null && story.status === "approved";
+      return false;
     });
+  }, [statusDrilldownFilter, scopedStories]);
+  const scopedStoryDisplayIds = useMemo(() => {
+    const rows = [...scopedStories].sort((a, b) => {
+      const aTs = new Date(a.createdAt).getTime();
+      const bTs = new Date(b.createdAt).getTime();
+      if (aTs !== bTs) return aTs - bTs;
+      return a.title.localeCompare(b.title);
+    });
+    const map = new Map<string, string>();
+    rows.forEach((story, idx) => {
+      map.set(story.id, `US-${String(idx + 1).padStart(2, "0")}`);
+    });
+    return map;
+  }, [scopedStories]);
+  const epicTeamByStoryId = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        for (const story of epic.userStories ?? []) {
+          map.set(story.id, epic.team ?? null);
+        }
+      }
+    }
+    return map;
+  }, [initiatives]);
+  const teamByAssigneeFallback = useMemo(() => {
+    const counts = new Map<string, Map<string, number>>();
+    for (const story of scopedStories) {
+      const assignee = story.assignee?.trim();
+      if (!assignee) continue;
+      const team = epicTeamByStoryId.get(story.id);
+      if (!team) continue;
+      const byTeam = counts.get(assignee) ?? new Map<string, number>();
+      byTeam.set(team, (byTeam.get(team) ?? 0) + 1);
+      counts.set(assignee, byTeam);
+    }
+    const out = new Map<string, string | null>();
+    for (const [assignee, byTeam] of counts.entries()) {
+      let winner: string | null = null;
+      let best = -1;
+      for (const [team, n] of byTeam.entries()) {
+        if (n > best) {
+          best = n;
+          winner = team;
+        }
+      }
+      out.set(assignee, winner);
+    }
+    return out;
+  }, [scopedStories, epicTeamByStoryId]);
+  const resolveStoryTeamForSprintNav = (story: UserStoryItem): string | null => {
+    const byStory = epicTeamByStoryId.get(story.id);
+    if (byStory) return byStory;
+    const assignee = story.assignee?.trim();
+    if (!assignee) return null;
+    return teamByAssigneeFallback.get(assignee) ?? null;
   };
-  const showAllStatusPieNames = () => setStatusPieVisibleNames(pieLegendItems.map((item) => item.name));
-  const allStatusPieSelected =
-    pieLegendItems.length > 0 && pieLegendItems.every((item) => statusPieVisibleNames.includes(item.name));
+  const openStatusDrilldown = (statusName: string) => {
+    if (!statusName) return;
+    setStatusDrilldownFilter(statusName);
+  };
+  const clearStatusDrilldown = () => setStatusDrilldownFilter(null);
   const monthBurndownEpics = useMemo(() => {
     const source = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
     return source.map((epic) => ({
@@ -852,99 +969,166 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
           <PieChartIcon className="size-4 text-slate-600" />
           User stories status{selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
         </h3>
-        <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
-          <div
-            className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
-          >
-            <div className="absolute inset-0">
-              <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <defs>
-                  <filter id="monthPieShadow">
-                    <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.18" />
-                  </filter>
-                </defs>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="43%"
-                  innerRadius="38%"
-                  outerRadius="68%"
-                  paddingAngle={3}
-                  cornerRadius={8}
-                  stroke="#ffffff"
-                  strokeWidth={2}
-                  label={piePercentLabel}
-                  labelLine={false}
-                  filter="url(#monthPieShadow)"
-                >
-                  {pieData.map((entry) => (
-                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value, name) => [
-                    `${Number(value ?? 0)} (${pieTotal > 0 ? Math.round((Number(value ?? 0) / pieTotal) * 100) : 0}%)`,
-                    name,
-                  ]}
-                />
-              </PieChart>
-              </ResponsiveContainer>
+        {statusDrilldownFilter ? (
+          <div className="mt-2 rounded-lg border border-slate-200/80 bg-white/80 p-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[12px] font-semibold text-slate-700">
+                Stories in <span className="text-slate-900">{statusDrilldownFilter}</span> ({statusDrilldownStories.length})
+              </p>
+              <button
+                type="button"
+                onClick={clearStatusDrilldown}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                aria-label="Back to chart"
+                title="Back to chart"
+              >
+                <ArrowLeft className="size-3.5" aria-hidden />
+              </button>
             </div>
-            <div className="pointer-events-none absolute inset-0">
-              <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Σ Stories</p>
-                <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
+            <div className="max-h-[11rem] overflow-auto">
+              <table className="w-full border-collapse text-left text-[12px]">
+                <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-2 py-1 font-semibold">Story ID</th>
+                    <th className="px-2 py-1 font-semibold">Story name</th>
+                    <th className="px-2 py-1 font-semibold">Sprint</th>
+                    <th className="px-2 py-1 font-semibold">Assignee</th>
+                    <th className="px-2 py-1 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statusDrilldownStories.map((story) => (
+                    <tr key={story.id} className="border-t border-slate-100 text-slate-700">
+                      <td className="px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => onOpenStory?.(story.id)}
+                          className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                        >
+                          {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
+                        </button>
+                      </td>
+                      <td className="px-2 py-1">{story.title}</td>
+                      <td className="px-2 py-1">
+                        {normalizeStoryYearSprint(story.sprint, month) != null ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, month);
+                              if (targetYearSprint == null) return;
+                              onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                            }}
+                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          >
+                            {storySprintDisplayLabel(story.sprint, month)}
+                          </button>
+                        ) : (
+                          "Unscheduled"
+                        )}
+                      </td>
+                      <td className="px-2 py-1">{story.assignee?.trim() || "Unassigned"}</td>
+                      <td className="px-2 py-1">
+                        {story.sprint == null
+                          ? "Unscheduled"
+                          : story.status === "todo"
+                            ? "To do"
+                            : story.status === "inProgress"
+                              ? "In progress"
+                              : story.status === "done"
+                                ? "Done"
+                                : "Approved"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+            <div
+              className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
+            >
+              <div className="absolute inset-0">
+                <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <defs>
+                    <filter id="monthPieShadow">
+                      <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0f172a" floodOpacity="0.18" />
+                    </filter>
+                  </defs>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="43%"
+                    innerRadius="38%"
+                    outerRadius="68%"
+                    paddingAngle={3}
+                    cornerRadius={8}
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    label={piePercentLabel}
+                    labelLine={false}
+                    filter="url(#monthPieShadow)"
+                    onClick={(entry) => openStatusDrilldown(String((entry as { name?: string }).name ?? ""))}
+                  >
+                    {pieData.map((entry) => (
+                      <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={(props) => <StatusPieTooltip {...props} total={pieTotal} />} />
+                </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Σ Stories</p>
+                  <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
+                </div>
               </div>
             </div>
+            <div className={`space-y-0.5 ${PIE_LEGEND_CAP}`}>
+              <button
+                type="button"
+                onClick={() => openStatusDrilldown("All")}
+                className="mb-0.5 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <Layers className="size-3.5" aria-hidden />
+                  All
+                </span>
+              </button>
+              {pieLegendItems.map((slice) => {
+                const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
+                return (
+                  <button
+                    key={slice.name}
+                    type="button"
+                    onClick={() => openStatusDrilldown(slice.name)}
+                    className="mb-0.5 flex w-full items-center justify-between gap-1.5 rounded-md px-1 py-1 text-left text-[12px] text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-700"
+                  >
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8" }}
+                      />
+                      {slice.name}
+                    </span>
+                    <span className="text-[12px] font-semibold text-slate-500">
+                      {slice.value} <span className="text-slate-500">({pct}%)</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className={`space-y-0.5 ${PIE_LEGEND_CAP}`}>
-            <button
-              type="button"
-              onClick={showAllStatusPieNames}
-              className={cn(
-                "mb-0.5 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
-                allStatusPieSelected
-                  ? "text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
-              )}
-            >
-              All
-            </button>
-            {pieLegendItems.map((slice) => {
-              const on = statusPieVisibleNames.includes(slice.name);
-              const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
-              return (
-                <button
-                  key={slice.name}
-                  type="button"
-                  onClick={() => toggleStatusPieName(slice.name)}
-                  className={cn(
-                    "mb-0.5 flex w-full items-center justify-between gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
-                    on ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
-                  )}
-                >
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    <span
-                      className="inline-block h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8", opacity: on ? 1 : 0.35 }}
-                    />
-                    {slice.name}
-                  </span>
-                  <span className={cn("text-[12px] font-semibold", on ? "text-slate-900" : "text-slate-500")}>
-                    {slice.value} <span className="text-slate-500">({pct}%)</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-6 flex shrink-0 items-center justify-between gap-2">
           <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
@@ -1105,10 +1289,13 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
                 allBurndownKeysSelected
                   ? "text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
+                  : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
               )}
             >
-              All
+              <span className="inline-flex items-center gap-1.5">
+                <Layers className="size-3.5" aria-hidden />
+                All
+              </span>
             </button>
             {burndownLegendItems.map((item) => {
               const on = burndownVisibleKeys.includes(item.key);
@@ -1120,8 +1307,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   className={cn(
                     "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
                     on
-                      ? "text-slate-900 hover:bg-slate-100/70"
-                      : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                      ? "text-slate-900 hover:bg-slate-200/70"
+                      : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                   )}
                 >
                   <span
@@ -1146,7 +1333,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <ChartNoAxesCombined className="size-4 text-slate-600" />
             Workload Balance
@@ -1224,10 +1411,13 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
                   workloadStatusFilters.includes("all")
                     ? "text-slate-900"
-                    : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
+                    : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
                 )}
               >
-                All
+                <span className="inline-flex items-center gap-1.5">
+                  <Layers className="size-3.5" aria-hidden />
+                  All
+                </span>
               </button>
               {WORKLOAD_BAR_SEGMENTS.map((s) => {
                 const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
@@ -1238,7 +1428,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                     onClick={() => toggleWorkloadStatusFilter(s.key)}
                     className={cn(
                       "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
-                      on ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                      on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                     )}
                   >
                     <span
@@ -1254,7 +1444,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 onClick={() => toggleWorkloadStatusFilter("unassigned")}
                 className={cn(
                   "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
-                  selectedShowUnassigned ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                  selectedShowUnassigned ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                 )}
               >
                 <span
@@ -1371,10 +1561,13 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
                 allCfdKeysSelected
                   ? "text-slate-900"
-                  : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-800",
+                  : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
               )}
             >
-              All
+              <span className="inline-flex items-center gap-1.5">
+                <Layers className="size-3.5" aria-hidden />
+                All
+              </span>
             </button>
             {[...CFD_FLOW_SEGMENTS].reverse().map(({ key, label, color }) => {
               const on = cfdVisibleKeys.includes(key);
@@ -1385,7 +1578,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   onClick={() => toggleCfdKey(key)}
                   className={cn(
                     "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
-                    on ? "text-slate-900 hover:bg-slate-100/70" : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-700",
+                    on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                   )}
                 >
                   <span

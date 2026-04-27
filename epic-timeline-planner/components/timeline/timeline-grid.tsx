@@ -2518,6 +2518,10 @@ export function TimelineGrid({
                   month={activeMonth}
                   planYear={currentYear}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  onOpenStory={onOpenStory ?? (() => {})}
+                  onOpenSprintKanban={(yearSprint, teamId) =>
+                    onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+                  }
                 />
               </div>
             ) : (
