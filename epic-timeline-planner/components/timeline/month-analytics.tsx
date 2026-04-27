@@ -53,7 +53,7 @@ const CFD_FLOW_SEGMENTS = [
 
 const SPRINT_CHART_BOX = "h-[15rem] min-h-[15rem] max-h-[15rem] w-full";
 const PIE_LEGEND_CAP = "max-h-[15rem] overflow-y-auto pr-1";
-const WORKLOAD_LIST_MAX = "max-h-[15rem] overflow-y-auto overflow-x-hidden overscroll-contain";
+const WORKLOAD_LIST_MAX = "max-h-[13rem] overflow-y-auto overflow-x-hidden overscroll-contain";
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
 
@@ -120,6 +120,43 @@ function BurndownTooltip({
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function CumulativeFlowTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: readonly BurndownTooltipPayload[];
+  label?: string | number;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const rows = payload.filter((item) => item.value != null);
+  if (rows.length === 0) return null;
+  return (
+    <div className="min-w-[12rem] rounded-xl border border-white/50 bg-slate-900/55 px-3 py-2 text-[12px] text-slate-100 shadow-xl backdrop-blur-md">
+      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">{String(label ?? "Cumulative flow")}</p>
+      <div className="space-y-1.5">
+        {rows.map((row) => {
+          const normalized = Array.isArray(row.value) ? row.value[0] : row.value;
+          const valueText = typeof normalized === "number" ? `${Math.round(normalized)} stories` : "n/a";
+          return (
+            <div key={String(row.dataKey ?? row.name)} className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-1.5 truncate text-slate-100/95">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30"
+                  style={{ backgroundColor: row.color ?? "#cbd5e1" }}
+                />
+                <span className="truncate">{String(row.name ?? row.dataKey ?? "Series")}</span>
+              </span>
+              <span className="shrink-0 tabular-nums font-semibold text-white">{valueText}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -771,18 +808,18 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         </div>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
           <div className="flex items-center gap-2">
-            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
               <button
                 type="button"
                 onClick={() => setMetric("daysLeft")}
-                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
+                className={`rounded-md px-2 py-0 text-[12px] font-medium ${
                   metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
@@ -791,19 +828,19 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               <button
                 type="button"
                 onClick={() => setMetric("storyCount")}
-                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
+                className={`rounded-md px-2 py-0 text-[12px] font-medium ${
                   metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
                 Stories
               </button>
             </div>
-            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
               <button
                 type="button"
                 onClick={() => setEstimateSource("stories")}
                 className={cn(
-                  "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                  "rounded-md px-2 py-0 text-[12px] font-medium",
                   estimateSource === "stories"
                     ? "bg-white text-slate-900 ring-1 ring-slate-300"
                     : "text-slate-600",
@@ -815,7 +852,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 type="button"
                 onClick={() => setEstimateSource("original")}
                 className={cn(
-                  "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                  "rounded-md px-2 py-0 text-[12px] font-medium",
                   estimateSource === "original"
                     ? "bg-white text-slate-900 ring-1 ring-slate-300"
                     : "text-slate-600",
@@ -826,7 +863,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             </div>
           </div>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 pl-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
@@ -969,7 +1006,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               type="button"
               onClick={() => setWorkloadView("stories")}
               className={cn(
-                "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                "rounded-md px-2 py-0 text-[12px] font-medium",
                 workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
               )}
             >
@@ -979,16 +1016,16 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               type="button"
               onClick={() => setWorkloadView("monthLoad")}
               className={cn(
-                "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
+                "rounded-md px-2 py-0 text-[12px] font-medium",
                 workloadView === "monthLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
               )}
             >
-              Month load
+              Month Load
             </button>
           </div>
         </div>
         {workloadView === "stories" ? (
-          <div className="grid min-h-0 max-h-[15rem] flex-1 gap-2 overflow-y-auto overflow-x-hidden pr-0.5 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
+          <div className="grid min-h-0 max-h-[13rem] flex-1 gap-2 overflow-y-auto overflow-x-hidden pr-0.5 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
             <div className="min-h-0 space-y-2.5">
               {analytics.workloadByAssignee.length > 0 ? (
                 analytics.workloadByAssignee.map((item) => {
@@ -1131,12 +1168,12 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
         <h3 className="mb-2 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
-        <div className="grid min-h-0 flex-1 gap-3 pl-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className="relative min-h-[15rem] min-w-0 md:h-full">
             {flowResolved.length > 0 ? (
               <div className="absolute inset-0">
@@ -1159,12 +1196,13 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 10 }}
                     />
                     <Tooltip
-                      formatter={(value, name) => [`${value} stories`, name]}
                       labelFormatter={(_, payload) => {
                         const row = payload?.[0]?.payload as { dayInMonth?: number; labelShort?: string } | undefined;
                         if (row?.dayInMonth != null && row.labelShort) return `Day ${row.dayInMonth} · ${row.labelShort}`;
                         return "";
                       }}
+                      content={(props) => <CumulativeFlowTooltip {...props} />}
+                      cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
                     {CFD_FLOW_SEGMENTS.map(({ key, label, color }) => (
                       <Area
