@@ -772,8 +772,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2 pl-[18px]">
-          <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+          <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
@@ -826,7 +826,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             </div>
           </div>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid min-h-0 flex-1 gap-3 pl-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
@@ -841,7 +841,18 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       textAnchor="end"
                       height={34}
                     />
-                    <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 10 }} width={44} />
+                    <YAxis
+                      allowDecimals={metric !== "storyCount"}
+                      tick={{ fontSize: 10 }}
+                      width={44}
+                      label={{
+                        value: metric === "storyCount" ? "Stories" : "Days left",
+                        angle: -90,
+                        position: "insideLeft",
+                        fill: "#64748b",
+                        fontSize: 10,
+                      }}
+                    />
                     <Tooltip
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.dayLabel ?? ""}
                       content={(props) => <BurndownTooltip {...props} metric={metric} />}
@@ -946,8 +957,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       </article>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <ChartNoAxesCombined className="size-4 text-slate-600" />
@@ -977,8 +988,8 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
           </div>
         </div>
         {workloadView === "stories" ? (
-          <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
-            <div className={`min-h-0 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
+          <div className="grid min-h-0 max-h-[15rem] flex-1 gap-2 overflow-y-auto overflow-x-hidden pr-0.5 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
+            <div className="min-h-0 space-y-2.5">
               {analytics.workloadByAssignee.length > 0 ? (
                 analytics.workloadByAssignee.map((item) => {
                 const { storiesByStatus: st } = item;
@@ -1018,14 +1029,22 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
               )}
             </div>
-            <div className="max-h-[15rem] space-y-1.5 overflow-y-auto rounded-lg bg-slate-50/80 p-2 ring-1 ring-slate-200/70">
-              <label className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[12px] font-semibold text-slate-800 hover:bg-slate-100/80">
+            <div className="space-y-1.5 pr-0.5">
+              <label className="flex cursor-pointer items-center gap-2 px-1 py-1 text-[12px] font-semibold text-slate-800">
                 <input
                   type="checkbox"
                   checked={workloadStatusFilters.includes("all")}
                   onChange={() => toggleWorkloadStatusFilter("all")}
-                  className="mt-0.5 size-3.5 shrink-0 rounded border-slate-300 bg-white text-indigo-600 accent-indigo-600 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                  className="peer sr-only"
                 />
+                <span className="mt-0.5 inline-flex size-3 shrink-0 items-center justify-center rounded-sm border border-slate-400 bg-white">
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full bg-blue-500/70 transition-opacity",
+                      workloadStatusFilters.includes("all") ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                </span>
                 <span>All</span>
               </label>
               {WORKLOAD_BAR_SEGMENTS.map((s) => {
@@ -1033,24 +1052,26 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 return (
                   <label
                     key={s.key}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[12px] hover:bg-slate-100/80",
-                      on ? "text-slate-900" : "text-slate-500",
-                    )}
+                    className={cn("flex cursor-pointer items-center gap-2 px-1 py-1 text-[12px]", on ? "text-slate-900" : "text-slate-500")}
                   >
                     <input
                       type="checkbox"
                       checked={on}
                       onChange={() => toggleWorkloadStatusFilter(s.key)}
-                      className="mt-0.5 size-3.5 shrink-0 rounded border-slate-300 bg-white text-indigo-600 accent-indigo-600 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                      className="peer sr-only"
                     />
+                    <span className="mt-0.5 inline-flex size-3 shrink-0 items-center justify-center rounded-sm border border-slate-400 bg-white">
+                      <span
+                        className={cn("size-1.5 rounded-full bg-blue-500/70 transition-opacity", on ? "opacity-100" : "opacity-0")}
+                      />
+                    </span>
                     <span className="font-medium">{s.label}</span>
                   </label>
                 );
               })}
               <label
                 className={cn(
-                  "flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[12px] hover:bg-slate-100/80",
+                  "flex cursor-pointer items-center gap-2 px-1 py-1 text-[12px]",
                   selectedShowUnassigned ? "text-slate-900" : "text-slate-500",
                 )}
               >
@@ -1058,8 +1079,16 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                   type="checkbox"
                   checked={selectedShowUnassigned}
                   onChange={() => toggleWorkloadStatusFilter("unassigned")}
-                  className="mt-0.5 size-3.5 shrink-0 rounded border-slate-300 bg-white text-indigo-600 accent-indigo-600 ring-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                  className="peer sr-only"
                 />
+                <span className="mt-0.5 inline-flex size-3 shrink-0 items-center justify-center rounded-sm border border-slate-400 bg-white">
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full bg-blue-500/70 transition-opacity",
+                      selectedShowUnassigned ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                </span>
                 <span className="font-medium">Unassigned</span>
               </label>
             </div>
@@ -1102,13 +1131,13 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2">
-        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 pl-[18px] text-[15px] font-semibold text-slate-800">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+        <h3 className="mb-2 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
-          <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
+        <div className="grid min-h-0 flex-1 gap-3 pl-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+          <div className="relative min-h-[15rem] min-w-0 md:h-full">
             {flowResolved.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
