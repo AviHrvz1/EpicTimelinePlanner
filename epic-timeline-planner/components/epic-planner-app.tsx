@@ -2964,7 +2964,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
               style={{
                 gridTemplateColumns: isLeftPanelHidden
-                  ? "54px minmax(0, 1fr)"
+                  ? "54px 14px minmax(0, 1fr)"
                   : `54px ${panelWidth}px 14px minmax(0, 1fr)`,
               }}
             >
@@ -3070,25 +3070,25 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
                 </div>
               ) : null}
+              {isLeftPanelHidden ? (
+                <div className="relative flex items-start justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="mt-2 h-7 w-7"
+                    onClick={() => setIsLeftPanelHidden(false)}
+                    aria-label="Show left panel"
+                    title="Show left panel"
+                  >
+                    <PanelLeftOpen className="size-4" aria-hidden />
+                  </Button>
+                </div>
+              ) : null}
               <div
                 ref={planningRightSurfaceRef}
                 className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"
               >
-                {isLeftPanelHidden ? (
-                  <div className="mb-2 flex justify-start">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setIsLeftPanelHidden(false)}
-                      aria-label="Show left panel"
-                      title="Show left panel"
-                    >
-                      <PanelLeftOpen className="size-4" aria-hidden />
-                    </Button>
-                  </div>
-                ) : null}
                 <TimelineGrid
                 initiatives={initiatives}
                 zoom={1}

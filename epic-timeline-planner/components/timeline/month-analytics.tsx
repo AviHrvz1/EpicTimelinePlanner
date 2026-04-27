@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, ChartNoAxesCombined, PieChart as PieChartIcon } from "lucide-react";
 import {
   Area,
@@ -15,6 +15,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  ReferenceLine,
 } from "recharts";
 
 import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
@@ -89,10 +90,9 @@ function collectMonthStories(
 function collectMonthEpics(
   initiatives: InitiativeItem[],
   month: number,
-  planYear: number,
   filterEpicTeamId?: string | null,
 ) {
-  const rows: EpicItem[] = [];
+  const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
@@ -101,29 +101,58 @@ function collectMonthEpics(
       if (epic.planStartMonth != null && epic.planEndMonth != null && (epic.planEndMonth < month || epic.planStartMonth > month)) {
         continue;
       }
-      rows.push({
-        ...epic,
-        planStartMonth: month,
-        planEndMonth: month,
-        planYear,
-      });
+      rows.push({ epic, initiative });
     }
   }
-  return rows.sort((a, b) => a.title.localeCompare(b.title));
+  return rows.sort((a, b) => a.epic.title.localeCompare(b.epic.title));
 }
 
 export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId = null }: MonthAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("auto");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
+  const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
+  const [epicInput, setEpicInput] = useState("");
+
+  const monthEpics = useMemo(
+    () => collectMonthEpics(initiatives, month, filterEpicTeamId),
+    [initiatives, month, filterEpicTeamId],
+  );
+  const epicComboOptions = useMemo(
+    () =>
+      monthEpics.map(({ epic, initiative }) => ({
+        id: epic.id,
+        label: `${epic.title} (${initiative.title})`,
+      })),
+    [monthEpics],
+  );
+  const selectedEpicOption = useMemo(
+    () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
+    [monthEpics, selectedEpicId],
+  );
+  useEffect(() => {
+    if (selectedEpicId === "all") {
+      setEpicInput("");
+      return;
+    }
+    const selected = epicComboOptions.find((opt) => opt.id === selectedEpicId);
+    if (!selected) {
+      setSelectedEpicId("all");
+      setEpicInput("");
+      return;
+    }
+    setEpicInput(selected.label);
+  }, [selectedEpicId, epicComboOptions]);
 
   const analytics = useMemo(() => {
     const monthStories = collectMonthStories(initiatives, month, filterEpicTeamId);
-    const scheduledStories = monthStories.filter((story) => story.sprint != null);
+    const scopeStories =
+      selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories;
+    const scheduledStories = scopeStories.filter((story) => story.sprint != null);
     const openStories = scheduledStories.filter((story) => story.status === "todo" || story.status === "inProgress");
 
     const statusCounts = {
-      unscheduled: monthStories.filter((story) => story.sprint == null).length,
+      unscheduled: scopeStories.filter((story) => story.sprint == null).length,
       todo: scheduledStories.filter((story) => story.status === "todo").length,
       inProgress: scheduledStories.filter((story) => story.status === "inProgress").length,
       done: scheduledStories.filter((story) => story.status === "done").length,
@@ -262,26 +291,66 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       workloadCapacityByAssignee,
       monthDaysLeft,
     };
-  }, [initiatives, month, planYear, filterEpicTeamId, metric]);
+  }, [initiatives, month, planYear, filterEpicTeamId, metric, selectedEpicOption]);
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const topSlice = pieData[0] ?? null;
-  const monthEpics = useMemo(
-    () => collectMonthEpics(initiatives, month, planYear, filterEpicTeamId),
-    [initiatives, month, planYear, filterEpicTeamId],
-  );
+  const monthBurndownEpics = useMemo(() => {
+    const source = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
+    return source.map((epic) => epicForBurndown(epic, estimateSource));
+  }, [monthEpics, selectedEpicOption, estimateSource]);
+
   const monthBurndown = useMemo(
     () =>
       buildQuarterBurndownSeries(
-        monthEpics.map((epic) => epicForBurndown(epic, estimateSource)),
+        monthBurndownEpics,
         "individual",
         metric,
         [month],
         planYear,
       ),
-    [monthEpics, metric, month, planYear, estimateSource],
+    [monthBurndownEpics, metric, month, planYear],
   );
+  const selectedEpicDueDate = useMemo(() => {
+    if (!selectedEpicOption) return null;
+    const dueMonth = selectedEpicOption.epic.planEndMonth ?? month;
+    const dueYear = selectedEpicOption.epic.planYear ?? planYear;
+    const dueDay = new Date(dueYear, dueMonth, 0).getDate();
+    return new Date(dueYear, dueMonth - 1, dueDay);
+  }, [selectedEpicOption, month, planYear]);
+  const monthBurndownWithDueTarget = useMemo(() => {
+    if (!selectedEpicOption || selectedEpicDueDate == null) return monthBurndown;
+    const totalDays = monthBurndown.length;
+    if (totalDays === 0) return monthBurndown;
+    const startValue =
+      metric === "daysLeft"
+        ? (selectedEpicOption.epic.userStories ?? []).reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
+        : (selectedEpicOption.epic.userStories ?? []).length;
+    const monthStart = new Date(planYear, month - 1, 1);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
+    return monthBurndown.map((row, idx) => {
+      const dayIdx = idx + 1;
+      let epicIdealRaw: number;
+      if (dueDayIndex <= 1) epicIdealRaw = 0;
+      else epicIdealRaw = startValue * (1 - (dayIdx - 1) / (dueDayIndex - 1));
+      const epicIdeal = metric === "storyCount"
+        ? Math.max(0, Math.round(epicIdealRaw))
+        : Number(Math.max(0, epicIdealRaw).toFixed(1));
+      return { ...row, epicIdeal };
+    });
+  }, [monthBurndown, selectedEpicOption, selectedEpicDueDate, metric, planYear, month]);
+  const selectedEpicDueAxisLabel = useMemo(() => {
+    if (!selectedEpicDueDate) return null;
+    if (selectedEpicDueDate.getFullYear() !== planYear || selectedEpicDueDate.getMonth() + 1 !== month) return null;
+    const day = selectedEpicDueDate.getDate();
+    const point = monthBurndown.find((row) => {
+      const label = String(row.dayLabel ?? "");
+      return label.startsWith(`${day}/${month} `);
+    });
+    return point?.axisLabel ?? null;
+  }, [selectedEpicDueDate, planYear, month, monthBurndown]);
 
   const chartLegendColumnClass = `space-y-1.5 md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-0`;
   const legendRowClass =
@@ -293,7 +362,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
         <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <PieChartIcon className="size-4 text-slate-600" />
-          User stories status
+          User stories status{selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
         </h3>
         <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div
@@ -335,12 +404,6 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="rounded-full bg-white/90 px-4 py-2.5 text-center shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
-                <p className="text-[24px] leading-none font-bold text-slate-900">{pieTotal}</p>
-              </div>
-            </div>
           </div>
           <div className={`space-y-1.5 ${PIE_LEGEND_CAP}`}>
             {pieData.map((slice) => {
@@ -376,6 +439,30 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
             Burndown
           </h3>
           <div className="flex items-center gap-2">
+            <div className="flex min-w-[19rem] flex-col gap-1">
+              <input
+                list="month-insights-epic-options"
+                value={epicInput}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setEpicInput(v);
+                  if (!v.trim()) {
+                    setSelectedEpicId("all");
+                    return;
+                  }
+                  const exact = epicComboOptions.find((opt) => opt.label === v);
+                  if (exact) setSelectedEpicId(exact.id);
+                }}
+                placeholder="Type epic name to filter burndown"
+                className="h-9 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
+                aria-label="Filter month insights by epic"
+              />
+              <datalist id="month-insights-epic-options">
+                {epicComboOptions.map((opt) => (
+                  <option key={opt.id} value={opt.label} />
+                ))}
+              </datalist>
+            </div>
             <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
               <button
                 type="button"
@@ -410,10 +497,10 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
         </div>
         <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
-            {monthEpics.length > 0 ? (
+            {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthBurndown} margin={{ top: 2, right: 4, left: 18, bottom: 22 }}>
+                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 2, right: 4, left: 18, bottom: 22 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="axisLabel"
@@ -432,7 +519,16 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                       ]}
                     />
                     <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
-                    {monthEpics.map((epic, idx) => (
+                    {selectedEpicOption ? (
+                      <Line
+                        type="monotone"
+                        dataKey={selectedEpicOption.epic.id}
+                        stroke={LINE_PALETTE[0]}
+                        strokeWidth={2}
+                        dot={false}
+                        name={selectedEpicOption.epic.title}
+                      />
+                    ) : monthBurndownEpics.map((epic, idx) => (
                       <Line
                         key={epic.id}
                         type="monotone"
@@ -443,6 +539,25 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                         name={epic.title}
                       />
                     ))}
+                    {selectedEpicOption ? (
+                      <Line
+                        type="monotone"
+                        dataKey="epicIdeal"
+                        stroke="#f97316"
+                        strokeWidth={1.8}
+                        strokeDasharray="5 4"
+                        dot={false}
+                        name="Epic ideal to due"
+                      />
+                    ) : null}
+                    {selectedEpicOption && selectedEpicDueAxisLabel ? (
+                      <ReferenceLine
+                        x={selectedEpicDueAxisLabel}
+                        stroke="#ef4444"
+                        strokeDasharray="3 3"
+                        label={{ value: "Epic due", position: "insideTopRight", fill: "#b91c1c", fontSize: 11 }}
+                      />
+                    ) : null}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -457,7 +572,7 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
               <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#94a3b8]" />
               Ideal
             </div>
-            {monthEpics.slice(0, 6).map((epic, idx) => (
+            {(selectedEpicOption ? [selectedEpicOption.epic] : monthBurndownEpics.slice(0, 6)).map((epic, idx) => (
               <div key={epic.id} className={legendRowClass}>
                 <span
                   className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
@@ -466,8 +581,18 @@ export function MonthAnalytics({ initiatives, month, planYear, filterEpicTeamId 
                 <span className="truncate">{epic.title}</span>
               </div>
             ))}
-            {monthEpics.length > 6 ? (
-              <p className="text-[11px] text-slate-500">+{monthEpics.length - 6} more epics</p>
+            {selectedEpicOption ? (
+              <>
+                <div className={legendRowClass}>
+                  <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500" />
+                  Epic ideal to due
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
+                </p>
+              </>
+            ) : monthBurndownEpics.length > 6 ? (
+              <p className="text-[11px] text-slate-500">+{monthBurndownEpics.length - 6} more epics</p>
             ) : null}
           </div>
         </div>
