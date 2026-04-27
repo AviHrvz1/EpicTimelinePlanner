@@ -1687,7 +1687,7 @@ export function MonthAnalytics({
                                 : "bg-white/80 text-slate-800 ring-1 ring-slate-200/80",
                             )}
                           >
-                            {analytics.monthDaysLeft > 0 ? `${pctRounded}% of remaining month capacity` : "Month ended"}
+                            {analytics.monthDaysLeft > 0 ? `${pctRounded}%` : "Month ended"}
                           </span>
                         </span>
                       </div>
