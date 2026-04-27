@@ -1674,17 +1674,17 @@ export function MonthAnalytics({
                       <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
                       <div className="relative h-4 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full ring-1 ring-slate-200/80">
                         <div
-                          className={cn("h-full rounded-full transition-colors", row.isOverCapacity ? "bg-red-600" : "bg-emerald-500")}
+                          className={cn("h-full rounded-full transition-colors", row.isOverCapacity ? "bg-rose-500" : "bg-emerald-500")}
                           style={{ width: `${barW}%` }}
                           role="presentation"
                         />
                         <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-1">
                           <span
                             className={cn(
-                              "rounded-full px-1.5 py-[1px] text-[10px] font-semibold tabular-nums shadow-sm",
+                              "rounded-md px-1.5 py-[1px] text-[10px] font-semibold tabular-nums",
                               row.isOverCapacity
-                                ? "bg-slate-900/25 text-white"
-                                : "bg-white/80 text-slate-800 ring-1 ring-slate-200/80",
+                                ? "bg-white/20 text-white ring-1 ring-white/25"
+                                : "bg-slate-50/90 text-slate-700 ring-1 ring-slate-200/80",
                             )}
                           >
                             {analytics.monthDaysLeft > 0 ? `${pctRounded}%` : "Month ended"}
