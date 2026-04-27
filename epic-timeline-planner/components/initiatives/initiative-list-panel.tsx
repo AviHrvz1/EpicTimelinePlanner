@@ -19,6 +19,7 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import Image from "next/image";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -433,6 +434,7 @@ function InitiativeTreeEpicRow({
   isEpicOpen,
   onToggleEpic,
   planContextMonth,
+  hideScheduledIcon = false,
   epicPlanDragEnabled,
   onOpenEpic,
   onOpenStory,
@@ -442,6 +444,7 @@ function InitiativeTreeEpicRow({
   isEpicOpen: boolean;
   onToggleEpic: () => void;
   planContextMonth: number | null;
+  hideScheduledIcon?: boolean;
   epicPlanDragEnabled: boolean;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onOpenStory: (storyId: string) => void;
@@ -481,13 +484,13 @@ function InitiativeTreeEpicRow({
           >
             <DragHandleIcon size="sm" />
           </button>
-        ) : isEpicScheduledOnGantt ? (
+        ) : isEpicScheduledOnGantt && !hideScheduledIcon ? (
           <span
             className="mt-0.5 inline-flex shrink-0 rounded-md p-1 text-emerald-600"
             title="Scheduled on Gantt"
             aria-label="Scheduled on Gantt"
           >
-            <CheckCircle2 className="size-4" aria-hidden />
+            <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
@@ -788,6 +791,7 @@ function InitiativeTreeCard({
                             })
                           }
                           planContextMonth={planContextMonth}
+                          hideScheduledIcon={inMonthView || isSprintModeActive}
                           epicPlanDragEnabled={epicPlanDragEnabled}
                           onOpenEpic={onOpenEpic}
                           onOpenStory={onOpenStory}
@@ -853,6 +857,7 @@ function SprintEpicCard({
   onCreateStoryQuick,
   backlogDropSlot,
   planContextMonth,
+  hideScheduledIcon = false,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -866,6 +871,7 @@ function SprintEpicCard({
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   backlogDropSlot?: { month: number; index: number };
   planContextMonth: number | null;
+  hideScheduledIcon?: boolean;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
@@ -929,13 +935,13 @@ function SprintEpicCard({
           >
             <DragHandleIcon size="sm" />
           </button>
-        ) : isEpicScheduledOnGantt ? (
+        ) : isEpicScheduledOnGantt && !hideScheduledIcon ? (
           <span
             className="inline-flex shrink-0 rounded-md p-1.5 text-emerald-600"
             title="Scheduled on Gantt"
             aria-label="Scheduled on Gantt"
           >
-            <CheckCircle2 className="size-4" aria-hidden />
+            <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
@@ -1047,7 +1053,7 @@ function SprintEpicCard({
                         title="Scheduled in active sprint"
                         aria-label="Scheduled in active sprint"
                       >
-                        <CheckCircle2 className="size-4" aria-hidden />
+                        <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
                       </span>
                     ) : (
                       <StoryDragHandle storyId={story.id} />
@@ -1656,6 +1662,7 @@ export function InitiativeListPanel({
                       planAnchorMonth != null ? { month: planAnchorMonth, index: idx } : undefined
                     }
                     planContextMonth={planAnchorMonth}
+                    hideScheduledIcon={inMonthView || isSprintModeActive}
                   />
                   {planAnchorMonth != null ? (
                     <EpicBacklogDropSlot month={planAnchorMonth} index={idx + 1} />
