@@ -1788,18 +1788,6 @@ export function TimelineGrid({
                   <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
                     {sprintKanbanSummaryStats.storyTotal} User Stories
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowRoadmapProgress((v) => !v)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                      showRoadmapProgress
-                        ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
-                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                    )}
-                  >
-                    Progress
-                  </button>
                 </>
               ) : summaryBadgesForScope ? (
                 <>
