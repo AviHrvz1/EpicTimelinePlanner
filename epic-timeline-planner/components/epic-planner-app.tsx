@@ -1427,6 +1427,25 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setIsLeftPanelHidden(false);
   }, [activeMonthPlanTab, activeTimelineMonth, activeQuarterViewTab]);
 
+  useEffect(() => {
+    const isInsightsSurface =
+      (activeTimelineMonth != null &&
+        (activeMonthPlanTab === "month-status" || activeMonthPlanTab === "sprint-status")) ||
+      (activeTimelineMonth == null && activeQuarterViewTab === "insights");
+    if (!isInsightsSurface) return;
+    const resetToTop = () => {
+      planningRightSurfaceRef.current?.scrollTo({ top: 0, behavior: "auto" });
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "auto" });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }
+    };
+    resetToTop();
+    const raf = requestAnimationFrame(resetToTop);
+    return () => cancelAnimationFrame(raf);
+  }, [activeTimelineMonth, activeMonthPlanTab, activeQuarterViewTab]);
+
   const activeMonthTeamCapacityKey = useMemo(() => {
     if (activeTimelineMonth == null) return null;
     return monthTeamCapacityBoardKey(selectedYear, activeTimelineMonth);
