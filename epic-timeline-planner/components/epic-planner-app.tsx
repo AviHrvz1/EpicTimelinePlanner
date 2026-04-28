@@ -1405,6 +1405,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }, []);
 
+  useEffect(() => {
+    // Insights surfaces default to a focused analytics layout.
+    if (activeMonthPlanTab === "month-status" || activeMonthPlanTab === "sprint-status") {
+      setIsLeftPanelHidden(true);
+    }
+  }, [activeMonthPlanTab]);
+
   const activeMonthTeamCapacityKey = useMemo(() => {
     if (activeTimelineMonth == null) return null;
     return monthTeamCapacityBoardKey(selectedYear, activeTimelineMonth);

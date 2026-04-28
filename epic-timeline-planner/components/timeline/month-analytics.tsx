@@ -68,9 +68,9 @@ const CFD_FLOW_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
 
-const SPRINT_CHART_BOX = "h-[15rem] min-h-[15rem] max-h-[15rem] w-full";
-const PIE_LEGEND_CAP = "max-h-[15rem] overflow-y-auto pr-1";
-const WORKLOAD_LIST_MAX = "max-h-[13rem] overflow-y-auto overflow-x-hidden overscroll-contain";
+const SPRINT_CHART_BOX = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] w-full";
+const PIE_LEGEND_CAP = "max-h-[clamp(12.5rem,27vh,20rem)] overflow-y-auto pr-1";
+const WORKLOAD_LIST_MAX = "max-h-[clamp(11.5rem,21vh,15.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain";
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
 
@@ -1078,7 +1078,7 @@ export function MonthAnalytics({
     updateWorkloadDrilldownArrowState();
   }, [workloadDrilldownAssignee, workloadDrilldownStories.length]);
 
-  const chartLegendColumnClass = "max-h-[15rem] space-y-1.5 overflow-y-auto pr-0";
+  const chartLegendColumnClass = "max-h-[clamp(12.5rem,27vh,20rem)] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
 
@@ -1263,7 +1263,7 @@ export function MonthAnalytics({
             </div>
           </div>
         ) : (
-          <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+          <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_8.75rem] md:items-stretch">
             <div
               className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
             >
@@ -1310,7 +1310,7 @@ export function MonthAnalytics({
                 </div>
               </div>
             </div>
-            <div className={`space-y-0.5 ${PIE_LEGEND_CAP}`}>
+            <div className={`space-y-0.5 md:pt-1 ${PIE_LEGEND_CAP}`}>
               <button
                 type="button"
                 onClick={() => openStatusDrilldown("All")}
@@ -1499,11 +1499,11 @@ export function MonthAnalytics({
               </div>
             )}
           </div>
-          <div className="relative max-h-[12rem]">
+          <div className="relative max-h-[clamp(11.5rem,21vh,15.5rem)]">
             <div
               ref={burndownLegendScrollRef}
               onScroll={updateBurndownArrowState}
-              className="max-h-[12rem] space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden"
+              className="max-h-[clamp(11.5rem,21vh,15.5rem)] space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <button
@@ -1714,12 +1714,12 @@ export function MonthAnalytics({
           </div>
         ) : null}
         {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
-          <div className="relative min-h-0 max-h-[13rem] flex-1">
-            <div className="grid min-h-0 max-h-[13rem] gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
+          <div className="relative min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] flex-1">
+            <div className="grid min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
             <div
               ref={workloadStoriesScrollRef}
               onScroll={updateWorkloadArrowState}
-              className="min-h-0 max-h-[13rem] space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
+              className="min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {analytics.workloadByAssignee.length > 0 ? (
@@ -1928,7 +1928,7 @@ export function MonthAnalytics({
           Cumulative flow
         </h3>
         <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
-          <div className="relative min-h-[15rem] min-w-0 md:h-full">
+          <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {flowResolved.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
