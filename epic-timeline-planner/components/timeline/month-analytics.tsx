@@ -294,7 +294,7 @@ function piePercentLabel({
       x={x}
       y={y}
       fill="#475569"
-      fontSize={10}
+      fontSize={12}
       fontWeight={600}
       textAnchor={x > cx ? "start" : "end"}
       dominantBaseline="central"
@@ -1449,9 +1449,9 @@ export function MonthAnalytics({
             </div>
           </div>
         ) : (
-          <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_8.75rem] md:items-stretch">
+          <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
             <div
-              className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
+              className={`relative rounded-lg ${SPRINT_CHART_BOX}`}
             >
               <div className="absolute inset-0 z-10">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1509,7 +1509,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => openStatusDrilldown("All")}
                 className={cn(
-                  "mb-0.5 w-full rounded-md px-1 py-1 text-left font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  "mb-0.5 w-full rounded-md px-1 py-1 text-left font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
                   isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                 )}
               >
@@ -1564,7 +1564,7 @@ export function MonthAnalytics({
               <button
                 type="button"
                 onClick={() => setMetric("daysLeft")}
-                className={`rounded-md px-2 py-0 text-[12px] font-medium ${
+                className={`rounded-md px-2 py-0 text-[13px] font-medium ${
                   metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
@@ -1573,7 +1573,7 @@ export function MonthAnalytics({
               <button
                 type="button"
                 onClick={() => setMetric("storyCount")}
-                className={`rounded-md px-2 py-0 text-[12px] font-medium ${
+                className={`rounded-md px-2 py-0 text-[13px] font-medium ${
                   metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
@@ -1585,7 +1585,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => setEstimateSource("stories")}
                 className={cn(
-                  "rounded-md px-2 py-0 text-[12px] font-medium",
+                  "rounded-md px-2 py-0 text-[13px] font-medium",
                   estimateSource === "stories"
                     ? "bg-white text-slate-900 ring-1 ring-slate-300"
                     : "text-slate-600",
@@ -1597,7 +1597,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => setEstimateSource("original")}
                 className={cn(
-                  "rounded-md px-2 py-0 text-[12px] font-medium",
+                  "rounded-md px-2 py-0 text-[13px] font-medium",
                   estimateSource === "original"
                     ? "bg-white text-slate-900 ring-1 ring-slate-300"
                     : "text-slate-600",
@@ -1726,7 +1726,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={showAllBurndownKeys}
                 className={cn(
-                  "mb-1 w-full rounded-md px-1 py-1 text-left font-semibold transition",
+                  "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
                   isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                   allBurndownKeysSelected
                     ? "text-slate-900 hover:bg-slate-200/70"
@@ -1811,7 +1811,7 @@ export function MonthAnalytics({
               type="button"
               onClick={() => setWorkloadView("stories")}
               className={cn(
-                "rounded-md px-2 py-0 text-[12px] font-medium",
+                "rounded-md px-2 py-0 text-[13px] font-medium",
                 workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
               )}
             >
@@ -1821,7 +1821,7 @@ export function MonthAnalytics({
               type="button"
               onClick={() => setWorkloadView("monthLoad")}
               className={cn(
-                "rounded-md px-2 py-0 text-[12px] font-medium",
+                "rounded-md px-2 py-0 text-[13px] font-medium",
                 workloadView === "monthLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
               )}
             >
@@ -1992,7 +1992,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => toggleWorkloadStatusFilter("all")}
                 className={cn(
-                  "mb-1 w-full rounded-md px-1 py-1 text-left font-semibold transition",
+                  "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
                   isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                   workloadStatusFilters.includes("all")
                     ? "text-slate-900 hover:bg-slate-200/70"
@@ -2216,7 +2216,7 @@ export function MonthAnalytics({
               type="button"
               onClick={showAllCfdKeys}
               className={cn(
-                "mb-1 w-full rounded-md px-1 py-1 text-left font-semibold transition",
+                "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
                 isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                 allCfdKeysSelected
                   ? "text-slate-900 hover:bg-slate-200/70"

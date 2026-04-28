@@ -1495,6 +1495,11 @@ export function TimelineGrid({
   }, [isRailExpanded, activeMonth, focusedQuarterLabel, quarterViewTab]);
 
   useEffect(() => {
+    if (!isInsightsSurfaceRender) return;
+    setIsRailExpanded(false);
+  }, [isInsightsSurfaceRender]);
+
+  useEffect(() => {
     try {
       const stored = window.localStorage.getItem(ROADMAP_BAR_MODE_STORAGE_KEY);
       if (stored === "epics" || stored === "initiatives") {
@@ -1586,7 +1591,7 @@ export function TimelineGrid({
                   <button
                     type="button"
                     onClick={item.onClick}
-                    className="cursor-pointer whitespace-nowrap px-1 py-1 text-[14px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-1 text-[15px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -1594,7 +1599,7 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "whitespace-nowrap px-1 py-1 text-[14px] font-semibold tracking-[0.01em]",
+                      "whitespace-nowrap px-1 py-1 text-[15px] font-semibold tracking-[0.01em]",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
                         : "text-slate-900",
@@ -2328,7 +2333,10 @@ export function TimelineGrid({
       {activeMonth ? (
         <div
           className={cn(
-            "mb-4 rounded-2xl p-1.5 shadow-lg ring-1",
+            "mb-4",
+            monthPlanTab !== "sprint-kanban" &&
+              monthPlanTab !== "epic-gantt" &&
+              "rounded-2xl p-1.5 shadow-lg ring-1",
             monthPlanTab === "sprint-kanban" && "flex min-h-0 flex-1 flex-col",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
             activeMonthQuarterLabel && quarterPanelTone[activeMonthQuarterLabel]
@@ -2338,7 +2346,10 @@ export function TimelineGrid({
         >
           <div
             className={cn(
-              "flex flex-col rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
+              "flex flex-col",
+              monthPlanTab !== "sprint-kanban" &&
+                monthPlanTab !== "epic-gantt" &&
+                "rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
               monthPlanTab === "sprint-kanban" ? "min-h-0 flex-1 overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||
               monthPlanTab === "month-capacity" ||
@@ -2605,7 +2616,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           className={cn(
-                            "flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-center text-[15px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
+                            "flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-center text-[15px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
                             activeMonth === month
                               ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
                               : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
@@ -2857,7 +2868,7 @@ export function TimelineGrid({
                             }}
                             className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-slate-100 hover:text-slate-800"
                           >
-                            <span className="inline-flex items-baseline gap-0.5 leading-none">
+                            <span className="inline-flex items-baseline gap-[1px] leading-none">
                               <span className="text-[12px] font-normal">S</span>
                               <span className="text-[10px] font-medium">
                                 {globalSprintFromMonthLane(month, 1)}
@@ -2874,7 +2885,7 @@ export function TimelineGrid({
                             }}
                             className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-slate-100 hover:text-slate-800"
                           >
-                            <span className="inline-flex items-baseline gap-0.5 leading-none">
+                            <span className="inline-flex items-baseline gap-[1px] leading-none">
                               <span className="text-[12px] font-normal">S</span>
                               <span className="text-[10px] font-medium">
                                 {globalSprintFromMonthLane(month, 2)}
