@@ -1267,7 +1267,7 @@ export function MonthAnalytics({
             <div
               className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
             >
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 z-10">
                 <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <defs>
@@ -1296,11 +1296,14 @@ export function MonthAnalytics({
                       <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
                     ))}
                   </Pie>
-                  <Tooltip content={(props) => <StatusPieTooltip {...props} total={pieTotal} />} />
+                  <Tooltip
+                    content={(props) => <StatusPieTooltip {...props} total={pieTotal} />}
+                    wrapperStyle={{ zIndex: 40 }}
+                  />
                 </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="pointer-events-none absolute inset-0">
+              <div className="pointer-events-none absolute inset-0 z-[1]">
                 <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Σ Stories</p>
                   <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
