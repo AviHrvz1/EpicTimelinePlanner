@@ -2251,7 +2251,7 @@ export function TimelineGrid({
                 onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
               }}
               className={cn(
-                "flex w-full min-w-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[14px] font-semibold tracking-[0.02em] transition duration-200",
+                "flex w-full min-w-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center text-[15px] font-semibold tracking-[0.02em] transition duration-200",
                 focusedQuarterLabel === quarter.label
                   ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
                   : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
