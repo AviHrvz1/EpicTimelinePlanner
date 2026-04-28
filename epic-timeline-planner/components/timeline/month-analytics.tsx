@@ -219,10 +219,12 @@ function StatusPieTooltip({
   active,
   payload,
   total,
+  title,
 }: {
   active?: boolean;
   payload?: readonly BurndownTooltipPayload[];
   total: number;
+  title: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const row = payload.find((item) => item.value != null);
@@ -231,7 +233,7 @@ function StatusPieTooltip({
   const value = typeof normalized === "number" ? Math.round(normalized) : Number(normalized ?? 0);
   const percent = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <AnalyticsTooltipShell title="User Stories Status">
+    <AnalyticsTooltipShell title={title}>
       <AnalyticsTooltipRow
         color={row.color}
         label={String(row.name ?? "Status")}
@@ -329,6 +331,20 @@ function statusDrilldownDisplayLabel(status: string | null): string {
   return status ?? "";
 }
 
+function deriveEpicStatus(epic: EpicItem): "Unscheduled" | "To do" | "In progress" | "Done" | "Approved" {
+  const scheduledStories = (epic.userStories ?? []).filter((story) => story.sprint != null);
+  if (scheduledStories.length === 0) return "Unscheduled";
+  const allApproved = scheduledStories.every((story) => story.status === "approved");
+  if (allApproved) return "Approved";
+  const allDoneOrApproved = scheduledStories.every(
+    (story) => story.status === "done" || story.status === "approved",
+  );
+  if (allDoneOrApproved) return "Done";
+  const hasInProgress = scheduledStories.some((story) => story.status === "inProgress");
+  if (hasInProgress) return "In progress";
+  return "To do";
+}
+
 function collectPeriodStories(
   initiatives: InitiativeItem[],
   months: number[],
@@ -404,6 +420,7 @@ export function MonthAnalytics({
   const scopeStartMonth = scopeMonths[0] ?? month;
   const scopeEndMonth = scopeMonths[scopeMonths.length - 1] ?? month;
   const scopeLabel = periodLabel ?? (scopeMonths.length === 1 ? "Month" : scopeMonths.length === 12 ? "Year" : "Quarter");
+  const isQuarterInsights = scopeMonths.length === 3;
   const monthEpics = useMemo(
     () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamId),
     [initiatives, scopeMonths, filterEpicTeamId],
@@ -652,7 +669,33 @@ export function MonthAnalytics({
   ]);
 
   const pieLegendItems = useMemo(() => analytics.statusPie.filter((x) => x.value > 0), [analytics.statusPie]);
-  const pieData = pieLegendItems;
+  const scopedEpics = useMemo(
+    () => (selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic)),
+    [selectedEpicOption, monthEpics],
+  );
+  const epicStatusById = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const epic of scopedEpics) out.set(epic.id, deriveEpicStatus(epic));
+    return out;
+  }, [scopedEpics]);
+  const epicStatusPie = useMemo(() => {
+    const counts = { unscheduled: 0, todo: 0, inProgress: 0, done: 0, approved: 0 };
+    for (const status of epicStatusById.values()) {
+      if (status === "Unscheduled") counts.unscheduled += 1;
+      else if (status === "To do") counts.todo += 1;
+      else if (status === "In progress") counts.inProgress += 1;
+      else if (status === "Done") counts.done += 1;
+      else if (status === "Approved") counts.approved += 1;
+    }
+    return [
+      { name: "Unscheduled", value: counts.unscheduled },
+      { name: "To do", value: counts.todo },
+      { name: "In progress", value: counts.inProgress },
+      { name: "Done", value: counts.done },
+      { name: "Approved", value: counts.approved },
+    ];
+  }, [epicStatusById]);
+  const pieData = isQuarterInsights ? epicStatusPie.filter((x) => x.value > 0) : pieLegendItems;
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const scopedStories = useMemo(
     () => (selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories),
@@ -670,6 +713,11 @@ export function MonthAnalytics({
       return false;
     });
   }, [statusDrilldownFilter, scopedStories]);
+  const statusDrilldownEpics = useMemo(() => {
+    if (!isQuarterInsights || statusDrilldownFilter == null) return [];
+    if (statusDrilldownFilter === "All") return scopedEpics;
+    return scopedEpics.filter((epic) => epicStatusById.get(epic.id) === statusDrilldownFilter);
+  }, [isQuarterInsights, statusDrilldownFilter, scopedEpics, epicStatusById]);
   const workloadDrilldownStories = useMemo(() => {
     if (workloadDrilldownAssignee == null) return [];
     return scopedStories
@@ -690,6 +738,24 @@ export function MonthAnalytics({
     });
     return map;
   }, [scopedStories]);
+  const scopedEpicDisplayIds = useMemo(() => {
+    const rows = [...scopedEpics].sort((a, b) => {
+      const aTs = new Date(a.createdAt).getTime();
+      const bTs = new Date(b.createdAt).getTime();
+      if (aTs !== bTs) return aTs - bTs;
+      return a.title.localeCompare(b.title);
+    });
+    const map = new Map<string, string>();
+    rows.forEach((epic, idx) => {
+      map.set(epic.id, `EP-${String(idx + 1).padStart(2, "0")}`);
+    });
+    return map;
+  }, [scopedEpics]);
+  const initiativeTitleByEpicId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of monthEpics) map.set(row.epic.id, row.initiative.title);
+    return map;
+  }, [monthEpics]);
   const epicTeamByStoryId = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const initiative of initiatives) {
@@ -1263,7 +1329,8 @@ export function MonthAnalytics({
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
         <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <PieChartIcon className="size-4 text-slate-600" />
-          User Stories Status{selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
+          {isQuarterInsights ? "Epic Statuses" : "User Stories Status"}
+          {selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
         </h3>
         {statusDrilldownFilter ? (
           <div className="mt-2 rounded-lg border border-slate-200/80 bg-white/80 p-2">
@@ -1273,7 +1340,9 @@ export function MonthAnalytics({
                   const Icon = statusDrilldownIcon(statusDrilldownFilter);
                   return <Icon className="size-3.5 text-slate-600" aria-hidden />;
                 })()}
-                Stories in <span className="text-slate-900">{statusDrilldownDisplayLabel(statusDrilldownFilter)}</span> ({statusDrilldownStories.length})
+                {isQuarterInsights ? "Epics" : "Stories"} in{" "}
+                <span className="text-slate-900">{statusDrilldownDisplayLabel(statusDrilldownFilter)}</span> (
+                {isQuarterInsights ? statusDrilldownEpics.length : statusDrilldownStories.length})
               </p>
               <button
                 type="button"
@@ -1288,58 +1357,86 @@ export function MonthAnalytics({
             <div className="max-h-[11rem] overflow-auto">
               <table className="w-full border-collapse text-left text-[12px]">
                 <thead className="sticky top-0 bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-2 py-1 font-semibold">Story ID</th>
-                    <th className="px-2 py-1 font-semibold">Story name</th>
-                    <th className="px-2 py-1 font-semibold">Sprint</th>
-                    <th className="px-2 py-1 font-semibold">Assignee</th>
-                    <th className="px-2 py-1 font-semibold">Status</th>
-                  </tr>
+                  {isQuarterInsights ? (
+                    <tr>
+                      <th className="px-2 py-1 font-semibold">Epic ID</th>
+                      <th className="px-2 py-1 font-semibold">Epic name</th>
+                      <th className="px-2 py-1 font-semibold">Initiative</th>
+                      <th className="px-2 py-1 font-semibold">Assignee</th>
+                      <th className="px-2 py-1 font-semibold">Status</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th className="px-2 py-1 font-semibold">Story ID</th>
+                      <th className="px-2 py-1 font-semibold">Story name</th>
+                      <th className="px-2 py-1 font-semibold">Sprint</th>
+                      <th className="px-2 py-1 font-semibold">Assignee</th>
+                      <th className="px-2 py-1 font-semibold">Status</th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
-                  {statusDrilldownStories.map((story) => (
-                    <tr key={story.id} className="border-t border-slate-100 text-slate-700">
-                      <td className="px-2 py-1">
-                        <button
-                          type="button"
-                          onClick={() => onOpenStory?.(story.id)}
-                          className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                        >
-                          {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                        </button>
-                      </td>
-                      <td className="px-2 py-1">{story.title}</td>
-                      <td className="px-2 py-1">
-                        {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
-                              if (targetYearSprint == null) return;
-                              onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
-                            }}
-                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                          >
-                            {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                          </button>
-                        ) : (
-                          "Unscheduled"
-                        )}
-                      </td>
-                      <td className="px-2 py-1">{story.assignee?.trim() || "Unassigned"}</td>
-                      <td className="px-2 py-1">
-                        {story.sprint == null
-                          ? "Unscheduled"
-                          : story.status === "todo"
-                            ? "To do"
-                            : story.status === "inProgress"
-                              ? "In progress"
-                              : story.status === "done"
-                                ? "Done"
-                                : "Approved"}
-                      </td>
-                    </tr>
-                  ))}
+                  {isQuarterInsights
+                    ? statusDrilldownEpics.map((epic) => (
+                        <tr key={epic.id} className="border-t border-slate-100 text-slate-700">
+                          <td className="px-2 py-1">
+                            <button
+                              type="button"
+                              onClick={() => onOpenEpic?.(epic.id)}
+                              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            >
+                              {scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
+                            </button>
+                          </td>
+                          <td className="px-2 py-1">{epic.title}</td>
+                          <td className="px-2 py-1">{initiativeTitleByEpicId.get(epic.id) ?? "—"}</td>
+                          <td className="px-2 py-1">{epic.assignee?.trim() || "Unassigned"}</td>
+                          <td className="px-2 py-1">{epicStatusById.get(epic.id) ?? "To do"}</td>
+                        </tr>
+                      ))
+                    : statusDrilldownStories.map((story) => (
+                        <tr key={story.id} className="border-t border-slate-100 text-slate-700">
+                          <td className="px-2 py-1">
+                            <button
+                              type="button"
+                              onClick={() => onOpenStory?.(story.id)}
+                              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            >
+                              {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
+                            </button>
+                          </td>
+                          <td className="px-2 py-1">{story.title}</td>
+                          <td className="px-2 py-1">
+                            {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
+                                  if (targetYearSprint == null) return;
+                                  onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                                }}
+                                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                              >
+                                {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
+                              </button>
+                            ) : (
+                              "Unscheduled"
+                            )}
+                          </td>
+                          <td className="px-2 py-1">{story.assignee?.trim() || "Unassigned"}</td>
+                          <td className="px-2 py-1">
+                            {story.sprint == null
+                              ? "Unscheduled"
+                              : story.status === "todo"
+                                ? "To do"
+                                : story.status === "inProgress"
+                                  ? "In progress"
+                                  : story.status === "done"
+                                    ? "Done"
+                                    : "Approved"}
+                          </td>
+                        </tr>
+                      ))}
                 </tbody>
               </table>
             </div>
@@ -1379,7 +1476,13 @@ export function MonthAnalytics({
                     ))}
                   </Pie>
                   <Tooltip
-                    content={(props) => <StatusPieTooltip {...props} total={pieTotal} />}
+                    content={(props) => (
+                      <StatusPieTooltip
+                        {...props}
+                        total={pieTotal}
+                        title={isQuarterInsights ? "Epic Statuses" : "User Stories Status"}
+                      />
+                    )}
                     wrapperStyle={{ zIndex: 40 }}
                   />
                 </PieChart>
@@ -1387,7 +1490,9 @@ export function MonthAnalytics({
               </div>
               <div className="pointer-events-none absolute inset-0 z-[1]">
                 <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Σ Stories</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    {isQuarterInsights ? "Σ Epics" : "Σ Stories"}
+                  </p>
                   <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
                 </div>
               </div>
