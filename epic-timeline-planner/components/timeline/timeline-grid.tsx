@@ -2724,6 +2724,7 @@ export function TimelineGrid({
                   yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
                   planYear={currentYear}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  onOpenStory={onOpenStory ?? (() => {})}
                 />
               </div>
             )}

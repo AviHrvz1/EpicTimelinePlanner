@@ -24,6 +24,8 @@ import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type WorkloadViewMode = "stories" | "sprintLoad";
+type SprintWorkloadStatusKey = (typeof WORKLOAD_BAR_SEGMENTS)[number]["key"];
+type SprintWorkloadFilterKey = "all" | SprintWorkloadStatusKey;
 
 const STATUS_COLORS: Record<string, string> = {
   Unscheduled: "#94a3b8",
@@ -52,12 +54,11 @@ const CFD_FLOW_SEGMENTS = [
  * Compact plot height so two rows of charts fit without excess scrolling (uses dynamic viewport height).
  * Matches pie, burndown, cumulative flow, and caps workload list beside pie.
  */
-const SPRINT_CHART_BOX =
-  "min-h-40 h-40 w-full md:min-h-40 md:h-[clamp(10.5rem,27dvh,14.5rem)] md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
+const SPRINT_CHART_BOX = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] w-full";
 /** Keep legend beside pie from growing taller than the pie plot on md+. */
-const PIE_LEGEND_CAP = "md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-1";
+const PIE_LEGEND_CAP = "max-h-[clamp(12.5rem,27vh,20rem)] overflow-y-auto pr-1";
 const WORKLOAD_LIST_MAX =
-  "max-h-[min(12rem,30dvh)] overflow-y-auto overflow-x-hidden overscroll-contain md:max-h-[clamp(10.5rem,27dvh,14.5rem)]";
+  "max-h-[clamp(11.5rem,21vh,15.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain";
 
 function AnalyticsTooltipShell({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -94,6 +95,7 @@ type SprintAnalyticsProps = {
   yearSprint: number;
   planYear: number;
   filterEpicTeamId?: string | null;
+  onOpenStory?: (storyId: string) => void;
 };
 
 export function SprintAnalytics({
@@ -102,10 +104,12 @@ export function SprintAnalytics({
   yearSprint,
   planYear,
   filterEpicTeamId = null,
+  onOpenStory,
 }: SprintAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
-  const [estimateSource, setEstimateSource] = useState<EstimateSource>("auto");
+  const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
+  const [workloadStatusFilters, setWorkloadStatusFilters] = useState<SprintWorkloadFilterKey[]>(["all"]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
   const analytics = useMemo(
@@ -116,7 +120,34 @@ export function SprintAnalytics({
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
-  const topSlice = pieData[0] ?? null;
+  const selectedWorkloadStatuses = useMemo<SprintWorkloadStatusKey[]>(
+    () =>
+      workloadStatusFilters.includes("all")
+        ? WORKLOAD_BAR_SEGMENTS.map((segment) => segment.key)
+        : (workloadStatusFilters.filter((v) => v !== "all") as SprintWorkloadStatusKey[]),
+    [workloadStatusFilters],
+  );
+  const toggleWorkloadStatusFilter = (value: SprintWorkloadFilterKey) => {
+    setWorkloadStatusFilters((prev) => {
+      if (value === "all") return ["all"];
+      if (prev.includes("all")) return [value];
+      if (prev.includes(value)) {
+        const next = prev.filter((v) => v !== value);
+        return next.length > 0 ? next : ["all"];
+      }
+      return [...prev, value];
+    });
+  };
+  const visibleWorkloadByAssignee = useMemo(
+    () =>
+      analytics.workloadByAssignee
+        .map((item) => ({
+          ...item,
+          selectedStoryCount: selectedWorkloadStatuses.reduce((sum, key) => sum + item.storiesByStatus[key], 0),
+        }))
+        .filter((item) => item.selectedStoryCount > 0),
+    [analytics.workloadByAssignee, selectedWorkloadStatuses],
+  );
 
   const sprintStories = useMemo(() => {
     const rows: Array<{
@@ -167,6 +198,21 @@ export function SprintAnalytics({
     if (!workloadDrilldownAssignee) return [];
     return sprintStories.filter((story) => story.assignee === workloadDrilldownAssignee);
   }, [workloadDrilldownAssignee, sprintStories]);
+  const sprintStoryDisplayIds = useMemo(() => {
+    const allStories = initiatives
+      .flatMap((initiative) => initiative.epics ?? [])
+      .flatMap((epic) => epic.userStories ?? [])
+      .sort((a, b) => {
+        const t = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (t !== 0) return t;
+        return a.title.localeCompare(b.title);
+      });
+    const map = new Map<string, string>();
+    allStories.forEach((story, index) => {
+      map.set(story.id, `US-${String(index + 1).padStart(2, "0")}`);
+    });
+    return map;
+  }, [initiatives]);
 
   const statusDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
   const workloadDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
@@ -197,9 +243,9 @@ export function SprintAnalytics({
     updateArrowState(workloadDrilldownScrollRef, setCanScrollWorkloadUp, setCanScrollWorkloadDown);
   }, [workloadDrilldownStories.length, workloadDrilldownAssignee]);
 
-  const chartLegendColumnClass = `space-y-1.5 md:max-h-[clamp(10.5rem,27dvh,14.5rem)] md:overflow-y-auto md:pr-0`;
+  const chartLegendColumnClass = "max-h-[clamp(12.5rem,27vh,20rem)] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
-    "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
+    "flex items-center justify-between rounded-md px-1 py-1 text-left text-[12px] font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-700";
 
   return (
     <section className="mb-2 flex flex-col gap-4">
@@ -241,7 +287,15 @@ export function SprintAnalytics({
                   <tbody>
                     {statusDrilldownStories.map((story) => (
                       <tr key={story.id} className="text-slate-700 transition hover:bg-slate-50/80">
-                        <td className="px-2 py-1.5 font-semibold text-blue-700">{story.id.slice(0, 8)}</td>
+                        <td className="px-2 py-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onOpenStory?.(story.id)}
+                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          >
+                            {sprintStoryDisplayIds.get(story.id) ?? story.id}
+                          </button>
+                        </td>
                         <td className="px-2 py-1.5">{story.title}</td>
                         <td className="px-2 py-1.5">{story.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`}</td>
                         <td className="px-2 py-1.5">{story.assignee}</td>
@@ -363,18 +417,13 @@ export function SprintAnalytics({
                 </div>
               );
             })}
-            {topSlice ? (
-              <p className="pt-0.5 text-[11px] text-slate-600">
-                Largest: <span className="font-semibold text-slate-800">{topSlice.name}</span>
-              </p>
-            ) : null}
           </div>
         </div>
         )}
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
+        <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
@@ -400,16 +449,6 @@ export function SprintAnalytics({
                 Stories
               </button>
             </div>
-            <select
-              value={estimateSource}
-              onChange={(e) => setEstimateSource(e.target.value as EstimateSource)}
-              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700"
-              aria-label="Burndown and load estimate source"
-            >
-              <option value="auto">Auto (stories, else original)</option>
-              <option value="original">Original estimate</option>
-              <option value="stories">Σ Stories only</option>
-            </select>
           </div>
         </div>
         <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
@@ -472,12 +511,16 @@ export function SprintAnalytics({
           </div>
           <div className={chartLegendColumnClass}>
             <div className={legendRowClass}>
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#94a3b8]" />
-              Ideal
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#94a3b8]" />
+                <span>Ideal</span>
+              </span>
             </div>
             <div className={legendRowClass}>
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#2563eb]" />
-              Actual
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#2563eb]" />
+                <span>Actual</span>
+              </span>
             </div>
           </div>
         </div>
@@ -486,7 +529,7 @@ export function SprintAnalytics({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <ChartNoAxesCombined className="size-4 text-slate-600" />
             Workload balance
@@ -550,7 +593,15 @@ export function SprintAnalytics({
                   <tbody>
                     {workloadDrilldownStories.map((story) => (
                       <tr key={story.id} className="border-t border-slate-100 text-slate-700">
-                        <td className="px-2 py-1 font-semibold text-blue-700">{story.id.slice(0, 8)}</td>
+                        <td className="px-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => onOpenStory?.(story.id)}
+                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          >
+                            {sprintStoryDisplayIds.get(story.id) ?? story.id}
+                          </button>
+                        </td>
                         <td className="px-2 py-1">{story.title}</td>
                         <td className="px-2 py-1">{story.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`}</td>
                         <td className="px-2 py-1">{story.assignee}</td>
@@ -584,28 +635,21 @@ export function SprintAnalytics({
               </button>
             </div>
           </div>
-        ) : workloadView === "stories" ? (
-          <div className="mb-2 flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto text-[10px] leading-tight whitespace-nowrap text-slate-600 sm:text-[11px]">
-            {WORKLOAD_BAR_SEGMENTS.map((s) => (
-              <span key={s.key} className="inline-flex min-w-0 items-center gap-1">
-                <span className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-black/10" style={{ backgroundColor: s.color }} />
-                <span className="truncate">{s.label}</span>
-              </span>
-            ))}
-          </div>
         ) : null}
         {!workloadDrilldownAssignee ? <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
           {workloadView === "stories" ? (
-            analytics.workloadByAssignee.length > 0 ? (
-              analytics.workloadByAssignee.map((item) => {
+            <div className="relative min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] flex-1">
+              <div className="grid min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] gap-2 md:grid-cols-[minmax(0,1fr)_8.5rem] md:items-stretch">
+                <div className="min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden">
+                  {visibleWorkloadByAssignee.length > 0 ? (
+                    visibleWorkloadByAssignee.map((item) => {
                 const { storiesByStatus: st } = item;
-                const storyTotal =
-                  st.todo + st.inProgress + st.done + st.approved;
+                const storyTotal = item.selectedStoryCount;
                 const barWidthPct = Math.max(
                   12,
                   Math.min(100, (storyTotal / analytics.workloadMaxStoryTotal) * 100),
                 );
-                const ariaPieces = WORKLOAD_BAR_SEGMENTS.filter((s) => st[s.key] > 0)
+                const ariaPieces = WORKLOAD_BAR_SEGMENTS.filter((s) => selectedWorkloadStatuses.includes(s.key) && st[s.key] > 0)
                   .map((s) => `${s.label} ${st[s.key]}`)
                   .join(", ");
                 return (
@@ -625,6 +669,7 @@ export function SprintAnalytics({
                         aria-label={`${item.assignee}: ${ariaPieces || "no stories"}`}
                       >
                         {WORKLOAD_BAR_SEGMENTS.map(({ key, label, color }) => {
+                          if (!selectedWorkloadStatuses.includes(key)) return null;
                           const n = st[key];
                           if (n <= 0) return null;
                           return (
@@ -639,15 +684,55 @@ export function SprintAnalytics({
                       </div>
                     </div>
                     <span className="shrink-0 tabular-nums text-slate-600">
-                      {item.daysLeftTotal}d left · {item.openCount} open
+                      {storyTotal} stories
                     </span>
                     </div>
                   </button>
                 );
-              })
-            ) : (
-              <p className="text-[12px] text-slate-500">No open workload found for this sprint.</p>
-            )
+                    })
+                  ) : (
+                    <p className="text-[12px] text-slate-500">No open workload found for this sprint.</p>
+                  )}
+                </div>
+                <div className="space-y-1.5 pr-0.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleWorkloadStatusFilter("all")}
+                    className={cn(
+                      "mb-1 w-full rounded-md px-1 py-1 text-left text-[13px] font-normal transition",
+                      workloadStatusFilters.includes("all")
+                        ? "text-slate-900 hover:bg-slate-200/70"
+                        : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Activity className="size-3.5" aria-hidden />
+                      All
+                    </span>
+                  </button>
+                  {WORKLOAD_BAR_SEGMENTS.map((s) => {
+                    const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => toggleWorkloadStatusFilter(s.key)}
+                        className={cn(
+                          "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[13px] font-normal transition",
+                          on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
+                        )}
+                      >
+                        <span
+                          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: s.color, opacity: on ? 1 : 0.35 }}
+                        />
+                        <span>{s.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           ) : analytics.workloadCapacityByAssignee.length > 0 ? (
             analytics.workloadCapacityByAssignee.map((row) => {
               const sprintD = analytics.workloadSprintCalendarDaysLeft;
@@ -698,7 +783,7 @@ export function SprintAnalytics({
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:pl-4">
         <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
@@ -803,11 +888,13 @@ export function SprintAnalytics({
           <div className={chartLegendColumnClass}>
             {[...CFD_FLOW_SEGMENTS].reverse().map(({ label, color }) => (
               <div key={label} className={legendRowClass}>
-                <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
-                  style={{ backgroundColor: color }}
-                />
-                {label}
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span>{label}</span>
+                </span>
               </div>
             ))}
           </div>
