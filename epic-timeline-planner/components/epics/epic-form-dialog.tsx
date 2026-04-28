@@ -1193,10 +1193,10 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-2 py-1.5 text-slate-800">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "title" ? (
-                                        <div className="flex items-center gap-1">
+                                        <div className="relative z-20 flex items-center gap-1">
                                           <input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
@@ -1206,7 +1206,7 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-2 py-1.5 text-slate-600">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "sprint" ? (
-                                        <div className="relative flex items-center gap-1">
+                                        <div className="relative z-20 flex items-center gap-1">
                                           <input
                                             ref={sprintInputRef}
                                             value={childEditingValue}
@@ -1225,7 +1225,7 @@ export function EpicFormDialog({
                                             placeholder="Sprint 1-24"
                                             className="w-[7.25rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
                                           />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -1233,7 +1233,7 @@ export function EpicFormDialog({
                                               setIsSprintAutocompleteOpen(false);
                                               setSprintAutocompletePosition(null);
                                             }}
-                                            className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                                            className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
                                           >
                                             <X className="size-3.5" />
                                           </button>
@@ -1249,19 +1249,28 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-3 py-2">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "status" ? (
-                                        <div className="flex items-center gap-1">
-                                          <select value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700">
+                                        <div className="relative z-20 flex items-center gap-1">
+                                          <select
+                                            value={childEditingValue}
+                                            onChange={(event) => setChildEditingValue(event.target.value)}
+                                            className="w-[7rem] min-w-[7rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                          >
                                             <option value="todo">To Do</option>
                                             <option value="inProgress">In Progress</option>
                                             <option value="done">Done</option>
                                             <option value="approved">Approved</option>
                                           </select>
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "status")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]", statusTone[childStoryDrafts[story.id]?.status ?? story.status] ?? "bg-muted text-muted-foreground")}>
+                                          <span
+                                            className={cn(
+                                              "inline-flex items-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
+                                              statusTone[childStoryDrafts[story.id]?.status ?? story.status] ?? "bg-muted text-muted-foreground",
+                                            )}
+                                          >
                                             {storyStatusLabel[childStoryDrafts[story.id]?.status ?? story.status] ?? (childStoryDrafts[story.id]?.status ?? story.status)}
                                           </span>
                                         </button>
@@ -1269,10 +1278,10 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-3 py-2 text-slate-600">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "assignee" ? (
-                                        <div className="flex items-center gap-1">
+                                        <div className="relative z-20 flex items-center gap-1">
                                           <input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700" />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
@@ -1282,16 +1291,20 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-2 py-1.5 text-slate-600">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "priority" ? (
-                                        <div className="flex items-center gap-1">
-                                          <select value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700">
+                                        <div className="relative z-20 flex items-center gap-1">
+                                          <select
+                                            value={childEditingValue}
+                                            onChange={(event) => setChildEditingValue(event.target.value)}
+                                            className="w-[6rem] min-w-[6rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                          >
                                             <option value="">Not set</option>
                                             <option value="P0">P0</option>
                                             <option value="P1">P1</option>
                                             <option value="P2">P2</option>
                                             <option value="P3">P3</option>
                                           </select>
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "priority")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
@@ -1301,10 +1314,10 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-3 py-2 text-slate-700">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "estimatedDays" ? (
-                                        <div className="flex items-center gap-1">
+                                        <div className="relative z-20 flex items-center gap-1">
                                           <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "estimatedDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
@@ -1314,10 +1327,10 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-3 py-2 text-slate-700">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "daysLeft" ? (
-                                        <div className="flex items-center gap-1">
+                                        <div className="relative z-20 flex items-center gap-1">
                                           <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "daysLeft")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
