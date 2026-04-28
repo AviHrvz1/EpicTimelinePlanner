@@ -697,7 +697,8 @@ export function MonthAnalytics({
       { name: "Approved", value: counts.approved },
     ];
   }, [epicStatusById]);
-  const pieData = isQuarterInsights ? epicStatusPie.filter((x) => x.value > 0) : pieLegendItems;
+  const statusChartShowsEpics = isQuarterInsights && selectedEpicOption == null;
+  const pieData = statusChartShowsEpics ? epicStatusPie.filter((x) => x.value > 0) : pieLegendItems;
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const scopedStories = useMemo(
     () => (selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories),
@@ -716,10 +717,37 @@ export function MonthAnalytics({
     });
   }, [statusDrilldownFilter, scopedStories]);
   const statusDrilldownEpics = useMemo(() => {
-    if (!isQuarterInsights || statusDrilldownFilter == null) return [];
+    if (!statusChartShowsEpics || statusDrilldownFilter == null) return [];
     if (statusDrilldownFilter === "All") return scopedEpics;
     return scopedEpics.filter((epic) => epicStatusById.get(epic.id) === statusDrilldownFilter);
-  }, [isQuarterInsights, statusDrilldownFilter, scopedEpics, epicStatusById]);
+  }, [statusChartShowsEpics, statusDrilldownFilter, scopedEpics, epicStatusById]);
+  const statusDrilldownRowCount = statusChartShowsEpics ? statusDrilldownEpics.length : statusDrilldownStories.length;
+  const statusDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollStatusDrilldownUp, setCanScrollStatusDrilldownUp] = useState(false);
+  const [canScrollStatusDrilldownDown, setCanScrollStatusDrilldownDown] = useState(false);
+  const updateStatusDrilldownArrowState = () => {
+    const node = statusDrilldownScrollRef.current;
+    if (!node) {
+      setCanScrollStatusDrilldownUp(false);
+      setCanScrollStatusDrilldownDown(false);
+      return;
+    }
+    const epsilon = 2;
+    setCanScrollStatusDrilldownUp(node.scrollTop > epsilon);
+    setCanScrollStatusDrilldownDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
+  };
+  const scrollStatusDrilldownBy = (delta: number) => {
+    statusDrilldownScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+  };
+  useEffect(() => {
+    if (!statusDrilldownFilter) {
+      setCanScrollStatusDrilldownUp(false);
+      setCanScrollStatusDrilldownDown(false);
+      return;
+    }
+    updateStatusDrilldownArrowState();
+  }, [statusDrilldownFilter, statusDrilldownRowCount, statusChartShowsEpics]);
+  const statusPanelTitle = statusChartShowsEpics ? "Epic Progress" : "User Story Progress";
   const workloadDrilldownStories = useMemo(() => {
     if (workloadDrilldownAssignee == null) return [];
     return scopedStories
@@ -1291,7 +1319,13 @@ export function MonthAnalytics({
               <Eraser className="size-3.5" aria-hidden />
             </button>
             {isEpicDropdownOpen ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-56 overflow-auto rounded-xl bg-white p-1.5 shadow-xl">
+              <div
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-56 overflow-auto rounded-xl bg-white p-1.5 shadow-xl"
+                onMouseLeave={() => {
+                  setIsEpicDropdownOpen(false);
+                  setShowAllEpicSuggestions(false);
+                }}
+              >
                 {filteredEpicOptions.length > 0 ? (
                   filteredEpicOptions.map((opt) => (
                     <button
@@ -1336,57 +1370,54 @@ export function MonthAnalytics({
           )}
         >
           <PieChartIcon className="size-4 text-slate-600" />
-          {isQuarterInsights ? "Epic Statuses" : "User Stories Status"}
+          {statusPanelTitle}
           {selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
         </h3>
         {statusDrilldownFilter ? (
-          <div className="mt-2 rounded-lg border border-slate-200/80 bg-white/80 p-2">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-700">
-                {(() => {
-                  const Icon = statusDrilldownIcon(statusDrilldownFilter);
-                  return <Icon className="size-3.5 text-slate-600" aria-hidden />;
-                })()}
-                {isQuarterInsights ? "Epics" : "Stories"} in{" "}
-                <span className="text-slate-900">{statusDrilldownDisplayLabel(statusDrilldownFilter)}</span> (
-                {isQuarterInsights ? statusDrilldownEpics.length : statusDrilldownStories.length})
-              </p>
+          <div className="relative mt-2 rounded-xl bg-white px-2.5 pb-2.5 pt-1.5">
+            <div className="pointer-events-none absolute right-2.5 -top-10 z-20 flex items-center justify-end">
               <button
                 type="button"
                 onClick={clearStatusDrilldown}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                className="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                 aria-label="Back to chart"
                 title="Back to chart"
               >
                 <ArrowLeft className="size-3.5" aria-hidden />
               </button>
             </div>
-            <div className="max-h-[11rem] overflow-auto">
-              <table className="w-full border-collapse text-left text-[12px]">
-                <thead className="sticky top-0 bg-slate-50 text-slate-600">
-                  {isQuarterInsights ? (
+            <div className="relative">
+              <div
+                ref={statusDrilldownScrollRef}
+                onScroll={updateStatusDrilldownArrowState}
+                className="h-[clamp(12rem,24vh,16rem)] overflow-auto rounded-lg bg-white/90 pr-5 [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+              <table className="min-h-full w-full border-separate border-spacing-0 text-left text-[12px]">
+                <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-600 backdrop-blur">
+                  {statusChartShowsEpics ? (
                     <tr>
-                      <th className="px-2 py-1 font-semibold">Epic ID</th>
-                      <th className="px-2 py-1 font-semibold">Epic name</th>
-                      <th className="px-2 py-1 font-semibold">Initiative</th>
-                      <th className="px-2 py-1 font-semibold">Assignee</th>
-                      <th className="px-2 py-1 font-semibold">Status</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Epic ID</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Epic name</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Initiative</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Assignee</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Status</th>
                     </tr>
                   ) : (
                     <tr>
-                      <th className="px-2 py-1 font-semibold">Story ID</th>
-                      <th className="px-2 py-1 font-semibold">Story name</th>
-                      <th className="px-2 py-1 font-semibold">Sprint</th>
-                      <th className="px-2 py-1 font-semibold">Assignee</th>
-                      <th className="px-2 py-1 font-semibold">Status</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Story ID</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Story name</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Sprint</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Assignee</th>
+                      <th className="px-2 py-1.5 text-[13px] font-bold">Status</th>
                     </tr>
                   )}
                 </thead>
                 <tbody>
-                  {isQuarterInsights
+                  {statusChartShowsEpics
                     ? statusDrilldownEpics.map((epic) => (
-                        <tr key={epic.id} className="border-t border-slate-100 text-slate-700">
-                          <td className="px-2 py-1">
+                        <tr key={epic.id} className="text-slate-700 transition hover:bg-slate-50/80">
+                          <td className="px-2 py-1.5">
                             <button
                               type="button"
                               onClick={() => onOpenEpic?.(epic.id)}
@@ -1395,15 +1426,19 @@ export function MonthAnalytics({
                               {scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
                             </button>
                           </td>
-                          <td className="px-2 py-1">{epic.title}</td>
-                          <td className="px-2 py-1">{initiativeTitleByEpicId.get(epic.id) ?? "—"}</td>
-                          <td className="px-2 py-1">{epic.assignee?.trim() || "Unassigned"}</td>
-                          <td className="px-2 py-1">{epicStatusById.get(epic.id) ?? "To do"}</td>
+                          <td className="px-2 py-1.5">{epic.title}</td>
+                          <td className="px-2 py-1.5">{initiativeTitleByEpicId.get(epic.id) ?? "—"}</td>
+                          <td className="px-2 py-1.5">{epic.assignee?.trim() || "Unassigned"}</td>
+                          <td className="px-2 py-1.5">
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                              {epicStatusById.get(epic.id) ?? "To do"}
+                            </span>
+                          </td>
                         </tr>
                       ))
                     : statusDrilldownStories.map((story) => (
-                        <tr key={story.id} className="border-t border-slate-100 text-slate-700">
-                          <td className="px-2 py-1">
+                        <tr key={story.id} className="text-slate-700 transition hover:bg-slate-50/80">
+                          <td className="px-2 py-1.5">
                             <button
                               type="button"
                               onClick={() => onOpenStory?.(story.id)}
@@ -1412,8 +1447,8 @@ export function MonthAnalytics({
                               {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                             </button>
                           </td>
-                          <td className="px-2 py-1">{story.title}</td>
-                          <td className="px-2 py-1">
+                          <td className="px-2 py-1.5">{story.title}</td>
+                          <td className="px-2 py-1.5">
                             {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
                               <button
                                 type="button"
@@ -1430,22 +1465,54 @@ export function MonthAnalytics({
                               "Unscheduled"
                             )}
                           </td>
-                          <td className="px-2 py-1">{story.assignee?.trim() || "Unassigned"}</td>
-                          <td className="px-2 py-1">
-                            {story.sprint == null
-                              ? "Unscheduled"
-                              : story.status === "todo"
-                                ? "To do"
-                                : story.status === "inProgress"
-                                  ? "In progress"
-                                  : story.status === "done"
-                                    ? "Done"
-                                    : "Approved"}
+                          <td className="px-2 py-1.5">{story.assignee?.trim() || "Unassigned"}</td>
+                          <td className="px-2 py-1.5">
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                              {story.sprint == null
+                                ? "Unscheduled"
+                                : story.status === "todo"
+                                  ? "To do"
+                                  : story.status === "inProgress"
+                                    ? "In progress"
+                                    : story.status === "done"
+                                      ? "Done"
+                                      : "Approved"}
+                            </span>
                           </td>
                         </tr>
                       ))}
+                  {statusDrilldownRowCount === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-8 text-center text-[12px] text-slate-500">
+                        No items in this status for the current scope.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
+              </div>
+              <button
+                type="button"
+                onClick={() => scrollStatusDrilldownBy(-96)}
+                className={cn(
+                  "absolute right-0 top-9 z-30 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  canScrollStatusDrilldownUp && "bg-slate-200/70 text-slate-800",
+                )}
+                aria-label="Scroll up status drilldown table"
+              >
+                <ChevronUp className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollStatusDrilldownBy(96)}
+                className={cn(
+                  "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  canScrollStatusDrilldownDown && "bg-slate-200/70 text-slate-800",
+                )}
+                aria-label="Scroll down status drilldown table"
+              >
+                <ChevronDown className="size-3.5" />
+              </button>
             </div>
           </div>
         ) : (
@@ -1487,7 +1554,7 @@ export function MonthAnalytics({
                       <StatusPieTooltip
                         {...props}
                         total={pieTotal}
-                        title={isQuarterInsights ? "Epic Statuses" : "User Stories Status"}
+                        title={statusPanelTitle}
                       />
                     )}
                     wrapperStyle={{ zIndex: 40 }}
@@ -1498,7 +1565,7 @@ export function MonthAnalytics({
               <div className="pointer-events-none absolute inset-0 z-[1]">
                 <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    {isQuarterInsights ? "Σ Epics" : "Σ Stories"}
+                    {statusChartShowsEpics ? "Σ Epics" : "Σ Stories"}
                   </p>
                   <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
                 </div>
