@@ -114,14 +114,9 @@ function BurndownTargetIcon(props: { cx?: number; cy?: number; color?: string })
 
 function AnalyticsTooltipShell({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="relative min-w-[14rem] overflow-hidden rounded-2xl border border-sky-200/70 bg-white/75 px-3 py-2.5 text-[12px] text-slate-900 shadow-[0_18px_42px_rgba(2,132,199,0.12)] ring-1 ring-sky-200/20 backdrop-blur-md">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-50/95 via-white/80 to-indigo-50/70" />
-      <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-cyan-200/25 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-12 left-0 h-24 w-32 rounded-full bg-indigo-200/25 blur-2xl" />
-      <p className="relative mb-2 inline-flex items-center rounded-full border border-sky-200/70 bg-sky-50/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-900">
-        {title}
-      </p>
-      <div className="relative space-y-1.5">{children}</div>
+    <div className="rounded-lg border border-slate-200/80 bg-white/95 px-2.5 py-2 text-[12px] shadow-lg ring-1 ring-slate-100/70 backdrop-blur-sm">
+      <p className="mb-1.5 text-[12px] font-semibold text-slate-800">{title}</p>
+      <div className="space-y-1">{children}</div>
     </div>
   );
 }
@@ -136,14 +131,12 @@ function AnalyticsTooltipRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-sky-100/80 bg-white/60 px-2 py-1">
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-slate-800">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-sky-200/80 shadow-[0_0_0_3px_rgba(56,189,248,0.14)]" style={{ backgroundColor: color ?? "#cbd5e1" }} />
+    <div className="flex items-center justify-between gap-2 text-[12px]">
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-slate-600">
+        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color ?? "#cbd5e1" }} />
         <span className="truncate">{label}</span>
       </span>
-      <span className="shrink-0 rounded-md border border-sky-200/70 bg-sky-50/90 px-1.5 py-0.5 tabular-nums font-semibold text-sky-900">
-        {value}
-      </span>
+      <span className="shrink-0 font-semibold text-slate-800">{value}</span>
     </div>
   );
 }
@@ -1259,6 +1252,10 @@ export function MonthAnalytics({
   const chartLegendColumnClass = "max-h-[clamp(12.5rem,27vh,20rem)] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
+  const sharedDrilldownScrollAreaClass =
+    "overflow-auto rounded-lg bg-white/90 pr-5 [&::-webkit-scrollbar]:hidden";
+  const sharedDrilldownArrowClass =
+    "absolute right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
 
   return (
     <section className="mb-2 flex flex-col gap-3.5">
@@ -1390,7 +1387,7 @@ export function MonthAnalytics({
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={updateStatusDrilldownArrowState}
-                className="h-[clamp(12rem,24vh,16rem)] overflow-auto rounded-lg bg-white/90 pr-5 [&::-webkit-scrollbar]:hidden"
+                className={cn("h-[clamp(12rem,24vh,16rem)]", sharedDrilldownScrollAreaClass)}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               <table className="min-h-full w-full border-separate border-spacing-0 text-left text-[12px]">
@@ -1495,7 +1492,8 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => scrollStatusDrilldownBy(-96)}
                 className={cn(
-                  "absolute right-0 top-9 z-30 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  sharedDrilldownArrowClass,
+                  "top-9 z-30",
                   canScrollStatusDrilldownUp && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll up status drilldown table"
@@ -1506,7 +1504,8 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => scrollStatusDrilldownBy(96)}
                 className={cn(
-                  "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  sharedDrilldownArrowClass,
+                  "bottom-0",
                   canScrollStatusDrilldownDown && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll down status drilldown table"
@@ -1916,7 +1915,7 @@ export function MonthAnalytics({
             <div
               ref={workloadDrilldownScrollRef}
               onScroll={updateWorkloadDrilldownArrowState}
-              className="max-h-[11rem] overflow-auto pr-5 [&::-webkit-scrollbar]:hidden"
+              className={cn("max-h-[11rem]", sharedDrilldownScrollAreaClass)}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <table className="w-full border-collapse text-left text-[12px]">
@@ -1980,7 +1979,8 @@ export function MonthAnalytics({
               type="button"
               onClick={() => scrollWorkloadDrilldownBy(-96)}
               className={cn(
-                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                sharedDrilldownArrowClass,
+                "top-0",
                 canScrollWorkloadDrilldownUp && "bg-slate-200/70 text-slate-800",
               )}
               aria-label="Scroll up workload stories table"
@@ -1991,7 +1991,8 @@ export function MonthAnalytics({
               type="button"
               onClick={() => scrollWorkloadDrilldownBy(96)}
               className={cn(
-                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                sharedDrilldownArrowClass,
+                "bottom-0",
                 canScrollWorkloadDrilldownDown && "bg-slate-200/70 text-slate-800",
               )}
               aria-label="Scroll down workload stories table"
