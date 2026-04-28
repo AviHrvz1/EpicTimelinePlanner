@@ -10,7 +10,6 @@ import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
-import { MonthTeamKanbanBoard } from "@/components/timeline/month-team-kanban";
 import { QuarterTeamCapacityBoard } from "@/components/timeline/quarter-team-capacity";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
@@ -24,7 +23,6 @@ import { MONTHS, QUARTERS } from "@/lib/timeline";
 import {
   MONTH_TEAM_COLUMNS,
   isKnownEpicTeamId,
-  type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import {
@@ -438,7 +436,6 @@ function MonthInitiativeGanttLaneRow({
 
 export type MonthPlanSurfaceTab =
   | "epic-gantt"
-  | "team-queue"
   | "month-capacity"
   | "month-status"
   | "sprint-kanban"
@@ -468,8 +465,6 @@ type TimelineGridProps = {
   /** Month drill: team allocation vs sprint tools (controlled from parent for URL sync). */
   monthPlanTab?: MonthPlanSurfaceTab;
   onMonthPlanTabChange?: (tab: MonthPlanSurfaceTab) => void;
-  /** Persisted team queues keyed by `year:month` (see monthTeamBoardStorageKey). */
-  monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
   monthTeamCapacityBoard?: { capacities: Record<string, number> };
   monthTeamCapacityByKey?: Record<string, MonthTeamCapacityBoardModel>;
   onMonthTeamCapacityChange?: (teamId: string, days: number) => void;
@@ -645,7 +640,6 @@ export function TimelineGrid({
   sprintKanbanScheduledStoriesEmphasis = null,
   monthPlanTab = "epic-gantt",
   onMonthPlanTabChange,
-  monthTeamBoardByKey = {},
   monthTeamCapacityBoard = { capacities: {} },
   monthTeamCapacityByKey = {},
   onMonthTeamCapacityChange,
@@ -1996,29 +1990,6 @@ export function TimelineGrid({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onMonthPlanTabChange?.("team-queue")}
-                  title="Team Queue"
-                  className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
-                    monthPlanTab === "team-queue"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                  )}
-                >
-                  <BarChart3 className="size-4" aria-hidden />
-                  <span className="sr-only">Team Queue</span>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
-                    )}
-                  >
-                    Team Queue
-                  </span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => onMonthPlanTabChange?.("month-capacity")}
                   title="Team Capacity"
                   className={cn(
@@ -2285,7 +2256,6 @@ export function TimelineGrid({
               "flex flex-col rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
               monthPlanTab === "sprint-kanban" ? "min-h-0 overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||
-              monthPlanTab === "team-queue" ||
               monthPlanTab === "month-capacity" ||
               monthPlanTab === "sprint-retrospective"
                 ? "min-h-[56rem]"
@@ -2446,19 +2416,6 @@ export function TimelineGrid({
                   </div>
                 </MonthEpicDropArea>
                 </div>
-              </div>
-            ) : monthPlanTab === "team-queue" ? (
-              <div className="flex-1 p-3 sm:p-5">
-                <MonthTeamKanbanBoard
-                  initiatives={initiatives}
-                  month={activeMonth}
-                  year={currentYear}
-                  board={monthTeamBoardByKey[`${currentYear}:${activeMonth}`]}
-                  onOpenEpic={onOpenEpic}
-                  onOpenSprintKanban={(yearSprint, teamId) => {
-                    onEnterSprintStoryBoard?.(yearSprint, teamId);
-                  }}
-                />
               </div>
             ) : monthPlanTab === "month-capacity" ? (
               <div className="flex-1 p-3 sm:p-5">

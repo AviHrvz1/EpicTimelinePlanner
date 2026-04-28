@@ -1214,9 +1214,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const planTabRaw = params.get("planTab");
     let hydratedMonthPlanTab: MonthPlanSurfaceTab = "epic-gantt";
     if (hydratedMonth != null) {
-      if (planTabRaw === "team") {
-        hydratedMonthPlanTab = "team-queue";
-      } else if (planTabRaw === "teamCapacity") {
+      if (planTabRaw === "teamCapacity") {
         hydratedMonthPlanTab = "month-capacity";
       } else if (planTabRaw === "epic") {
         hydratedMonthPlanTab = "epic-gantt";
@@ -1339,7 +1337,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (activeTimelineMonth != null) {
       params.set("month", String(activeTimelineMonth));
       if (activeMonthPlanTab === "epic-gantt") params.set("planTab", "epic");
-      else if (activeMonthPlanTab === "team-queue") params.set("planTab", "team");
       else if (activeMonthPlanTab === "month-capacity") params.set("planTab", "teamCapacity");
       else if (activeMonthPlanTab === "month-status") params.set("planTab", "monthInsights");
       else if (activeMonthPlanTab === "sprint-kanban") params.set("planTab", "sprintBoard");
@@ -1403,7 +1400,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setActiveMonthPlanTab(tab);
     if (tab === "sprint-kanban") setActiveSprintTab("kanban");
     if (tab === "sprint-status") setActiveSprintTab("status");
-    if (tab === "epic-gantt" || tab === "team-queue" || tab === "month-capacity" || tab === "month-status") {
+    if (tab === "epic-gantt" || tab === "month-capacity" || tab === "month-status") {
       setSprintStoryBoardTeamId(null);
     }
   }, []);
@@ -3114,7 +3111,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 activeSprintTabExternal={activeSprintTab}
                 monthPlanTab={activeMonthPlanTab}
                 onMonthPlanTabChange={handleMonthPlanTabChange}
-                monthTeamBoardByKey={monthTeamBoardByKey}
                 monthTeamCapacityBoard={activeMonthTeamCapacityBoard}
                 monthTeamCapacityByKey={monthTeamCapacityByKey}
                 onMonthTeamCapacityChange={updateMonthTeamCapacity}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -96,6 +96,42 @@ type BurndownTooltipPayload = {
   dataKey?: unknown;
 };
 
+function AnalyticsTooltipShell({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="relative min-w-[14rem] overflow-hidden rounded-2xl border border-sky-200/70 bg-white/75 px-3 py-2.5 text-[12px] text-slate-900 shadow-[0_18px_42px_rgba(2,132,199,0.12)] ring-1 ring-sky-200/20 backdrop-blur-md">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-50/95 via-white/80 to-indigo-50/70" />
+      <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-cyan-200/25 blur-2xl" />
+      <div className="pointer-events-none absolute -bottom-12 left-0 h-24 w-32 rounded-full bg-indigo-200/25 blur-2xl" />
+      <p className="relative mb-2 inline-flex items-center rounded-full border border-sky-200/70 bg-sky-50/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-900">
+        {title}
+      </p>
+      <div className="relative space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function AnalyticsTooltipRow({
+  color,
+  label,
+  value,
+}: {
+  color?: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-sky-100/80 bg-white/60 px-2 py-1">
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-slate-800">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-sky-200/80 shadow-[0_0_0_3px_rgba(56,189,248,0.14)]" style={{ backgroundColor: color ?? "#cbd5e1" }} />
+        <span className="truncate">{label}</span>
+      </span>
+      <span className="shrink-0 rounded-md border border-sky-200/70 bg-sky-50/90 px-1.5 py-0.5 tabular-nums font-semibold text-sky-900">
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function formatBurndownValue(
   value: number | string | readonly (number | string)[] | null | undefined,
   metric: BurndownMetric,
@@ -120,25 +156,16 @@ function BurndownTooltip({
   const rows = payload.filter((item) => item.value != null);
   if (rows.length === 0) return null;
   return (
-    <div className="min-w-[12rem] rounded-xl border border-white/50 bg-slate-900/55 px-3 py-2 text-[12px] text-slate-100 shadow-xl backdrop-blur-md">
-      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">{String(label ?? "Burndown")}</p>
-      <div className="space-y-1.5">
-        {rows.map((row) => (
-          <div key={String(row.dataKey ?? row.name)} className="flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-1.5 truncate text-slate-100/95">
-              <span
-                className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30"
-                style={{ backgroundColor: row.color ?? "#cbd5e1" }}
-              />
-              <span className="truncate">{String(row.name ?? row.dataKey ?? "Series")}</span>
-            </span>
-            <span className="shrink-0 tabular-nums font-semibold text-white">
-              {formatBurndownValue(row.value, metric)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <AnalyticsTooltipShell title={String(label ?? "Burndown")}>
+      {rows.map((row) => (
+        <AnalyticsTooltipRow
+          key={String(row.dataKey ?? row.name)}
+          color={row.color}
+          label={String(row.name ?? row.dataKey ?? "Series")}
+          value={formatBurndownValue(row.value, metric)}
+        />
+      ))}
+    </AnalyticsTooltipShell>
   );
 }
 
@@ -155,27 +182,20 @@ function CumulativeFlowTooltip({
   const rows = payload.filter((item) => item.value != null);
   if (rows.length === 0) return null;
   return (
-    <div className="min-w-[12rem] rounded-xl border border-white/50 bg-slate-900/55 px-3 py-2 text-[12px] text-slate-100 shadow-xl backdrop-blur-md">
-      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">{String(label ?? "Cumulative flow")}</p>
-      <div className="space-y-1.5">
-        {rows.map((row) => {
-          const normalized = Array.isArray(row.value) ? row.value[0] : row.value;
-          const valueText = typeof normalized === "number" ? `${Math.round(normalized)} stories` : "n/a";
-          return (
-            <div key={String(row.dataKey ?? row.name)} className="flex items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-1.5 truncate text-slate-100/95">
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30"
-                  style={{ backgroundColor: row.color ?? "#cbd5e1" }}
-                />
-                <span className="truncate">{String(row.name ?? row.dataKey ?? "Series")}</span>
-              </span>
-              <span className="shrink-0 tabular-nums font-semibold text-white">{valueText}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <AnalyticsTooltipShell title={String(label ?? "Cumulative flow")}>
+      {rows.map((row) => {
+        const normalized = Array.isArray(row.value) ? row.value[0] : row.value;
+        const valueText = typeof normalized === "number" ? `${Math.round(normalized)} stories` : "n/a";
+        return (
+          <AnalyticsTooltipRow
+            key={String(row.dataKey ?? row.name)}
+            color={row.color}
+            label={String(row.name ?? row.dataKey ?? "Series")}
+            value={valueText}
+          />
+        );
+      })}
+    </AnalyticsTooltipShell>
   );
 }
 
@@ -195,21 +215,13 @@ function StatusPieTooltip({
   const value = typeof normalized === "number" ? Math.round(normalized) : Number(normalized ?? 0);
   const percent = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className="min-w-[12rem] rounded-xl border border-white/50 bg-slate-900/55 px-3 py-2 text-[12px] text-slate-100 shadow-xl backdrop-blur-md">
-      <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-200/95">User stories status</p>
-      <div className="flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-1.5 truncate text-slate-100/95">
-          <span
-            className="h-2 w-2 shrink-0 rounded-full ring-1 ring-white/30"
-            style={{ backgroundColor: row.color ?? "#cbd5e1" }}
-          />
-          <span className="truncate">{String(row.name ?? "Status")}</span>
-        </span>
-        <span className="shrink-0 tabular-nums font-semibold text-white">
-          {value} ({percent}%)
-        </span>
-      </div>
-    </div>
+    <AnalyticsTooltipShell title="User stories status">
+      <AnalyticsTooltipRow
+        color={row.color}
+        label={String(row.name ?? "Status")}
+        value={`${value} (${percent}%)`}
+      />
+    </AnalyticsTooltipShell>
   );
 }
 
@@ -718,7 +730,7 @@ export function MonthAnalytics({
     const now = new Date();
     const isCurrentMonth = now.getFullYear() === planYear && now.getMonth() + 1 === month;
     const elapsedDays = isCurrentMonth ? Math.max(1, Math.min(horizon, now.getDate())) : horizon;
-    const seriesKeys = ["actual", ...monthBurndownEpics.map((epic) => epic.id)];
+    const seriesKeys = monthBurndownEpics.map((epic) => epic.id);
     const nextRows = monthBurndown.map((row) => ({ ...row })) as Array<
       (typeof monthBurndown)[number] & Record<string, number | string | boolean | null | undefined>
     >;
@@ -778,26 +790,35 @@ export function MonthAnalytics({
     return rows as typeof monthBurndownFilledToToday;
   }, [monthBurndown, monthBurndownFilledToToday, selectedEpicOption, monthEpics, planYear, month, metric]);
   const monthBurndownResolved = monthBurndownFromSnapshots ?? monthBurndownFilledToToday;
+  const burndownFocusedEpicOption = useMemo(() => {
+    if (selectedEpicOption) return selectedEpicOption;
+    if (burndownVisibleKeys.length !== 1) return null;
+    return monthEpics.find((row) => row.epic.id === burndownVisibleKeys[0]) ?? null;
+  }, [selectedEpicOption, burndownVisibleKeys, monthEpics]);
   const selectedEpicDueDate = useMemo(() => {
-    if (!selectedEpicOption) return null;
-    const dueMonth = selectedEpicOption.epic.planEndMonth ?? month;
-    const dueYear = selectedEpicOption.epic.planYear ?? planYear;
+    if (!burndownFocusedEpicOption) return null;
+    const dueMonth = burndownFocusedEpicOption.epic.planEndMonth ?? month;
+    const dueYear = burndownFocusedEpicOption.epic.planYear ?? planYear;
     const dueDay = new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
-  }, [selectedEpicOption, month, planYear]);
+  }, [burndownFocusedEpicOption, month, planYear]);
   const monthBurndownWithDueTarget = useMemo(() => {
-    if (!selectedEpicOption || selectedEpicDueDate == null) return monthBurndownResolved;
+    if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownResolved;
     const totalDays = monthBurndownResolved.length;
     if (totalDays === 0) return monthBurndownResolved;
     const startValue =
       metric === "daysLeft"
-        ? (selectedEpicOption.epic.userStories ?? []).reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
-        : (selectedEpicOption.epic.userStories ?? []).length;
+        ? (burndownFocusedEpicOption.epic.userStories ?? []).reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
+        : (burndownFocusedEpicOption.epic.userStories ?? []).length;
     const monthStart = new Date(planYear, month - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
+    const dueDayIndexClamped = Math.max(1, Math.min(totalDays, dueDayIndex));
     return monthBurndownResolved.map((row, idx) => {
       const dayIdx = idx + 1;
+      if (dayIdx > dueDayIndexClamped) {
+        return { ...row, epicIdeal: null };
+      }
       let epicIdealRaw: number;
       if (dueDayIndex <= 1) epicIdealRaw = 0;
       else epicIdealRaw = startValue * (1 - (dayIdx - 1) / (dueDayIndex - 1));
@@ -806,9 +827,9 @@ export function MonthAnalytics({
         : Number(Math.max(0, epicIdealRaw).toFixed(1));
       return { ...row, epicIdeal };
     });
-  }, [monthBurndownResolved, selectedEpicOption, selectedEpicDueDate, metric, planYear, month]);
+  }, [monthBurndownResolved, burndownFocusedEpicOption, selectedEpicDueDate, metric, planYear, month]);
   const selectedEpicDueMarker = useMemo(() => {
-    if (!selectedEpicDueDate || !selectedEpicOption) return null;
+    if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     const inCurrentMonth =
       selectedEpicDueDate.getFullYear() === planYear && selectedEpicDueDate.getMonth() + 1 === month;
     if (!inCurrentMonth) {
@@ -835,9 +856,9 @@ export function MonthAnalytics({
       y: typeof y === "number" ? y : 0,
       label: "Epic due",
     };
-  }, [selectedEpicDueDate, selectedEpicOption, planYear, month, monthBurndownWithDueTarget]);
+  }, [selectedEpicDueDate, burndownFocusedEpicOption, planYear, month, monthBurndownWithDueTarget]);
   const monthEndMarker = useMemo(() => {
-    if (!selectedEpicOption) return null;
+    if (!burndownFocusedEpicOption) return null;
     const last = monthBurndownWithDueTarget[monthBurndownWithDueTarget.length - 1] as
       | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string; dayLabel?: string })
       | undefined;
@@ -848,7 +869,7 @@ export function MonthAnalytics({
       y: typeof y === "number" ? y : 0,
       label: `Month end (${String(last.dayLabel ?? "")})`,
     };
-  }, [selectedEpicOption, monthBurndownWithDueTarget]);
+  }, [burndownFocusedEpicOption, monthBurndownWithDueTarget]);
   const burndownLegendItems = useMemo(() => {
     if (selectedEpicOption) {
       return [
@@ -857,7 +878,6 @@ export function MonthAnalytics({
       ];
     }
     return [
-      { key: "actual", label: "Actual", color: "#94a3b8" },
       ...monthBurndownEpics.slice(0, 6).map((epic, idx) => ({
         key: epic.id,
         label: epic.title,
@@ -875,11 +895,10 @@ export function MonthAnalytics({
   }, [burndownLegendItems]);
   const toggleBurndownKey = (key: string) => {
     setBurndownVisibleKeys((prev) => {
-      if (prev.includes(key)) {
-        const next = prev.filter((k) => k !== key);
-        return next.length > 0 ? next : prev;
-      }
-      return [...prev, key];
+      const allKeys = burndownLegendItems.map((item) => item.key);
+      // Legend click focuses a single epic/series instead of toggling it off.
+      if (prev.length === 1 && prev[0] === key) return allKeys;
+      return [key];
     });
   };
   const showAllBurndownKeys = () => setBurndownVisibleKeys(burndownLegendItems.map((item) => item.key));
@@ -1102,7 +1121,7 @@ export function MonthAnalytics({
                 const exact = epicComboOptions.find((opt) => opt.label === v);
                 if (exact) setSelectedEpicId(exact.id);
               }}
-              placeholder="Select a specific epic to filter all charts"
+              placeholder="All Epics"
               className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700"
               aria-label="Filter month insights by epic across all charts"
             />
@@ -1413,17 +1432,14 @@ export function MonthAnalytics({
                       content={(props) => <BurndownTooltip {...props} metric={metric} />}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
-                    {!selectedEpicOption && burndownVisibleKeys.includes("actual") ? (
-                      <Line type="monotone" dataKey="actual" stroke="#94a3b8" strokeWidth={2} dot={false} name="Actual" />
-                    ) : null}
-                    {selectedEpicOption && burndownVisibleKeys.includes(selectedEpicOption.epic.id) ? (
+                    {burndownFocusedEpicOption && burndownVisibleKeys.includes(burndownFocusedEpicOption.epic.id) ? (
                       <Line
                         type="monotone"
-                        dataKey={selectedEpicOption.epic.id}
+                        dataKey={burndownFocusedEpicOption.epic.id}
                         stroke={LINE_PALETTE[0]}
                         strokeWidth={2}
                         dot={false}
-                        name={selectedEpicOption.epic.title}
+                        name={burndownFocusedEpicOption.epic.title}
                       />
                     ) : monthBurndownEpics.map((epic, idx) =>
                       burndownVisibleKeys.includes(epic.id) ? (
@@ -1438,7 +1454,7 @@ export function MonthAnalytics({
                       />
                       ) : null,
                     )}
-                    {selectedEpicOption && burndownVisibleKeys.includes("epicIdeal") ? (
+                    {burndownFocusedEpicOption ? (
                       <Line
                         type="monotone"
                         dataKey="epicIdeal"
@@ -1449,7 +1465,7 @@ export function MonthAnalytics({
                         name="Epic ideal to due"
                       />
                     ) : null}
-                    {selectedEpicOption && monthEndMarker ? (
+                    {burndownFocusedEpicOption && monthEndMarker ? (
                       <ReferenceDot
                         x={monthEndMarker.axisLabel}
                         y={monthEndMarker.y}
@@ -1460,7 +1476,7 @@ export function MonthAnalytics({
                         label={{ value: monthEndMarker.label, position: "top", fill: "#1e3a8a", fontSize: 11 }}
                       />
                     ) : null}
-                    {selectedEpicOption && selectedEpicDueMarker ? (
+                    {burndownFocusedEpicOption && selectedEpicDueMarker ? (
                       <ReferenceDot
                         x={selectedEpicDueMarker.axisLabel}
                         y={selectedEpicDueMarker.y}
@@ -1524,7 +1540,7 @@ export function MonthAnalytics({
                   </button>
                 );
               })}
-              {selectedEpicOption ? (
+            {burndownFocusedEpicOption ? (
                 <p className="text-[11px] text-slate-500">
                   Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
                 </p>
