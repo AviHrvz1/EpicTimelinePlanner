@@ -24,7 +24,25 @@ function story(title, assignee, sprint, status, estimatedDays, daysLeft, month) 
   };
 }
 
-function epic(title, assignee, color, startMonth, endMonth, sprint, stories) {
+function storyWithSnapshots(title, assignee, sprint, status, estimatedDays, daysLeft, month, snapshots) {
+  return {
+    ...story(title, assignee, sprint, status, estimatedDays, daysLeft, month),
+    snapshots: { create: snapshots },
+  };
+}
+
+function snapshot(isoDate, status, sprint, estimatedDays, daysLeft, assignee) {
+  return {
+    snapshotDate: new Date(isoDate),
+    status,
+    sprint,
+    estimatedDays,
+    daysLeft,
+    assignee,
+  };
+}
+
+function epic(title, assignee, color, startMonth, endMonth, sprint, stories, endSprint = 2) {
   return {
     title,
     assignee,
@@ -34,6 +52,7 @@ function epic(title, assignee, color, startMonth, endMonth, sprint, stories) {
     planSprint: sprint,
     planStartMonth: startMonth,
     planEndMonth: endMonth ?? startMonth,
+    planEndSprint: endSprint,
     userStories: { create: stories },
   };
 }
@@ -94,6 +113,28 @@ async function main() {
           story("Slack release digest", "Maya", 2, "inProgress", 3, 1, 3),
           story("Manual approval step", "Ava", null, "todo", 2, 2, 3),
         ]),
+        epic("lala", "Ava", "#0284c7", 3, 5, 2, [
+          storyWithSnapshots("lala - deploy guardrails", "Ava", 7, "inProgress", 8, 2, 4, [
+            snapshot("2026-04-01T12:00:00.000Z", "todo", 7, 8, 8, "Ava"),
+            snapshot("2026-04-03T12:00:00.000Z", "inProgress", 7, 8, 7, "Ava"),
+            snapshot("2026-04-06T12:00:00.000Z", "inProgress", 7, 8, 6, "Ava"),
+            snapshot("2026-04-09T12:00:00.000Z", "inProgress", 7, 8, 5, "Ava"),
+            snapshot("2026-04-12T12:00:00.000Z", "inProgress", 7, 8, 4, "Ava"),
+            snapshot("2026-04-15T12:00:00.000Z", "inProgress", 7, 8, 3, "Ava"),
+            snapshot("2026-04-18T12:00:00.000Z", "inProgress", 8, 8, 3, "Ava"),
+            snapshot("2026-04-22T12:00:00.000Z", "inProgress", 8, 8, 2, "Ava"),
+            snapshot("2026-04-26T12:00:00.000Z", "done", 8, 8, 0, "Ava"),
+          ]),
+          storyWithSnapshots("lala - release metrics feed", "Maya", 8, "todo", 6, 2, 4, [
+            snapshot("2026-04-01T12:00:00.000Z", "todo", 7, 6, 6, "Maya"),
+            snapshot("2026-04-05T12:00:00.000Z", "todo", 7, 6, 6, "Maya"),
+            snapshot("2026-04-10T12:00:00.000Z", "inProgress", 7, 6, 5, "Maya"),
+            snapshot("2026-04-14T12:00:00.000Z", "inProgress", 7, 6, 4, "Maya"),
+            snapshot("2026-04-18T12:00:00.000Z", "inProgress", 8, 6, 3, "Maya"),
+            snapshot("2026-04-22T12:00:00.000Z", "inProgress", 8, 6, 2, "Maya"),
+            snapshot("2026-04-28T12:00:00.000Z", "inProgress", 8, 6, 1, "Maya"),
+          ]),
+        ], 1),
       ],
     },
     {

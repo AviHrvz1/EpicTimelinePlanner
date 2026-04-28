@@ -1409,7 +1409,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     // Insights surfaces default to a focused analytics layout.
     if (activeMonthPlanTab === "month-status" || activeMonthPlanTab === "sprint-status") {
       setIsLeftPanelHidden(true);
+      return;
     }
+    // Non-insight surfaces restore the standard split layout.
+    setIsLeftPanelHidden(false);
   }, [activeMonthPlanTab]);
 
   const activeMonthTeamCapacityKey = useMemo(() => {

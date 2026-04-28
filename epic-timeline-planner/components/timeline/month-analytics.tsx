@@ -96,6 +96,22 @@ type BurndownTooltipPayload = {
   dataKey?: unknown;
 };
 
+function BurndownTargetIcon(props: { cx?: number; cy?: number; color?: string }) {
+  const cx = props.cx ?? 0;
+  const cy = props.cy ?? 0;
+  const color = props.color ?? "#dc2626";
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={5} fill="#ffffff" stroke={color} strokeWidth={1.6} />
+      <circle cx={cx} cy={cy} r={1.8} fill={color} />
+      <line x1={cx - 7} y1={cy} x2={cx - 5.5} y2={cy} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+      <line x1={cx + 5.5} y1={cy} x2={cx + 7} y2={cy} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+      <line x1={cx} y1={cy - 7} x2={cx} y2={cy - 5.5} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+      <line x1={cx} y1={cy + 5.5} x2={cx} y2={cy + 7} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+    </g>
+  );
+}
+
 function AnalyticsTooltipShell({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="relative min-w-[14rem] overflow-hidden rounded-2xl border border-sky-200/70 bg-white/75 px-3 py-2.5 text-[12px] text-slate-900 shadow-[0_18px_42px_rgba(2,132,199,0.12)] ring-1 ring-sky-200/20 backdrop-blur-md">
@@ -215,7 +231,7 @@ function StatusPieTooltip({
   const value = typeof normalized === "number" ? Math.round(normalized) : Number(normalized ?? 0);
   const percent = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <AnalyticsTooltipShell title="User stories status">
+    <AnalyticsTooltipShell title="User Stories Status">
       <AnalyticsTooltipRow
         color={row.color}
         label={String(row.name ?? "Status")}
@@ -800,9 +816,10 @@ export function MonthAnalytics({
   }, [selectedEpicOption, burndownVisibleKeys, monthEpics]);
   const selectedEpicDueDate = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
+    const dueSprint = burndownFocusedEpicOption.epic.planEndSprint;
     const dueMonth = burndownFocusedEpicOption.epic.planEndMonth ?? month;
     const dueYear = burndownFocusedEpicOption.epic.planYear ?? planYear;
-    const dueDay = new Date(dueYear, dueMonth, 0).getDate();
+    const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [burndownFocusedEpicOption, month, planYear]);
   const monthBurndownWithDueTarget = useMemo(() => {
@@ -816,63 +833,93 @@ export function MonthAnalytics({
     const monthStart = new Date(planYear, month - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
-    const dueDayIndexClamped = Math.max(1, Math.min(totalDays, dueDayIndex));
-    return monthBurndownResolved.map((row, idx) => {
+    const targetDayIndex = Math.max(1, dueDayIndex);
+    const withIdeal = monthBurndownResolved.map((row, idx) => {
       const dayIdx = idx + 1;
-      if (dayIdx > dueDayIndexClamped) {
+      if (dayIdx > targetDayIndex) {
         return { ...row, epicIdeal: null };
       }
       let epicIdealRaw: number;
-      if (dueDayIndex <= 1) epicIdealRaw = 0;
-      else epicIdealRaw = startValue * (1 - (dayIdx - 1) / (dueDayIndex - 1));
+      if (targetDayIndex <= 1) epicIdealRaw = 0;
+      else epicIdealRaw = startValue * (1 - (dayIdx - 1) / (targetDayIndex - 1));
       const epicIdeal = metric === "storyCount"
         ? Math.max(0, Math.round(epicIdealRaw))
         : Number(Math.max(0, epicIdealRaw).toFixed(1));
       return { ...row, epicIdeal };
     });
+    if (targetDayIndex <= totalDays) return withIdeal;
+    const extended = [...withIdeal] as Array<Record<string, number | string | boolean | null | undefined>>;
+    for (let dayIdx = totalDays + 1; dayIdx <= targetDayIndex; dayIdx += 1) {
+      const dayDate = new Date(monthStart);
+      dayDate.setDate(dayIdx);
+      let epicIdealRaw: number;
+      if (targetDayIndex <= 1) epicIdealRaw = 0;
+      else epicIdealRaw = startValue * (1 - (dayIdx - 1) / (targetDayIndex - 1));
+      const epicIdeal =
+        metric === "storyCount"
+          ? Math.max(0, Math.round(epicIdealRaw))
+          : Number(Math.max(0, epicIdealRaw).toFixed(1));
+      const axisLabel = flowChartDayLabel(dayDate);
+      extended.push({
+        axisLabel,
+        dayLabel: axisLabel,
+        isToday: false,
+        [burndownFocusedEpicOption.epic.id]: null,
+        epicIdeal,
+      });
+    }
+    return extended as typeof monthBurndownResolved;
   }, [monthBurndownResolved, burndownFocusedEpicOption, selectedEpicDueDate, metric, planYear, month]);
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
-    const inCurrentMonth =
-      selectedEpicDueDate.getFullYear() === planYear && selectedEpicDueDate.getMonth() + 1 === month;
-    if (!inCurrentMonth) {
-      const last = monthBurndownWithDueTarget[monthBurndownWithDueTarget.length - 1] as
-        | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string })
-        | undefined;
-      if (!last?.axisLabel) return null;
-      const lastIdeal = last.epicIdeal;
-      return {
-        axisLabel: String(last.axisLabel),
-        y: typeof lastIdeal === "number" ? lastIdeal : 0,
-        label: `Epic due ${selectedEpicDueDate.toLocaleDateString()}`,
-      };
-    }
-    const day = selectedEpicDueDate.getDate();
-    const point = monthBurndownWithDueTarget.find((row) => {
-      const label = String(row.dayLabel ?? "");
-      return label.startsWith(`${day}/${month} `);
-    }) as (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string }) | undefined;
+    if (monthBurndownWithDueTarget.length === 0) return null;
+    const monthStart = new Date(planYear, month - 1, 1);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
+    const rowIndex = Math.max(0, Math.min(monthBurndownWithDueTarget.length - 1, dueDayIndex - 1));
+    const point = monthBurndownWithDueTarget[rowIndex] as
+      | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string })
+      | undefined;
     if (!point?.axisLabel) return null;
     const y = point.epicIdeal;
     return {
       axisLabel: String(point.axisLabel),
       y: typeof y === "number" ? y : 0,
-      label: "Epic due",
+      label: `Epic due ${selectedEpicDueDate.getDate()}/${selectedEpicDueDate.getMonth() + 1}`,
     };
-  }, [selectedEpicDueDate, burndownFocusedEpicOption, planYear, month, monthBurndownWithDueTarget]);
+  }, [selectedEpicDueDate, burndownFocusedEpicOption, monthBurndownWithDueTarget, planYear, month]);
   const monthEndMarker = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
-    const last = monthBurndownWithDueTarget[monthBurndownWithDueTarget.length - 1] as
+    const monthEndLabel = flowChartDayLabel(new Date(planYear, month - 1, new Date(planYear, month, 0).getDate()));
+    const monthEndPoint = monthBurndownWithDueTarget.find((row) => {
+      return String(row.dayLabel ?? row.axisLabel ?? "") === monthEndLabel;
+    }) as
       | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string; dayLabel?: string })
       | undefined;
-    if (!last?.axisLabel) return null;
-    const y = last.epicIdeal;
+    if (!monthEndPoint?.axisLabel) return null;
+    const y = monthEndPoint.epicIdeal;
     return {
-      axisLabel: String(last.axisLabel),
+      axisLabel: String(monthEndPoint.axisLabel),
       y: typeof y === "number" ? y : 0,
-      label: `Month end (${String(last.dayLabel ?? "")})`,
+      label: `Month end (${monthEndLabel})`,
     };
-  }, [burndownFocusedEpicOption, monthBurndownWithDueTarget]);
+  }, [burndownFocusedEpicOption, monthBurndownWithDueTarget, planYear, month]);
+  const burndownAxisTicks = useMemo(() => {
+    const labels = monthBurndownWithDueTarget
+      .map((row) => String(row.axisLabel ?? ""))
+      .filter((label) => label.length > 0);
+    if (labels.length <= 10) return labels;
+    const step = Math.max(1, Math.ceil(labels.length / 10));
+    const ticks: string[] = [];
+    for (let i = 0; i < labels.length; i += step) ticks.push(labels[i]);
+    const last = labels[labels.length - 1];
+    if (ticks[ticks.length - 1] !== last) ticks.push(last);
+    if (selectedEpicDueMarker && !ticks.includes(selectedEpicDueMarker.axisLabel)) {
+      ticks.push(selectedEpicDueMarker.axisLabel);
+      ticks.sort((a, b) => labels.indexOf(a) - labels.indexOf(b));
+    }
+    return ticks;
+  }, [monthBurndownWithDueTarget, selectedEpicDueMarker]);
   const burndownLegendItems = useMemo(() => {
     if (selectedEpicOption) {
       return [
@@ -1184,7 +1231,7 @@ export function MonthAnalytics({
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
         <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <PieChartIcon className="size-4 text-slate-600" />
-          User stories status{selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
+          User Stories Status{selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
         </h3>
         {statusDrilldownFilter ? (
           <div className="mt-2 rounded-lg border border-slate-200/80 bg-white/80 p-2">
@@ -1411,15 +1458,17 @@ export function MonthAnalytics({
             {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 2, right: 4, left: 18, bottom: 22 }}>
+                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 2, right: 26, left: 18, bottom: 34 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="axisLabel"
-                      interval="preserveStartEnd"
+                      interval={0}
+                      ticks={burndownAxisTicks}
+                      tickFormatter={(value) => String(value ?? "")}
                       tick={{ fontSize: 11, fill: "#64748b" }}
                       angle={-28}
                       textAnchor="end"
-                      height={34}
+                      height={44}
                     />
                     <YAxis
                       allowDecimals={metric !== "storyCount"}
@@ -1474,23 +1523,32 @@ export function MonthAnalytics({
                     {burndownFocusedEpicOption && monthEndMarker ? (
                       <ReferenceDot
                         x={monthEndMarker.axisLabel}
-                        y={monthEndMarker.y}
+                        y={Math.max(monthEndMarker.y + (metric === "storyCount" ? 0.35 : 0.25), metric === "storyCount" ? 1 : 0.8)}
                         r={4}
+                        isFront
+                        ifOverflow="visible"
                         fill="#2563eb"
                         stroke="#ffffff"
                         strokeWidth={1.5}
-                        label={{ value: monthEndMarker.label, position: "top", fill: "#1e3a8a", fontSize: 11 }}
                       />
                     ) : null}
                     {burndownFocusedEpicOption && selectedEpicDueMarker ? (
                       <ReferenceDot
                         x={selectedEpicDueMarker.axisLabel}
-                        y={selectedEpicDueMarker.y}
-                        r={4}
-                        fill="#ef4444"
-                        stroke="#ffffff"
-                        strokeWidth={1.5}
-                        label={{ value: selectedEpicDueMarker.label, position: "top", fill: "#b91c1c", fontSize: 11 }}
+                        y={Math.max(selectedEpicDueMarker.y + (metric === "storyCount" ? 0.35 : 0.25), metric === "storyCount" ? 1 : 0.8)}
+                        r={0}
+                        isFront
+                        ifOverflow="visible"
+                        shape={(shapeProps: { cx?: number; cy?: number }) => (
+                          <BurndownTargetIcon cx={shapeProps.cx} cy={(shapeProps.cy ?? 0) + 4} color="#dc2626" />
+                        )}
+                        label={{
+                          value: `Due ${selectedEpicDueDate ? `${selectedEpicDueDate.getDate()}/${selectedEpicDueDate.getMonth() + 1}` : ""}`,
+                          position: "top",
+                          fill: "#b91c1c",
+                          fontSize: 11,
+                          angle: 0,
+                        }}
                       />
                     ) : null}
                   </LineChart>
