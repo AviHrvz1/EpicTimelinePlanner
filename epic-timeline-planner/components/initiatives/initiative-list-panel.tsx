@@ -132,7 +132,7 @@ function IconFilterSelect<T extends string>({
     >
       <summary
         className={cn(
-          "flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
+          "flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[13px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
           disabled ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50 focus:ring-2 focus:ring-ring/40",
         )}
         aria-label={ariaLabel}
@@ -165,7 +165,7 @@ function IconFilterSelect<T extends string>({
             }}
             disabled={disabled}
             className={cn(
-              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
               disabled && "cursor-not-allowed opacity-60 hover:bg-transparent",
               (isAllSelected ? opt.value === allValue : values.includes(opt.value)) && "bg-slate-100 text-slate-900",
             )}

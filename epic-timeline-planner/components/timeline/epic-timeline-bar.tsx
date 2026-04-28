@@ -154,6 +154,7 @@ type EpicPlanTimelineBarProps = {
   onUnschedule?: () => void;
   emphasizeFlash?: boolean;
   emphasizeTick?: number;
+  compact?: boolean;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -170,6 +171,7 @@ export function EpicPlanTimelineBar({
   onUnschedule,
   emphasizeFlash = false,
   emphasizeTick = 0,
+  compact = false,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const dragData = {
@@ -212,7 +214,8 @@ export function EpicPlanTimelineBar({
       </div>
       <div
         className={cn(
-          "relative z-10 flex h-9 w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md text-[13px] font-semibold text-white active:cursor-grabbing",
+          "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-semibold text-white active:cursor-grabbing",
+          compact ? "h-8 text-[13px]" : "h-9 text-[13px]",
           emphasizeFlash
             ? "ring-1 ring-white/20"
             : "shadow-lg ring-1 ring-black/15",
@@ -244,7 +247,8 @@ export function EpicPlanTimelineBar({
         ) : null}
         <span
           className={cn(
-            "relative z-10 flex min-w-0 flex-1 items-center gap-1 px-3 text-left antialiased",
+            "relative z-10 flex min-w-0 flex-1 items-center gap-1 text-left antialiased",
+            compact ? "px-2" : "px-3",
             emphasizeFlash && "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]",
           )}
         >
@@ -254,7 +258,7 @@ export function EpicPlanTimelineBar({
           <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
-      <div className="mt-0.5 flex items-center gap-1.5 px-2">
+      <div className={cn("flex items-center gap-1.5 px-2", compact ? "mt-0.25" : "mt-0.5")}>
         <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"

@@ -1192,7 +1192,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       setFocusedQuarterLabel(q);
     }
     const quarterTabRaw = params.get("quarterTab");
-    if (quarterTabRaw === "gantt" || quarterTabRaw === "status" || quarterTabRaw === "capacity" || quarterTabRaw === "insights") {
+    if (quarterTabRaw === "gantt" || quarterTabRaw === "capacity" || quarterTabRaw === "insights") {
       setActiveQuarterViewTab(quarterTabRaw);
     }
     const monthRaw = params.get("month");

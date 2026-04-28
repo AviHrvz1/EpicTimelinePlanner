@@ -1,12 +1,11 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { Activity, BarChart3, ChevronDown, ChevronRight, ClipboardList, Map as MapIcon, Thermometer, Users } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, ChevronDown, ChevronRight, ClipboardList, Flag, Map as MapIcon, Thermometer, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
-import { QuarterStatus } from "@/components/timeline/quarter-status";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
@@ -443,7 +442,7 @@ export type MonthPlanSurfaceTab =
   | "sprint-capacity"
   | "sprint-retrospective";
 
-export type QuarterSurfaceTab = "gantt" | "status" | "capacity" | "insights";
+export type QuarterSurfaceTab = "gantt" | "capacity" | "insights";
 
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
@@ -518,6 +517,20 @@ const QUARTER_PROGRESS_STEPS: Record<string, number> = {
   Q3: 3,
   Q4: 4,
 };
+const FULL_MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 
 function QuarterYearProgressIcon({
   quarterLabel,
@@ -604,9 +617,9 @@ function MonthEpicDropArea({
     <div
       ref={setNodeRef}
       className={cn(
-        "relative isolate flex min-h-0 flex-1 flex-col rounded-xl border border-slate-100/90 transition ring-1",
+        "relative isolate flex min-h-0 flex-1 flex-col rounded-xl transition ring-1",
         isOver
-          ? "border-primary/35 bg-primary/10 ring-primary/20"
+          ? "bg-primary/10 ring-primary/20"
           : "bg-slate-50/35 ring-slate-100/80",
         className,
       )}
@@ -1235,7 +1248,7 @@ export function TimelineGrid({
   /** Today line over initiative lanes (sprint resolution). */
   const roadmapLaneTodayLeft = useMemo(() => {
     if (activeMonth != null) return null;
-    if (focusedQuarter && quarterViewTab === "status") return null;
+    if (focusedQuarter && quarterViewTab !== "gantt") return null;
     return focusedQuarter
       ? todayLeftPercentInQuarterSprints(currentYear, focusedQuarter.months)
       : todayLeftPercentInYearSprints(currentYear);
@@ -1422,7 +1435,7 @@ export function TimelineGrid({
         onFocusedQuarterChange(focusedQuarter.label);
       },
     });
-    if (quarterViewTab === "status" || quarterViewTab === "insights") {
+    if (quarterViewTab === "insights") {
       breadcrumbItems.push({
         label: "Insights",
         onClick: null,
@@ -1838,7 +1851,7 @@ export function TimelineGrid({
           <div className="flex items-center gap-2" />
         )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-scroll overscroll-y-contain [scrollbar-gutter:stable]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
       {activeMonth ? (
         <div className="relative z-30 h-0">
           <div
@@ -2098,29 +2111,6 @@ export function TimelineGrid({
             </button>
             <button
               type="button"
-              onClick={() => setQuarterViewTab("status")}
-              title="Quarter Status"
-              className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
-                quarterViewTab === "status"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-              )}
-            >
-              <BarChart3 className="size-4" aria-hidden />
-              <span className="sr-only">Quarter Status</span>
-              <span
-                aria-hidden
-                className={cn(
-                  railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
-                )}
-              >
-                Quarter Status
-              </span>
-            </button>
-            <button
-              type="button"
               onClick={() => setQuarterViewTab("insights")}
               title="Quarter Insights"
               className={cn(
@@ -2202,29 +2192,6 @@ export function TimelineGrid({
             </button>
             <button
               type="button"
-              onClick={() => setQuarterViewTab("status")}
-              title="Quarters Status"
-              className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
-                quarterViewTab === "status"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-              )}
-            >
-              <BarChart3 className="size-4" aria-hidden />
-              <span className="sr-only">Quarters Status</span>
-              <span
-                aria-hidden
-                className={cn(
-                  railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
-                )}
-              >
-                Quarters Status
-              </span>
-            </button>
-            <button
-              type="button"
               onClick={() => setQuarterViewTab("insights")}
               title="All Quarters Insights"
               className={cn(
@@ -2273,7 +2240,7 @@ export function TimelineGrid({
         </div>
       ) : null}
       {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-        <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
+        <div className={cn("mb-2 w-full overflow-x-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
           <div className="grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
@@ -2292,7 +2259,7 @@ export function TimelineGrid({
               style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
             >
               <QuarterYearProgressIcon quarterLabel={quarter.label} />
-              <span>{quarter.label}</span>
+              <span>{focusedQuarter ? quarter.label : `Quarter ${quarter.label.replace("Q", "")}`}</span>
             </button>
           ))}
           </div>
@@ -2344,14 +2311,15 @@ export function TimelineGrid({
                         className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2 py-2.5 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
                         <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-[13px] font-semibold leading-tight text-slate-800">
+                          <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-slate-800">
+                            <Flag className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))}
                           </span>
-                          <span className="max-w-full px-0.5 text-[12px] font-medium leading-tight text-slate-500">
+                          <span className="max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
                             ({sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})
                           </span>
                         </div>
-                        <div className="flex w-full min-w-0 gap-1">
+                        <div className="mt-1 flex w-full min-w-0 gap-1">
                           {sprintDaysWithWeekday(currentYear, activeMonth, 1).map((dayLabel) => (
                             <span
                               key={dayLabel.key}
@@ -2377,14 +2345,15 @@ export function TimelineGrid({
                         className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2 py-2.5 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                       >
                         <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-[13px] font-semibold leading-tight text-slate-800">
+                          <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-slate-800">
+                            <Flag className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))}
                           </span>
-                          <span className="max-w-full px-0.5 text-[12px] font-medium leading-tight text-slate-500">
+                          <span className="max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
                             ({sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})
                           </span>
                         </div>
-                        <div className="flex w-full min-w-0 gap-1">
+                        <div className="mt-1 flex w-full min-w-0 gap-1">
                           {sprintDaysWithWeekday(currentYear, activeMonth, 2).map((dayLabel) => (
                             <span
                               key={dayLabel.key}
@@ -2568,7 +2537,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           className={cn(
-                            "w-full rounded-xl py-2.5 text-center text-[13px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
+                            "flex w-full items-center justify-center gap-1.5 rounded-xl py-1.5 text-center text-[15px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
                             activeMonth === month
                               ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
                               : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
@@ -2580,9 +2549,10 @@ export function TimelineGrid({
                             onMonthPlanTabChange?.("epic-gantt");
                           }}
                         >
-                          {MONTHS[month - 1]}
+                          <CalendarDays className="size-4 shrink-0 opacity-80" aria-hidden />
+                          <span>{FULL_MONTHS[month - 1]}</span>
                         </button>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="mt-3.5 grid grid-cols-2 gap-2">
                           <button
                             type="button"
                             title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateWeekdayRangeText(currentYear, month, 1)})`}
@@ -2591,7 +2561,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex min-h-[3.35rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                            className="flex min-h-[2.9rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-1 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                           >
                             <span className="text-[13px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
@@ -2608,7 +2578,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex min-h-[3.35rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-2 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                            className="flex min-h-[2.9rem] flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200/80 bg-white px-1 py-1 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
                           >
                             <span className="text-[13px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
@@ -2676,7 +2646,7 @@ export function TimelineGrid({
                       bar along the timeline.
                     </p>
                   ) : (
-                    <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
+                    <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-0.5">
                       {quarterRoadmapEpicRows.map((group, idx) => (
                         <div
                           key={`q-epic-row-${group.timelineRow}`}
@@ -2722,7 +2692,7 @@ export function TimelineGrid({
                                     if (node) barElsRef.current.set(row.epic.id, node);
                                     else barElsRef.current.delete(row.epic.id);
                                   }}
-                                  className={cn("relative min-w-0 rounded-lg pt-0.5 pb-2", rz ? "z-0 opacity-70" : "z-20")}
+                                  className={cn("relative min-w-0 rounded-lg pt-0.5 pb-0", rz ? "z-0 opacity-70" : "z-20")}
                                   style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                                 >
                                   <EpicPlanTimelineBar
@@ -2774,7 +2744,7 @@ export function TimelineGrid({
               </div>
             </div>
           ) : !focusedQuarter && quarterViewTab === "gantt" ? (
-            <div className={cn("mb-4 w-full", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
+            <div className={cn("mb-4 w-full overflow-x-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
               <div className="grid min-w-0 grid-cols-4 gap-2">
               {QUARTERS.map((quarter) => (
                 <section
@@ -2787,7 +2757,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           className={cn(
-                            "w-full rounded-lg py-2 text-center text-[14px] font-semibold shadow-sm ring-1 ring-black/5 transition hover:-translate-y-px hover:shadow-md",
+                            "w-full rounded-lg py-1 text-center text-[14px] font-semibold shadow-sm ring-1 ring-black/5 transition hover:-translate-y-px hover:shadow-md",
                             monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
                           )}
                           onClick={() => {
@@ -2798,7 +2768,7 @@ export function TimelineGrid({
                         >
                           {MONTHS[month - 1]}
                         </button>
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="relative top-0.5 grid grid-cols-2 gap-1.5">
                           <button
                             type="button"
                             title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 1))}
@@ -2807,9 +2777,14 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                            className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-slate-100 hover:text-slate-800"
                           >
-                            {sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 1))}
+                            <span className="inline-flex items-baseline gap-0.5 leading-none">
+                              <span className="text-[12px] font-normal">S</span>
+                              <span className="text-[10px] font-medium">
+                                {globalSprintFromMonthLane(month, 1)}
+                              </span>
+                            </span>
                           </button>
                           <button
                             type="button"
@@ -2819,9 +2794,14 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-white hover:text-slate-800"
+                            className="flex min-h-[1.625rem] items-center justify-center rounded bg-white/75 px-0.5 text-[11px] font-semibold leading-tight text-slate-600 ring-1 ring-slate-200/80 transition hover:bg-slate-100 hover:text-slate-800"
                           >
-                            {sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
+                            <span className="inline-flex items-baseline gap-0.5 leading-none">
+                              <span className="text-[12px] font-normal">S</span>
+                              <span className="text-[10px] font-medium">
+                                {globalSprintFromMonthLane(month, 2)}
+                              </span>
+                            </span>
                           </button>
                         </div>
                         <MonthDropCell month={month} />
@@ -2877,11 +2857,7 @@ export function TimelineGrid({
             </label>
           </div>
         ) : null}
-        {activeMonth ? null : !focusedQuarter && quarterViewTab === "status" ? (
-          <QuarterStatus initiatives={initiatives} quarterMonths={MONTHS.map((_, i) => i + 1)} planYear={currentYear} />
-        ) : activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
-          <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
-        ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "insights" ? (
+        {activeMonth ? null : !focusedQuarter && quarterViewTab === "insights" ? (
           <MonthAnalytics
             initiatives={initiatives}
             month={1}
@@ -2953,9 +2929,9 @@ export function TimelineGrid({
             </p>
           )
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (
-          <div className="relative w-full">
+          <div className="relative w-full overflow-x-hidden">
             <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
-            <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
+            <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-1.5">
               {yearRoadmapInitiativeRows.map((group, idx) => (
                 <div
                   key={`year-init-row-${group.timelineRow}`}
@@ -2994,7 +2970,7 @@ export function TimelineGrid({
             </div>
           </div>
         ) : (
-          <div className="relative w-full">
+          <div className="relative w-full overflow-x-hidden">
             <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
             <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 space-y-2">
               {yearRoadmapEpicRows.map((group, idx) => (
@@ -3041,7 +3017,7 @@ export function TimelineGrid({
                             if (node) barElsRef.current.set(row.epic.id, node);
                             else barElsRef.current.delete(row.epic.id);
                           }}
-                          className={cn("relative min-w-0 rounded-lg pt-0.5 pb-2", rz ? "z-0 opacity-70" : "z-20")}
+                          className={cn("relative min-w-0 rounded-lg pt-0.5 pb-1", rz ? "z-0 opacity-70" : "z-20")}
                           style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                         >
                           <EpicPlanTimelineBar
@@ -3049,6 +3025,7 @@ export function TimelineGrid({
                             title={row.epic.title}
                             icon={row.epic.icon}
                             hideIcon
+                            compact
                             color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
                             progressPercent={completionPercent}
                             progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
