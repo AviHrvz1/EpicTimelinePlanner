@@ -1657,6 +1657,16 @@ export function TimelineGrid({
   );
   const selectedSprintTeamOption =
     sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
+  const focusedQuarterDisplayName = useMemo(() => {
+    if (!focusedQuarter) return "Quarter";
+    const shortQuarterMatch = focusedQuarter.label.match(/^Q([1-4])$/i);
+    if (shortQuarterMatch) return `Quarter-${shortQuarterMatch[1]}`;
+    return focusedQuarter.label;
+  }, [focusedQuarter]);
+  const monthInsightsLabel =
+    activeMonth != null ? `${FULL_MONTHS[activeMonth - 1]}-Insights` : "Month-Insights";
+  const quarterInsightsLabel = focusedQuarter ? `${focusedQuarterDisplayName} Insights` : "Quarter Insights";
+  const quarterCapacityLabel = focusedQuarter ? `${focusedQuarterDisplayName} Capacity` : "Quarter Capacity";
   useEffect(() => {
     if (!isSprintTeamMenuOpen) return;
     const handlePointerDown = (event: PointerEvent) => {
@@ -2210,7 +2220,7 @@ export function TimelineGrid({
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-status")}
-                  title="Month Insights"
+                  title={monthInsightsLabel}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "month-status"
@@ -2219,7 +2229,7 @@ export function TimelineGrid({
                   )}
                 >
                   <BarChart3 className="size-4" aria-hidden />
-                  <span className="sr-only">Month Insights</span>
+                  <span className="sr-only">{monthInsightsLabel}</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -2227,7 +2237,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Month Insights
+                    {monthInsightsLabel}
                   </span>
                 </button>
               </>
@@ -2284,7 +2294,7 @@ export function TimelineGrid({
             <button
               type="button"
               onClick={() => setQuarterViewTab("insights")}
-              title="Quarter Insights"
+              title={quarterInsightsLabel}
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "insights"
@@ -2293,7 +2303,7 @@ export function TimelineGrid({
               )}
             >
               <Activity className="size-4" aria-hidden />
-              <span className="sr-only">Quarter Insights</span>
+              <span className="sr-only">{quarterInsightsLabel}</span>
               <span
                 aria-hidden
                 className={cn(
@@ -2301,13 +2311,13 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                Quarter Insights
+                {quarterInsightsLabel}
               </span>
             </button>
             <button
               type="button"
               onClick={() => setQuarterViewTab("capacity")}
-              title="Quarter Capacity"
+              title={quarterCapacityLabel}
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "capacity"
@@ -2316,7 +2326,7 @@ export function TimelineGrid({
               )}
             >
               <Thermometer className="size-4" aria-hidden />
-              <span className="sr-only">Quarter Capacity</span>
+              <span className="sr-only">{quarterCapacityLabel}</span>
               <span
                 aria-hidden
                 className={cn(
@@ -2324,7 +2334,7 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                Quarter Capacity
+                {quarterCapacityLabel}
               </span>
             </button>
           </div>
