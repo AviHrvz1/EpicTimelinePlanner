@@ -2343,7 +2343,7 @@ export function TimelineGrid({
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 1), null);
                         }}
-                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2 py-2.5 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-2 py-2.5 text-center shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99]"
                       >
                         <div className="flex flex-col items-center gap-0.5">
                           <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-slate-800">
@@ -2377,7 +2377,7 @@ export function TimelineGrid({
                           if (isPostDragClickSuppressed()) return;
                           onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 2), null);
                         }}
-                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2 py-2.5 text-center shadow-sm ring-1 ring-black/[0.04] transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99]"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-2 py-2.5 text-center shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99]"
                       >
                         <div className="flex flex-col items-center gap-0.5">
                           <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-slate-800">
@@ -2796,7 +2796,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           className={cn(
-                            "w-full rounded-lg py-1 text-center text-[14px] font-semibold shadow-sm ring-1 ring-black/5 transition hover:-translate-y-px hover:shadow-md",
+                            "w-full rounded-lg py-1.5 text-center text-[14px] font-semibold shadow-sm ring-1 ring-black/5 transition hover:-translate-y-px hover:shadow-md",
                             monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
                           )}
                           onClick={() => {
