@@ -1414,10 +1414,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   useEffect(() => {
     // Insights surfaces default to a focused analytics layout.
-    const insightsSurface =
-      activeMonthPlanTab === "month-status" ||
-      activeMonthPlanTab === "sprint-status" ||
-      (activeTimelineMonth == null && activeQuarterViewTab === "insights");
+    const monthOrSprintInsightsSurface =
+      activeTimelineMonth != null &&
+      (activeMonthPlanTab === "month-status" || activeMonthPlanTab === "sprint-status");
+    const quarterInsightsSurface = activeTimelineMonth == null && activeQuarterViewTab === "insights";
+    const insightsSurface = monthOrSprintInsightsSurface || quarterInsightsSurface;
     if (insightsSurface) {
       setIsLeftPanelHidden(true);
       return;

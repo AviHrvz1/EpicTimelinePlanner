@@ -420,7 +420,9 @@ export function MonthAnalytics({
   const scopeStartMonth = scopeMonths[0] ?? month;
   const scopeEndMonth = scopeMonths[scopeMonths.length - 1] ?? month;
   const scopeLabel = periodLabel ?? (scopeMonths.length === 1 ? "Month" : scopeMonths.length === 12 ? "Year" : "Quarter");
-  const isQuarterInsights = scopeMonths.length === 3;
+  const isMultiPeriodInsights = scopeMonths.length > 1;
+  // Keep status pie/drilldown consistent across Month, Quarter, and All Quarters insights.
+  const isQuarterInsights = true;
   const monthEpics = useMemo(
     () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamId),
     [initiatives, scopeMonths, filterEpicTeamId],
@@ -1327,7 +1329,12 @@ export function MonthAnalytics({
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+        <h3
+          className={cn(
+            "mb-2 inline-flex shrink-0 items-center gap-1.5 font-semibold text-slate-800",
+            isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
+          )}
+        >
           <PieChartIcon className="size-4 text-slate-600" />
           {isQuarterInsights ? "Epic Statuses" : "User Stories Status"}
           {selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
@@ -1501,21 +1508,27 @@ export function MonthAnalytics({
               <button
                 type="button"
                 onClick={() => openStatusDrilldown("All")}
-                className="mb-0.5 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800"
+                className={cn(
+                  "mb-0.5 w-full rounded-md px-1 py-1 text-left font-semibold text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                )}
               >
                 <span className="inline-flex items-center gap-1.5">
                   <Layers className="size-3.5" aria-hidden />
                   All
                 </span>
               </button>
-              {pieLegendItems.map((slice) => {
+              {pieData.map((slice) => {
                 const pct = pieTotal > 0 ? Math.round((slice.value / pieTotal) * 100) : 0;
                 return (
                   <button
                     key={slice.name}
                     type="button"
                     onClick={() => openStatusDrilldown(slice.name)}
-                    className="mb-0.5 flex w-full items-center justify-between gap-1.5 rounded-md px-1 py-1 text-left text-[12px] text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-700"
+                    className={cn(
+                      "mb-0.5 flex w-full items-center justify-between gap-1.5 rounded-md px-1 py-1 text-left text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-700",
+                      isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                    )}
                   >
                     <span className="inline-flex items-center gap-1.5 font-medium">
                       <span
@@ -1524,7 +1537,7 @@ export function MonthAnalytics({
                       />
                       {slice.name}
                     </span>
-                    <span className="text-[12px] font-semibold text-slate-500">
+                    <span className={cn("font-semibold text-slate-500", isMultiPeriodInsights ? "text-[13px]" : "text-[12px]")}>
                       {slice.value} <span className="text-slate-500">({pct}%)</span>
                     </span>
                   </button>
@@ -1537,7 +1550,12 @@ export function MonthAnalytics({
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
         <div className="mb-6 flex shrink-0 items-center justify-between gap-2">
-          <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+          <h3
+            className={cn(
+              "ml-[48px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
+              isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
+            )}
+          >
             <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
@@ -1708,7 +1726,8 @@ export function MonthAnalytics({
                 type="button"
                 onClick={showAllBurndownKeys}
                 className={cn(
-                  "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                  "mb-1 w-full rounded-md px-1 py-1 text-left font-semibold transition",
+                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                   allBurndownKeysSelected
                     ? "text-slate-900 hover:bg-slate-200/70"
                     : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
@@ -1727,7 +1746,8 @@ export function MonthAnalytics({
                     type="button"
                     onClick={() => toggleBurndownKey(item.key)}
                     className={cn(
-                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
+                      isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                       on
                         ? "text-slate-900 hover:bg-slate-200/70"
                         : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
@@ -1777,7 +1797,12 @@ export function MonthAnalytics({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
         <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
-          <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+          <h3
+            className={cn(
+              "inline-flex items-center gap-1.5 font-semibold text-slate-800",
+              isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
+            )}
+          >
             <ChartNoAxesCombined className="size-4 text-slate-600" />
             Workload Balance
           </h3>
@@ -1967,7 +1992,8 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => toggleWorkloadStatusFilter("all")}
                 className={cn(
-                  "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                  "mb-1 w-full rounded-md px-1 py-1 text-left font-semibold transition",
+                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                   workloadStatusFilters.includes("all")
                     ? "text-slate-900 hover:bg-slate-200/70"
                     : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
@@ -1986,7 +2012,8 @@ export function MonthAnalytics({
                     type="button"
                     onClick={() => toggleWorkloadStatusFilter(s.key)}
                     className={cn(
-                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
+                      isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                       on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                     )}
                   >
@@ -2002,7 +2029,8 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => toggleWorkloadStatusFilter("unassigned")}
                 className={cn(
-                  "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                  "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
+                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                   selectedShowUnassigned ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                 )}
               >
@@ -2119,7 +2147,12 @@ export function MonthAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
-        <h3 className="mb-2 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+        <h3
+          className={cn(
+            "ml-[48px] inline-flex shrink-0 items-center gap-1.5 font-semibold text-slate-800",
+            isMultiPeriodInsights ? "mb-3 text-[16px]" : "mb-2 text-[15px]",
+          )}
+        >
           <Activity className="size-4 text-slate-600" />
           Cumulative flow
         </h3>
@@ -2183,7 +2216,8 @@ export function MonthAnalytics({
               type="button"
               onClick={showAllCfdKeys}
               className={cn(
-                "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-semibold transition",
+                "mb-1 w-full rounded-md px-1 py-1 text-left font-semibold transition",
+                isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                 allCfdKeysSelected
                   ? "text-slate-900 hover:bg-slate-200/70"
                   : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
@@ -2202,7 +2236,8 @@ export function MonthAnalytics({
                   type="button"
                   onClick={() => toggleCfdKey(key)}
                   className={cn(
-                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] transition",
+                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
+                    isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                     on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                   )}
                 >

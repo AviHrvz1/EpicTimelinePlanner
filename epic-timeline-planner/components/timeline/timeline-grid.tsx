@@ -2315,6 +2315,7 @@ export function TimelineGrid({
         <div
           className={cn(
             "mb-4 rounded-2xl p-1.5 shadow-lg ring-1",
+            monthPlanTab === "sprint-kanban" && "flex min-h-0 flex-1 flex-col",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
             activeMonthQuarterLabel && quarterPanelTone[activeMonthQuarterLabel]
               ? quarterPanelTone[activeMonthQuarterLabel]
@@ -2324,7 +2325,7 @@ export function TimelineGrid({
           <div
             className={cn(
               "flex flex-col rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
-              monthPlanTab === "sprint-kanban" ? "min-h-0 overflow-visible" : "overflow-hidden",
+              monthPlanTab === "sprint-kanban" ? "min-h-0 flex-1 overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||
               monthPlanTab === "month-capacity" ||
               monthPlanTab === "sprint-retrospective"
@@ -2504,7 +2505,7 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
-              <div className="px-3 pb-3 pt-1.5 sm:px-5 sm:pb-5 sm:pt-2">
+              <div className="flex min-h-0 flex-1 px-3 pb-3 pt-1.5 sm:px-5 sm:pb-5 sm:pt-2">
                 <SprintKanbanBoard
                   initiatives={initiatives}
                   month={activeMonth}
@@ -2803,7 +2804,7 @@ export function TimelineGrid({
                 >
                   <div className="grid grid-cols-3 gap-2">
                     {quarter.months.map((month) => (
-                      <div key={month} className="space-y-2">
+                      <div key={month} className="space-y-3">
                         <button
                           type="button"
                           className={cn(
