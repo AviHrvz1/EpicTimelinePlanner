@@ -318,10 +318,13 @@ function collectMonthStories(
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
+    if (initiative.status !== "scheduled") continue;
     for (const epic of initiative.epics ?? []) {
       if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+      const startMonth = epic.planStartMonth ?? initiative.startMonth;
+      const endMonth = epic.planEndMonth ?? initiative.endMonth;
+      if (startMonth == null || endMonth == null) continue;
+      if (endMonth < month || startMonth > month) continue;
       rows.push(...(epic.userStories ?? []));
     }
   }
@@ -335,13 +338,13 @@ function collectMonthEpics(
 ) {
   const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
+    if (initiative.status !== "scheduled") continue;
     for (const epic of initiative.epics ?? []) {
       if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
-      if (epic.planStartMonth != null && epic.planEndMonth != null && (epic.planEndMonth < month || epic.planStartMonth > month)) {
-        continue;
-      }
+      const startMonth = epic.planStartMonth ?? initiative.startMonth;
+      const endMonth = epic.planEndMonth ?? initiative.endMonth;
+      if (startMonth == null || endMonth == null) continue;
+      if (endMonth < month || startMonth > month) continue;
       rows.push({ epic, initiative });
     }
   }
@@ -878,7 +881,7 @@ export function MonthAnalytics({
       ];
     }
     return [
-      ...monthBurndownEpics.slice(0, 6).map((epic, idx) => ({
+      ...monthBurndownEpics.map((epic, idx) => ({
         key: epic.id,
         label: epic.title,
         color: LINE_PALETTE[idx % LINE_PALETTE.length],
@@ -1543,12 +1546,10 @@ export function MonthAnalytics({
                   </button>
                 );
               })}
-            {burndownFocusedEpicOption ? (
+              {burndownFocusedEpicOption ? (
                 <p className="text-[11px] text-slate-500">
                   Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
                 </p>
-              ) : monthBurndownEpics.length > 6 ? (
-                <p className="text-[11px] text-slate-500">+{monthBurndownEpics.length - 6} more epics</p>
               ) : null}
             </div>
             <button
