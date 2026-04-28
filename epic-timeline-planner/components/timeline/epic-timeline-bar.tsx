@@ -67,6 +67,7 @@ type InitiativeTimelineBarProps = {
   /** Brief neon highlight (left accordion → Gantt); `emphasizeTick` restarts CSS when re-triggered. */
   emphasizeFlash?: boolean;
   emphasizeTick?: number;
+  showProgress?: boolean;
 };
 
 export function InitiativeTimelineBar({
@@ -80,6 +81,7 @@ export function InitiativeTimelineBar({
   onClick,
   emphasizeFlash = false,
   emphasizeTick = 0,
+  showProgress = true,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
 
@@ -122,7 +124,13 @@ export function InitiativeTimelineBar({
           <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
-      <div className="mt-0.5 flex items-center gap-1.5 px-2">
+      <div
+        className={cn(
+          "mt-0.5 flex items-center gap-1.5 px-2",
+          showProgress ? "visible" : "invisible pointer-events-none",
+        )}
+        aria-hidden={!showProgress}
+      >
         <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
@@ -155,6 +163,7 @@ type EpicPlanTimelineBarProps = {
   emphasizeFlash?: boolean;
   emphasizeTick?: number;
   compact?: boolean;
+  showProgress?: boolean;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -172,6 +181,7 @@ export function EpicPlanTimelineBar({
   emphasizeFlash = false,
   emphasizeTick = 0,
   compact = false,
+  showProgress = true,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const dragData = {
@@ -258,7 +268,14 @@ export function EpicPlanTimelineBar({
           <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
-      <div className={cn("flex items-center gap-1.5 px-2", compact ? "mt-0.25" : "mt-0.5")}>
+      <div
+        className={cn(
+          "flex items-center gap-1.5 px-2",
+          compact ? "mt-0.25" : "mt-0.5",
+          showProgress ? "visible" : "invisible pointer-events-none",
+        )}
+        aria-hidden={!showProgress}
+      >
         <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"

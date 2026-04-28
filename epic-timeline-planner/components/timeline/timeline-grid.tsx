@@ -60,6 +60,7 @@ type GanttLaneRowProps = {
   emphasize?: boolean;
   /** Bumps when emphasis is re-triggered so the CSS animation restarts. */
   emphasizeTick?: number;
+  showProgress?: boolean;
 };
 
 function GanttLaneRow({
@@ -75,6 +76,7 @@ function GanttLaneRow({
   ganttLaneSortIndex,
   emphasize = false,
   emphasizeTick = 0,
+  showProgress = true,
 }: GanttLaneRowProps) {
   const resizeEdgeClass =
     "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
@@ -115,6 +117,7 @@ function GanttLaneRow({
               isResizing={Boolean(rz)}
               emphasizeFlash={emphasize}
               emphasizeTick={emphasizeTick}
+              showProgress={showProgress}
               onClick={() => onOpenInitiative(initiative.id)}
             />
             {onResizeInitiativeRange ? (
@@ -167,6 +170,7 @@ type EpicGanttLaneRowProps = {
   ganttLaneSortIndex: number;
   emphasize?: boolean;
   emphasizeTick?: number;
+  showProgress?: boolean;
 };
 
 function formatDayMonthYearShort(date: Date): string {
@@ -331,6 +335,7 @@ function EpicGanttLaneRow({
   ganttLaneSortIndex,
   emphasize = false,
   emphasizeTick = 0,
+  showProgress = true,
 }: EpicGanttLaneRowProps) {
   const stories = epic.userStories ?? [];
   const totalStories = stories.length;
@@ -387,6 +392,7 @@ function EpicGanttLaneRow({
             }
             emphasizeFlash={emphasize}
             emphasizeTick={emphasizeTick}
+            showProgress={showProgress}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
           />
@@ -400,10 +406,12 @@ function MonthInitiativeGanttLaneRow({
   initiative,
   onOpenInitiative,
   ganttLaneSortIndex,
+  showProgress = true,
 }: {
   initiative: InitiativeItem;
   onOpenInitiative: (initiativeId: string) => void;
   ganttLaneSortIndex: number;
+  showProgress?: boolean;
 }) {
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
@@ -425,6 +433,7 @@ function MonthInitiativeGanttLaneRow({
             color={initiative.color}
             progressPercent={completionPercent}
             progressLabel={totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"}
+            showProgress={showProgress}
             onClick={() => onOpenInitiative(initiative.id)}
           />
         </div>
@@ -681,6 +690,7 @@ export function TimelineGrid({
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
+  const [showRoadmapProgress, setShowRoadmapProgress] = useState(false);
   const [quarterViewTabState, setQuarterViewTabState] = useState<QuarterSurfaceTab>("gantt");
   const quarterViewTab = quarterViewTabExternal ?? quarterViewTabState;
   const setQuarterViewTab = useCallback((tab: QuarterSurfaceTab) => {
@@ -1650,7 +1660,7 @@ export function TimelineGrid({
               <div />
             )}
             {summaryBadgesForScope ? (
-              <div className="flex flex-wrap items-center justify-end gap-2 pr-3">
+              <div className="flex flex-wrap items-center justify-end gap-3 pr-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -1720,12 +1730,24 @@ export function TimelineGrid({
                 <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
                   {summaryBadgesForScope.totalStories} User Stories
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRoadmapProgress((v) => !v)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    showRoadmapProgress
+                      ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  Progress
+                </button>
               </div>
             ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="flex w-full flex-wrap items-center gap-2 pr-3">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+          <div className="flex w-full flex-wrap items-center gap-3 pr-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-3">
               {sprintKanbanSummaryStats ? (
                 <>
                   <button
@@ -1766,6 +1788,18 @@ export function TimelineGrid({
                   <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
                     {sprintKanbanSummaryStats.storyTotal} User Stories
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRoadmapProgress((v) => !v)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      showRoadmapProgress
+                        ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    Progress
+                  </button>
                 </>
               ) : summaryBadgesForScope ? (
                 <>
@@ -1838,6 +1872,18 @@ export function TimelineGrid({
                   <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
                     {summaryBadgesForScope.totalStories} User Stories
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRoadmapProgress((v) => !v)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      showRoadmapProgress
+                        ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    Progress
+                  </button>
                 </>
               ) : null}
             </div>
@@ -2402,6 +2448,7 @@ export function TimelineGrid({
                               initiative={initiative}
                               onOpenInitiative={onOpenInitiative}
                               ganttLaneSortIndex={rowIndex}
+                              showProgress={showRoadmapProgress}
                             />
                           ))
                         ) : (
@@ -2433,6 +2480,7 @@ export function TimelineGrid({
                                 ganttLaneSortIndex={rowIndex}
                                 emphasize={emphasize}
                                 emphasizeTick={emphasizeTick}
+                                showProgress={showRoadmapProgress}
                               />
                             );
                           })
@@ -2630,6 +2678,7 @@ export function TimelineGrid({
                                       color={row.initiative.color}
                                       progressPercent={completionPercent}
                                       progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                                      showProgress={showRoadmapProgress}
                                       onClick={() => onOpenInitiative(row.initiative.id)}
                                     />
                                   </div>
@@ -2705,6 +2754,7 @@ export function TimelineGrid({
                                     isResizing={Boolean(rz)}
                                     emphasizeFlash={emphasizeFlash}
                                     emphasizeTick={emphasizeTick}
+                                    showProgress={showRoadmapProgress}
                                     onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                     onClick={() => onOpenEpic(row.epic.id)}
                                   />
@@ -2959,6 +3009,7 @@ export function TimelineGrid({
                             color={row.initiative.color}
                             progressPercent={completionPercent}
                             progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                            showProgress={showRoadmapProgress}
                             onClick={() => onOpenInitiative(row.initiative.id)}
                           />
                         </div>
@@ -3032,6 +3083,7 @@ export function TimelineGrid({
                             isResizing={Boolean(rz)}
                             emphasizeFlash={emphasizeFlash}
                             emphasizeTick={emphasizeTick}
+                            showProgress={showRoadmapProgress}
                             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                             onClick={() => onOpenEpic(row.epic.id)}
                           />
