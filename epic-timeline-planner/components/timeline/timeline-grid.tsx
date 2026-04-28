@@ -1667,6 +1667,10 @@ export function TimelineGrid({
     activeMonth != null ? `${FULL_MONTHS[activeMonth - 1]}-Insights` : "Month-Insights";
   const quarterInsightsLabel = focusedQuarter ? `${focusedQuarterDisplayName} Insights` : "Quarter Insights";
   const quarterCapacityLabel = focusedQuarter ? `${focusedQuarterDisplayName} Capacity` : "Quarter Capacity";
+  const sprintInsightsLabel = (() => {
+    const sprintNumber = activeSprint ?? activeYearSprintForMonthDrill;
+    return sprintNumber != null ? `Sprint ${sprintNumber} Insights` : "Sprint Insights";
+  })();
   useEffect(() => {
     if (!isSprintTeamMenuOpen) return;
     const handlePointerDown = (event: PointerEvent) => {
@@ -2098,7 +2102,7 @@ export function TimelineGrid({
                     onMonthPlanTabChange?.("sprint-status");
                     setActiveSprintTab("status");
                   }}
-                  title="Sprint Insights"
+                  title={sprintInsightsLabel}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-status"
@@ -2107,7 +2111,7 @@ export function TimelineGrid({
                   )}
                 >
                   <BarChart3 className="size-4" aria-hidden />
-                  <span className="sr-only">Sprint Insights</span>
+                  <span className="sr-only">{sprintInsightsLabel}</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -2115,7 +2119,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Sprint Insights
+                    {sprintInsightsLabel}
                   </span>
                 </button>
                 <button
@@ -2495,7 +2499,11 @@ export function TimelineGrid({
                         title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))} board (${sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})`}
                         onClick={() => {
                           if (isPostDragClickSuppressed()) return;
-                          onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 1), null);
+                          const targetSprint = globalSprintFromMonthLane(activeMonth, 1);
+                          setActiveSprint(targetSprint);
+                          setActiveSprintTab("kanban");
+                          onMonthPlanTabChange?.("sprint-kanban");
+                          onEnterSprintStoryBoard?.(targetSprint, null);
                         }}
                         className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-2 py-2.5 text-center shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99]"
                       >
@@ -2529,7 +2537,11 @@ export function TimelineGrid({
                         title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))} board (${sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})`}
                         onClick={() => {
                           if (isPostDragClickSuppressed()) return;
-                          onEnterSprintStoryBoard?.(globalSprintFromMonthLane(activeMonth, 2), null);
+                          const targetSprint = globalSprintFromMonthLane(activeMonth, 2);
+                          setActiveSprint(targetSprint);
+                          setActiveSprintTab("kanban");
+                          onMonthPlanTabChange?.("sprint-kanban");
+                          onEnterSprintStoryBoard?.(targetSprint, null);
                         }}
                         className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-2 py-2.5 text-center shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99]"
                       >
