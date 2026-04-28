@@ -1371,7 +1371,7 @@ export function EpicFormDialog({
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-sm font-normal text-slate-700">Assignee</p>
                   <input
-                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
+                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
                     placeholder="e.g. Avi"
                     value={assignee}
                     onChange={(event) => setAssignee(event.target.value)}
@@ -1380,7 +1380,7 @@ export function EpicFormDialog({
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-sm font-normal text-slate-700">Parent</p>
                   <select
-                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40"
+                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
                     value={initiativeId}
                     onChange={(event) => {
                       const next = event.target.value;
@@ -1409,7 +1409,7 @@ export function EpicFormDialog({
                   <p className="text-sm font-normal text-slate-700">Team</p>
                   {showTeamSelect ? (
                     <select
-                      className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
+                      className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
                       value={teamDraft}
                       onChange={(event) => setTeamDraft(event.target.value)}
                     >
@@ -1425,7 +1425,7 @@ export function EpicFormDialog({
                       <input
                         value={MONTH_TEAM_COLUMNS.find((t) => t.id === persistedTeam)?.label ?? persistedTeam ?? "Not set"}
                         readOnly
-                        className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] text-slate-700"
+                        className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[13px] text-slate-700"
                       />
                       <Button
                         type="button"
@@ -1449,7 +1449,7 @@ export function EpicFormDialog({
                     min={0}
                     max={5000}
                     step={1}
-                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
                     placeholder="e.g. 40"
                     value={originalEstimateDaysDraft}
                     onChange={(event) => setOriginalEstimateDaysDraft(event.target.value)}
@@ -1471,7 +1471,7 @@ export function EpicFormDialog({
                   <input
                     value={totalUserStoryEstimate}
                     readOnly
-                    className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-2.5 text-[13px] font-medium text-slate-700"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[13px] font-medium text-slate-700"
                   />
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">

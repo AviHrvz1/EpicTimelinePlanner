@@ -787,7 +787,7 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Assignee</p>
-              <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800" placeholder="e.g. Avi" />
+              <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800" placeholder="e.g. Avi" />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Team</p>
@@ -795,7 +795,7 @@ export function StoryDetailsDialog({
                 value={epicTeamDraft}
                 onChange={(event) => setEpicTeamDraft(event.target.value)}
                 disabled={!epicId}
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
               >
                 <option value="">Not set</option>
                 {MONTH_TEAM_COLUMNS.map((t) => (
@@ -807,7 +807,7 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Sprint</p>
-              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-2.5 text-[13px] font-medium text-slate-800">
+              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-1.5 text-[13px] font-medium text-slate-800">
                 <option value="">Not set</option>
                 {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => (
                   <option key={i + 1} value={String(i + 1)}>{`Sprint ${i + 1}`}</option>
@@ -821,7 +821,7 @@ export function StoryDetailsDialog({
                 min={0}
                 value={estimatedDays}
                 onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
+                className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
               />
             </div>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -831,12 +831,12 @@ export function StoryDetailsDialog({
                 min={0}
                 value={daysLeft}
                 onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-6 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800"
+                className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
               />
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Priority</p>
-              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800">
+              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800">
                 <option value="">Not set</option>
                 <option value="P0">P0</option>
                 <option value="P1">P1</option>
@@ -846,7 +846,7 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Parent</p>
-              <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2.5 text-[13px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
+              <select value={epicId} onChange={(event) => setEpicId(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40" disabled={Boolean(lockParentEpicId)}>
                 <option value="">Select epic</option>
                 {initiatives.map((initiative) => (
                   <optgroup key={initiative.id} label={initiative.title}>
