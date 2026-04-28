@@ -282,45 +282,123 @@ function GanttTodayMarker({
   leftPercent,
   showBadge = true,
   badgePlacement = "above",
+  prioritizeLabel = false,
+  showArrow = true,
+  showLine = true,
   /** Bleed top/bottom past the track box so the dash meets the outer padded panel border (parent uses py-3 sm:py-4). */
   bleedToPaddedPanel,
 }: {
   leftPercent: number | null;
   showBadge?: boolean;
   badgePlacement?: TodayBadgePlacement;
+  prioritizeLabel?: boolean;
+  showArrow?: boolean;
+  showLine?: boolean;
   bleedToPaddedPanel?: boolean;
 }) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
   const x = Math.min(100, Math.max(0, leftPercent));
+  const prioritizedAbove = prioritizeLabel && badgePlacement === "above";
+  if (prioritizedAbove) {
+    return (
+      <div
+        className="pointer-events-none absolute inset-x-0 inset-y-0 z-[1000] overflow-visible [isolation:isolate]"
+        aria-hidden
+      >
+        {showBadge ? (
+          <div
+            className="absolute -top-[14px] px-0 py-0 text-[10px] font-semibold leading-none text-emerald-800 [writing-mode:vertical-rl]"
+            style={{ left: `${x}%`, transform: "translateX(-100%) translateX(-6px)" }}
+          >
+            Today
+          </div>
+        ) : null}
+        <div
+          className="absolute top-0 bottom-0 w-4 -translate-x-1/2 overflow-visible"
+          style={{ left: `${x}%` }}
+        >
+          {showArrow ? (
+            <div className="absolute -top-6 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
+          ) : null}
+          {showLine ? (
+            <div className="absolute left-1/2 top-[2px] bottom-0 w-0 -translate-x-1/2 border-l border-dashed border-emerald-500" />
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+  const badgeRectY = badgePlacement === "inside" ? 2 : prioritizedAbove ? -1.4 : -6;
+  const badgeTextY = badgePlacement === "inside" ? 6 : prioritizedAbove ? 2.6 : -2;
+  const arrowTopY = prioritizedAbove ? 5 : 0;
+  const arrowTipY = arrowTopY + 6;
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 z-0 overflow-visible [isolation:isolate]",
+        "pointer-events-none absolute inset-x-0 overflow-visible [isolation:isolate]",
+        prioritizeLabel ? "z-30" : "z-0",
         bleedToPaddedPanel ? "-top-3 -bottom-3 sm:-top-4 sm:-bottom-4" : "inset-y-0",
       )}
       aria-hidden
     >
-      {showBadge ? (
-        <div
-          className={cn(
-            "absolute left-0 rounded border border-emerald-200/80 bg-white/95 px-1 py-px text-[10px] font-semibold leading-none text-emerald-800 shadow-sm ring-1 ring-emerald-100/60",
-            badgePlacement === "inside" ? "top-1.5" : "-top-5 sm:-top-6",
-          )}
-          style={{ left: `${x}%`, transform: "translateX(-50%)" }}
-        >
-          Today
-        </div>
-      ) : null}
-
-      {/* Downward arrow at line start (same x as dashed line). */}
-      <div
-        className="absolute top-0 z-[1] h-0 w-0 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500 drop-shadow-[0_0_6px_rgba(16,185,129,0.4)]"
-        style={{ left: `${x}%`, transform: "translateX(-50%)" }}
-      />
-      <div
-        className="absolute top-0 bottom-0 w-0 border-l border-dashed border-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.35)]"
-        style={{ left: `${x}%`, transform: "translateX(-50%)" }}
-      />
+      <svg
+        className="absolute inset-0 h-full w-full overflow-visible"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        {showBadge ? (
+          <g>
+            <rect
+              x={x - 4.5}
+              y={badgeRectY}
+              width={9}
+              height={6}
+              rx={1.2}
+              fill="#ffffff"
+              stroke="#86efac"
+              strokeWidth={0.35}
+            />
+            <text
+              x={x}
+              y={badgeTextY}
+              textAnchor="middle"
+              fontSize="3"
+              fontWeight="700"
+              fill="#065f46"
+            >
+              Today
+            </text>
+          </g>
+        ) : null}
+        {showArrow ? (
+          <polygon
+            points={`${x - 0.7},${arrowTopY} ${x + 0.7},${arrowTopY} ${x},${arrowTipY}`}
+            fill="#10b981"
+          />
+        ) : null}
+        {showLine ? (
+          <>
+            <line
+              x1={x}
+              x2={x}
+              y1={arrowTipY - 0.2}
+              y2={arrowTipY + 1.6}
+              stroke="#10b981"
+              strokeWidth={0.2}
+              strokeLinecap="round"
+            />
+            <line
+              x1={x}
+              x2={x}
+              y1={arrowTipY + 1.6}
+              y2={100}
+              stroke="#10b981"
+              strokeWidth={0.2}
+              strokeLinecap="round"
+              strokeDasharray="0.2 1.1"
+            />
+          </>
+        ) : null}
+      </svg>
     </div>
   );
 }
@@ -2453,7 +2531,12 @@ export function TimelineGrid({
                     )}
                   >
                     <div className="relative flex min-h-0 w-full flex-1 flex-col">
-                      <GanttTodayMarker leftPercent={monthEpicGanttTodayLeft} showBadge badgePlacement="above" />
+                      <GanttTodayMarker
+                        leftPercent={monthEpicGanttTodayLeft}
+                        showBadge={false}
+                        badgePlacement="above"
+                        prioritizeLabel
+                      />
                       <div
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         className="relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto"
@@ -2680,7 +2763,12 @@ export function TimelineGrid({
                   )}
                 >
                   <div className="relative flex min-h-0 w-full flex-1 flex-col">
-                    <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
+                    <GanttTodayMarker
+                      leftPercent={roadmapLaneTodayLeft}
+                      showBadge={false}
+                      badgePlacement="above"
+                      prioritizeLabel
+                    />
                   {roadmapBarMode === "initiatives" ? (
                     quarterRoadmapInitiativeRows.length === 0 ? (
                       <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
@@ -2833,7 +2921,7 @@ export function TimelineGrid({
               </div>
             </div>
           ) : !focusedQuarter && quarterViewTab === "gantt" ? (
-            <div className={cn("mb-4 w-full overflow-x-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
+            <div className={cn("relative mb-4 w-full overflow-x-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
               <div className="grid min-w-0 grid-cols-4 gap-2">
               {QUARTERS.map((quarter) => (
                 <section
@@ -3027,15 +3115,20 @@ export function TimelineGrid({
           <div
             className={cn(
               "relative isolate flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
-              "min-h-[calc(100vh-21rem)]",
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
             <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
-              <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
+              <GanttTodayMarker
+                leftPercent={roadmapLaneTodayLeft}
+                showBadge={false}
+                badgePlacement="above"
+                prioritizeLabel
+              />
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
-                className="relative z-10 min-h-0 flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto"
+                className="relative z-10 min-h-0 flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               {yearRoadmapInitiativeRows.map((group, idx) => (
                 <div
@@ -3080,15 +3173,20 @@ export function TimelineGrid({
           <div
             className={cn(
               "relative isolate flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
-              "min-h-[calc(100vh-21rem)]",
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
             <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
-              <GanttTodayMarker leftPercent={roadmapLaneTodayLeft} showBadge badgePlacement="above" />
+              <GanttTodayMarker
+                leftPercent={roadmapLaneTodayLeft}
+                showBadge={false}
+                badgePlacement="above"
+                prioritizeLabel
+              />
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
-                className="relative z-10 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto"
+                className="relative z-10 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               {yearRoadmapEpicRows.map((group, idx) => (
                 <div

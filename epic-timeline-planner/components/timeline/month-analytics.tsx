@@ -1530,7 +1530,7 @@ export function MonthAnalytics({
                       isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
                     )}
                   >
-                    <span className="inline-flex items-center gap-1.5 font-medium">
+                    <span className="inline-flex items-center gap-1.5 font-normal">
                       <span
                         className="inline-block h-2.5 w-2.5 rounded-full"
                         style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8" }}
@@ -2021,7 +2021,7 @@ export function MonthAnalytics({
                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: s.color, opacity: on ? 1 : 0.35 }}
                     />
-                    <span className="font-medium">{s.label}</span>
+                    <span className="font-normal">{s.label}</span>
                   </button>
                 );
               })}
@@ -2038,7 +2038,7 @@ export function MonthAnalytics({
                   className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: STATUS_COLORS.Unscheduled, opacity: selectedShowUnassigned ? 1 : 0.35 }}
                 />
-                <span className="font-medium">Unassigned</span>
+                <span className="font-normal">Unassigned</span>
               </button>
             </div>
             </div>
