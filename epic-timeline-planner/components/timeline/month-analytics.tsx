@@ -1956,8 +1956,8 @@ export function MonthAnalytics({
                     className="block w-full rounded-md px-1 py-0.5 text-left transition hover:bg-sky-100/70"
                   >
                   <div className="flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="w-16 shrink-0 truncate font-medium">{item.assignee}</span>
-                    <div className="h-2.5 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
+                    <span className="w-16 shrink-0 truncate text-[13px] font-semibold">{item.assignee}</span>
+                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
                       <div
                         className="flex h-full min-w-0 overflow-hidden rounded-full shadow-sm ring-1 ring-slate-300/40"
                         style={{ width: `${barWidthPct}%` }}
@@ -2086,8 +2086,8 @@ export function MonthAnalytics({
                     className="block w-full rounded-md px-1 py-0.5 text-left transition hover:bg-sky-100/70"
                   >
                     <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
-                      <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
-                      <div className="relative h-4 min-w-0 flex-1 max-w-[15.5rem] overflow-hidden rounded-full ring-1 ring-slate-200/80">
+                      <span className="w-16 shrink-0 truncate text-[13px] font-semibold">{row.assignee}</span>
+                      <div className="relative h-4 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ring-slate-200/80">
                         <div
                           className={cn("h-full rounded-full transition-colors", row.isOverCapacity ? "bg-rose-500" : "bg-emerald-500")}
                           style={{ width: `${barW}%` }}
