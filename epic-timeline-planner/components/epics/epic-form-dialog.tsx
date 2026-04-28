@@ -34,6 +34,7 @@ import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { createPortal } from "react-dom";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,16 @@ function monthIndicesForQuarter(q: 1 | 2 | 3 | 4 | null): number[] {
   if (q === null) return Array.from({ length: 12 }, (_, i) => i + 1);
   const start = (q - 1) * 3 + 1;
   return [start, start + 1, start + 2];
+}
+
+function parseSprintDraftValue(value: string): number | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  const numericText = raw.replace(/[^0-9]/g, "");
+  if (!numericText) return null;
+  const parsed = Number(numericText);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(1, Math.min(24, Math.round(parsed)));
 }
 
 const EPIC_CHILD_TABLE_DEFAULT_WIDTHS = [72, 200, 80, 104, 116, 88, 80, 80] as const;
@@ -184,12 +195,31 @@ export function EpicFormDialog({
   const [newChildTitle, setNewChildTitle] = useState("");
   const [childStorySortKey, setChildStorySortKey] = useState<EpicChildStorySortKey>("title");
   const [childStorySortDir, setChildStorySortDir] = useState<"asc" | "desc">("asc");
+  const [isSprintAutocompleteOpen, setIsSprintAutocompleteOpen] = useState(false);
+  const [sprintAutocompletePosition, setSprintAutocompletePosition] = useState<{ left: number; top: number; width: number } | null>(null);
+  const sprintAutocompleteOptions = useMemo(
+    () => Array.from({ length: 24 }, (_, idx) => idx + 1),
+    [],
+  );
+  const filteredSprintAutocompleteOptions = useMemo(() => {
+    if (!isSprintAutocompleteOpen || childEditingCell?.field !== "sprint") return [];
+    const raw = childEditingValue.trim().toLowerCase();
+    if (!raw) return sprintAutocompleteOptions;
+    const numericQuery = raw.replace(/[^0-9]/g, "");
+    return sprintAutocompleteOptions.filter((sprintNo) => {
+      const sprintLabel = `sprint ${sprintNo}`;
+      if (sprintLabel.includes(raw)) return true;
+      if (!numericQuery) return false;
+      return String(sprintNo).includes(numericQuery);
+    });
+  }, [childEditingCell?.field, childEditingValue, isSprintAutocompleteOpen, sprintAutocompleteOptions]);
   const { widths: childTableWidths, onColumnResizeStart: onChildTableColResize } = useResizableTableColumns(
     `${open ? "1" : "0"}-${epic?.id ?? "none"}`,
     EPIC_CHILD_TABLE_DEFAULT_WIDTHS,
   );
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
+  const sprintInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionEditor = useEditor({
     extensions: [
       StarterKit,
@@ -382,7 +412,7 @@ export function EpicFormDialog({
         case "sprint": {
           const parseS = (s: UserStoryItem) => {
             const d = drafts[s.id]?.sprint?.trim();
-            const n = d ? Number(d) : s.sprint;
+            const n = d ? parseSprintDraftValue(d) : s.sprint;
             return Number.isFinite(Number(n)) ? Number(n) : missingNum;
           };
           return cmpNum(parseS(sa), parseS(sb));
@@ -495,6 +525,20 @@ export function EpicFormDialog({
     setChildEditingValue("");
     setNewChildTitle("");
   }, [epic]);
+
+  useEffect(() => {
+    if (!isSprintAutocompleteOpen || childEditingCell?.field !== "sprint") return;
+    updateSprintAutocompletePosition();
+    function handleViewportChange() {
+      updateSprintAutocompletePosition();
+    }
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [isSprintAutocompleteOpen, childEditingCell?.field]);
 
   if (!visible) return null;
 
@@ -638,6 +682,18 @@ export function EpicFormDialog({
     const value = draft[field] ?? "";
     setChildEditingCell({ rowId: storyId, field });
     setChildEditingValue(value);
+    setIsSprintAutocompleteOpen(field === "sprint");
+  }
+
+  function updateSprintAutocompletePosition() {
+    const el = sprintInputRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setSprintAutocompletePosition({
+      left: rect.left,
+      top: rect.bottom + 4,
+      width: rect.width,
+    });
   }
 
   async function confirmChildCellEdit(storyId: string) {
@@ -649,11 +705,13 @@ export function EpicFormDialog({
     setChildStoryDrafts((prev) => ({ ...prev, [storyId]: next }));
     setChildEditingCell(null);
     setChildEditingValue("");
+    setIsSprintAutocompleteOpen(false);
+    setSprintAutocompletePosition(null);
     const patch =
       field === "title"
         ? { title: next.title.trim() }
         : field === "sprint"
-          ? { sprint: next.sprint.trim() === "" ? null : Number(next.sprint) }
+          ? { sprint: parseSprintDraftValue(next.sprint) }
           : field === "status"
             ? { status: next.status }
             : field === "assignee"
@@ -893,7 +951,7 @@ export function EpicFormDialog({
                             No user stories yet.
                           </p>
                         ) : (
-                          <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
+                          <div className="overflow-x-auto overflow-y-visible rounded-md bg-white ring-1 ring-slate-200">
                             <table className="w-full table-fixed text-left text-sm">
                               <colgroup>
                                 {childTableWidths.map((w, i) => (
@@ -1148,14 +1206,44 @@ export function EpicFormDialog({
                                     </td>
                                     <td className="px-2 py-1.5 text-slate-600">
                                       {childEditingCell?.rowId === story.id && childEditingCell.field === "sprint" ? (
-                                        <div className="flex items-center gap-1">
-                                          <input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" />
+                                        <div className="relative flex items-center gap-1">
+                                          <input
+                                            ref={sprintInputRef}
+                                            value={childEditingValue}
+                                            onChange={(event) => {
+                                              setChildEditingValue(event.target.value);
+                                              setIsSprintAutocompleteOpen(true);
+                                              updateSprintAutocompletePosition();
+                                            }}
+                                            onFocus={() => {
+                                              setIsSprintAutocompleteOpen(true);
+                                              updateSprintAutocompletePosition();
+                                            }}
+                                            onBlur={() => {
+                                              window.setTimeout(() => setIsSprintAutocompleteOpen(false), 120);
+                                            }}
+                                            placeholder="Sprint 1-24"
+                                            className="w-[7.25rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                          />
                                           <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded p-1 text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setChildEditingCell(null);
+                                              setIsSprintAutocompleteOpen(false);
+                                              setSprintAutocompletePosition(null);
+                                            }}
+                                            className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                                          >
+                                            <X className="size-3.5" />
+                                          </button>
                                         </div>
                                       ) : (
                                         <button type="button" onClick={() => beginChildCellEdit(story.id, "sprint")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {childStoryDrafts[story.id]?.sprint ? `Sprint ${childStoryDrafts[story.id]?.sprint}` : "Not set"}
+                                          {(() => {
+                                            const sprint = parseSprintDraftValue(childStoryDrafts[story.id]?.sprint ?? "");
+                                            return sprint != null ? `Sprint ${sprint}` : "Not set";
+                                          })()}
                                         </button>
                                       )}
                                     </td>
@@ -1587,6 +1675,37 @@ export function EpicFormDialog({
           </div>
         </div>
       </div>
+      {typeof document !== "undefined" &&
+      isSprintAutocompleteOpen &&
+      filteredSprintAutocompleteOptions.length > 0 &&
+      sprintAutocompletePosition != null
+        ? createPortal(
+            <div
+              className="fixed z-[220] max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg"
+              style={{
+                left: sprintAutocompletePosition.left,
+                top: sprintAutocompletePosition.top,
+                width: sprintAutocompletePosition.width,
+              }}
+            >
+              {filteredSprintAutocompleteOptions.map((sprintNo) => (
+                <button
+                  key={sprintNo}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setChildEditingValue(`Sprint ${sprintNo}`);
+                    setIsSprintAutocompleteOpen(false);
+                  }}
+                  className="block w-full rounded px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100"
+                >
+                  Sprint {sprintNo}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

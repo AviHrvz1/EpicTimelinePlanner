@@ -244,6 +244,8 @@ function StatusPieTooltip({
 type MonthAnalyticsProps = {
   initiatives: InitiativeItem[];
   month: number;
+  periodMonths?: number[];
+  periodLabel?: string;
   planYear: number;
   filterEpicTeamId?: string | null;
   onOpenEpic?: (epicId: string) => void;
@@ -327,12 +329,14 @@ function statusDrilldownDisplayLabel(status: string | null): string {
   return status ?? "";
 }
 
-function collectMonthStories(
+function collectPeriodStories(
   initiatives: InitiativeItem[],
-  month: number,
+  months: number[],
   filterEpicTeamId?: string | null,
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
+  const minMonth = Math.min(...months);
+  const maxMonth = Math.max(...months);
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled") continue;
     for (const epic of initiative.epics ?? []) {
@@ -340,19 +344,21 @@ function collectMonthStories(
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
       const endMonth = epic.planEndMonth ?? initiative.endMonth;
       if (startMonth == null || endMonth == null) continue;
-      if (endMonth < month || startMonth > month) continue;
+      if (endMonth < minMonth || startMonth > maxMonth) continue;
       rows.push(...(epic.userStories ?? []));
     }
   }
   return rows;
 }
 
-function collectMonthEpics(
+function collectPeriodEpics(
   initiatives: InitiativeItem[],
-  month: number,
+  months: number[],
   filterEpicTeamId?: string | null,
 ) {
   const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+  const minMonth = Math.min(...months);
+  const maxMonth = Math.max(...months);
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled") continue;
     for (const epic of initiative.epics ?? []) {
@@ -360,7 +366,7 @@ function collectMonthEpics(
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
       const endMonth = epic.planEndMonth ?? initiative.endMonth;
       if (startMonth == null || endMonth == null) continue;
-      if (endMonth < month || startMonth > month) continue;
+      if (endMonth < minMonth || startMonth > maxMonth) continue;
       rows.push({ epic, initiative });
     }
   }
@@ -370,6 +376,8 @@ function collectMonthEpics(
 export function MonthAnalytics({
   initiatives,
   month,
+  periodMonths,
+  periodLabel,
   planYear,
   filterEpicTeamId = null,
   onOpenEpic,
@@ -389,13 +397,20 @@ export function MonthAnalytics({
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
 
+  const scopeMonths = useMemo(() => {
+    const base = periodMonths != null && periodMonths.length > 0 ? periodMonths : [month];
+    return [...new Set(base)].sort((a, b) => a - b);
+  }, [periodMonths, month]);
+  const scopeStartMonth = scopeMonths[0] ?? month;
+  const scopeEndMonth = scopeMonths[scopeMonths.length - 1] ?? month;
+  const scopeLabel = periodLabel ?? (scopeMonths.length === 1 ? "Month" : scopeMonths.length === 12 ? "Year" : "Quarter");
   const monthEpics = useMemo(
-    () => collectMonthEpics(initiatives, month, filterEpicTeamId),
-    [initiatives, month, filterEpicTeamId],
+    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamId),
+    [initiatives, scopeMonths, filterEpicTeamId],
   );
   const monthStories = useMemo(
-    () => collectMonthStories(initiatives, month, filterEpicTeamId),
-    [initiatives, month, filterEpicTeamId],
+    () => collectPeriodStories(initiatives, scopeMonths, filterEpicTeamId),
+    [initiatives, scopeMonths, filterEpicTeamId],
   );
   const epicComboOptions = useMemo(
     () =>
@@ -479,12 +494,19 @@ export function MonthAnalytics({
       { name: "Approved", value: statusCounts.approved },
     ];
 
-    const totalDays = new Date(planYear, month, 0).getDate();
-    const dayDates = Array.from({ length: totalDays }, (_, idx) => new Date(planYear, month - 1, idx + 1));
+    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
+    const periodEndDate = new Date(planYear, scopeEndMonth, 0);
+    const totalDays =
+      Math.floor((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const dayDates = Array.from({ length: totalDays }, (_, idx) => {
+      const day = new Date(periodStartDate);
+      day.setDate(periodStartDate.getDate() + idx);
+      return day;
+    });
     const today = new Date();
     const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const monthStart = new Date(planYear, month - 1, 1).getTime();
-    const monthEnd = new Date(planYear, month - 1, totalDays).getTime();
+    const monthStart = periodStartDate.getTime();
+    const monthEnd = periodEndDate.getTime();
     let today1Based = 1;
     if (startToday >= monthEnd) today1Based = totalDays;
     else if (startToday > monthStart) {
@@ -619,6 +641,8 @@ export function MonthAnalytics({
   }, [
     initiatives,
     month,
+    scopeStartMonth,
+    scopeEndMonth,
     planYear,
     filterEpicTeamId,
     metric,
@@ -738,10 +762,10 @@ export function MonthAnalytics({
         monthBurndownEpics,
         "individual",
         metric,
-        [month],
+        scopeMonths,
         planYear,
       ),
-    [monthBurndownEpics, metric, month, planYear],
+    [monthBurndownEpics, metric, scopeMonths, planYear],
   );
   const monthBurndownFilledToToday = useMemo(() => {
     const horizon = monthBurndown.length;
@@ -785,7 +809,8 @@ export function MonthAnalytics({
 
     for (let i = 0; i < rows.length; i += 1) {
       const dayIdx = i + 1;
-      const day = new Date(planYear, month - 1, dayIdx, 23, 59, 59, 999);
+      const day = new Date(planYear, scopeStartMonth - 1, 1, 23, 59, 59, 999);
+      day.setDate(day.getDate() + (dayIdx - 1));
       let dayTotal = 0;
       for (const epic of sourceEpics) {
         const epicStories = epic.userStories ?? [];
@@ -807,7 +832,7 @@ export function MonthAnalytics({
       rows[i].actual = dayIdx <= elapsedDays ? (metric === "storyCount" ? Math.round(dayTotal) : Number(dayTotal.toFixed(1))) : null;
     }
     return rows as typeof monthBurndownFilledToToday;
-  }, [monthBurndown, monthBurndownFilledToToday, selectedEpicOption, monthEpics, planYear, month, metric]);
+  }, [monthBurndown, monthBurndownFilledToToday, selectedEpicOption, monthEpics, planYear, month, metric, scopeStartMonth]);
   const monthBurndownResolved = monthBurndownFromSnapshots ?? monthBurndownFilledToToday;
   const burndownFocusedEpicOption = useMemo(() => {
     if (selectedEpicOption) return selectedEpicOption;
@@ -817,11 +842,11 @@ export function MonthAnalytics({
   const selectedEpicDueDate = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
     const dueSprint = burndownFocusedEpicOption.epic.planEndSprint;
-    const dueMonth = burndownFocusedEpicOption.epic.planEndMonth ?? month;
+    const dueMonth = burndownFocusedEpicOption.epic.planEndMonth ?? scopeEndMonth;
     const dueYear = burndownFocusedEpicOption.epic.planYear ?? planYear;
     const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
-  }, [burndownFocusedEpicOption, month, planYear]);
+  }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
   const monthBurndownWithDueTarget = useMemo(() => {
     if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownResolved;
     const totalDays = monthBurndownResolved.length;
@@ -830,7 +855,7 @@ export function MonthAnalytics({
       metric === "daysLeft"
         ? (burndownFocusedEpicOption.epic.userStories ?? []).reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
         : (burndownFocusedEpicOption.epic.userStories ?? []).length;
-    const monthStart = new Date(planYear, month - 1, 1);
+    const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
     const targetDayIndex = Math.max(1, dueDayIndex);
@@ -869,11 +894,11 @@ export function MonthAnalytics({
       });
     }
     return extended as typeof monthBurndownResolved;
-  }, [monthBurndownResolved, burndownFocusedEpicOption, selectedEpicDueDate, metric, planYear, month]);
+  }, [monthBurndownResolved, burndownFocusedEpicOption, selectedEpicDueDate, metric, planYear, month, scopeStartMonth]);
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     if (monthBurndownWithDueTarget.length === 0) return null;
-    const monthStart = new Date(planYear, month - 1, 1);
+    const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
     const rowIndex = Math.max(0, Math.min(monthBurndownWithDueTarget.length - 1, dueDayIndex - 1));
@@ -887,10 +912,10 @@ export function MonthAnalytics({
       y: typeof y === "number" ? y : 0,
       label: `Epic due ${selectedEpicDueDate.getDate()}/${selectedEpicDueDate.getMonth() + 1}`,
     };
-  }, [selectedEpicDueDate, burndownFocusedEpicOption, monthBurndownWithDueTarget, planYear, month]);
+  }, [selectedEpicDueDate, burndownFocusedEpicOption, monthBurndownWithDueTarget, planYear, month, scopeStartMonth]);
   const monthEndMarker = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
-    const monthEndLabel = flowChartDayLabel(new Date(planYear, month - 1, new Date(planYear, month, 0).getDate()));
+    const monthEndLabel = flowChartDayLabel(new Date(planYear, scopeEndMonth, 0));
     const monthEndPoint = monthBurndownWithDueTarget.find((row) => {
       return String(row.dayLabel ?? row.axisLabel ?? "") === monthEndLabel;
     }) as
@@ -901,9 +926,9 @@ export function MonthAnalytics({
     return {
       axisLabel: String(monthEndPoint.axisLabel),
       y: typeof y === "number" ? y : 0,
-      label: `Month end (${monthEndLabel})`,
+      label: `${scopeLabel} end (${monthEndLabel})`,
     };
-  }, [burndownFocusedEpicOption, monthBurndownWithDueTarget, planYear, month]);
+  }, [burndownFocusedEpicOption, monthBurndownWithDueTarget, planYear, month, scopeEndMonth, scopeLabel]);
   const burndownAxisTicks = useMemo(() => {
     const labels = monthBurndownWithDueTarget
       .map((row) => String(row.axisLabel ?? ""))
@@ -981,8 +1006,15 @@ export function MonthAnalytics({
     const hasSnapshots = sourceStories.some((story) => (story.snapshots?.length ?? 0) > 0);
     if (!hasSnapshots) return null;
 
-    const totalDays = new Date(planYear, month, 0).getDate();
-    const dayDates = Array.from({ length: totalDays }, (_, idx) => new Date(planYear, month - 1, idx + 1, 23, 59, 59, 999));
+    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1, 23, 59, 59, 999);
+    const periodEndDate = new Date(planYear, scopeEndMonth, 0, 23, 59, 59, 999);
+    const totalDays =
+      Math.floor((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const dayDates = Array.from({ length: totalDays }, (_, idx) => {
+      const day = new Date(periodStartDate);
+      day.setDate(periodStartDate.getDate() + idx);
+      return day;
+    });
     const monthStartDay = dayDates[0];
     const storiesOpenAtStart = sourceStories.filter((story) => {
       const snapshot = latestSnapshotAtDay(story, monthStartDay);
@@ -1030,7 +1062,7 @@ export function MonthAnalytics({
         approved,
       };
     });
-  }, [selectedEpicOption, monthEpics, planYear, month]);
+  }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
   const flowResolved = flowFromSnapshots ?? analytics.flowSprintTrendData;
   useEffect(() => {
     setCfdVisibleKeys((prev) => {
@@ -1278,17 +1310,17 @@ export function MonthAnalytics({
                       </td>
                       <td className="px-2 py-1">{story.title}</td>
                       <td className="px-2 py-1">
-                        {normalizeStoryYearSprint(story.sprint, month) != null ? (
+                        {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
                           <button
                             type="button"
                             onClick={() => {
-                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, month);
+                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
                               if (targetYearSprint == null) return;
                               onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
                             }}
                             className="font-semibold text-blue-700 underline-offset-2 hover:underline"
                           >
-                            {storySprintDisplayLabel(story.sprint, month)}
+                            {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                           </button>
                         ) : (
                           "Unscheduled"
@@ -1714,17 +1746,17 @@ export function MonthAnalytics({
                       </td>
                       <td className="px-2 py-1">{story.title}</td>
                       <td className="px-2 py-1">
-                        {normalizeStoryYearSprint(story.sprint, month) != null ? (
+                        {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
                           <button
                             type="button"
                             onClick={() => {
-                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, month);
+                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
                               if (targetYearSprint == null) return;
                               onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
                             }}
                             className="font-semibold text-blue-700 underline-offset-2 hover:underline"
                           >
-                            {storySprintDisplayLabel(story.sprint, month)}
+                            {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                           </button>
                         ) : (
                           "Unscheduled"

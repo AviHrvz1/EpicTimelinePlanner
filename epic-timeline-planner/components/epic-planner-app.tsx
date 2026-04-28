@@ -15,7 +15,7 @@ import { InitiativeListPanel } from "@/components/initiatives/initiative-list-pa
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
 import { DragContext } from "@/components/timeline/drag-context";
 import { type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
-import { TimelineGrid, type MonthPlanSurfaceTab } from "@/components/timeline/timeline-grid";
+import { TimelineGrid, type MonthPlanSurfaceTab, type QuarterSurfaceTab } from "@/components/timeline/timeline-grid";
 import { Button } from "@/components/ui/button";
 import {
   EPICS_UNPLAN_DROP_ID,
@@ -726,6 +726,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [activeYearSprint, setActiveYearSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("epic-gantt");
+  const [activeQuarterViewTab, setActiveQuarterViewTab] = useState<QuarterSurfaceTab>("gantt");
   const [panelStatusQuickFilter, setPanelStatusQuickFilter] = useState<"Scheduled" | "Unscheduled" | null>(null);
   /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
   const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
@@ -1190,6 +1191,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (q && QUARTERS.some((item) => item.label === q)) {
       setFocusedQuarterLabel(q);
     }
+    const quarterTabRaw = params.get("quarterTab");
+    if (quarterTabRaw === "gantt" || quarterTabRaw === "status" || quarterTabRaw === "capacity" || quarterTabRaw === "insights") {
+      setActiveQuarterViewTab(quarterTabRaw);
+    }
     const monthRaw = params.get("month");
     let hydratedMonth: number | null = null;
     if (monthRaw) {
@@ -1334,6 +1339,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (!isUrlHydrated) return;
     const params = new URLSearchParams();
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
+    if (activeTimelineMonth == null && activeQuarterViewTab !== "gantt") params.set("quarterTab", activeQuarterViewTab);
     if (activeTimelineMonth != null) {
       params.set("month", String(activeTimelineMonth));
       if (activeMonthPlanTab === "epic-gantt") params.set("planTab", "epic");
@@ -1369,6 +1375,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     isUrlHydrated,
     focusedQuarterLabel,
     activeTimelineMonth,
+    activeQuarterViewTab,
     activeYearSprint,
     activeSprintTab,
     activeMonthPlanTab,
@@ -1407,13 +1414,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   useEffect(() => {
     // Insights surfaces default to a focused analytics layout.
-    if (activeMonthPlanTab === "month-status" || activeMonthPlanTab === "sprint-status") {
+    const insightsSurface =
+      activeMonthPlanTab === "month-status" ||
+      activeMonthPlanTab === "sprint-status" ||
+      (activeTimelineMonth == null && activeQuarterViewTab === "insights");
+    if (insightsSurface) {
       setIsLeftPanelHidden(true);
       return;
     }
     // Non-insight surfaces restore the standard split layout.
     setIsLeftPanelHidden(false);
-  }, [activeMonthPlanTab]);
+  }, [activeMonthPlanTab, activeTimelineMonth, activeQuarterViewTab]);
 
   const activeMonthTeamCapacityKey = useMemo(() => {
     if (activeTimelineMonth == null) return null;
@@ -3113,14 +3124,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   setActiveYearSprint(null);
                   setActiveSprintTab("kanban");
                   setActiveMonthPlanTab("epic-gantt");
+                  setActiveQuarterViewTab("gantt");
                   setSprintStoryBoardTeamId(null);
                 }}
                 focusedQuarterLabel={focusedQuarterLabel}
                 focusedMonthExternal={activeTimelineMonth}
                 activeSprintExternal={activeYearSprint}
                 activeSprintTabExternal={activeSprintTab}
+                quarterViewTabExternal={activeQuarterViewTab}
                 monthPlanTab={activeMonthPlanTab}
                 onMonthPlanTabChange={handleMonthPlanTabChange}
+                onQuarterViewTabChange={setActiveQuarterViewTab}
                 monthTeamCapacityBoard={activeMonthTeamCapacityBoard}
                 monthTeamCapacityByKey={monthTeamCapacityByKey}
                 onMonthTeamCapacityChange={updateMonthTeamCapacity}

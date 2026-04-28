@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Map as MapIcon, Thermometer, Users } from "lucide-react";
+import { Activity, BarChart3, ChevronDown, ChevronRight, ClipboardList, Map as MapIcon, Thermometer, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -443,6 +443,8 @@ export type MonthPlanSurfaceTab =
   | "sprint-capacity"
   | "sprint-retrospective";
 
+export type QuarterSurfaceTab = "gantt" | "status" | "capacity" | "insights";
+
 type TimelineGridProps = {
   initiatives: InitiativeItem[];
   zoom: number;
@@ -462,6 +464,8 @@ type TimelineGridProps = {
   focusedMonthExternal?: number | null;
   activeSprintExternal?: number | null;
   activeSprintTabExternal?: "kanban" | "status";
+  quarterViewTabExternal?: QuarterSurfaceTab;
+  onQuarterViewTabChange?: (tab: QuarterSurfaceTab) => void;
   /** Month drill: team allocation vs sprint tools (controlled from parent for URL sync). */
   monthPlanTab?: MonthPlanSurfaceTab;
   onMonthPlanTabChange?: (tab: MonthPlanSurfaceTab) => void;
@@ -624,6 +628,8 @@ export function TimelineGrid({
   focusedMonthExternal,
   activeSprintExternal,
   activeSprintTabExternal,
+  quarterViewTabExternal,
+  onQuarterViewTabChange,
   onFocusedQuarterChange,
   onSprintModeChange,
   onSprintTabChange,
@@ -662,7 +668,12 @@ export function TimelineGrid({
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
-  const [quarterViewTab, setQuarterViewTab] = useState<"gantt" | "status" | "capacity">("gantt");
+  const [quarterViewTabState, setQuarterViewTabState] = useState<QuarterSurfaceTab>("gantt");
+  const quarterViewTab = quarterViewTabExternal ?? quarterViewTabState;
+  const setQuarterViewTab = useCallback((tab: QuarterSurfaceTab) => {
+    if (onQuarterViewTabChange) onQuarterViewTabChange(tab);
+    else setQuarterViewTabState(tab);
+  }, [onQuarterViewTabChange]);
   const [roadmapBarMode, setRoadmapBarMode] = useState<"epics" | "initiatives">("epics");
   const [capacityQuarterFilterLabel, setCapacityQuarterFilterLabel] = useState<"all" | "Q1" | "Q2" | "Q3" | "Q4">("all");
   const [capacityTeamFilterId, setCapacityTeamFilterId] = useState<string>("all");
@@ -1411,7 +1422,7 @@ export function TimelineGrid({
         onFocusedQuarterChange(focusedQuarter.label);
       },
     });
-    if (quarterViewTab === "status") {
+    if (quarterViewTab === "status" || quarterViewTab === "insights") {
       breadcrumbItems.push({
         label: "Insights",
         onClick: null,
@@ -2110,6 +2121,29 @@ export function TimelineGrid({
             </button>
             <button
               type="button"
+              onClick={() => setQuarterViewTab("insights")}
+              title="Quarter Insights"
+              className={cn(
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                quarterViewTab === "insights"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <Activity className="size-4" aria-hidden />
+              <span className="sr-only">Quarter Insights</span>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
+                Quarter Insights
+              </span>
+            </button>
+            <button
+              type="button"
               onClick={() => setQuarterViewTab("capacity")}
               title="Quarter Capacity"
               className={cn(
@@ -2187,6 +2221,29 @@ export function TimelineGrid({
                 )}
               >
                 Quarters Status
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarterViewTab("insights")}
+              title="All Quarters Insights"
+              className={cn(
+                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                quarterViewTab === "insights"
+                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              )}
+            >
+              <Activity className="size-4" aria-hidden />
+              <span className="sr-only">All Quarters Insights</span>
+              <span
+                aria-hidden
+                className={cn(
+                  railLabelBaseClass,
+                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
+                All Quarters Insights
               </span>
             </button>
             <button
@@ -2824,6 +2881,32 @@ export function TimelineGrid({
           <QuarterStatus initiatives={initiatives} quarterMonths={MONTHS.map((_, i) => i + 1)} planYear={currentYear} />
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "status" ? (
           <QuarterStatus initiatives={initiatives} quarterMonths={focusedQuarter.months} planYear={currentYear} />
+        ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "insights" ? (
+          <MonthAnalytics
+            initiatives={initiatives}
+            month={1}
+            periodMonths={MONTHS.map((_, i) => i + 1)}
+            periodLabel="Year"
+            planYear={currentYear}
+            onOpenEpic={onOpenEpic}
+            onOpenStory={onOpenStory ?? (() => {})}
+            onOpenSprintKanban={(yearSprint, teamId) =>
+              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+            }
+          />
+        ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
+          <MonthAnalytics
+            initiatives={initiatives}
+            month={focusedQuarter.months[0]}
+            periodMonths={focusedQuarter.months}
+            periodLabel={focusedQuarter.label}
+            planYear={currentYear}
+            onOpenEpic={onOpenEpic}
+            onOpenStory={onOpenStory ?? (() => {})}
+            onOpenSprintKanban={(yearSprint, teamId) =>
+              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+            }
+          />
         ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard
             initiatives={initiatives}
