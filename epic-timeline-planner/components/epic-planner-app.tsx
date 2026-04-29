@@ -699,6 +699,28 @@ function buildStoryRefMaps(initiatives: InitiativeItem[]): {
   return { byId, idByRef };
 }
 
+function buildEpicRefMaps(initiatives: InitiativeItem[]): {
+  byId: Record<string, string>;
+  idByRef: Record<string, string>;
+} {
+  const rows = initiatives
+    .flatMap((initiative) => initiative.epics ?? [])
+    .map((epic) => ({
+      id: epic.id,
+      createdAt: new Date(epic.createdAt).getTime(),
+      title: epic.title,
+    }))
+    .sort((a, b) => a.createdAt - b.createdAt || a.title.localeCompare(b.title));
+  const byId: Record<string, string> = {};
+  const idByRef: Record<string, string> = {};
+  rows.forEach((row, idx) => {
+    const ref = String(idx + 1).padStart(2, "0");
+    byId[row.id] = ref;
+    idByRef[ref] = row.id;
+  });
+  return { byId, idByRef };
+}
+
 /** Map URL `story` param (e.g. `09`, `9`, `US-09`, or raw id) to a story primary key. */
 function resolveStoryIdFromUrlParam(storyParam: string, maps: ReturnType<typeof buildStoryRefMaps>): string {
   const raw = storyParam.trim();
@@ -706,6 +728,17 @@ function resolveStoryIdFromUrlParam(storyParam: string, maps: ReturnType<typeof 
   const direct = maps.idByRef[raw];
   if (direct) return direct;
   const stripped = raw.replace(/^US-/i, "");
+  const padded = stripped.padStart(2, "0");
+  return maps.idByRef[stripped] ?? maps.idByRef[padded] ?? raw;
+}
+
+/** Map URL `epic` param (e.g. `10`, `EPIC-10`, or raw id) to an epic primary key. */
+function resolveEpicIdFromUrlParam(epicParam: string, maps: ReturnType<typeof buildEpicRefMaps>): string {
+  const raw = epicParam.trim();
+  if (!raw) return raw;
+  const direct = maps.idByRef[raw];
+  if (direct) return direct;
+  const stripped = raw.replace(/^EPIC-/i, "");
   const padded = stripped.padStart(2, "0");
   return maps.idByRef[stripped] ?? maps.idByRef[padded] ?? raw;
 }
@@ -1136,6 +1169,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     };
   }, [initiatives]);
   const storyRefMaps = useMemo(() => buildStoryRefMaps(initiatives), [initiatives]);
+  const epicRefMaps = useMemo(() => buildEpicRefMaps(initiatives), [initiatives]);
 
   const currentEditingInitiative = useMemo(() => {
     if (!editingInitiative) return undefined;
@@ -1251,8 +1285,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }
       }
     }
-    const epicId = params.get("epic");
-    if (epicId) {
+    const epicParam = params.get("epic");
+    if (epicParam) {
+      const initialEpicMaps = buildEpicRefMaps(initialInitiatives);
+      const epicId = resolveEpicIdFromUrlParam(epicParam, initialEpicMaps);
       for (const initiative of initialInitiatives) {
         const epic = (initiative.epics ?? []).find((e) => e.id === epicId);
         if (epic) {
@@ -1361,7 +1397,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     ) {
       params.set("sprintTeam", sprintStoryBoardTeamId);
     }
-    if (epicDialogOpen && editingEpic?.id) params.set("epic", editingEpic.id);
+    if (epicDialogOpen && editingEpic?.id) {
+      const epicRef = epicRefMaps.byId[editingEpic.id];
+      params.set("epic", epicRef ? `EPIC-${epicRef}` : editingEpic.id);
+    }
     if (selectedStoryId) params.set("story", storyRefMaps.byId[selectedStoryId] ?? selectedStoryId);
     const next = params.toString();
     const target = next ? `${pathname}?${next}` : pathname;
@@ -1381,6 +1420,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     activeMonthPlanTab,
     epicDialogOpen,
     editingEpic?.id,
+    epicRefMaps.byId,
     selectedStoryId,
     storyRefMaps.byId,
     router,

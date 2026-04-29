@@ -1,7 +1,7 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { Activity, BarChart3, CalendarDays, ChevronDown, ChevronRight, ClipboardList, Flag, Map as MapIcon, Thermometer, Users } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, ChevronDown, ChevronRight, ClipboardList, Eye, Flag, Map as MapIcon, Thermometer, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -1811,6 +1811,19 @@ export function TimelineGrid({
               <div className="flex flex-wrap items-center justify-end gap-3 pr-3">
                 <button
                   type="button"
+                  onClick={() => setShowRoadmapProgress((v) => !v)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    showRoadmapProgress
+                      ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
+                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                  )}
+                >
+                  <Eye className="size-3.5" aria-hidden />
+                  Progress
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setRoadmapBarMode("initiatives");
                     onSummaryStatusQuickFilterChange?.(null);
@@ -1878,18 +1891,6 @@ export function TimelineGrid({
                 <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
                   {summaryBadgesForScope.totalStories} User Stories
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowRoadmapProgress((v) => !v)}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                    showRoadmapProgress
-                      ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                  )}
-                >
-                  Progress
-                </button>
               </div>
             ) : null}
           </div>
@@ -1939,6 +1940,19 @@ export function TimelineGrid({
                 </>
               ) : summaryBadgesForScope ? (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => setShowRoadmapProgress((v) => !v)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      showRoadmapProgress
+                        ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
+                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                    )}
+                  >
+                    <Eye className="size-3.5" aria-hidden />
+                    Progress
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -2008,18 +2022,6 @@ export function TimelineGrid({
                   <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
                     {summaryBadgesForScope.totalStories} User Stories
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowRoadmapProgress((v) => !v)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                      showRoadmapProgress
-                        ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
-                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
-                    )}
-                  >
-                    Progress
-                  </button>
                 </>
               ) : null}
             </div>

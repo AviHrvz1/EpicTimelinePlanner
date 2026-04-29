@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronUp, PieChart as PieChartIcon } from "lucide-react";
+import { Activity, ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 type WorkloadViewMode = "stories" | "sprintLoad";
 type SprintWorkloadStatusKey = (typeof WORKLOAD_BAR_SEGMENTS)[number]["key"];
 type SprintWorkloadFilterKey = "all" | SprintWorkloadStatusKey;
+type SprintCfdKey = (typeof CFD_FLOW_SEGMENTS)[number]["key"];
 
 const STATUS_COLORS: Record<string, string> = {
   Unscheduled: "#94a3b8",
@@ -110,6 +111,7 @@ export function SprintAnalytics({
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<SprintWorkloadFilterKey[]>(["all"]);
+  const [cfdVisibleKeys, setCfdVisibleKeys] = useState<SprintCfdKey[]>(() => CFD_FLOW_SEGMENTS.map((segment) => segment.key));
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
   const analytics = useMemo(
@@ -148,6 +150,16 @@ export function SprintAnalytics({
         .filter((item) => item.selectedStoryCount > 0),
     [analytics.workloadByAssignee, selectedWorkloadStatuses],
   );
+  const allCfdKeysSelected = cfdVisibleKeys.length === CFD_FLOW_SEGMENTS.length;
+  const showAllCfdKeys = () => setCfdVisibleKeys(CFD_FLOW_SEGMENTS.map((segment) => segment.key));
+  const toggleCfdKey = (key: SprintCfdKey) => {
+    setCfdVisibleKeys((prev) => {
+      const has = prev.includes(key);
+      if (!has) return [...prev, key];
+      if (prev.length === 1) return prev;
+      return prev.filter((k) => k !== key);
+    });
+  };
 
   const sprintStories = useMemo(() => {
     const rows: Array<{
@@ -243,7 +255,8 @@ export function SprintAnalytics({
     updateArrowState(workloadDrilldownScrollRef, setCanScrollWorkloadUp, setCanScrollWorkloadDown);
   }, [workloadDrilldownStories.length, workloadDrilldownAssignee]);
 
-  const chartLegendColumnClass = "max-h-[clamp(12.5rem,27vh,20rem)] space-y-1.5 overflow-y-auto pr-0";
+  const chartLegendColumnClass =
+    "max-h-[clamp(12.5rem,27vh,20rem)] space-y-1.5 overflow-y-auto pr-0 md:justify-self-end md:w-[10.5rem]";
   const legendRowClass =
     "flex items-center justify-between rounded-md px-1 py-1 text-left text-[12px] font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-700";
 
@@ -251,42 +264,45 @@ export function SprintAnalytics({
     <section className="mb-2 flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
-          <PieChartIcon className="size-4 text-slate-600" />
-          User stories status
-        </h3>
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+          <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+            <PieChartIcon className="size-4 text-slate-600" />
+            User Stories Status
+          </h3>
+          {statusDrilldownFilter ? (
+            <button
+              type="button"
+              onClick={() => setStatusDrilldownFilter(null)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              aria-label="Back to chart"
+              title="Back to chart"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden />
+            </button>
+          ) : null}
+        </div>
         {statusDrilldownFilter ? (
-          <div className="relative mt-1 rounded-xl bg-white p-2">
-            <div className="mb-1 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => setStatusDrilldownFilter(null)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                aria-label="Back to chart"
-              >
-                <ArrowLeft className="size-3.5" aria-hidden />
-              </button>
-            </div>
+          <div className="relative mt-1 rounded-none border border-slate-200/80 bg-white/80 p-2">
             <div className="relative">
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={() => updateArrowState(statusDrilldownScrollRef, setCanScrollStatusUp, setCanScrollStatusDown)}
-                className="h-[clamp(10.5rem,26dvh,14.5rem)] overflow-auto rounded-lg bg-white/90 pr-5 [&::-webkit-scrollbar]:hidden"
+                className="h-[clamp(12rem,24vh,16rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
-                <table className="w-full border-separate border-spacing-0 text-left text-[12px]">
-                  <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-600 backdrop-blur">
+                <table className="w-full border-separate border-spacing-0 text-left text-[13px]">
+                  <thead className="sticky top-0 z-10 bg-[#0897d5] text-white backdrop-blur">
                     <tr>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Story ID</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Story name</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Sprint</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Assignee</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Status</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Story ID</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Story name</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Sprint</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {statusDrilldownStories.map((story) => (
-                      <tr key={story.id} className="text-slate-700 transition hover:bg-slate-50/80">
+                      <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                         <td className="px-2 py-1.5">
                           <button
                             type="button"
@@ -299,12 +315,16 @@ export function SprintAnalytics({
                         <td className="px-2 py-1.5">{story.title}</td>
                         <td className="px-2 py-1.5">{story.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`}</td>
                         <td className="px-2 py-1.5">{story.assignee}</td>
-                        <td className="px-2 py-1.5">{story.status}</td>
+                        <td className="px-2 py-1.5">
+                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
+                            {story.status}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                     {statusDrilldownStories.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-3 py-8 text-center text-[12px] text-slate-500">
+                        <td colSpan={5} className="px-3 py-8 text-center text-[13px] text-slate-500">
                           No stories in this status.
                         </td>
                       </tr>
@@ -316,7 +336,7 @@ export function SprintAnalytics({
                 type="button"
                 onClick={() => statusDrilldownScrollRef.current?.scrollBy({ top: -96, behavior: "smooth" })}
                 className={cn(
-                  "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  "absolute -right-[2px] top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
                   canScrollStatusUp && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll up status stories"
@@ -327,7 +347,7 @@ export function SprintAnalytics({
                 type="button"
                 onClick={() => statusDrilldownScrollRef.current?.scrollBy({ top: 96, behavior: "smooth" })}
                 className={cn(
-                  "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  "absolute bottom-0 -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
                   canScrollStatusDown && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll down status stories"
@@ -376,7 +396,7 @@ export function SprintAnalytics({
                     const raw = Number(row?.value ?? 0);
                     const pct = pieTotal > 0 ? Math.round((raw / pieTotal) * 100) : 0;
                     return (
-                      <AnalyticsTooltipShell title={String(label ?? "User stories status")}>
+                      <AnalyticsTooltipShell title={String(label ?? "User Stories Status")}>
                         <AnalyticsTooltipRow
                           color={(row?.color as string) ?? "#94a3b8"}
                           label={String(row?.name ?? "Status")}
@@ -423,17 +443,17 @@ export function SprintAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
-        <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
-          <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+        <div className="mb-6 flex shrink-0 items-center justify-between gap-2">
+          <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
           </h3>
           <div className="flex items-center gap-2">
-            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
               <button
                 type="button"
                 onClick={() => setMetric("daysLeft")}
-                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
+                className={`rounded-md px-2 py-0 text-[13px] font-medium ${
                   metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
@@ -442,7 +462,7 @@ export function SprintAnalytics({
               <button
                 type="button"
                 onClick={() => setMetric("storyCount")}
-                className={`rounded-md px-2.5 py-1.5 text-[13px] font-medium ${
+                className={`rounded-md px-2 py-0 text-[13px] font-medium ${
                   metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
@@ -451,7 +471,7 @@ export function SprintAnalytics({
             </div>
           </div>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             <div className="absolute inset-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -481,7 +501,18 @@ export function SprintAnalytics({
                     }}
                     height={34}
                   />
-                  <YAxis allowDecimals={metric !== "storyCount"} tick={{ fontSize: 10 }} width={44} />
+                  <YAxis
+                    allowDecimals={metric !== "storyCount"}
+                    tick={{ fontSize: 10 }}
+                    width={44}
+                    label={{
+                      value: metric === "storyCount" ? "Stories" : "Days left",
+                      angle: -90,
+                      position: "insideLeft",
+                      fill: "#64748b",
+                      fontSize: 13,
+                    }}
+                  />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload || payload.length === 0) return null;
@@ -529,70 +560,68 @@ export function SprintAnalytics({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
-        <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <ChartNoAxesCombined className="size-4 text-slate-600" />
-            Workload balance
+            Workload Balance
           </h3>
-          <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+          {workloadDrilldownAssignee ? (
             <button
               type="button"
-              onClick={() => setWorkloadView("stories")}
-              className={cn(
-                "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
-                workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-              )}
+              onClick={() => setWorkloadDrilldownAssignee(null)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              aria-label="Back to workload chart"
+              title="Back to workload chart"
             >
-              Stories
+              <ArrowLeft className="size-3.5" aria-hidden />
             </button>
-            <button
-              type="button"
-              onClick={() => setWorkloadView("sprintLoad")}
-              className={cn(
-                "rounded-md px-2.5 py-1.5 text-[13px] font-medium",
-                workloadView === "sprintLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-              )}
-            >
-              Sprint load
-            </button>
-          </div>
-        </div>
-        {workloadDrilldownAssignee ? (
-          <div className="mt-1 rounded-xl border border-slate-200/80 bg-white/80 p-2">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[12px] font-semibold text-slate-700">
-                Stories assigned to <span className="text-slate-900">{workloadDrilldownAssignee}</span> (
-                {workloadDrilldownStories.length})
-              </p>
+          ) : (
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
               <button
                 type="button"
-                onClick={() => setWorkloadDrilldownAssignee(null)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                aria-label="Back to workload chart"
+                onClick={() => setWorkloadView("stories")}
+                className={cn(
+                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
+                )}
               >
-                <ArrowLeft className="size-3.5" aria-hidden />
+                Stories
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkloadView("sprintLoad")}
+                className={cn(
+                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  workloadView === "sprintLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
+                )}
+              >
+                Sprint load
               </button>
             </div>
+          )}
+        </div>
+        {workloadDrilldownAssignee ? (
+          <div className="mt-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
             <div className="relative">
               <div
                 ref={workloadDrilldownScrollRef}
                 onScroll={() => updateArrowState(workloadDrilldownScrollRef, setCanScrollWorkloadUp, setCanScrollWorkloadDown)}
-                className="max-h-[11rem] overflow-auto pr-5 [&::-webkit-scrollbar]:hidden"
+                className="h-[clamp(12rem,24vh,16rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
-                <table className="w-full border-collapse text-left text-[12px]">
-                  <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                <table className="w-full border-collapse text-left text-[13px]">
+                  <thead className="sticky top-0 bg-[#0897d5] text-white">
                     <tr>
-                      <th className="px-2 py-1 font-semibold">Story ID</th>
-                      <th className="px-2 py-1 font-semibold">Story name</th>
-                      <th className="px-2 py-1 font-semibold">Sprint</th>
-                      <th className="px-2 py-1 font-semibold">Assignee</th>
-                      <th className="px-2 py-1 font-semibold">Status</th>
+                      <th className="px-2 py-1 text-[14px] font-semibold">Story ID</th>
+                      <th className="px-2 py-1 text-[14px] font-semibold">Story name</th>
+                      <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
+                      <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
+                      <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {workloadDrilldownStories.map((story) => (
-                      <tr key={story.id} className="border-t border-slate-100 text-slate-700">
+                      <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                         <td className="px-2 py-1">
                           <button
                             type="button"
@@ -605,7 +634,11 @@ export function SprintAnalytics({
                         <td className="px-2 py-1">{story.title}</td>
                         <td className="px-2 py-1">{story.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`}</td>
                         <td className="px-2 py-1">{story.assignee}</td>
-                        <td className="px-2 py-1">{story.status}</td>
+                        <td className="px-2 py-1">
+                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
+                            {story.status}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -615,7 +648,7 @@ export function SprintAnalytics({
                 type="button"
                 onClick={() => workloadDrilldownScrollRef.current?.scrollBy({ top: -96, behavior: "smooth" })}
                 className={cn(
-                  "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  "absolute -right-[2px] top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
                   canScrollWorkloadUp && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll up workload stories table"
@@ -626,7 +659,7 @@ export function SprintAnalytics({
                 type="button"
                 onClick={() => workloadDrilldownScrollRef.current?.scrollBy({ top: 96, behavior: "smooth" })}
                 className={cn(
-                  "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                  "absolute bottom-0 -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
                   canScrollWorkloadDown && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll down workload stories table"
@@ -784,11 +817,11 @@ export function SprintAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:pl-4">
-        <h3 className="mb-2 inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+        <h3 className="mb-4 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
-          Cumulative flow
+          Cumulative Flow
         </h3>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {analytics.flowSprintTrendData.length > 0 ? (
               <div className="absolute inset-0">
@@ -825,11 +858,11 @@ export function SprintAnalytics({
                       tick={{ fontSize: 10, fill: "#64748b" }}
                       width={40}
                       label={{
-                        value: "Unique people",
+                        value: "Stories",
                         angle: -90,
                         position: "insideLeft",
                         fill: "#64748b",
-                        fontSize: 10,
+                        fontSize: 13,
                       }}
                     />
                     <Tooltip
@@ -848,7 +881,7 @@ export function SprintAnalytics({
                         const title =
                           row?.dayInSprint != null && row.labelShort
                             ? `Day ${row.dayInSprint} · ${row.labelShort}`
-                            : "Cumulative flow";
+                            : "Cumulative Flow";
                         return (
                           <AnalyticsTooltipShell title={title}>
                             {payload.map((item, idx) => (
@@ -856,28 +889,30 @@ export function SprintAnalytics({
                                 key={`${String(item.name)}-${idx}`}
                                 color={(item.color as string) ?? "#94a3b8"}
                                 label={String(item.name ?? "")}
-                                value={`${Number(item.value ?? 0)} unique people`}
+                                value={`${Number(item.value ?? 0)} stories`}
                               />
                             ))}
                           </AnalyticsTooltipShell>
                         );
                       }}
                     />
-                    {CFD_FLOW_SEGMENTS.map(({ key, label, color }) => (
-                      <Area
-                        key={key}
-                        type="monotone"
-                        dataKey={key}
-                        name={label}
-                        stackId="cfd"
-                        stroke={color}
-                        fill={color}
-                        fillOpacity={0.38}
-                        strokeOpacity={1}
-                        strokeWidth={1.5}
-                        isAnimationActive={false}
-                      />
-                    ))}
+                    {CFD_FLOW_SEGMENTS.map(({ key, label, color }) =>
+                      cfdVisibleKeys.includes(key) ? (
+                        <Area
+                          key={key}
+                          type="monotone"
+                          dataKey={key}
+                          name={label}
+                          stackId="cfd"
+                          stroke={color}
+                          fill={color}
+                          fillOpacity={0.38}
+                          strokeOpacity={1}
+                          strokeWidth={1.5}
+                          isAnimationActive={false}
+                        />
+                      ) : null,
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -886,17 +921,41 @@ export function SprintAnalytics({
             )}
           </div>
           <div className={chartLegendColumnClass}>
-            {[...CFD_FLOW_SEGMENTS].reverse().map(({ label, color }) => (
-              <div key={label} className={legendRowClass}>
-                <span className="inline-flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={showAllCfdKeys}
+              className={cn(
+                "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-medium transition",
+                allCfdKeysSelected
+                  ? "text-slate-900 hover:bg-slate-200/70"
+                  : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+              )}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Layers className="size-3.5" aria-hidden />
+                All
+              </span>
+            </button>
+            {[...CFD_FLOW_SEGMENTS].reverse().map(({ key, label, color }) => {
+              const on = cfdVisibleKeys.includes(key);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleCfdKey(key)}
+                  className={cn(
+                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] font-medium transition",
+                    on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
+                  )}
+                >
                   <span
                     className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
-                    style={{ backgroundColor: color }}
+                    style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
                   />
                   <span>{label}</span>
-                </span>
-              </div>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </div>
       </article>

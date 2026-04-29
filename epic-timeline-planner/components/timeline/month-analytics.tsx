@@ -191,7 +191,7 @@ function CumulativeFlowTooltip({
   const rows = payload.filter((item) => item.value != null);
   if (rows.length === 0) return null;
   return (
-    <AnalyticsTooltipShell title={String(label ?? "Cumulative flow")}>
+    <AnalyticsTooltipShell title={String(label ?? "Cumulative Flow")}>
       {rows.map((row) => {
         const normalized = Array.isArray(row.value) ? row.value[0] : row.value;
         const valueText = typeof normalized === "number" ? `${Math.round(normalized)} stories` : "n/a";
@@ -749,7 +749,10 @@ export function MonthAnalytics({
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [workloadDrilldownAssignee, scopedStories]);
   const scopedStoryDisplayIds = useMemo(() => {
-    const rows = [...scopedStories].sort((a, b) => {
+    const rows = initiatives
+      .flatMap((initiative) => initiative.epics ?? [])
+      .flatMap((epic) => epic.userStories ?? [])
+      .sort((a, b) => {
       const aTs = new Date(a.createdAt).getTime();
       const bTs = new Date(b.createdAt).getTime();
       if (aTs !== bTs) return aTs - bTs;
@@ -760,9 +763,11 @@ export function MonthAnalytics({
       map.set(story.id, `US-${String(idx + 1).padStart(2, "0")}`);
     });
     return map;
-  }, [scopedStories]);
+  }, [initiatives]);
   const scopedEpicDisplayIds = useMemo(() => {
-    const rows = [...scopedEpics].sort((a, b) => {
+    const rows = initiatives
+      .flatMap((initiative) => initiative.epics ?? [])
+      .sort((a, b) => {
       const aTs = new Date(a.createdAt).getTime();
       const bTs = new Date(b.createdAt).getTime();
       if (aTs !== bTs) return aTs - bTs;
@@ -770,10 +775,10 @@ export function MonthAnalytics({
     });
     const map = new Map<string, string>();
     rows.forEach((epic, idx) => {
-      map.set(epic.id, `EP-${String(idx + 1).padStart(2, "0")}`);
+      map.set(epic.id, `EPIC-${String(idx + 1).padStart(2, "0")}`);
     });
     return map;
-  }, [scopedEpics]);
+  }, [initiatives]);
   const initiativeTitleByEpicId = useMemo(() => {
     const map = new Map<string, string>();
     for (const row of monthEpics) map.set(row.epic.id, row.initiative.title);
@@ -1253,9 +1258,9 @@ export function MonthAnalytics({
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
   const sharedDrilldownScrollAreaClass =
-    "overflow-auto rounded-lg bg-white/90 pr-5 [&::-webkit-scrollbar]:hidden";
+    "overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden";
   const sharedDrilldownArrowClass =
-    "absolute right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
+    "absolute -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
 
   return (
     <section className="mb-2 flex flex-col gap-3.5">
@@ -1360,29 +1365,31 @@ export function MonthAnalytics({
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <h3
-          className={cn(
-            "mb-2 inline-flex shrink-0 items-center gap-1.5 font-semibold text-slate-800",
-            isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
-          )}
-        >
-          <PieChartIcon className="size-4 text-slate-600" />
-          {statusPanelTitle}
-          {selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
-        </h3>
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+          <h3
+            className={cn(
+              "inline-flex items-center gap-1.5 font-semibold text-slate-800",
+              isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
+            )}
+          >
+            <PieChartIcon className="size-4 text-slate-600" />
+            {statusPanelTitle}
+            {selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
+          </h3>
+          {statusDrilldownFilter ? (
+            <button
+              type="button"
+              onClick={clearStatusDrilldown}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              aria-label="Back to chart"
+              title="Back to chart"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden />
+            </button>
+          ) : null}
+        </div>
         {statusDrilldownFilter ? (
-          <div className="relative mt-2 rounded-xl bg-white px-2.5 pb-2.5 pt-1.5">
-            <div className="pointer-events-none absolute right-2.5 -top-10 z-20 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={clearStatusDrilldown}
-                className="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                aria-label="Back to chart"
-                title="Back to chart"
-              >
-                <ArrowLeft className="size-3.5" aria-hidden />
-              </button>
-            </div>
+          <div className="relative mt-2 rounded-none bg-white px-2.5 pb-2.5 pt-1.5">
             <div className="relative">
               <div
                 ref={statusDrilldownScrollRef}
@@ -1390,30 +1397,30 @@ export function MonthAnalytics({
                 className={cn("h-[clamp(12rem,24vh,16rem)]", sharedDrilldownScrollAreaClass)}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
-              <table className="min-h-full w-full border-separate border-spacing-0 text-left text-[12px]">
-                <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-600 backdrop-blur">
+              <table className="min-h-full w-full border-separate border-spacing-0 text-left text-[13px]">
+                <thead className="sticky top-0 z-10 bg-[#0897d5] text-white backdrop-blur">
                   {statusChartShowsEpics ? (
                     <tr>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Epic ID</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Epic name</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Initiative</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Assignee</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Status</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Epic ID</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Epic name</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Initiative</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
                     </tr>
                   ) : (
                     <tr>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Story ID</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Story name</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Sprint</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Assignee</th>
-                      <th className="px-2 py-1.5 text-[13px] font-bold">Status</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Story ID</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Story name</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Sprint</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
                     </tr>
                   )}
                 </thead>
                 <tbody>
                   {statusChartShowsEpics
                     ? statusDrilldownEpics.map((epic) => (
-                        <tr key={epic.id} className="text-slate-700 transition hover:bg-slate-50/80">
+                        <tr key={epic.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                           <td className="px-2 py-1.5">
                             <button
                               type="button"
@@ -1427,14 +1434,14 @@ export function MonthAnalytics({
                           <td className="px-2 py-1.5">{initiativeTitleByEpicId.get(epic.id) ?? "—"}</td>
                           <td className="px-2 py-1.5">{epic.assignee?.trim() || "Unassigned"}</td>
                           <td className="px-2 py-1.5">
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
                               {epicStatusById.get(epic.id) ?? "To do"}
                             </span>
                           </td>
                         </tr>
                       ))
                     : statusDrilldownStories.map((story) => (
-                        <tr key={story.id} className="text-slate-700 transition hover:bg-slate-50/80">
+                        <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                           <td className="px-2 py-1.5">
                             <button
                               type="button"
@@ -1464,7 +1471,7 @@ export function MonthAnalytics({
                           </td>
                           <td className="px-2 py-1.5">{story.assignee?.trim() || "Unassigned"}</td>
                           <td className="px-2 py-1.5">
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
                               {story.sprint == null
                                 ? "Unscheduled"
                                 : story.status === "todo"
@@ -1480,7 +1487,7 @@ export function MonthAnalytics({
                       ))}
                   {statusDrilldownRowCount === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-8 text-center text-[12px] text-slate-500">
+                      <td colSpan={5} className="px-3 py-8 text-center text-[13px] text-slate-500">
                         No items in this status for the current scope.
                       </td>
                     </tr>
@@ -1862,7 +1869,7 @@ export function MonthAnalytics({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
           <h3
             className={cn(
               "inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -1872,65 +1879,63 @@ export function MonthAnalytics({
             <ChartNoAxesCombined className="size-4 text-slate-600" />
             Workload Balance
           </h3>
-          <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+          {workloadDrilldownAssignee ? (
             <button
               type="button"
-              onClick={() => setWorkloadView("stories")}
-              className={cn(
-                "rounded-md px-2 py-0 text-[13px] font-medium",
-                workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-              )}
+              onClick={() => setWorkloadDrilldownAssignee(null)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              aria-label="Back to workload chart"
+              title="Back to workload chart"
             >
-              Stories
+              <ArrowLeft className="size-3.5" aria-hidden />
             </button>
-            <button
-              type="button"
-              onClick={() => setWorkloadView("monthLoad")}
-              className={cn(
-                "rounded-md px-2 py-0 text-[13px] font-medium",
-                workloadView === "monthLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-              )}
-            >
-              Month Load
-            </button>
-          </div>
-        </div>
-        {workloadDrilldownAssignee ? (
-          <div className="mt-1 rounded-lg border border-slate-200/80 bg-white/80 p-2">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-[12px] font-semibold text-slate-700">
-                Stories assigned to <span className="text-slate-900">{workloadDrilldownAssignee}</span> ({workloadDrilldownStories.length})
-              </p>
+          ) : (
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
               <button
                 type="button"
-                onClick={() => setWorkloadDrilldownAssignee(null)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                aria-label="Back to workload chart"
-                title="Back to workload chart"
+                onClick={() => setWorkloadView("stories")}
+                className={cn(
+                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
+                )}
               >
-                <ArrowLeft className="size-3.5" aria-hidden />
+                Stories
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkloadView("monthLoad")}
+                className={cn(
+                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  workloadView === "monthLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
+                )}
+              >
+                Month Load
               </button>
             </div>
+          )}
+        </div>
+        {workloadDrilldownAssignee ? (
+          <div className="mt-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
             <div className="relative">
             <div
               ref={workloadDrilldownScrollRef}
               onScroll={updateWorkloadDrilldownArrowState}
-              className={cn("max-h-[11rem]", sharedDrilldownScrollAreaClass)}
+              className={cn("h-[clamp(12rem,24vh,16rem)]", sharedDrilldownScrollAreaClass)}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
-              <table className="w-full border-collapse text-left text-[12px]">
-                <thead className="sticky top-0 bg-slate-50 text-slate-600">
+              <table className="w-full border-collapse text-left text-[13px]">
+                <thead className="sticky top-0 bg-[#0897d5] text-white">
                   <tr>
-                    <th className="px-2 py-1 font-semibold">Story ID</th>
-                    <th className="px-2 py-1 font-semibold">Story name</th>
-                    <th className="px-2 py-1 font-semibold">Sprint</th>
-                    <th className="px-2 py-1 font-semibold">Assignee</th>
-                    <th className="px-2 py-1 font-semibold">Status</th>
+                    <th className="px-2 py-1 text-[14px] font-semibold">Story ID</th>
+                    <th className="px-2 py-1 text-[14px] font-semibold">Story name</th>
+                    <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
+                    <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
+                    <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {workloadDrilldownStories.map((story) => (
-                    <tr key={story.id} className="border-t border-slate-100 text-slate-700">
+                    <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                       <td className="px-2 py-1">
                         <button
                           type="button"
@@ -2222,7 +2227,7 @@ export function MonthAnalytics({
           )}
         >
           <Activity className="size-4 text-slate-600" />
-          Cumulative flow
+          Cumulative Flow
         </h3>
         <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
