@@ -2462,9 +2462,12 @@ export function TimelineGrid({
               "rounded-2xl p-1.5 shadow-lg ring-1",
             monthPlanTab === "sprint-kanban" && "flex min-h-0 flex-1 flex-col",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
+            monthPlanTab !== "sprint-kanban" &&
             activeMonthQuarterLabel && quarterPanelTone[activeMonthQuarterLabel]
               ? quarterPanelTone[activeMonthQuarterLabel]
-              : "bg-slate-100/70 ring-slate-200/90",
+              : monthPlanTab === "sprint-kanban"
+                ? "bg-white ring-slate-200/90"
+                : "bg-slate-100/70 ring-slate-200/90",
           )}
         >
           <div
@@ -2487,15 +2490,11 @@ export function TimelineGrid({
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
                   <div
                     className={cn(
-                      "overflow-hidden rounded-2xl border border-slate-200/55 px-4 pt-4 pb-0 shadow-sm ring-1 ring-black/[0.03]",
-                      activeMonthQuarterLabel === "Q1" && "bg-gradient-to-br from-blue-50/95 via-white to-white",
-                      activeMonthQuarterLabel === "Q2" && "bg-gradient-to-br from-cyan-50/95 via-white to-white",
-                      activeMonthQuarterLabel === "Q3" && "bg-gradient-to-br from-emerald-50/95 via-white to-white",
-                      activeMonthQuarterLabel === "Q4" && "bg-gradient-to-br from-violet-50/95 via-white to-white",
-                      !activeMonthQuarterLabel && "bg-gradient-to-br from-slate-50/90 via-white to-white",
+                      "overflow-hidden rounded-2xl border border-slate-200/55 px-5 pt-4 pb-2 shadow-sm ring-1 ring-black/[0.03]",
+                      "bg-white",
                     )}
                   >
-                    <div className="grid min-w-0 grid-cols-2 gap-2.5">
+                    <div className="grid min-w-0 grid-cols-2 gap-3">
                       <button
                         type="button"
                         title={`Open ${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))} board (${sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})`}
@@ -2507,9 +2506,9 @@ export function TimelineGrid({
                           onMonthPlanTabChange?.("sprint-kanban");
                           onEnterSprintStoryBoard?.(targetSprint, null);
                         }}
-                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-2 py-2.5 text-center shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99]"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-2 py-2 text-center ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 active:scale-[0.99]"
                       >
-                        <div className="flex flex-col items-center gap-0.5">
+                        <div className="flex flex-col items-center gap-0.5 pb-1">
                           <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-slate-800">
                             <Flag className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))}
@@ -2524,10 +2523,10 @@ export function TimelineGrid({
                               key={dayLabel.key}
                               className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
                             >
-                              <span className="w-full truncate text-[11px] font-semibold leading-none text-slate-700">
+                              <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-700">
                                 {dayLabel.weekday}
                               </span>
-                              <span className="w-full truncate text-[10px] font-medium leading-none text-slate-500 tabular-nums">
+                              <span className="w-full truncate text-[11px] font-medium leading-none text-slate-500 tabular-nums">
                                 {dayLabel.dayMonth}
                               </span>
                             </span>
@@ -2545,9 +2544,9 @@ export function TimelineGrid({
                           onMonthPlanTabChange?.("sprint-kanban");
                           onEnterSprintStoryBoard?.(targetSprint, null);
                         }}
-                        className="flex w-full min-w-0 flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-2 py-2.5 text-center shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99]"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-2 py-2 text-center ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 active:scale-[0.99]"
                       >
-                        <div className="flex flex-col items-center gap-0.5">
+                        <div className="flex flex-col items-center gap-0.5 pb-1">
                           <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-slate-800">
                             <Flag className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))}
@@ -2562,10 +2561,10 @@ export function TimelineGrid({
                               key={dayLabel.key}
                               className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
                             >
-                              <span className="w-full truncate text-[11px] font-semibold leading-none text-slate-700">
+                              <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-700">
                                 {dayLabel.weekday}
                               </span>
-                              <span className="w-full truncate text-[10px] font-medium leading-none text-slate-500 tabular-nums">
+                              <span className="w-full truncate text-[11px] font-medium leading-none text-slate-500 tabular-nums">
                                 {dayLabel.dayMonth}
                               </span>
                             </span>
@@ -2666,7 +2665,7 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
-              <div className="flex min-h-0 flex-1 px-3 pb-3 pt-1.5 sm:px-5 sm:pb-5 sm:pt-2">
+              <div className="flex min-h-0 flex-1">
                 <SprintKanbanBoard
                   initiatives={initiatives}
                   month={activeMonth}

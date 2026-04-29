@@ -258,7 +258,7 @@ export function SprintKanbanBoard({
   return (
     <div className="flex w-full min-h-0 flex-1 flex-col gap-2">
       {assigneeOptions.length > 0 ? (
-        <div className="shrink-0 rounded-xl bg-slate-50/90 px-2.5 py-1">
+        <div className="shrink-0 px-2.5 py-1">
           <div
             className="flex min-w-0 items-center py-0.5"
             onMouseEnter={() => setAssigneeFilterExpanded(true)}
