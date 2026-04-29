@@ -2804,7 +2804,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex min-h-[2rem] flex-col items-center justify-center gap-0 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-0.5 py-0 text-center shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99]"
+                            className="flex min-h-[2rem] flex-col items-center justify-center gap-0 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-1.5 py-0.5 text-center shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99]"
                           >
                             <span className="text-[13px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
@@ -2821,7 +2821,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex min-h-[2rem] flex-col items-center justify-center gap-0 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-0.5 py-0 text-center shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99]"
+                            className="flex min-h-[2rem] flex-col items-center justify-center gap-0 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-1.5 py-0.5 text-center shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99]"
                           >
                             <span className="text-[13px] font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
