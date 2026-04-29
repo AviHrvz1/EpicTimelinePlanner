@@ -318,14 +318,11 @@ function GanttTodayMarker({
           className="absolute top-0 bottom-0 w-4 -translate-x-1/2 overflow-visible"
           style={{ left: `${x}%` }}
         >
-          {showArrow ? (
-            <div className="absolute -top-[5px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
-          ) : null}
           {showLine ? (
             <div className="absolute left-1/2 top-[88px] bottom-0 w-px -translate-x-1/2 bg-emerald-500/95" />
           ) : null}
           {showArrow ? (
-            <div className="absolute top-[80px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
+            <div className="absolute top-[81px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
           ) : null}
         </div>
       </div>
