@@ -48,7 +48,7 @@ import {
   usePlanningSurfaceRect,
 } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
-import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
+import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type StoryWithEpic = UserStoryItem & { epicTitle: string };
 
@@ -133,6 +133,17 @@ export function StoryDetailsDialog({
   const [newLabel, setNewLabel] = useState("");
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
   const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
+  const sprintPlanningYear = useMemo(
+    () => initiatives[0]?.year ?? new Date().getFullYear(),
+    [initiatives],
+  );
+  const assignableSprints = useMemo(
+    () =>
+      Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => i + 1).filter(
+        (n) => sprintEndDate(sprintPlanningYear, n).getTime() > Date.now(),
+      ),
+    [sprintPlanningYear],
+  );
   const [priority, setPriority] = useState("");
   const [sprint, setSprint] = useState("");
   const [status, setStatus] = useState<StoryStatus>(StoryStatus.todo);
@@ -809,8 +820,8 @@ export function StoryDetailsDialog({
               <p className="text-sm font-normal text-slate-700">Sprint</p>
               <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-1.5 text-[13px] font-medium text-slate-800">
                 <option value="">Not set</option>
-                {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => (
-                  <option key={i + 1} value={String(i + 1)}>{`Sprint ${i + 1}`}</option>
+                {assignableSprints.map((n) => (
+                  <option key={n} value={String(n)}>{`Sprint ${n}`}</option>
                 ))}
               </select>
             </label>

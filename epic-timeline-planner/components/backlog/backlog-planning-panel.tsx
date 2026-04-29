@@ -9,7 +9,7 @@ import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
+import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
@@ -675,6 +675,18 @@ export function BacklogPlanningPanel({
       return { id: String(n), label: `Sprint ${n}` };
     }),
   ];
+  const assignableSprintsForYear = useMemo(() => {
+    const cache = new Map<number, number[]>();
+    return (year: number): number[] => {
+      const cached = cache.get(year);
+      if (cached) return cached;
+      const list = Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => i + 1).filter(
+        (n) => sprintEndDate(year, n).getTime() > Date.now(),
+      );
+      cache.set(year, list);
+      return list;
+    };
+  }, []);
   const quarterOptions: OptionItem[] = [
     { id: "Q1", label: "Q1" },
     { id: "Q2", label: "Q2" },
@@ -1112,8 +1124,7 @@ export function BacklogPlanningPanel({
                     className="h-7 min-w-[94px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   >
                     <option value="unscheduled">Unscheduled</option>
-                    {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => {
-                      const n = i + 1;
+                    {assignableSprintsForYear(Number(row.initiativeYear)).map((n) => {
                       return (
                         <option key={n} value={String(n)}>
                           Sprint {n}
@@ -3485,8 +3496,7 @@ export function BacklogPlanningPanel({
                                             className="h-7 min-w-[96px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           >
                                             <option value="unscheduled">Unscheduled</option>
-                                            {Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => {
-                                              const n = i + 1;
+                                            {assignableSprintsForYear(Number(initiative.year)).map((n) => {
                                               return (
                                                 <option key={n} value={String(n)}>
                                                   Sprint {n}

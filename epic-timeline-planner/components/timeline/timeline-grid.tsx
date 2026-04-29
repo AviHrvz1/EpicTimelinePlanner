@@ -1311,10 +1311,10 @@ export function TimelineGrid({
     },
   };
   const monthToneByQuarter: Record<string, string> = {
-    Q1: "bg-blue-50 text-blue-800 hover:bg-blue-100",
-    Q2: "bg-cyan-50 text-cyan-800 hover:bg-cyan-100",
-    Q3: "bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
-    Q4: "bg-violet-50 text-violet-800 hover:bg-violet-100",
+    Q1: "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
+    Q2: "border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100",
+    Q3: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+    Q4: "border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100",
   };
   const quarterPanelTone: Record<string, string> = {
     Q1: "bg-blue-50/45 ring-blue-100",
@@ -3018,7 +3018,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           className={cn(
-                            "flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-center text-[15px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition hover:-translate-y-px hover:shadow-md",
+                            "flex w-full items-center justify-center gap-1.5 rounded-xl border py-1.5 text-center text-[15px] font-bold tracking-tight ring-1 ring-black/[0.04] transition hover:-translate-y-px",
                             monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
                           )}
                           onClick={() => {

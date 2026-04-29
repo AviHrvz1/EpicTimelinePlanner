@@ -47,6 +47,7 @@ import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
+import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 function quarterNumFromMonth(month: number): 1 | 2 | 3 | 4 {
   if (month <= 3) return 1;
@@ -197,22 +198,6 @@ export function EpicFormDialog({
   const [childStorySortDir, setChildStorySortDir] = useState<"asc" | "desc">("asc");
   const [isSprintAutocompleteOpen, setIsSprintAutocompleteOpen] = useState(false);
   const [sprintAutocompletePosition, setSprintAutocompletePosition] = useState<{ left: number; top: number; width: number } | null>(null);
-  const sprintAutocompleteOptions = useMemo(
-    () => Array.from({ length: 24 }, (_, idx) => idx + 1),
-    [],
-  );
-  const filteredSprintAutocompleteOptions = useMemo(() => {
-    if (!isSprintAutocompleteOpen || childEditingCell?.field !== "sprint") return [];
-    const raw = childEditingValue.trim().toLowerCase();
-    if (!raw) return sprintAutocompleteOptions;
-    const numericQuery = raw.replace(/[^0-9]/g, "");
-    return sprintAutocompleteOptions.filter((sprintNo) => {
-      const sprintLabel = `sprint ${sprintNo}`;
-      if (sprintLabel.includes(raw)) return true;
-      if (!numericQuery) return false;
-      return String(sprintNo).includes(numericQuery);
-    });
-  }, [childEditingCell?.field, childEditingValue, isSprintAutocompleteOpen, sprintAutocompleteOptions]);
   const { widths: childTableWidths, onColumnResizeStart: onChildTableColResize } = useResizableTableColumns(
     `${open ? "1" : "0"}-${epic?.id ?? "none"}`,
     EPIC_CHILD_TABLE_DEFAULT_WIDTHS,
@@ -324,6 +309,29 @@ export function EpicFormDialog({
     () => initiatives.find((initiative) => initiative.id === initiativeId) ?? null,
     [initiativeId, initiatives],
   );
+  const sprintPlanningYear = useMemo(
+    () => selectedInitiative?.year ?? epic?.planYear ?? initiatives[0]?.year ?? new Date().getFullYear(),
+    [selectedInitiative?.year, epic?.planYear, initiatives],
+  );
+  const assignableSprintOptions = useMemo(
+    () =>
+      Array.from({ length: YEAR_SPRINT_MAX }, (_, idx) => idx + 1).filter(
+        (n) => sprintEndDate(sprintPlanningYear, n).getTime() > Date.now(),
+      ),
+    [sprintPlanningYear],
+  );
+  const filteredSprintAutocompleteOptions = useMemo(() => {
+    if (!isSprintAutocompleteOpen || childEditingCell?.field !== "sprint") return [];
+    const raw = childEditingValue.trim().toLowerCase();
+    if (!raw) return assignableSprintOptions;
+    const numericQuery = raw.replace(/[^0-9]/g, "");
+    return assignableSprintOptions.filter((sprintNo) => {
+      const sprintLabel = `sprint ${sprintNo}`;
+      if (sprintLabel.includes(raw)) return true;
+      if (!numericQuery) return false;
+      return String(sprintNo).includes(numericQuery);
+    });
+  }, [assignableSprintOptions, childEditingCell?.field, childEditingValue, isSprintAutocompleteOpen]);
   const allowedMonthNames = useMemo(() => {
     const indices = monthIndicesForQuarter(parseQuarterSelect(planQuarterDraft));
     return indices.map((i) => MONTHS[i - 1]);
@@ -707,11 +715,16 @@ export function EpicFormDialog({
     setChildEditingValue("");
     setIsSprintAutocompleteOpen(false);
     setSprintAutocompletePosition(null);
+    const sprintCandidate = parseSprintDraftValue(next.sprint);
+    const sprintValue =
+      sprintCandidate == null || assignableSprintOptions.includes(sprintCandidate)
+        ? sprintCandidate
+        : null;
     const patch =
       field === "title"
         ? { title: next.title.trim() }
         : field === "sprint"
-          ? { sprint: parseSprintDraftValue(next.sprint) }
+          ? { sprint: sprintValue }
           : field === "status"
             ? { status: next.status }
             : field === "assignee"
