@@ -1624,18 +1624,48 @@ export function TimelineGrid({
   const railLabelBaseClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
 
-  useEffect(() => {
+  const runSurfaceTransition = useCallback(() => {
     const el = timelineContentScrollRef.current;
     if (!el) return;
     if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     el.animate(
       [
-        { opacity: 0.0, transform: "translateX(18px)" },
-        { opacity: 1.0, transform: "translateX(0px)" },
+        {
+          opacity: 0.0,
+          filter: "brightness(0.78) saturate(0.94) blur(2px)",
+          transform: "perspective(1200px) rotateX(0.35deg) translateY(6px) scale(0.994)",
+          boxShadow: "0 0 0 rgba(59, 130, 246, 0)",
+          offset: 0,
+        },
+        {
+          opacity: 0.35,
+          filter: "brightness(0.84) saturate(0.96) blur(1.5px)",
+          transform: "perspective(1200px) rotateX(0.22deg) translateY(4px) scale(0.996)",
+          boxShadow: "0 6px 20px rgba(59, 130, 246, 0.08)",
+          offset: 0.35,
+        },
+        {
+          opacity: 0.7,
+          filter: "brightness(0.92) saturate(0.985) blur(0.8px)",
+          transform: "perspective(1200px) rotateX(0.1deg) translateY(2px) scale(0.998)",
+          boxShadow: "0 4px 14px rgba(59, 130, 246, 0.05)",
+          offset: 0.7,
+        },
+        {
+          opacity: 1.0,
+          filter: "brightness(1) saturate(1) blur(0px)",
+          transform: "perspective(1200px) rotateX(0deg) translateY(0px) scale(1)",
+          boxShadow: "0 0 0 rgba(59, 130, 246, 0)",
+          offset: 1,
+        },
       ],
-      { duration: 290, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      { duration: 430, easing: "linear" },
     );
-  }, [surfaceTransitionKey]);
+  }, []);
+
+  useEffect(() => {
+    runSurfaceTransition();
+  }, [runSurfaceTransition, surfaceTransitionKey]);
 
   useEffect(() => {
     console.log("[rail-nav] expanded state changed", {
@@ -1756,7 +1786,10 @@ export function TimelineGrid({
                 {item.onClick ? (
                   <button
                     type="button"
-                    onClick={item.onClick}
+                    onClick={() => {
+                      runSurfaceTransition();
+                      item.onClick?.();
+                    }}
                     className="cursor-pointer whitespace-nowrap px-1 py-1 text-[15px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
