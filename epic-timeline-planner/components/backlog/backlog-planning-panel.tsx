@@ -335,14 +335,14 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] ring-1 ring-indigo-300/80 outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
+        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] ring-1 ring-indigo-300/80 outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
       >
         <span className="font-semibold text-slate-700">{label}: </span>
         <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-56 rounded-lg border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 ring-1 ring-indigo-200/60 backdrop-blur-sm">
-        <label className="mb-1 flex items-center gap-2 text-[13px] text-slate-700">
+        <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
           <input
             type="checkbox"
             checked={allSelected}
@@ -353,7 +353,7 @@ function MultiCheckboxFilter({
         </label>
         <div className="max-h-44 space-y-1 overflow-auto pr-1">
           {options.map((option) => (
-            <label key={option.id} className="flex items-center gap-2 text-[13px] text-slate-700">
+            <label key={option.id} className="flex items-center gap-2 text-[14px] text-slate-700">
               <input
                 type="checkbox"
                 checked={allSelected || selected.includes(option.id)}
@@ -2468,7 +2468,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[30px] min-w-[11.5rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
+              className="flex h-[30px] min-w-[11.5rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
             >
               <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
                 <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
@@ -2482,7 +2482,7 @@ export function BacklogPlanningPanel({
                   const checked = groupLevels.includes(level);
                   const disabled = idx > 0 && !groupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
                   return (
-                    <label key={level} className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700", disabled && "opacity-50")}>
+                    <label key={level} className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[14px] text-slate-700", disabled && "opacity-50")}>
                       <input
                         type="checkbox"
                         checked={checked}
@@ -2566,7 +2566,7 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-xl border border-[#19abeb]/70 bg-white text-[16px] shadow-inner">
+      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-none border border-[#19abeb]/70 bg-white text-[16px] shadow-inner">
         <>
         {showTableHeaderRow ? (
           <div className="sticky top-0 z-10 relative border-b border-[#19abeb]/70 bg-[#0897d5]">
@@ -2579,13 +2579,13 @@ export function BacklogPlanningPanel({
                   {key === "workItem" ? (
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
-                      <span className="mr-1.5 inline-flex shrink-0 items-center gap-0.5 rounded-md bg-white/85 p-0.5 ring-1 ring-slate-200/90" role="group" aria-label="Row tree expand and collapse">
+                      <span className="mr-1.5 inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5" role="group" aria-label="Row tree expand and collapse">
                         <button
                           type="button"
                           onClick={collapseAllRows}
                           title="Collapse all rows"
                           aria-label="Collapse all rows"
-                            className="inline-flex h-5 w-5 items-center justify-center rounded text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                            className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                         >
                           <ChevronsUp className="size-3.5" strokeWidth={2.2} />
                         </button>
@@ -2594,7 +2594,7 @@ export function BacklogPlanningPanel({
                           onClick={expandAllRows}
                           title="Expand all rows"
                           aria-label="Expand all rows"
-                          className="inline-flex h-5 w-5 items-center justify-center rounded text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                          className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                         >
                           <ChevronsDown className="size-3.5" strokeWidth={2.2} />
                         </button>
@@ -2621,7 +2621,7 @@ export function BacklogPlanningPanel({
                 <button
                   type="button"
                   onClick={() => setColumnsMenuOpen((open) => !open)}
-                  className="inline-flex h-[30px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold normal-case tracking-normal text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
+                  className="inline-flex h-[26px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold normal-case tracking-normal text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
                 >
                   <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
                   Table
@@ -2676,7 +2676,7 @@ export function BacklogPlanningPanel({
               <button
                 type="button"
                 onClick={() => setColumnsMenuOpen((open) => !open)}
-                className="inline-flex h-[30px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
+                className="inline-flex h-[26px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
               >
                 <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
                 Table
