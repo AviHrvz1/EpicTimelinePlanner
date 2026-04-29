@@ -77,6 +77,8 @@ import {
   globalSprintFromMonthLane,
   monthLaneFromGlobalSprint,
   resolvedInitiativeYearSprintBounds,
+  sprintEndDate,
+  YEAR_SPRINT_MAX,
   yearSprintRangeFromMonthRange,
 } from "@/lib/year-sprint";
 
@@ -870,6 +872,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isLeftPanelHidden, setIsLeftPanelHidden] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const planningRightSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const sprintAutoRolloverInFlightRef = useRef<Set<string>>(new Set());
   const ganttEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ganttEmphasisTickRef = useRef(0);
   const [ganttEmphasis, setGanttEmphasis] = useState<{ initiativeId: string; tick: number } | null>(null);
@@ -1744,6 +1747,78 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     );
     setInitiatives(data);
   }
+
+  useEffect(() => {
+    const now = new Date();
+    if (selectedYear !== now.getFullYear()) return;
+
+    const nowMs = now.getTime();
+    const inFlight = sprintAutoRolloverInFlightRef.current;
+    const candidates: Array<{ storyId: string; fromSprint: number; toSprint: number }> = [];
+
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        for (const story of epic.userStories ?? []) {
+          if (story.sprint == null) continue;
+          if (story.status === StoryStatus.approved) continue;
+          if (inFlight.has(story.id)) continue;
+          const fromSprint = clampYearSprint(story.sprint);
+          if (fromSprint >= YEAR_SPRINT_MAX) continue;
+          if (sprintEndDate(selectedYear, fromSprint).getTime() > nowMs) continue;
+
+          // Move to the nearest sprint that has not ended yet (or the final sprint).
+          let toSprint = fromSprint + 1;
+          while (toSprint < YEAR_SPRINT_MAX && sprintEndDate(selectedYear, toSprint).getTime() <= nowMs) {
+            toSprint += 1;
+          }
+          if (toSprint !== fromSprint) {
+            candidates.push({ storyId: story.id, fromSprint, toSprint });
+          }
+        }
+      }
+    }
+
+    if (candidates.length === 0) return;
+
+    candidates.forEach((entry) => inFlight.add(entry.storyId));
+    let cancelled = false;
+
+    (async () => {
+      const results = await Promise.all(
+        candidates.map(async (entry) => {
+          try {
+            const response = await fetch(`/api/stories/${entry.storyId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sprint: entry.toSprint }),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return { ok: true as const, entry };
+          } catch {
+            return { ok: false as const, entry };
+          }
+        }),
+      );
+
+      results.forEach(({ entry }) => inFlight.delete(entry.storyId));
+      if (cancelled) return;
+
+      const movedCount = results.filter((row) => row.ok).length;
+      const failedCount = results.length - movedCount;
+
+      if (movedCount > 0) {
+        await refresh(selectedYear);
+        toast.success(`Moved ${movedCount} non-approved ticket${movedCount === 1 ? "" : "s"} to the next sprint.`);
+      }
+      if (failedCount > 0) {
+        toast.error(`Failed to move ${failedCount} ticket${failedCount === 1 ? "" : "s"} to the next sprint.`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initiatives, selectedYear]);
 
   async function handleDeleteInitiative(id: string) {
     await fetch(`/api/initiatives/${id}`, { method: "DELETE" });

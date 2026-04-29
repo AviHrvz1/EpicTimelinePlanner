@@ -3037,7 +3037,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex h-7 items-center justify-center rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-0.5 py-0 text-center transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 active:scale-[0.99]"
+                            className="flex h-7 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
                           >
                             <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
                               <span className="text-[13px] font-semibold">S</span>
@@ -3054,7 +3054,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex h-7 items-center justify-center rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-0.5 py-0 text-center transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 active:scale-[0.99]"
+                            className="flex h-7 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
                           >
                             <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
                               <span className="text-[13px] font-semibold">S</span>
