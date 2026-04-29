@@ -708,6 +708,36 @@ function MonthEpicDropArea({
   );
 }
 
+function SprintPlanDropButton({
+  month,
+  lane,
+  title,
+  onClick,
+  className,
+  children,
+}: {
+  month: number;
+  lane: 1 | 2;
+  title: string;
+  onClick: () => void;
+  className: string;
+  children: ReactNode;
+}) {
+  const dropId = `epic-plan:${month}:${lane}`;
+  const { setNodeRef, isOver } = useDroppable({ id: dropId });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      title={title}
+      onClick={onClick}
+      className={cn(className, isOver && "ring-2 ring-primary/40 bg-primary/10")}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function TimelineGrid({
   initiatives,
   zoom,
@@ -2993,7 +3023,12 @@ export function TimelineGrid({
               </div>
             </div>
           ) : !focusedQuarter && quarterViewTab === "gantt" ? (
-            <div className={cn("relative mb-4 w-full overflow-x-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
+            <div
+              className={cn(
+                "relative mb-4 w-full overflow-x-hidden",
+                hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
+              )}
+            >
               <GanttTodayMarker
                 leftPercent={roadmapLaneTodayLeft}
                 showBadge={false}
@@ -3028,8 +3063,9 @@ export function TimelineGrid({
                           {MONTHS[month - 1]}
                         </button>
                         <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
+                          <SprintPlanDropButton
+                            month={month}
+                            lane={1}
                             title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 1))}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
@@ -3044,9 +3080,10 @@ export function TimelineGrid({
                                 {globalSprintFromMonthLane(month, 1)}
                               </span>
                             </span>
-                          </button>
-                          <button
-                            type="button"
+                          </SprintPlanDropButton>
+                          <SprintPlanDropButton
+                            month={month}
+                            lane={2}
                             title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
                             onClick={() => {
                               if (isPostDragClickSuppressed()) return;
@@ -3061,7 +3098,7 @@ export function TimelineGrid({
                                 {globalSprintFromMonthLane(month, 2)}
                               </span>
                             </span>
-                          </button>
+                          </SprintPlanDropButton>
                         </div>
                         <MonthDropCell month={month} />
                       </div>

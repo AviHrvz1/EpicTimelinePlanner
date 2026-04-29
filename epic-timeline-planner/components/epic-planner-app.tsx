@@ -36,6 +36,7 @@ import {
   parseSprintCapacityBucketDropId,
 } from "@/lib/epic-dnd-ids";
 import {
+  clientXCenterFromDragEnd,
   clientYCenterFromDragEnd,
   inferGanttLaneHoverIndexFromClientY,
   inferGanttLaneHoverTimelineRowFromClientY,
@@ -2697,8 +2698,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }
         month = parsed.month;
         planSprint = 1;
+        const cx = clientXCenterFromDragEnd(event);
+        const overRect = event.over?.rect;
+        if (
+          cx !== undefined &&
+          overRect &&
+          Number.isFinite(overRect.left) &&
+          Number.isFinite(overRect.width) &&
+          overRect.width > 0
+        ) {
+          const midpoint = overRect.left + overRect.width / 2;
+          planSprint = cx >= midpoint ? 2 : 1;
+        }
         laneIndex = parsed.laneIndex;
-        console.log("[gantt-drop] epic month drop parsed", { month, laneIndex });
+        console.log("[gantt-drop] epic month drop parsed", { month, laneIndex, planSprint });
       } else {
         console.log("[gantt-drop] epic branch: overId not epic-plan or month", { overId });
         return;

@@ -10,6 +10,13 @@ export function clientYCenterFromDragEnd(event: DragEndEvent): number | undefine
   return rect.top + rect.height / 2;
 }
 
+export function clientXCenterFromDragEnd(event: DragEndEvent): number | undefined {
+  const current = event.active.rect.current;
+  const rect = current?.translated ?? current?.initial;
+  if (!rect) return undefined;
+  return rect.left + rect.width / 2;
+}
+
 /**
  * Maps viewport Y to a target insert index for `computeInitiativeMonthLanePlacement`
  * (0..n, where n appends after the last scheduled row). Rows must set `data-gantt-lane-index`
