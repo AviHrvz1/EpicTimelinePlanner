@@ -419,10 +419,9 @@ export function BacklogPlanningPanel({
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
   const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
-  const [showBacklogDebugZebra, setShowBacklogDebugZebra] = useState(true);
-  const [backlogZebraUiLines, setBacklogZebraUiLines] = useState<string[]>([]);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
+  const backlogRowsRootRef = useRef<HTMLDivElement | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
   const [columnVisibility, setColumnVisibility] = useState<Record<BacklogColumnKey, boolean>>(DEFAULT_BACKLOG_COLUMN_VISIBILITY);
@@ -800,10 +799,28 @@ export function BacklogPlanningPanel({
   ]);
 
   useEffect(() => {
-    if (!showBacklogDebugZebra) return;
-    const nextLines = zebraUiLinesRef.current.slice(0, 60);
-    setBacklogZebraUiLines((prev) => (prev.join("\n") === nextLines.join("\n") ? prev : nextLines));
-  }, [showBacklogDebugZebra, fullyFiltered, groupLevels, query, yearFilter, quarterFilter, statusFilter, sprintFilter, assigneeFilter, workItemFilter, openGroupFolders, openInitiatives, openEpics]);
+    const root = backlogRowsRootRef.current;
+    if (!root) return;
+
+    const rowEls = Array.from(root.querySelectorAll<HTMLElement>('[data-backlog-zebra-row="true"]'));
+    rowEls.forEach((el, idx) => {
+      const bg = idx % 2 === 0 ? "#d8f2ff" : "#ffffff";
+      el.style.backgroundColor = bg;
+    });
+  }, [
+    fullyFiltered,
+    groupLevels,
+    query,
+    yearFilter,
+    quarterFilter,
+    statusFilter,
+    sprintFilter,
+    assigneeFilter,
+    workItemFilter,
+    openGroupFolders,
+    openInitiatives,
+    openEpics,
+  ]);
 
   const visibleColumnKeys = useMemo(
     () => BACKLOG_COLUMN_ORDER.filter((key) => columnVisibility[key]),
@@ -958,52 +975,8 @@ export function BacklogPlanningPanel({
     return { key: "none", label: "No sprint", sort: "99" };
   }
 
-  // Zebra striping:
-  // - Folder/header rows (Year/Quarter/etc) alternate using folderZebraIndex,
-  //   independent of how many child rows exist between them.
-  // - Child rows (initiative/epic/story) alternate using childZebraIndex, which
-  //   is seeded per folder row (so the first initiative under a quarter won't
-  //   look identical to the quarter header).
-  const DEBUG_BACKLOG_ZEBRA = true;
-  const zebraTraceIdRef = useRef(0);
-  zebraTraceIdRef.current += 1;
-  const zebraTraceId = zebraTraceIdRef.current;
-  let zebraLogCount = 0;
-  const zebraUiLinesRef = useRef<string[]>([]);
-  zebraUiLinesRef.current = [];
-
-  let folderZebraIndex = 0;
-  let childZebraIndex = 0;
-
-  const nextFolderBg = (meta: { label: string; id: string; kind: "folder" }): { idx: number; bg: string } => {
-    const idx = folderZebraIndex;
-    const bg = idx % 2 === 0 ? "#d8f2ff" : "#ffffff";
-    folderZebraIndex += 1;
-    if (DEBUG_BACKLOG_ZEBRA && zebraLogCount < 80) {
-      zebraLogCount += 1;
-      const line = `[idx=${idx}] kind=folder label=${meta.label} bg=${bg}`;
-      zebraUiLinesRef.current.push(line);
-      console.log(`[BacklogZebra#${zebraTraceId}] ${line}`);
-    }
-    return { idx, bg };
-  };
-
-  const nextChildBgStyle = (meta?: { kind?: "initiative" | "epic" | "story"; label?: string; id?: string }): CSSProperties => {
-    const idx = childZebraIndex;
-    const bg = idx % 2 === 0 ? "#d8f2ff" : "#ffffff";
-    childZebraIndex += 1;
-    if (DEBUG_BACKLOG_ZEBRA && zebraLogCount < 80) {
-      zebraLogCount += 1;
-      const kind = meta?.kind ?? "row";
-      // Avoid spam for leaf rows; only log folder-ish containers and epics/initiatives.
-      if (!meta?.kind || ["initiative", "epic"].includes(meta.kind)) {
-        const line = `[idx=${idx}] kind=${kind} label=${meta?.label ?? ""} bg=${bg}`;
-        zebraUiLinesRef.current.push(line);
-        console.log(`[BacklogZebra#${zebraTraceId}] ${line}`);
-      }
-    }
-    return { backgroundColor: bg };
-  };
+  // Backlog zebra striping:
+  // Applied after render via a DOM hook (see useEffect above).
 
   function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
     return rows
@@ -1022,8 +995,10 @@ export function BacklogPlanningPanel({
               "group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2",
               "hover:bg-[#c5ebff]",
             )}
+            data-backlog-zebra-row="true"
+            data-backlog-zebra-kind="story"
+            data-backlog-zebra-label={row.storyTitle}
             style={{
-              ...nextChildBgStyle({ kind: "story", label: row.storyTitle, id: row.storyId }),
               gridTemplateColumns: tableGridTemplate,
             }}
           >
@@ -1351,16 +1326,15 @@ export function BacklogPlanningPanel({
     renderChildren: () => React.ReactNode,
   ) {
     const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
-    const { idx: folderIdx, bg } = nextFolderBg({ label, id: folderId, kind: "folder" });
-    const prevChildZebraIndex = childZebraIndex;
-    childZebraIndex = (folderIdx % 2) ^ 1;
     const renderedChildren = isOpen ? renderChildren() : null;
-    childZebraIndex = prevChildZebraIndex;
     return (
       <div key={folderId}>
         <div
           className="grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-1.5 hover:bg-[#c5ebff]"
-          style={{ gridTemplateColumns: tableGridTemplate, backgroundColor: bg }}
+          style={{ gridTemplateColumns: tableGridTemplate }}
+          data-backlog-zebra-row="true"
+          data-backlog-zebra-kind="folder"
+          data-backlog-zebra-label={label}
         >
           {renderBacklogCells({
             workItem: (
@@ -1442,8 +1416,10 @@ export function BacklogPlanningPanel({
             className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
             style={{
               gridTemplateColumns: tableGridTemplate,
-              ...nextChildBgStyle({ kind: "epic", label: epicTitle, id: epicId }),
             }}
+            data-backlog-zebra-row="true"
+            data-backlog-zebra-kind="epic"
+            data-backlog-zebra-label={epicTitle}
           >
             {renderBacklogCells({
               workItem: (
@@ -1604,8 +1580,10 @@ export function BacklogPlanningPanel({
             className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
             style={{
               gridTemplateColumns: tableGridTemplate,
-              ...nextChildBgStyle({ kind: "initiative", label: initiativeTitle, id: initiativeId }),
             }}
+            data-backlog-zebra-row="true"
+            data-backlog-zebra-kind="initiative"
+            data-backlog-zebra-label={initiativeTitle}
           >
             {renderBacklogCells({
               workItem: (
@@ -1856,8 +1834,10 @@ export function BacklogPlanningPanel({
                   className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
                   style={{
                     gridTemplateColumns: tableGridTemplate,
-                    ...nextChildBgStyle({ kind: "initiative", label: initiative.initiativeTitle, id: initiative.initiativeId }),
                   }}
+                  data-backlog-zebra-row="true"
+                  data-backlog-zebra-kind="initiative"
+                  data-backlog-zebra-label={initiative.initiativeTitle}
                 >
               {renderBacklogCells({
                 workItem: (
@@ -1991,8 +1971,10 @@ export function BacklogPlanningPanel({
                       className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
                       style={{
                         gridTemplateColumns: tableGridTemplate,
-                        ...nextChildBgStyle({ kind: "epic", label: epic.epicTitle, id: epic.epicId }),
                       }}
+                    data-backlog-zebra-row="true"
+                    data-backlog-zebra-kind="epic"
+                    data-backlog-zebra-label={epic.epicTitle}
                     >
                       {renderBacklogCells({
                         workItem: (
@@ -2448,24 +2430,6 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      {showBacklogDebugZebra ? (
-        <div className="fixed right-4 top-24 z-[9999] w-[360px] max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200/70 bg-white/85 p-3 text-[11px] shadow-lg backdrop-blur">
-          <div className="flex items-center justify-between gap-2">
-            <div className="font-semibold">Backlog zebra</div>
-            <button
-              type="button"
-              onClick={() => setShowBacklogDebugZebra(false)}
-              className="rounded px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-            >
-              Hide
-            </button>
-          </div>
-          <div className="mt-2 font-mono whitespace-pre-wrap leading-[1.25] text-slate-700">
-            {backlogZebraUiLines.length > 0 ? backlogZebraUiLines.slice(0, 120).join("\n") : "No zebra logs yet (try grouping/collapse)."}
-          </div>
-        </div>
-      ) : null}
-
       <div className="mb-6 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pt-3 pb-5 shadow-sm ring-1 ring-white/60">
         <div className="relative flex items-center">
           <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
@@ -2765,7 +2729,7 @@ export function BacklogPlanningPanel({
         {fullyFiltered.length === 0 ? (
           <div className="p-4 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
-          <div className="divide-y divide-slate-100 bg-white">
+          <div className="divide-y divide-slate-100 bg-white" ref={backlogRowsRootRef}>
             {groupLevels.length > 0 ? (
               <>
                 {renderGroupedTree(groupedStoryRows)}
@@ -2785,8 +2749,10 @@ export function BacklogPlanningPanel({
                     className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2"
                     style={{
                       gridTemplateColumns: tableGridTemplate,
-                      ...nextChildBgStyle({ kind: "initiative", label: initiative.title, id: initiative.id }),
                     }}
+                    data-backlog-zebra-row="true"
+                    data-backlog-zebra-kind="initiative"
+                    data-backlog-zebra-label={initiative.title}
                   >
                     {renderBacklogCells({
                       workItem: (
@@ -3095,6 +3061,9 @@ export function BacklogPlanningPanel({
                             <div
                             className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2"
                               style={{ gridTemplateColumns: tableGridTemplate }}
+                            data-backlog-zebra-row="true"
+                            data-backlog-zebra-kind="epic"
+                            data-backlog-zebra-label={epic.title}
                             >
                               {renderBacklogCells({
                                 workItem: (
@@ -3334,7 +3303,9 @@ export function BacklogPlanningPanel({
                                   <div
                                     key={story.id}
                                     className={cn("hover:bg-[#c5ebff]", "border-t border-[#7cd3f7]/95")}
-                                    style={nextChildBgStyle({ kind: "story", label: story.title, id: story.id })}
+                                    data-backlog-zebra-row="true"
+                                    data-backlog-zebra-kind="story"
+                                    data-backlog-zebra-label={story.title}
                                   >
                                     {(() => {
                                       const progress = storyCompletion(story);
