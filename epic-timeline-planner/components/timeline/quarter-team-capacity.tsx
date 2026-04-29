@@ -2,7 +2,7 @@
 
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
-import { epicEffectiveEstimateDays } from "@/lib/epic-estimates";
+import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import { quarterTeamCapacityBucketDropId } from "@/lib/epic-dnd-ids";
 import { monthTeamCapacityBoardKey, type MonthTeamCapacityBoard } from "@/lib/month-team-capacity";
@@ -52,7 +52,9 @@ type QuarterTeamCapacityBoardProps = {
   onCapacityChange: (teamId: string, quarterTotalDays: number) => void;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
+  onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
   teamFilterId?: string | null;
+  onTeamFilterChange?: (teamId: string | null) => void;
 };
 
 export function QuarterTeamCapacityBoard({
@@ -64,7 +66,9 @@ export function QuarterTeamCapacityBoard({
   onCapacityChange,
   onOpenEpic,
   onRemoveEpicFromCapacity,
+  onEpicOriginalEstimateChange,
   teamFilterId = null,
+  onTeamFilterChange,
 }: QuarterTeamCapacityBoardProps) {
   const rows = collectQuarterEpics(initiatives, quarterMonths);
   const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
@@ -90,19 +94,19 @@ export function QuarterTeamCapacityBoard({
   for (const team of visibleTeams) {
     teamTotalCapacity += Number(teamQuarterCapacity.get(team.id) ?? 0);
     const cards = rows.filter((row) => row.epic.team === team.id);
-    teamTotalAssigned += cards.reduce(
-      (sum, row) => sum + epicEffectiveEstimateDays(row.epic, "auto"),
-      0,
-    );
+    teamTotalAssigned += cards.reduce((sum, row) => sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0)), 0);
   }
 
   return (
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
-        teamLabel="All teams (combined)"
+        teamLabel={teamFilterId ? (visibleTeams[0]?.label ?? "Team") : "All teams (combined)"}
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
+        teamOptions={MONTH_TEAM_COLUMNS.map((team) => ({ id: team.id, label: team.label }))}
+        selectedTeamId={teamFilterId}
+        onTeamSelect={(teamId) => onTeamFilterChange?.(teamId)}
       />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {visibleTeams.map((team) => {
@@ -115,7 +119,9 @@ export function QuarterTeamCapacityBoard({
                 icon: row.epic.icon,
                 title: row.epic.title,
                 initiativeTitle: row.initiative.title,
-                loadDays: epicEffectiveEstimateDays(row.epic, "auto"),
+                loadDays: Math.max(0, Number(row.epic.originalEstimateDays ?? 0)),
+                childStoryEstimateDays: epicStoryEstimateDaysSum(row.epic),
+                originalEstimateDays: Math.max(0, Number(row.epic.originalEstimateDays ?? 0)),
                 planningLabel: epicPlanningLabel(row.epic),
                 executionStatusLabel: execution.label,
                 executionStatusClassName: execution.className,
@@ -132,6 +138,7 @@ export function QuarterTeamCapacityBoard({
               onCapacityChange={(days) => onCapacityChange(team.id, days)}
               onOpenEpic={onOpenEpic}
               onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+              onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
               dropId={quarterTeamCapacityBucketDropId(year, quarterLabel, team.id)}
               gaugeScaleMax={gaugeScaleMax}
               capacityInputMax={capacityInputMax}

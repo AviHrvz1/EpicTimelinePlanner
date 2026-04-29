@@ -13,23 +13,27 @@ export function TeamEpicCard({
   icon,
   title,
   initiativeTitle,
-  loadDays,
+  childStoryEstimateDays,
+  originalEstimateDays,
   planningLabel,
   executionStatusLabel,
   executionStatusClassName,
   onOpenEpic,
   onRemoveEpicFromCapacity,
+  onOriginalEstimateChange,
 }: {
   epicId: string;
   icon: string;
   title: string;
   initiativeTitle: string;
-  loadDays: number;
+  childStoryEstimateDays: number;
+  originalEstimateDays: number;
   planningLabel?: string;
   executionStatusLabel?: string;
   executionStatusClassName?: string;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
+  onOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
 }) {
   const { setNodeRef, attributes, listeners, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(epicId),
@@ -39,68 +43,85 @@ export function TeamEpicCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "min-h-[4.05rem] rounded-none border border-slate-200/90 bg-white/95 px-2 py-1.5 shadow-sm",
-        isDragging && "opacity-60",
+        "group relative min-h-[5.6rem] rounded-lg border border-slate-200/90 bg-white px-2.5 py-2 shadow-sm transition hover:border-slate-300 hover:shadow-md",
+        isDragging && "opacity-60 shadow-lg",
       )}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         zIndex: isDragging ? 30 : undefined,
       }}
     >
-      <div className="flex items-start gap-1.5">
+      <button
+        type="button"
+        onClick={() => onRemoveEpicFromCapacity(epicId)}
+        className="absolute right-2 top-2 z-20 inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+        aria-label="Remove epic from team capacity bucket"
+        title="Clear team assignment"
+      >
+        <X className="size-3.5" aria-hidden />
+      </button>
+      <div className="flex items-start gap-2">
         <button
           type="button"
-          className="mt-0.5 shrink-0 cursor-grab rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 active:cursor-grabbing"
+          className="mt-0.5 shrink-0 cursor-grab rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 active:cursor-grabbing"
           aria-label="Drag epic card"
           {...attributes}
           {...listeners}
         >
           ::
         </button>
-        <div className="min-w-0 flex-1 pr-1">
-          <div className="mb-1 flex flex-wrap items-center gap-1">
-            {planningLabel ? (
-              <span className="inline-flex items-center rounded border border-violet-200/90 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
-                {planningLabel}
-              </span>
-            ) : null}
-            {executionStatusLabel ? (
-              <span
-                className={cn(
-                  "inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-semibold",
-                  executionStatusClassName ?? "border-blue-200/90 bg-blue-50 text-blue-800",
-                )}
-              >
-                {executionStatusLabel}
-              </span>
-            ) : null}
-          </div>
+        <div className="min-w-0 flex-1 pr-1.5">
           <button
             type="button"
             onClick={() => onOpenEpic(epicId)}
-            className="block w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
+            className="block w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 transition hover:text-blue-700"
           >
             <span className="mr-1.5 inline-flex align-middle text-slate-600">
               <EpicPlanBarIcon icon={icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
             </span>
             {title}
           </button>
-          <p className="truncate text-[11px] leading-snug text-slate-500">{initiativeTitle}</p>
+          <p className="mt-0.5 truncate text-[11px] leading-snug text-slate-500">{initiativeTitle}</p>
+          {(planningLabel || executionStatusLabel) && (
+            <div className="mt-1.5 flex w-full flex-wrap justify-start gap-1.5">
+              {planningLabel ? (
+                <span className="inline-flex items-center rounded-md border border-violet-200/90 bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-800">
+                  {planningLabel}
+                </span>
+              ) : null}
+              {executionStatusLabel ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-md border px-2 py-0.5 text-[10.5px] font-semibold",
+                    executionStatusClassName ?? "border-blue-200/90 bg-blue-50 text-blue-800",
+                  )}
+                >
+                  {executionStatusLabel}
+                </span>
+              ) : null}
+            </div>
+          )}
         </div>
-        <div className="flex shrink-0 items-center gap-1 self-center">
-          <span className="text-[11px] font-semibold text-slate-600">Est</span>
-          <span className="inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded border border-slate-200 bg-slate-50 px-1 text-[11px] font-medium text-slate-800 tabular-nums">
-            {Math.round(loadDays)}
-          </span>
-          <button
-            type="button"
-            onClick={() => onRemoveEpicFromCapacity(epicId)}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Remove epic from team capacity bucket"
-            title="Clear team assignment"
-          >
-            <X className="size-3.5" aria-hidden />
-          </button>
+        <div className="ml-auto flex w-[9.25rem] shrink-0 flex-col items-start gap-1.5 self-start pt-7">
+          <div className="grid w-full grid-cols-[4.5rem_3.5rem] items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-600">Σ Child</span>
+            <span className="inline-flex h-6 w-[3.5rem] items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-[11px] font-semibold text-slate-800 tabular-nums">
+              {Math.round(childStoryEstimateDays)}
+            </span>
+          </div>
+          <label className="grid w-full grid-cols-[4.5rem_3.5rem] items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+            <span>Orig. Est.</span>
+            <input
+              type="number"
+              min={0}
+              max={5000}
+              step={1}
+              value={originalEstimateDays}
+              onChange={(event) => onOriginalEstimateChange(epicId, Math.max(0, Number(event.target.value || 0)))}
+              className="h-6 w-[3.5rem] rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              aria-label="Original estimate days"
+            />
+          </label>
         </div>
       </div>
     </article>
@@ -115,6 +136,7 @@ export function TeamCapacityBucket({
   onCapacityChange,
   onOpenEpic,
   onRemoveEpicFromCapacity,
+  onEpicOriginalEstimateChange,
   dropId,
   gaugeScaleMax,
   capacityInputMax,
@@ -128,6 +150,8 @@ export function TeamCapacityBucket({
     title: string;
     initiativeTitle: string;
     loadDays: number;
+    childStoryEstimateDays: number;
+    originalEstimateDays: number;
     planningLabel?: string;
     executionStatusLabel?: string;
     executionStatusClassName?: string;
@@ -136,6 +160,7 @@ export function TeamCapacityBucket({
   onCapacityChange: (days: number) => void;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
+  onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
   dropId: string;
   /** Thermometer “full scale” for the capacity marker (e.g. 60 for one month, 180 for a quarter). */
   gaugeScaleMax: number;
@@ -219,6 +244,7 @@ export function TeamCapacityBucket({
                   {...card}
                   onOpenEpic={onOpenEpic}
                   onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+                  onOriginalEstimateChange={onEpicOriginalEstimateChange}
                 />
               ))
             )}

@@ -1702,6 +1702,32 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }, []);
 
+  const updateEpicOriginalEstimateFromCapacity = useCallback(async (epicId: string, estimatedDays: number) => {
+    /** Epic API validates integer days; normalize inline edits before PATCH. */
+    const nextEstimate = Math.max(0, Math.round(Number(estimatedDays) || 0));
+    flushSync(() => {
+      setInitiatives((prev) =>
+        prev.map((init) => ({
+          ...init,
+          epics: (init.epics ?? []).map((epic) =>
+            epic.id === epicId ? { ...epic, originalEstimateDays: nextEstimate } : epic,
+          ),
+        })),
+      );
+    });
+    try {
+      const response = await fetch(`/api/epics/${epicId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ originalEstimateDays: nextEstimate }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch {
+      await refresh();
+      toast.error("Failed to update original estimate");
+    }
+  }, []);
+
   const unscheduleStoryFromCapacity = useCallback(async (storyId: string) => {
     setSprintCapacityByKey((prev) => {
       const next = Object.fromEntries(
@@ -3308,6 +3334,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onQuarterTeamCapacityChange={updateQuarterTeamCapacity}
                 onYearTeamCapacityChange={updateYearTeamCapacity}
                 onMonthTeamCapacityEpicRemove={removeEpicFromMonthTeamCapacity}
+                onCapacityEpicOriginalEstimateChange={updateEpicOriginalEstimateFromCapacity}
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}

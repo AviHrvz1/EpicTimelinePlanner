@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
+
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
-import { epicEffectiveEstimateDays } from "@/lib/epic-estimates";
+import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
 import { monthTeamCapacityBucketDropId } from "@/lib/epic-dnd-ids";
 import { MONTH_TEAM_COLUMNS, collectMonthEpicsForTeamBoard } from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
@@ -50,6 +52,7 @@ type MonthTeamCapacityProps = {
   onCapacityChange: (teamId: string, days: number) => void;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
+  onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
 };
 
 export function MonthTeamCapacityBoard({
@@ -60,32 +63,37 @@ export function MonthTeamCapacityBoard({
   onCapacityChange,
   onOpenEpic,
   onRemoveEpicFromCapacity,
+  onEpicOriginalEstimateChange,
 }: MonthTeamCapacityProps) {
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
   const gradientKey = `month-${year}-${month}`.replace(/[^a-zA-Z0-9]+/g, "-");
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const visibleTeams = selectedTeamId
+    ? MONTH_TEAM_COLUMNS.filter((team) => team.id === selectedTeamId)
+    : MONTH_TEAM_COLUMNS;
 
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
-  for (const team of MONTH_TEAM_COLUMNS) {
+  for (const team of visibleTeams) {
     const cap = Number(capacityBoard.capacities[team.id] ?? 20);
     teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
     const cards = rows.filter((row) => row.epic.team === team.id);
-    teamTotalAssigned += cards.reduce(
-      (sum, row) => sum + epicEffectiveEstimateDays(row.epic, "auto"),
-      0,
-    );
+    teamTotalAssigned += cards.reduce((sum, row) => sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0)), 0);
   }
 
   return (
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
-        teamLabel="All teams (combined)"
+        teamLabel={selectedTeamId ? (visibleTeams[0]?.label ?? "Team") : "All teams (combined)"}
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
+        teamOptions={MONTH_TEAM_COLUMNS.map((team) => ({ id: team.id, label: team.label }))}
+        selectedTeamId={selectedTeamId}
+        onTeamSelect={setSelectedTeamId}
       />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        {MONTH_TEAM_COLUMNS.map((team) => {
+        {visibleTeams.map((team) => {
           const cards = rows
             .filter((row) => row.epic.team === team.id)
             .map((row) => {
@@ -95,7 +103,9 @@ export function MonthTeamCapacityBoard({
                 icon: row.epic.icon,
                 title: row.epic.title,
                 initiativeTitle: row.initiative.title,
-                loadDays: epicEffectiveEstimateDays(row.epic, "auto"),
+                loadDays: Math.max(0, Number(row.epic.originalEstimateDays ?? 0)),
+                childStoryEstimateDays: epicStoryEstimateDaysSum(row.epic),
+                originalEstimateDays: Math.max(0, Number(row.epic.originalEstimateDays ?? 0)),
                 planningLabel: epicPlanningLabel(row.epic),
                 executionStatusLabel: execution.label,
                 executionStatusClassName: execution.className,
@@ -111,6 +121,7 @@ export function MonthTeamCapacityBoard({
               onCapacityChange={(days) => onCapacityChange(team.id, days)}
               onOpenEpic={onOpenEpic}
               onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+              onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
               dropId={monthTeamCapacityBucketDropId(year, month, team.id)}
               gaugeScaleMax={60}
               capacityInputMax={200}

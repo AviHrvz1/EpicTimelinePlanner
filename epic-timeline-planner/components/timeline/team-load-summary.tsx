@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, Thermometer } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Thermometer, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -9,12 +10,19 @@ export function TeamLoadSummary({
   gradientKey,
   totalAssigned,
   totalCapacity,
+  teamOptions,
+  selectedTeamId = null,
+  onTeamSelect,
 }: {
   teamLabel: string;
   gradientKey: string;
   totalAssigned: number;
   totalCapacity: number;
+  teamOptions?: Array<{ id: string; label: string }>;
+  selectedTeamId?: string | null;
+  onTeamSelect?: (teamId: string | null) => void;
 }) {
+  const [teamFilterExpanded, setTeamFilterExpanded] = useState(false);
   const overCapacity = totalAssigned > totalCapacity;
   const utilization = totalCapacity > 0 ? (totalAssigned / totalCapacity) * 100 : totalAssigned > 0 ? 200 : 0;
   const thermometerPct = Math.max(0, Math.min(100, utilization));
@@ -127,6 +135,60 @@ export function TeamLoadSummary({
         {overCapacity ? (
           <span className="inline-flex items-center gap-1 text-rose-600">
             <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          </span>
+        ) : null}
+        {teamOptions && teamOptions.length > 0 && onTeamSelect ? (
+          <span
+            className="ml-auto inline-flex min-w-0 items-center"
+            onMouseEnter={() => setTeamFilterExpanded(true)}
+            onMouseLeave={() => setTeamFilterExpanded(false)}
+          >
+            <button
+              type="button"
+              onClick={() => onTeamSelect(null)}
+              title="All teams"
+              aria-label="Show all teams"
+              className={cn(
+                "relative z-20 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ring-1 transition",
+                selectedTeamId == null
+                  ? "bg-sky-600 text-white ring-sky-700"
+                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
+              )}
+            >
+              <Users className="size-4" aria-hidden />
+            </button>
+            {teamOptions.map((team, idx) => {
+              const isSelected = selectedTeamId === team.id;
+              const short = team.label
+                .split(/\s+/)
+                .map((p) => p[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase();
+              return (
+                <button
+                  key={team.id}
+                  type="button"
+                  onClick={() => onTeamSelect(team.id)}
+                  title={team.label}
+                  aria-label={`Show ${team.label} team`}
+                  className={cn(
+                    "relative inline-flex h-8 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
+                    teamFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-8 justify-center px-0",
+                    isSelected
+                      ? "bg-sky-600 text-white ring-sky-700"
+                      : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
+                  )}
+                  style={{
+                    marginLeft: teamFilterExpanded ? 6 : -10,
+                    zIndex: teamFilterExpanded ? 10 : 10 - Math.min(idx, 9),
+                  }}
+                >
+                  {!teamFilterExpanded ? <span>{short}</span> : null}
+                  {teamFilterExpanded ? <span className="max-w-[10rem] truncate text-[12px]">{team.label}</span> : null}
+                </button>
+              );
+            })}
           </span>
         ) : null}
       </div>

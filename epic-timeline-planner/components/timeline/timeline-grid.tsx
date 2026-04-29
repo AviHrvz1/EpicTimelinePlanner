@@ -551,6 +551,7 @@ type TimelineGridProps = {
   /** All-quarters view: set per-team year total; parent splits across all months in year. */
   onYearTeamCapacityChange?: (teamId: string, yearTotalDays: number) => void;
   onMonthTeamCapacityEpicRemove?: (epicId: string) => void;
+  onCapacityEpicOriginalEstimateChange?: (epicId: string, estimatedDays: number) => void;
   /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
   /** Delivery team id when sprint story board was opened from a team lane (breadcrumbs + left epic list). */
@@ -774,6 +775,7 @@ export function TimelineGrid({
   onQuarterTeamCapacityChange,
   onYearTeamCapacityChange,
   onMonthTeamCapacityEpicRemove,
+  onCapacityEpicOriginalEstimateChange,
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
   onSprintStoryBoardTeamChange,
@@ -2718,6 +2720,9 @@ export function TimelineGrid({
                   onCapacityChange={(teamId, days) => onMonthTeamCapacityChange?.(teamId, days)}
                   onOpenEpic={onOpenEpic}
                   onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
+                  onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
+                    onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
+                  }
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
@@ -3208,7 +3213,11 @@ export function TimelineGrid({
             }}
             onOpenEpic={onOpenEpic}
             onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
+            onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
+              onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
+            }
             teamFilterId={capacityTeamFilterId === "all" ? null : capacityTeamFilterId}
+            onTeamFilterChange={(teamId) => setCapacityTeamFilterId(teamId ?? "all")}
           />
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard
@@ -3222,7 +3231,11 @@ export function TimelineGrid({
             }
             onOpenEpic={onOpenEpic}
             onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
+            onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
+              onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
+            }
             teamFilterId={capacityTeamFilterId === "all" ? null : capacityTeamFilterId}
+            onTeamFilterChange={(teamId) => setCapacityTeamFilterId(teamId ?? "all")}
           />
         ) : roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : (
