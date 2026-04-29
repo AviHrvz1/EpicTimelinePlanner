@@ -1,6 +1,6 @@
 "use client";
 
-import { useDroppable } from "@dnd-kit/core";
+import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { Activity, BarChart3, CalendarDays, ChevronDown, ChevronRight, ClipboardList, Eye, Flag, Map as MapIcon, Thermometer, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
@@ -17,6 +17,7 @@ import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { computeSprintKanbanSummaryStats } from "@/lib/sprint-plan";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
+import { isEpicPlanDraggableId } from "@/lib/epic-dnd-ids";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 import {
@@ -658,20 +659,24 @@ function MonthDropCell({
   month: number;
   variant?: "compact" | "prominent";
 }) {
+  const { active } = useDndContext();
   const { setNodeRef, isOver } = useDroppable({ id: `month:${month}` });
   const isProminent = variant === "prominent";
+  const isEpicDragActive = active ? isEpicPlanDraggableId(String(active.id)) : false;
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "w-full shrink-0 rounded-lg transition",
+        "w-full shrink-0 rounded-lg transition-all",
         isProminent
           ? "mt-2 flex min-h-11 items-center justify-center border border-dashed border-slate-200/90 bg-slate-50/50 px-3 text-center"
-          : "h-2",
+          : isEpicDragActive
+            ? "h-px bg-slate-300/80"
+            : "h-0 bg-transparent opacity-0",
         isOver
           ? isProminent
             ? "border-primary/35 bg-primary/10 ring-2 ring-primary/15"
-            : "h-2.5 bg-primary/25 ring-1 ring-primary/20"
+            : "h-1 bg-blue-500/90"
           : isProminent && "hover:border-slate-300/80 hover:bg-slate-50/90",
       )}
       aria-hidden={!isProminent}
@@ -3008,7 +3013,7 @@ export function TimelineGrid({
                 <section
                   key={quarter.label}
                   className={cn(
-                    "space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-2.5 pb-0 shadow-sm ring-1 ring-black/[0.03]",
+                    "space-y-1.5 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-2 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
                     quarterPanelTone[quarter.label] ?? "bg-slate-50/60 ring-slate-200",
                   )}
                 >
@@ -3038,7 +3043,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex h-7 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
+                            className="flex h-6 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
                           >
                             <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
                               <span className="text-[13px] font-semibold">S</span>
@@ -3055,7 +3060,7 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex h-7 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
+                            className="flex h-6 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
                           >
                             <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
                               <span className="text-[13px] font-semibold">S</span>
