@@ -2517,7 +2517,7 @@ export function TimelineGrid({
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
                   <div
                     className={cn(
-                      "overflow-hidden rounded-2xl border border-slate-200/55 px-5 pt-4 pb-2 shadow-sm ring-1 ring-black/[0.03]",
+                      "mb-2 overflow-hidden rounded-2xl px-5 pt-4 pb-2 ring-1 ring-black/[0.03]",
                       "bg-white",
                     )}
                   >
@@ -2540,7 +2540,7 @@ export function TimelineGrid({
                             <Flag className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))}
                           </span>
-                          <span className="max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
+                          <span className="mt-0.5 max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
                             ({sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})
                           </span>
                         </div>
@@ -2578,7 +2578,7 @@ export function TimelineGrid({
                             <Flag className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))}
                           </span>
-                          <span className="max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
+                          <span className="mt-0.5 max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
                             ({sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})
                           </span>
                         </div>
