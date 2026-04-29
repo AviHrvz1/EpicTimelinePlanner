@@ -303,12 +303,12 @@ function GanttTodayMarker({
   if (prioritizedAbove) {
     return (
       <div
-        className="pointer-events-none absolute inset-x-0 inset-y-0 z-[1000] overflow-visible [isolation:isolate]"
+        className="pointer-events-none absolute inset-x-0 inset-y-0 z-[3000] overflow-visible [isolation:isolate]"
         aria-hidden
       >
         {showBadge ? (
           <div
-            className="absolute -top-[14px] px-0 py-0 text-[10px] font-semibold leading-none text-emerald-800 [writing-mode:vertical-rl]"
+            className="absolute top-[2px] px-0 py-0 text-[10px] font-semibold leading-none text-emerald-800 [writing-mode:vertical-rl]"
             style={{ left: `${x}%`, transform: "translateX(-100%) translateX(-6px)" }}
           >
             Today
@@ -319,10 +319,13 @@ function GanttTodayMarker({
           style={{ left: `${x}%` }}
         >
           {showArrow ? (
-            <div className="absolute -top-6 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
+            <div className="absolute -top-[5px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
           ) : null}
           {showLine ? (
-            <div className="absolute left-1/2 top-[2px] bottom-0 w-0 -translate-x-1/2 border-l border-dashed border-emerald-500" />
+            <div className="absolute left-1/2 top-[88px] bottom-0 w-px -translate-x-1/2 bg-emerald-500/95" />
+          ) : null}
+          {showArrow ? (
+            <div className="absolute top-[80px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
           ) : null}
         </div>
       </div>
@@ -2774,6 +2777,12 @@ export function TimelineGrid({
               )}
             >
               <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
+                <GanttTodayMarker
+                  leftPercent={roadmapLaneTodayLeft}
+                  showBadge={false}
+                  badgePlacement="above"
+                  prioritizeLabel
+                />
                 <div className="shrink-0 space-y-0.5">
                   <div className="grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                     {visibleMonths.map((month) => (
@@ -2848,13 +2857,21 @@ export function TimelineGrid({
                     roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
                   )}
                 >
-                  <div className="relative flex min-h-0 w-full flex-1 flex-col">
-                    <GanttTodayMarker
-                      leftPercent={roadmapLaneTodayLeft}
-                      showBadge={false}
-                      badgePlacement="above"
-                      prioritizeLabel
+                  <GanttTodayMarker
+                    leftPercent={roadmapLaneTodayLeft}
+                    showBadge={false}
+                    badgePlacement="above"
+                    prioritizeLabel
+                    showLine={false}
+                  />
+                  {roadmapLaneTodayLeft != null ? (
+                    <div
+                      className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
+                      style={{ left: `${roadmapLaneTodayLeft}%` }}
+                      aria-hidden
                     />
+                  ) : null}
+                  <div className="relative flex min-h-0 w-full flex-1 flex-col">
                   {roadmapBarMode === "initiatives" ? (
                     quarterRoadmapInitiativeRows.length === 0 ? (
                       <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
@@ -3008,6 +3025,13 @@ export function TimelineGrid({
             </div>
           ) : !focusedQuarter && quarterViewTab === "gantt" ? (
             <div className={cn("relative mb-4 w-full overflow-x-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
+              <GanttTodayMarker
+                leftPercent={roadmapLaneTodayLeft}
+                showBadge={false}
+                badgePlacement="above"
+                prioritizeLabel
+                showLine={false}
+              />
               <div className="grid min-w-0 grid-cols-4 gap-2">
               {QUARTERS.map((quarter) => (
                 <section
@@ -3207,13 +3231,14 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
-            <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
-              <GanttTodayMarker
-                leftPercent={roadmapLaneTodayLeft}
-                showBadge={false}
-                badgePlacement="above"
-                prioritizeLabel
+            {roadmapLaneTodayLeft != null ? (
+              <div
+                className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
+                style={{ left: `${roadmapLaneTodayLeft}%` }}
+                aria-hidden
               />
+            ) : null}
+            <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className="relative z-10 min-h-0 flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden"
@@ -3265,13 +3290,14 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
-            <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
-              <GanttTodayMarker
-                leftPercent={roadmapLaneTodayLeft}
-                showBadge={false}
-                badgePlacement="above"
-                prioritizeLabel
+            {roadmapLaneTodayLeft != null ? (
+              <div
+                className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
+                style={{ left: `${roadmapLaneTodayLeft}%` }}
+                aria-hidden
               />
+            ) : null}
+            <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className="relative z-10 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden"
