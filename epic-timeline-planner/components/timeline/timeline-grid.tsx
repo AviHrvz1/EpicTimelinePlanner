@@ -370,36 +370,23 @@ function GanttTodayMarker({
             </text>
           </g>
         ) : null}
-        {showArrow ? (
-          <polygon
-            points={`${x - 0.7},${arrowTopY} ${x + 0.7},${arrowTopY} ${x},${arrowTipY}`}
-            fill="#10b981"
-          />
-        ) : null}
-        {showLine ? (
-          <>
-            <line
-              x1={x}
-              x2={x}
-              y1={arrowTipY - 0.2}
-              y2={arrowTipY + 1.6}
-              stroke="#10b981"
-              strokeWidth={0.2}
-              strokeLinecap="round"
-            />
-            <line
-              x1={x}
-              x2={x}
-              y1={arrowTipY + 1.6}
-              y2={100}
-              stroke="#10b981"
-              strokeWidth={0.2}
-              strokeLinecap="round"
-              strokeDasharray="0.2 1.1"
-            />
-          </>
-        ) : null}
       </svg>
+      {showArrow ? (
+        <div
+          className="absolute h-[10px] w-[12px] -translate-x-1/2 bg-emerald-500"
+          style={{
+            left: `${x}%`,
+            top: `${arrowTopY}%`,
+            clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+          }}
+        />
+      ) : null}
+      {showLine ? (
+        <div
+          className="absolute bottom-0 w-px -translate-x-1/2 bg-emerald-500/85"
+          style={{ left: `${x}%`, top: `calc(${arrowTopY}% + 10px)` }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2611,16 +2598,9 @@ export function TimelineGrid({
                   <div
                     className={cn(
                       "flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4",
-                      monthEpicGanttTodayLeft != null && "pt-5 sm:pt-6",
                     )}
                   >
                     <div className="relative flex min-h-0 w-full flex-1 flex-col">
-                      <GanttTodayMarker
-                        leftPercent={monthEpicGanttTodayLeft}
-                        showBadge={false}
-                        badgePlacement="above"
-                        prioritizeLabel
-                      />
                       <div
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         className="relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto"
@@ -2774,12 +2754,6 @@ export function TimelineGrid({
               )}
             >
               <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
-                <GanttTodayMarker
-                  leftPercent={roadmapLaneTodayLeft}
-                  showBadge={false}
-                  badgePlacement="above"
-                  prioritizeLabel
-                />
                 <div className="shrink-0 space-y-0.5">
                   <div className="grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                     {visibleMonths.map((month) => (
@@ -2858,16 +2832,7 @@ export function TimelineGrid({
                     leftPercent={roadmapLaneTodayLeft}
                     showBadge={false}
                     badgePlacement="above"
-                    prioritizeLabel
-                    showLine={false}
                   />
-                  {roadmapLaneTodayLeft != null ? (
-                    <div
-                      className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
-                      style={{ left: `${roadmapLaneTodayLeft}%` }}
-                      aria-hidden
-                    />
-                  ) : null}
                   <div className="relative flex min-h-0 w-full flex-1 flex-col">
                   {roadmapBarMode === "initiatives" ? (
                     quarterRoadmapInitiativeRows.length === 0 ? (
