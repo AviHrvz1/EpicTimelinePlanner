@@ -2695,6 +2695,7 @@ export function TimelineGrid({
               <div className="flex min-h-0 flex-1">
                 <SprintKanbanBoard
                   initiatives={initiatives}
+                  planYear={currentYear}
                   month={activeMonth}
                   yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}

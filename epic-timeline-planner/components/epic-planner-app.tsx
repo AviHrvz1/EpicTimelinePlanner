@@ -759,6 +759,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeYearSprint, setActiveYearSprint] = useState<number | null>(null);
+  const isActiveSprintClosed =
+    activeYearSprint != null && sprintEndDate(selectedYear, activeYearSprint).getTime() <= Date.now();
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("epic-gantt");
   const [activeQuarterViewTab, setActiveQuarterViewTab] = useState<QuarterSurfaceTab>("gantt");
@@ -2235,6 +2237,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (isStoryDraggableId(activeId)) {
       const storyId = parseStoryIdFromDraggable(activeId);
       if (!storyId) return;
+      if (isActiveSprintClosed) {
+        toast.message("Sprint is closed. Drag and drop is disabled.");
+        return;
+      }
 
       if (overId === STORIES_UNSCHEDULE_DROP_ID) {
         flushSync(() => {
@@ -3141,7 +3147,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   initiatives={initiatives}
                   activeMonth={activeTimelineMonth}
                   activeYearSprint={activeYearSprint}
-                  storyDragEnabled={isSprintModeActive}
+                  storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
                   isSprintModeActive={isSprintModeActive}
                   onCreateInitiative={() => {
                     setEditingInitiative(undefined);

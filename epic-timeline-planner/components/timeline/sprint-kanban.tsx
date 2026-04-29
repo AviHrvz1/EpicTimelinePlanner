@@ -10,6 +10,7 @@ import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { sprintEndDate } from "@/lib/year-sprint";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
@@ -34,6 +35,7 @@ function KanbanColumn({
   label,
   tone,
   Icon,
+  dropDisabled = false,
   children,
 }: {
   yearSprint: number;
@@ -41,10 +43,11 @@ function KanbanColumn({
   label: string;
   tone: string;
   Icon: LucideIcon;
+  dropDisabled?: boolean;
   children: ReactNode;
 }) {
   const dropId = sprintKanbanDropId(yearSprint, status);
-  const { setNodeRef, isOver } = useDroppable({ id: dropId });
+  const { setNodeRef, isOver } = useDroppable({ id: dropId, disabled: dropDisabled });
 
   return (
     <div
@@ -66,6 +69,7 @@ function KanbanColumn({
 
 function KanbanStoryCard({
   row,
+  dragDisabled = false,
   onOpenStory,
   onUnscheduleStory,
   onRequestUnscheduleStory,
@@ -73,6 +77,7 @@ function KanbanStoryCard({
   emphasizeTick = 0,
 }: {
   row: BoardStoryRow;
+  dragDisabled?: boolean;
   onOpenStory: (storyId: string) => void;
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
@@ -82,6 +87,7 @@ function KanbanStoryCard({
   const { story, epic } = row;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: storyBoardDraggableId(story.id),
+    disabled: dragDisabled,
   });
 
   return (
@@ -106,15 +112,17 @@ function KanbanStoryCard({
       ) : null}
       <div className="flex flex-col gap-2">
         <div className="flex items-start gap-1.5">
-          <button
-            type="button"
-            className="mt-1 shrink-0 cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-            aria-label="Drag story"
-            {...attributes}
-            {...listeners}
-          >
-            <DragHandleIcon size="sm" />
-          </button>
+          {dragDisabled ? null : (
+            <button
+              type="button"
+              className="mt-1 shrink-0 cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+              aria-label="Drag story"
+              {...attributes}
+              {...listeners}
+            >
+              <DragHandleIcon size="sm" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onOpenStory(story.id)}
@@ -166,6 +174,7 @@ function KanbanStoryCard({
 
 type SprintKanbanProps = {
   initiatives: InitiativeItem[];
+  planYear: number;
   month: number;
   yearSprint: number;
   /** When set, only stories for epics on this delivery team (same as left panel filter). */
@@ -180,6 +189,7 @@ type SprintKanbanProps = {
 
 export function SprintKanbanBoard({
   initiatives,
+  planYear,
   month,
   yearSprint,
   filterEpicTeamId = null,
@@ -189,6 +199,7 @@ export function SprintKanbanBoard({
   onRequestUnscheduleStory,
   onOpenStory,
 }: SprintKanbanProps) {
+  const sprintClosed = sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
   const allRows = useMemo(
     () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId),
     [initiatives, month, yearSprint, filterEpicTeamId],
@@ -256,7 +267,29 @@ export function SprintKanbanBoard({
   }, []);
 
   return (
-    <div className="flex w-full min-h-0 flex-1 flex-col gap-2">
+    <div className="relative flex w-full min-h-0 flex-1 flex-col gap-2">
+      {sprintClosed ? (
+        <div className="pointer-events-none absolute inset-x-3 top-2 z-30 flex justify-center">
+          <div
+            className="px-4 py-2 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
+            style={{
+              background: "rgba(255, 255, 255, 0.2)",
+              borderRadius: "16px",
+              boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+              backdropFilter: "blur(1.2px)",
+              WebkitBackdropFilter: "blur(1.2px)",
+              border: "1px solid rgba(255, 255, 255, 0.44)",
+            }}
+          >
+            <img
+              src="/closed-sign-transparent.png"
+              alt={`Sprint ${yearSprint} is closed`}
+              className="h-40 w-auto object-contain"
+              draggable={false}
+            />
+          </div>
+        </div>
+      ) : null}
       {assigneeOptions.length > 0 ? (
         <div className="shrink-0 px-2.5 py-1">
           <div
@@ -321,6 +354,7 @@ export function SprintKanbanBoard({
             label={label}
             tone={tone}
             Icon={Icon}
+            dropDisabled={sprintClosed}
           >
             {(byStatus.get(status) ?? []).map((row) => {
               const accordionEmphasis =
@@ -336,6 +370,7 @@ export function SprintKanbanBoard({
                 <KanbanStoryCard
                   key={row.story.id}
                   row={row}
+                  dragDisabled={sprintClosed}
                   onOpenStory={onOpenStory}
                   onUnscheduleStory={onUnscheduleStory}
                   onRequestUnscheduleStory={onRequestUnscheduleStory}
