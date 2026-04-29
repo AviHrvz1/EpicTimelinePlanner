@@ -1587,8 +1587,33 @@ export function TimelineGrid({
   const isInsightsSurfaceRender =
     (activeMonth != null && (monthPlanTab === "month-status" || monthPlanTab === "sprint-status")) ||
     (activeMonth == null && quarterViewTab === "insights");
+  const surfaceTransitionKey = useMemo(
+    () =>
+      [
+        activeMonth ?? "year",
+        focusedQuarterLabel ?? "all",
+        quarterViewTab,
+        monthPlanTab,
+        activeSprint ?? "none",
+        activeSprintTab,
+      ].join(":"),
+    [activeMonth, focusedQuarterLabel, quarterViewTab, monthPlanTab, activeSprint, activeSprintTab],
+  );
   const railLabelBaseClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
+
+  useEffect(() => {
+    const el = timelineContentScrollRef.current;
+    if (!el) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    el.animate(
+      [
+        { opacity: 0.0, transform: "translateX(18px)" },
+        { opacity: 1.0, transform: "translateX(0px)" },
+      ],
+      { duration: 290, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+  }, [surfaceTransitionKey]);
 
   useEffect(() => {
     console.log("[rail-nav] expanded state changed", {
@@ -2459,6 +2484,7 @@ export function TimelineGrid({
             "mb-4",
             monthPlanTab !== "sprint-kanban" &&
               monthPlanTab !== "epic-gantt" &&
+              monthPlanTab !== "sprint-retrospective" &&
               "rounded-2xl p-1.5 shadow-lg ring-1",
             monthPlanTab === "sprint-kanban" && "flex min-h-0 flex-1 flex-col",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
@@ -2475,6 +2501,7 @@ export function TimelineGrid({
               "flex flex-col",
               monthPlanTab !== "sprint-kanban" &&
                 monthPlanTab !== "epic-gantt" &&
+                monthPlanTab !== "sprint-retrospective" &&
                 "rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
               monthPlanTab === "sprint-kanban" ? "min-h-0 flex-1 overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||

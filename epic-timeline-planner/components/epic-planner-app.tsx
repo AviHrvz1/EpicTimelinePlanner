@@ -1486,6 +1486,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     return () => cancelAnimationFrame(raf);
   }, [activeTimelineMonth, activeMonthPlanTab, activeQuarterViewTab]);
 
+  useEffect(() => {
+    const el = planningRightSurfaceRef.current;
+    if (!el) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    el.animate(
+      [
+        { opacity: 0.0, transform: "translateX(18px)" },
+        { opacity: 1, transform: "translateX(0px)" },
+      ],
+      { duration: 290, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+  }, [topMode]);
+
   const activeMonthTeamCapacityKey = useMemo(() => {
     if (activeTimelineMonth == null) return null;
     return monthTeamCapacityBoardKey(selectedYear, activeTimelineMonth);

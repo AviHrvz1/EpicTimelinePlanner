@@ -357,7 +357,7 @@ function RetroRichSection({
     >
       <div
         className={cn(
-          "mb-2.5 flex items-center gap-2 rounded-lg px-3 py-2 text-lg font-semibold italic text-white shadow-sm",
+          "mb-2.5 flex items-center gap-2 rounded-lg px-3 py-2 text-lg font-semibold text-white shadow-sm",
           titleAccentClass,
         )}
       >
@@ -433,7 +433,7 @@ export function SprintRetrospectiveEditor({
   }
 
   return (
-    <section className="font-sans rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50/70 to-white p-5 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
+    <section className="font-sans rounded-2xl bg-gradient-to-b from-slate-50/70 to-white p-5 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0 space-y-1">
           <h3 className="flex items-center gap-2.5 font-sans text-xl font-bold tracking-tight text-slate-700 md:text-2xl">
@@ -486,7 +486,7 @@ export function SprintRetrospectiveEditor({
       </div>
 
       <section className="mt-4 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm">
-        <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 px-3 py-2 text-lg font-semibold italic text-white shadow-sm">
+        <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 px-3 py-2 text-lg font-semibold text-white shadow-sm">
           <span className="inline-flex items-center gap-2">
             <ListChecks className="size-4 shrink-0" aria-hidden />
             What's next?
