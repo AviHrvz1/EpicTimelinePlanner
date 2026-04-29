@@ -337,7 +337,7 @@ function GanttTodayMarker({
       className={cn(
         "pointer-events-none absolute inset-x-0 overflow-visible [isolation:isolate]",
         prioritizeLabel ? "z-30" : "z-0",
-        bleedToPaddedPanel ? "-top-3 -bottom-3 sm:-top-4 sm:-bottom-4" : "inset-y-0",
+        bleedToPaddedPanel ? "-top-12 -bottom-3 sm:-top-13 sm:-bottom-4" : "inset-y-0",
       )}
       aria-hidden
     >
@@ -2598,9 +2598,16 @@ export function TimelineGrid({
                   <div
                     className={cn(
                       "flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4",
+                      monthEpicGanttTodayLeft != null && "pt-5 sm:pt-6",
                     )}
                   >
                     <div className="relative flex min-h-0 w-full flex-1 flex-col">
+                      <GanttTodayMarker
+                        leftPercent={monthEpicGanttTodayLeft}
+                        showBadge={false}
+                        badgePlacement="above"
+                        bleedToPaddedPanel
+                      />
                       <div
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         className="relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto"
