@@ -958,9 +958,9 @@ export function EpicFormDialog({
                                   <col key={i} style={{ width: w }} />
                                 ))}
                               </colgroup>
-                              <thead className="bg-indigo-50/70 text-slate-600">
+                              <thead className="bg-[#0897d5] text-white">
                                 <tr>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[0] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[0] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -983,7 +983,7 @@ export function EpicFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[1] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[1] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -1006,7 +1006,7 @@ export function EpicFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[2] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[2] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -1029,7 +1029,7 @@ export function EpicFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[3] }}>
+                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[3] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -1052,7 +1052,7 @@ export function EpicFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[4] }}>
+                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[4] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -1075,7 +1075,7 @@ export function EpicFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: childTableWidths[5] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[5] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -1098,7 +1098,7 @@ export function EpicFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[6] }}>
+                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[6] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -1121,7 +1121,7 @@ export function EpicFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-3 py-2 text-left font-medium" style={{ width: childTableWidths[7] }}>
+                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[7] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -1147,7 +1147,7 @@ export function EpicFormDialog({
                                 </tr>
                               </thead>
                               <tbody>
-                                <tr className="border-t border-slate-100 bg-blue-50/40">
+                                <tr className="border-t border-[#7cd3f7]/95 bg-white">
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                   <td className="px-2 py-1.5">
                                     <div className="flex gap-1">
@@ -1179,8 +1179,14 @@ export function EpicFormDialog({
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                 </tr>
-                                {sortedEpicChildStories.map((story) => (
-                                  <tr key={story.id} className="border-t border-slate-100 align-middle">
+                                {sortedEpicChildStories.map((story, rowIndex) => (
+                                  <tr
+                                    key={story.id}
+                                    className={cn(
+                                      "border-t border-[#7cd3f7]/95 align-middle text-slate-700 transition hover:bg-[#c5ebff]",
+                                      rowIndex % 2 === 0 ? "bg-white" : "bg-[#d8f2ff]",
+                                    )}
+                                  >
                                     <td className="px-2 py-1.5 text-slate-600">
                                       <button
                                         type="button"

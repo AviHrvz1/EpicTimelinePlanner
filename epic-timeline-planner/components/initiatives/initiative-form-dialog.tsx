@@ -678,9 +678,9 @@ export function InitiativeFormDialog({
                                   <col key={i} style={{ width: w }} />
                                 ))}
                               </colgroup>
-                              <thead className="bg-indigo-50/70 text-slate-600">
+                              <thead className="bg-[#0897d5] text-white">
                                 <tr>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[0] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[0] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -703,7 +703,7 @@ export function InitiativeFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[1] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[1] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -726,7 +726,7 @@ export function InitiativeFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[2] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[2] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -749,7 +749,7 @@ export function InitiativeFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[3] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[3] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -772,7 +772,7 @@ export function InitiativeFormDialog({
                                       aria-hidden
                                     />
                                   </th>
-                                  <th className="relative px-2 py-1.5 text-left font-medium" style={{ width: initChildTableWidths[4] }}>
+                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[4] }}>
                                     <button
                                       type="button"
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
@@ -796,7 +796,7 @@ export function InitiativeFormDialog({
                                     />
                                   </th>
                                   <th
-                                    className="relative px-2 py-1.5 text-left font-medium"
+                                    className="relative px-2 py-1.5 text-left text-[14px] font-semibold"
                                     style={{ width: initChildTableWidths[5] }}
                                     title="Sum of estimated days from all user stories under this epic"
                                   >
@@ -825,7 +825,7 @@ export function InitiativeFormDialog({
                                 </tr>
                               </thead>
                               <tbody>
-                                <tr className="border-t border-slate-100 bg-blue-50/40">
+                                <tr className="border-t border-[#7cd3f7]/95 bg-white">
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                   <td className="px-2 py-1.5">
                                     <div className="flex gap-1">
@@ -847,8 +847,14 @@ export function InitiativeFormDialog({
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                   <td className="px-2 py-1.5 text-slate-400">-</td>
                                 </tr>
-                                {sortedInitiativeChildEpics.map((row) => (
-                                  <tr key={row.id} className="border-t border-slate-100">
+                                {sortedInitiativeChildEpics.map((row, rowIndex) => (
+                                  <tr
+                                    key={row.id}
+                                    className={cn(
+                                      "border-t border-[#7cd3f7]/95 text-slate-700 transition hover:bg-[#c5ebff]",
+                                      rowIndex % 2 === 0 ? "bg-white" : "bg-[#d8f2ff]",
+                                    )}
+                                  >
                                     <td className="px-2 py-1.5 text-slate-600"><button type="button" onClick={() => onOpenEpic?.(row.id)} className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline">{displayIds.byEpicId.get(row.id) ?? row.id}</button></td>
                                     <td className="px-2 py-1.5 text-slate-800">{childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? <div className="relative z-20 flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.title ?? row.title}</button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600">

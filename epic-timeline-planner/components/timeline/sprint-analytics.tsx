@@ -55,9 +55,9 @@ const CFD_FLOW_SEGMENTS = [
  * Compact plot height so two rows of charts fit without excess scrolling (uses dynamic viewport height).
  * Matches pie, burndown, cumulative flow, and caps workload list beside pie.
  */
-const SPRINT_CHART_BOX = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] w-full";
+const SPRINT_CHART_BOX = "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full";
 /** Keep legend beside pie from growing taller than the pie plot on md+. */
-const PIE_LEGEND_CAP = "max-h-[clamp(12.5rem,27vh,20rem)] overflow-y-auto pr-1";
+const PIE_LEGEND_CAP = "max-h-[clamp(14.75rem,30vh,19rem)] overflow-y-auto pr-1";
 const WORKLOAD_LIST_MAX =
   "max-h-[clamp(11.5rem,21vh,15.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain";
 
@@ -87,6 +87,48 @@ function AnalyticsTooltipRow({
       </span>
       <span className="font-semibold text-slate-800">{value}</span>
     </div>
+  );
+}
+
+function piePercentLabel({
+  cx,
+  cy,
+  midAngle,
+  outerRadius,
+  percent,
+}: {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  outerRadius?: number;
+  percent?: number;
+}) {
+  if (
+    cx == null ||
+    cy == null ||
+    midAngle == null ||
+    outerRadius == null ||
+    percent == null ||
+    percent <= 0
+  ) {
+    return null;
+  }
+  const RAD = Math.PI / 180;
+  const r = outerRadius + 6;
+  const x = cx + r * Math.cos(-midAngle * RAD);
+  const y = cy + r * Math.sin(-midAngle * RAD);
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#475569"
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+      fontSize={12}
+      fontWeight={600}
+    >
+      {`${Math.round(percent * 100)}%`}
+    </text>
   );
 }
 
@@ -256,15 +298,15 @@ export function SprintAnalytics({
   }, [workloadDrilldownStories.length, workloadDrilldownAssignee]);
 
   const chartLegendColumnClass =
-    "max-h-[clamp(12.5rem,27vh,20rem)] space-y-1.5 overflow-y-auto pr-0 md:justify-self-end md:w-[10.5rem]";
+    "max-h-[clamp(14.75rem,30vh,19rem)] space-y-1.5 overflow-y-auto pr-0 md:justify-self-end md:w-[10.5rem]";
   const legendRowClass =
-    "flex items-center justify-between rounded-md px-1 py-1 text-left text-[12px] font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-700";
+    "flex items-center justify-between rounded-md px-1 py-1 text-left text-[13px] font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-700";
 
   return (
     <section className="mb-2 flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <PieChartIcon className="size-4 text-slate-600" />
             User Stories Status
@@ -287,7 +329,7 @@ export function SprintAnalytics({
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={() => updateArrowState(statusDrilldownScrollRef, setCanScrollStatusUp, setCanScrollStatusDown)}
-                className="h-[clamp(12rem,24vh,16rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
+                className="h-[clamp(11.5rem,23vh,15.5rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 <table className="w-full border-separate border-spacing-0 text-left text-[13px]">
@@ -358,9 +400,7 @@ export function SprintAnalytics({
           </div>
         ) : (
         <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
-          <div
-            className={`relative rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ${SPRINT_CHART_BOX}`}
-          >
+          <div className={`relative ${SPRINT_CHART_BOX}`}>
             <div className="absolute inset-0">
               <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -381,6 +421,7 @@ export function SprintAnalytics({
                   cornerRadius={8}
                   stroke="#ffffff"
                   strokeWidth={2}
+                  label={piePercentLabel}
                   labelLine={false}
                   filter="url(#sprintPieShadow)"
                   onClick={(entry) => setStatusDrilldownFilter(String((entry as { name?: string }).name ?? ""))}
@@ -409,12 +450,6 @@ export function SprintAnalytics({
               </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="rounded-full bg-white/90 px-4 py-2.5 text-center shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</p>
-                <p className="text-[24px] leading-none font-bold text-slate-900">{pieTotal}</p>
-              </div>
-            </div>
           </div>
           <div className={`space-y-1.5 ${PIE_LEGEND_CAP}`}>
             {pieData.map((slice) => {
@@ -424,14 +459,14 @@ export function SprintAnalytics({
                   key={slice.name}
                   className="flex items-center justify-between rounded-lg bg-slate-50/80 px-2 py-1.5"
                 >
-                  <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+                  <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
                     <span
                       className="inline-block h-2.5 w-2.5 rounded-full"
                       style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8" }}
                     />
                     {slice.name}
                   </span>
-                  <span className="text-[12px] font-semibold text-slate-900">
+                  <span className="text-[13px] font-semibold text-slate-900">
                     {slice.value} <span className="text-slate-500">({pct}%)</span>
                   </span>
                 </div>
@@ -443,7 +478,7 @@ export function SprintAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
-        <div className="mb-6 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
@@ -560,7 +595,7 @@ export function SprintAnalytics({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
-        <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <ChartNoAxesCombined className="size-4 text-slate-600" />
             Workload Balance
@@ -606,7 +641,7 @@ export function SprintAnalytics({
               <div
                 ref={workloadDrilldownScrollRef}
                 onScroll={() => updateArrowState(workloadDrilldownScrollRef, setCanScrollWorkloadUp, setCanScrollWorkloadDown)}
-                className="h-[clamp(12rem,24vh,16rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
+                className="h-[clamp(10.75rem,21.5vh,14rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 <table className="w-full border-collapse text-left text-[13px]">
@@ -817,7 +852,7 @@ export function SprintAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:pl-4">
-        <h3 className="mb-4 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+        <h3 className="mb-2.5 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative Flow
         </h3>
@@ -925,7 +960,7 @@ export function SprintAnalytics({
               type="button"
               onClick={showAllCfdKeys}
               className={cn(
-                "mb-1 w-full rounded-md px-1 py-1 text-left text-[12px] font-medium transition",
+                "mb-1 w-full rounded-md px-1 py-1 text-left text-[13px] font-medium transition",
                 allCfdKeysSelected
                   ? "text-slate-900 hover:bg-slate-200/70"
                   : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
@@ -944,7 +979,7 @@ export function SprintAnalytics({
                   type="button"
                   onClick={() => toggleCfdKey(key)}
                   className={cn(
-                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12px] font-medium transition",
+                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[13px] font-medium transition",
                     on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                   )}
                 >

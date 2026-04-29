@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Eraser, Filter, Folder, Layers3, ListTodo, Plus, Search, TableProperties, X, Zap } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -419,6 +419,8 @@ export function BacklogPlanningPanel({
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
   const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
+  const [showBacklogDebugZebra, setShowBacklogDebugZebra] = useState(true);
+  const [backlogZebraUiLines, setBacklogZebraUiLines] = useState<string[]>([]);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -745,6 +747,63 @@ export function BacklogPlanningPanel({
       ),
     [backlogFilteredBeforeWorkItem],
   );
+  useEffect(() => {
+    // Debug aid: keep concise counts + active filters to diagnose missing backlog rows.
+    console.log("[BacklogDebug] counts", {
+      sourceInitiatives: initiatives.length,
+      filteredWithControls: filteredWithControls.length,
+      backlogFilteredBeforeWorkItem: backlogFilteredBeforeWorkItem.length,
+      fullyFiltered: fullyFiltered.length,
+      summaryInitiativeCount,
+      summaryEpicCount,
+      summaryStoryCount,
+    });
+    console.log("[BacklogDebug] filters", {
+      query,
+      yearFilter,
+      quarterFilter,
+      statusFilter,
+      sprintFilter,
+      assigneeFilter,
+      workItemFilter,
+      groupLevels,
+    });
+    console.log(
+      "[BacklogDebug] visible initiative IDs",
+      fullyFiltered.map((initiative) => initiative.id),
+    );
+    console.log("[BacklogDebug] ui open state", {
+      groupLevels,
+      openGroupFoldersCount: Object.keys(openGroupFolders).length,
+      openInitiativesCount: Object.keys(openInitiatives).length,
+      openEpicsCount: Object.keys(openEpics).length,
+    });
+  }, [
+    initiatives.length,
+    filteredWithControls.length,
+    backlogFilteredBeforeWorkItem.length,
+    fullyFiltered,
+    summaryInitiativeCount,
+    summaryEpicCount,
+    summaryStoryCount,
+    query,
+    yearFilter,
+    quarterFilter,
+    statusFilter,
+    sprintFilter,
+    assigneeFilter,
+    workItemFilter,
+    groupLevels,
+    openGroupFolders,
+    openInitiatives,
+    openEpics,
+  ]);
+
+  useEffect(() => {
+    if (!showBacklogDebugZebra) return;
+    const nextLines = zebraUiLinesRef.current.slice(0, 60);
+    setBacklogZebraUiLines((prev) => (prev.join("\n") === nextLines.join("\n") ? prev : nextLines));
+  }, [showBacklogDebugZebra, fullyFiltered, groupLevels, query, yearFilter, quarterFilter, statusFilter, sprintFilter, assigneeFilter, workItemFilter, openGroupFolders, openInitiatives, openEpics]);
 
   const visibleColumnKeys = useMemo(
     () => BACKLOG_COLUMN_ORDER.filter((key) => columnVisibility[key]),
@@ -899,6 +958,53 @@ export function BacklogPlanningPanel({
     return { key: "none", label: "No sprint", sort: "99" };
   }
 
+  // Zebra striping:
+  // - Folder/header rows (Year/Quarter/etc) alternate using folderZebraIndex,
+  //   independent of how many child rows exist between them.
+  // - Child rows (initiative/epic/story) alternate using childZebraIndex, which
+  //   is seeded per folder row (so the first initiative under a quarter won't
+  //   look identical to the quarter header).
+  const DEBUG_BACKLOG_ZEBRA = true;
+  const zebraTraceIdRef = useRef(0);
+  zebraTraceIdRef.current += 1;
+  const zebraTraceId = zebraTraceIdRef.current;
+  let zebraLogCount = 0;
+  const zebraUiLinesRef = useRef<string[]>([]);
+  zebraUiLinesRef.current = [];
+
+  let folderZebraIndex = 0;
+  let childZebraIndex = 0;
+
+  const nextFolderBg = (meta: { label: string; id: string; kind: "folder" }): { idx: number; bg: string } => {
+    const idx = folderZebraIndex;
+    const bg = idx % 2 === 0 ? "#d8f2ff" : "#ffffff";
+    folderZebraIndex += 1;
+    if (DEBUG_BACKLOG_ZEBRA && zebraLogCount < 80) {
+      zebraLogCount += 1;
+      const line = `[idx=${idx}] kind=folder label=${meta.label} bg=${bg}`;
+      zebraUiLinesRef.current.push(line);
+      console.log(`[BacklogZebra#${zebraTraceId}] ${line}`);
+    }
+    return { idx, bg };
+  };
+
+  const nextChildBgStyle = (meta?: { kind?: "initiative" | "epic" | "story"; label?: string; id?: string }): CSSProperties => {
+    const idx = childZebraIndex;
+    const bg = idx % 2 === 0 ? "#d8f2ff" : "#ffffff";
+    childZebraIndex += 1;
+    if (DEBUG_BACKLOG_ZEBRA && zebraLogCount < 80) {
+      zebraLogCount += 1;
+      const kind = meta?.kind ?? "row";
+      // Avoid spam for leaf rows; only log folder-ish containers and epics/initiatives.
+      if (!meta?.kind || ["initiative", "epic"].includes(meta.kind)) {
+        const line = `[idx=${idx}] kind=${kind} label=${meta?.label ?? ""} bg=${bg}`;
+        zebraUiLinesRef.current.push(line);
+        console.log(`[BacklogZebra#${zebraTraceId}] ${line}`);
+      }
+    }
+    return { backgroundColor: bg };
+  };
+
   function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
     return rows
       .slice()
@@ -912,8 +1018,14 @@ export function BacklogPlanningPanel({
         return (
           <div
             key={`${keyPrefix}-story-${row.storyId}`}
-            className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
-            style={{ gridTemplateColumns: tableGridTemplate }}
+            className={cn(
+              "group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2",
+              "hover:bg-[#c5ebff]",
+            )}
+            style={{
+              ...nextChildBgStyle({ kind: "story", label: row.storyTitle, id: row.storyId }),
+              gridTemplateColumns: tableGridTemplate,
+            }}
           >
             {renderBacklogCells({
               workItem: (
@@ -1231,11 +1343,25 @@ export function BacklogPlanningPanel({
       });
   }
 
-  function renderFolderRow(folderId: string, label: string, count: number, indentPx: number, children: React.ReactNode) {
+  function renderFolderRow(
+    folderId: string,
+    label: string,
+    count: number,
+    indentPx: number,
+    renderChildren: () => React.ReactNode,
+  ) {
     const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    const { idx: folderIdx, bg } = nextFolderBg({ label, id: folderId, kind: "folder" });
+    const prevChildZebraIndex = childZebraIndex;
+    childZebraIndex = (folderIdx % 2) ^ 1;
+    const renderedChildren = isOpen ? renderChildren() : null;
+    childZebraIndex = prevChildZebraIndex;
     return (
       <div key={folderId}>
-        <div className="grid items-center gap-3 px-3 py-1.5 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+        <div
+          className="grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-1.5 hover:bg-[#c5ebff]"
+          style={{ gridTemplateColumns: tableGridTemplate, backgroundColor: bg }}
+        >
           {renderBacklogCells({
             workItem: (
               <button
@@ -1261,7 +1387,7 @@ export function BacklogPlanningPanel({
             progress: <span className="text-center text-[16px] text-slate-400">-</span>,
           })}
         </div>
-        {isOpen ? children : null}
+        {renderedChildren}
       </div>
     );
   }
@@ -1313,8 +1439,11 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
-            style={{ gridTemplateColumns: tableGridTemplate }}
+            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+            style={{
+              gridTemplateColumns: tableGridTemplate,
+              ...nextChildBgStyle({ kind: "epic", label: epicTitle, id: epicId }),
+            }}
           >
             {renderBacklogCells({
               workItem: (
@@ -1471,7 +1600,13 @@ export function BacklogPlanningPanel({
       const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
       return (
         <div key={folderId}>
-          <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+          <div
+            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+            style={{
+              gridTemplateColumns: tableGridTemplate,
+              ...nextChildBgStyle({ kind: "initiative", label: initiativeTitle, id: initiativeId }),
+            }}
+          >
             {renderBacklogCells({
               workItem: (
                 <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx }}>
@@ -1698,9 +1833,13 @@ export function BacklogPlanningPanel({
     return Array.from(groups.entries())
       .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
       .map(([key, group]) =>
-        renderFolderRow(`${path}${level}:${key}`, group.label, group.rows.length, levelIndex * 14, (
-          <>{renderGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>
-        )),
+        renderFolderRow(
+          `${path}${level}:${key}`,
+          group.label,
+          group.rows.length,
+          levelIndex * 14,
+          () => <>{renderGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>,
+        ),
       );
   }
 
@@ -1712,8 +1851,14 @@ export function BacklogPlanningPanel({
         const initFolderId = `standalone-init:${initiative.initiativeId}`;
         const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
         return (
-          <div key={initFolderId}>
-            <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+              <div key={initFolderId}>
+                <div
+                  className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+                  style={{
+                    gridTemplateColumns: tableGridTemplate,
+                    ...nextChildBgStyle({ kind: "initiative", label: initiative.initiativeTitle, id: initiative.initiativeId }),
+                  }}
+                >
               {renderBacklogCells({
                 workItem: (
                   <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx }}>
@@ -1725,7 +1870,19 @@ export function BacklogPlanningPanel({
                     >
                       {isInitOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
                     </button>
-                    <button type="button" onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId) return; onOpenInitiative(initiative.initiativeId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId) return; onOpenInitiative(initiative.initiativeId); }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId) return;
+                          onOpenInitiative(initiative.initiativeId);
+                        }
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
                       <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
                       {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
                         <span className="flex min-w-0 items-center gap-1">
@@ -1758,7 +1915,7 @@ export function BacklogPlanningPanel({
                           </span>
                         </span>
                       )}
-                    </button>
+                    </div>
                     <button
                       type="button"
                       onClick={(event) => {
@@ -1830,12 +1987,30 @@ export function BacklogPlanningPanel({
               <div>
                 {initiative.epics.map((epic) => (
                   <div key={`standalone-epic:${epic.epicId}`}>
-                    <div className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50" style={{ gridTemplateColumns: tableGridTemplate }}>
+                    <div
+                      className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+                      style={{
+                        gridTemplateColumns: tableGridTemplate,
+                        ...nextChildBgStyle({ kind: "epic", label: epic.epicTitle, id: epic.epicId }),
+                      }}
+                    >
                       {renderBacklogCells({
                         workItem: (
                           <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
                             <span className="inline-block h-7 w-7 shrink-0" />
-                            <button type="button" onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId) return; onOpenEpic(epic.epicId); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId) return; onOpenEpic(epic.epicId); }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId) return;
+                                  onOpenEpic(epic.epicId);
+                                }
+                              }}
+                              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                            >
                               <Folder className="size-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                               {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
                                 <span className="flex min-w-0 items-center gap-1">
@@ -1864,7 +2039,7 @@ export function BacklogPlanningPanel({
                                   </span>
                                 </span>
                               )}
-                            </button>
+                            </div>
                             <button
                               type="button"
                               onClick={(event) => {
@@ -1954,9 +2129,15 @@ export function BacklogPlanningPanel({
     return Array.from(groups.entries())
       .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
       .map(([key, group]) =>
-        renderFolderRow(`${path}${level}:${key}`, group.label, group.rows.length, levelIndex * 14, (
-          <>{renderStandaloneGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>
-        )),
+        renderFolderRow(
+          `${path}${level}:${key}`,
+          group.label,
+          group.rows.length,
+          levelIndex * 14,
+          (
+            () => <>{renderStandaloneGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>
+          ),
+        ),
       );
   }
 
@@ -2024,7 +2205,6 @@ export function BacklogPlanningPanel({
         return;
       }
       const parsed = JSON.parse(raw) as {
-        query?: unknown;
         statusFilter?: unknown;
         sprintFilter?: unknown;
         yearFilter?: unknown;
@@ -2032,7 +2212,6 @@ export function BacklogPlanningPanel({
         assigneeFilter?: unknown;
         groupLevels?: unknown;
       };
-      if (typeof parsed.query === "string") setQuery(parsed.query);
       if (Array.isArray(parsed.statusFilter)) setStatusFilter(parsed.statusFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.sprintFilter)) setSprintFilter(parsed.sprintFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.yearFilter)) setYearFilter(parsed.yearFilter.filter((v): v is string => typeof v === "string"));
@@ -2059,7 +2238,6 @@ export function BacklogPlanningPanel({
       window.localStorage.setItem(
         BACKLOG_VIEW_STATE_STORAGE_KEY,
         JSON.stringify({
-          query,
           statusFilter,
           sprintFilter,
           yearFilter,
@@ -2071,7 +2249,7 @@ export function BacklogPlanningPanel({
     } catch {
       // Ignore write failures (private mode, quotas, etc.)
     }
-  }, [hasLoadedViewState, query, statusFilter, sprintFilter, yearFilter, quarterFilter, assigneeFilter, groupLevels]);
+  }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, assigneeFilter, groupLevels]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -2270,6 +2448,24 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
+      {showBacklogDebugZebra ? (
+        <div className="fixed right-4 top-24 z-[9999] w-[360px] max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200/70 bg-white/85 p-3 text-[11px] shadow-lg backdrop-blur">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-semibold">Backlog zebra</div>
+            <button
+              type="button"
+              onClick={() => setShowBacklogDebugZebra(false)}
+              className="rounded px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              Hide
+            </button>
+          </div>
+          <div className="mt-2 font-mono whitespace-pre-wrap leading-[1.25] text-slate-700">
+            {backlogZebraUiLines.length > 0 ? backlogZebraUiLines.slice(0, 120).join("\n") : "No zebra logs yet (try grouping/collapse)."}
+          </div>
+        </div>
+      ) : null}
+
       <div className="mb-6 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pt-3 pb-5 shadow-sm ring-1 ring-white/60">
         <div className="relative flex items-center">
           <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
@@ -2406,12 +2602,12 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-xl border border-slate-200 bg-white text-[16px] shadow-inner">
+      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-xl border border-[#19abeb]/70 bg-white text-[16px] shadow-inner">
         <>
         {showTableHeaderRow ? (
-          <div className="sticky top-0 z-10 relative border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50">
+          <div className="sticky top-0 z-10 relative border-b border-[#19abeb]/70 bg-[#0897d5]">
             <div
-              className="grid items-center gap-3 px-3 py-2.5 pr-28 text-[13px] font-semibold tracking-[0.02em] text-slate-700 uppercase"
+              className="grid items-center gap-3 px-3 py-2.5 pr-28 text-[13px] font-semibold tracking-[0.02em] text-white uppercase"
               style={{ gridTemplateColumns: tableGridTemplate }}
             >
               {visibleColumnKeys.map((key, index) => (
@@ -2425,7 +2621,7 @@ export function BacklogPlanningPanel({
                           onClick={collapseAllRows}
                           title="Collapse all rows"
                           aria-label="Collapse all rows"
-                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                         >
                           <ChevronsUp className="size-3.5" strokeWidth={2.2} />
                         </button>
@@ -2434,7 +2630,7 @@ export function BacklogPlanningPanel({
                           onClick={expandAllRows}
                           title="Expand all rows"
                           aria-label="Expand all rows"
-                          className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-white/90 transition hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                         >
                           <ChevronsDown className="size-3.5" strokeWidth={2.2} />
                         </button>
@@ -2450,7 +2646,7 @@ export function BacklogPlanningPanel({
                       onMouseDown={(event) => beginColumnResize(key, event)}
                       className="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
                     >
-                      <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-slate-300" />
+                      <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-white/55" />
                     </button>
                   ) : null}
                 </div>
@@ -2586,8 +2782,11 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div
-                    className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
-                    style={{ gridTemplateColumns: tableGridTemplate }}
+                    className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2"
+                    style={{
+                      gridTemplateColumns: tableGridTemplate,
+                      ...nextChildBgStyle({ kind: "initiative", label: initiative.title, id: initiative.id }),
+                    }}
                   >
                     {renderBacklogCells({
                       workItem: (
@@ -2608,9 +2807,17 @@ export function BacklogPlanningPanel({
                               <ChevronRight className="size-4 shrink-0 text-slate-500" />
                             )}
                           </button>
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id) return; onOpenInitiative(initiative.id); }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id) return;
+                                onOpenInitiative(initiative.id);
+                              }
+                            }}
                             className="flex min-w-0 flex-1 items-center gap-2 text-left"
                           >
                             <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
@@ -2641,7 +2848,7 @@ export function BacklogPlanningPanel({
                                 </span>
                               </span>
                             )}
-                          </button>
+                          </div>
                           <button
                             type="button"
                             onClick={(event) => {
@@ -2886,7 +3093,7 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div
-                              className="group grid items-center gap-3 px-3 py-2 hover:bg-slate-50"
+                            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2"
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             >
                               {renderBacklogCells({
@@ -2908,9 +3115,17 @@ export function BacklogPlanningPanel({
                                         <ChevronRight className="size-4 shrink-0 text-slate-500" />
                                       )}
                                     </button>
-                                    <button
-                                      type="button"
+                                    <div
+                                      role="button"
+                                      tabIndex={0}
                                       onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id) return; onOpenEpic(epic.id); }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id) return;
+                                          onOpenEpic(epic.id);
+                                        }
+                                      }}
                                       className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                     >
                                       <span className="inline-block size-4 shrink-0" aria-hidden />
@@ -2941,7 +3156,7 @@ export function BacklogPlanningPanel({
                                           </span>
                                         </span>
                                       )}
-                                    </button>
+                                    </div>
                                     <button
                                       type="button"
                                       onClick={(event) => {
@@ -3116,12 +3331,16 @@ export function BacklogPlanningPanel({
                             {isEpicOpen ? (
                               <div>
                                 {(epic.userStories ?? []).map((story) => (
-                                  <div key={story.id}>
+                                  <div
+                                    key={story.id}
+                                    className={cn("hover:bg-[#c5ebff]", "border-t border-[#7cd3f7]/95")}
+                                    style={nextChildBgStyle({ kind: "story", label: story.title, id: story.id })}
+                                  >
                                     {(() => {
                                       const progress = storyCompletion(story);
                                                                             return (
                                     <div
-                                      className="group grid w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50"
+                                      className="group grid w-full items-center gap-3 px-3 py-2 text-left"
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                     {renderBacklogCells({
@@ -3131,9 +3350,17 @@ export function BacklogPlanningPanel({
                                       onMouseEnter={cancelCreateMenuClose}
                                       onMouseLeave={scheduleCreateMenuClose}
                                     >
-                                      <button
-                                        type="button"
+                                      <div
+                                        role="button"
+                                        tabIndex={0}
                                         onClick={() => { if (editingStoryTitle?.id === story.id) return; onOpenStory(story.id); }}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter" || event.key === " ") {
+                                            event.preventDefault();
+                                            if (editingStoryTitle?.id === story.id) return;
+                                            onOpenStory(story.id);
+                                          }
+                                        }}
                                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                       >
                                         <span className="inline-block size-3.5 shrink-0" aria-hidden />
@@ -3167,7 +3394,7 @@ export function BacklogPlanningPanel({
                                         <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[16px] font-semibold text-slate-600">
                                           #{storyRefById[story.id] ?? story.id.slice(0, 6)}
                                         </span>
-                                      </button>
+                                      </div>
                                       <button
                                         type="button"
                                         onClick={(event) => {
