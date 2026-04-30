@@ -3159,7 +3159,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       <main className="h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8">
         <div className="mx-auto flex h-full w-full max-w-[2550px] flex-col gap-5 overflow-hidden">
           <div className="rounded-2xl bg-card p-4 shadow-lg ring-1 ring-black/5">
-            <div className="flex items-start justify-between gap-6">
+            <div className="relative flex items-start justify-between gap-6">
               <div className="min-w-0 flex-1">
                 <div className="inline-flex flex-col p-1 pl-10">
                   <img
@@ -3169,6 +3169,21 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   />
                 </div>
               </div>
+              {topMode === "roadmap" ? (
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+                  <div className="relative inline-block pb-3">
+                    <div className="relative z-20 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
+                      <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
+                        Roadmap&nbsp;{selectedYear}
+                      </span>
+                    </div>
+                    <div
+                      className="absolute left-1/2 top-full z-10 min-w-[20rem] -translate-x-1/2 -translate-y-9 rounded-md bg-gradient-to-b from-sky-400 via-blue-600 to-blue-950 px-16 py-1 shadow-md shadow-blue-900/35"
+                      aria-hidden
+                    />
+                  </div>
+                </div>
+              ) : null}
               <div className="shrink-0 self-end pb-0">
                 {topMode === "roadmap" ? (
                   <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
