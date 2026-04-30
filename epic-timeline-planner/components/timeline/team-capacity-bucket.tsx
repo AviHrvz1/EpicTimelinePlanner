@@ -185,21 +185,28 @@ export function TeamCapacityBucket({
   const fluidGradId = `tcap-fluid-${gradientKey}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
 
   return (
-    <section className={cn("min-w-0 rounded-2xl border bg-white p-3 shadow-sm ring-1 ring-slate-100/70", team.tone)}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="truncate text-[15px] font-bold text-slate-800">
-          <span className="mr-1.5 inline-flex align-middle text-slate-600">
-            <Users className="size-4" />
+    <section
+      className={cn(
+        "min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+      )}
+    >
+      <div className="relative mb-2 flex min-h-8 items-center justify-end pr-0.5">
+        <p
+          className="pointer-events-none absolute left-1/2 top-1/2 flex max-w-[calc(100%-9rem)] items-center justify-center gap-1.5 pr-[84px] text-center text-[15px] font-bold text-slate-800"
+          style={{ transform: "translate(-50%, -50%)" }}
+        >
+          <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
+          <span className="truncate">
+            {teamLabelPrefix ? (
+              <>
+                <span className="font-semibold text-slate-600">{teamLabelPrefix}</span> {team.label}
+              </>
+            ) : (
+              team.label
+            )}
           </span>
-          {teamLabelPrefix ? (
-            <>
-              <span className="font-semibold text-slate-600">{teamLabelPrefix}</span> {team.label}
-            </>
-          ) : (
-            team.label
-          )}
         </p>
-        <label className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
+        <label className="relative z-10 inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
           Capacity
           <input
             type="number"
@@ -208,7 +215,7 @@ export function TeamCapacityBucket({
             step={1}
             value={capacity}
             onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
-            className="h-7 w-14 rounded-md border border-slate-200 bg-white px-1 text-[11px] font-medium text-slate-800"
+            className="h-7 w-11 shrink-0 rounded-md border border-slate-200/90 bg-white/90 px-1 text-[11px] font-medium text-slate-800 shadow-sm"
           />
           d
         </label>

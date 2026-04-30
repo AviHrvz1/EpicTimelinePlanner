@@ -1,16 +1,19 @@
 "use client";
 
 import { AlertTriangle, Thermometer } from "lucide-react";
+import { type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 export function TeamLoadSummary({
   teamLabel,
+  teamLabelSlot,
   gradientKey,
   totalAssigned,
   totalCapacity,
 }: {
   teamLabel: string;
+  teamLabelSlot?: ReactNode;
   gradientKey: string;
   totalAssigned: number;
   totalCapacity: number;
@@ -53,11 +56,15 @@ export function TeamLoadSummary({
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm">
             <Thermometer className="size-3.5 text-slate-700" aria-hidden />
           </span>
-          <h3 className="min-w-0 truncate text-[14px] font-bold leading-tight text-slate-900 sm:text-[15px]">
+          <h3 className="shrink-0 text-[14px] font-bold leading-tight text-slate-900 sm:text-[15px]">
             Team load
             <span className="font-semibold text-slate-400"> · </span>
-            <span className="font-semibold text-slate-500">{teamLabel}</span>
           </h3>
+          {teamLabelSlot ? (
+            <div className="min-w-0">{teamLabelSlot}</div>
+          ) : (
+            <span className="min-w-0 truncate font-semibold text-slate-500">{teamLabel}</span>
+          )}
         </div>
 
         <div

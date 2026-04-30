@@ -78,7 +78,7 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   sprint: "Sprint",
   assignee: "Assignee",
   estDays: "Est Days",
-  epicOriginalEst: "Epic Original Est",
+  epicOriginalEst: "Epic Est",
   daysLeft: "Days Left",
   progress: "Progress",
 };

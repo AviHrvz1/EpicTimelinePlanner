@@ -1,5 +1,6 @@
 "use client";
 
+import { type ReactNode } from "react";
 import { AlertTriangle, Users, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
@@ -21,16 +22,8 @@ type SprintCapacityBoardProps = {
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
+  teamSelectorSlot?: ReactNode;
 };
-
-const MEMBER_PANEL_TONES = [
-  "border-sky-200/90 bg-gradient-to-b from-sky-50/90 to-white",
-  "border-violet-200/90 bg-gradient-to-b from-violet-50/90 to-white",
-  "border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white",
-  "border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-white",
-  "border-rose-200/90 bg-gradient-to-b from-rose-50/90 to-white",
-  "border-cyan-200/90 bg-gradient-to-b from-cyan-50/90 to-white",
-];
 
 function CapacityStoryCard({
   card,
@@ -112,7 +105,6 @@ function CapacityBucket({
   capacity,
   assignedTotal,
   cards,
-  toneClass,
   onCapacityChange,
   onEstimateChange,
   onUnscheduleStory,
@@ -124,7 +116,6 @@ function CapacityBucket({
   capacity: number;
   assignedTotal: number;
   cards: Array<{ id: string; title: string; epicTitle: string; estimatedDays: number }>;
-  toneClass: string;
   onCapacityChange: (days: number) => void;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
@@ -147,15 +138,20 @@ function CapacityBucket({
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
 
   return (
-    <section className={cn("min-w-0 rounded-2xl border bg-white p-3 shadow-sm ring-1 ring-slate-100/70", toneClass)}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="truncate text-[15px] font-bold text-slate-800">
-          <span className="mr-1.5 inline-flex align-middle text-slate-600">
-            <Users className="size-4" />
-          </span>
-          {member}
+    <section
+      className={cn(
+        "min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+      )}
+    >
+      <div className="relative mb-2 flex min-h-8 items-center justify-end pr-0.5">
+        <p
+          className="pointer-events-none absolute left-1/2 top-1/2 flex max-w-[calc(100%-9rem)] items-center justify-center gap-1.5 pr-[84px] text-center text-[15px] font-bold text-slate-800"
+          style={{ transform: "translate(-50%, -50%)" }}
+        >
+          <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
+          <span className="truncate">{member}</span>
         </p>
-        <label className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
+        <label className="relative z-10 inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
           Capacity
           <input
             type="number"
@@ -164,7 +160,7 @@ function CapacityBucket({
             step={0.5}
             value={capacity}
             onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
-            className="h-7 w-12 rounded-md border border-slate-200 bg-white px-1 text-[11px] font-medium text-slate-800"
+            className="h-7 w-11 shrink-0 rounded-md border border-slate-200/90 bg-white/90 px-1 text-[11px] font-medium text-slate-800 shadow-sm"
           />
           d
         </label>
@@ -254,7 +250,7 @@ function CapacityBucket({
                 fill={`url(#fluid-${memberGradientKey})`}
                 opacity="0.95"
               />
-              {overCapacity ? <AlertTriangle x={38} y={-2} className="size-4 text-rose-600" /> : null}
+              {overCapacity ? <AlertTriangle x={30} y={-25} className="size-4 text-rose-600" /> : null}
             </svg>
           </div>
           <div className="text-center text-[11px] font-semibold text-slate-600">
@@ -284,6 +280,7 @@ export function SprintCapacityBoard({
   onEstimateChange,
   onUnscheduleStory,
   onOpenStory,
+  teamSelectorSlot,
 }: SprintCapacityBoardProps) {
   /**
    * Capacity assignment is scoped by sprint board key (year+sprint+team bucket set), not by epic.team.
@@ -323,16 +320,16 @@ export function SprintCapacityBoard({
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
         teamLabel={teamLabel}
+        teamLabelSlot={teamSelectorSlot}
         gradientKey={`sprint-${gradientKey}`}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-        {members.map((member, idx) => {
+        {members.map((member) => {
           const assignedIds = capacityBoard.assignments[member] ?? [];
           const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
           const assignedTotal = cards.reduce((sum, card) => sum + card.estimatedDays, 0);
-          const toneClass = MEMBER_PANEL_TONES[idx % MEMBER_PANEL_TONES.length]!;
           return (
             <CapacityBucket
               key={member}
@@ -342,7 +339,6 @@ export function SprintCapacityBoard({
               capacity={capacityBoard.capacities[member] ?? 6}
               assignedTotal={assignedTotal}
               cards={cards}
-              toneClass={toneClass}
               onCapacityChange={(days) => onCapacityChange(member, days)}
               onEstimateChange={onEstimateChange}
               onUnscheduleStory={onUnscheduleStory}

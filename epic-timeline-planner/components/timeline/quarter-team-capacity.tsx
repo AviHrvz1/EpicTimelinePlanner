@@ -1,5 +1,6 @@
 "use client";
 
+import { type ReactNode } from "react";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
@@ -54,6 +55,7 @@ type QuarterTeamCapacityBoardProps = {
   onRemoveEpicFromCapacity: (epicId: string) => void;
   onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
   teamFilterIds?: string[];
+  teamSelectorSlot?: ReactNode;
 };
 
 export function QuarterTeamCapacityBoard({
@@ -67,6 +69,7 @@ export function QuarterTeamCapacityBoard({
   onRemoveEpicFromCapacity,
   onEpicOriginalEstimateChange,
   teamFilterIds = [],
+  teamSelectorSlot,
 }: QuarterTeamCapacityBoardProps) {
   const rows = collectQuarterEpics(initiatives, quarterMonths);
   const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
@@ -106,6 +109,7 @@ export function QuarterTeamCapacityBoard({
               ? (visibleTeams[0]?.label ?? "Team")
               : "All teams (combined)"
         }
+        teamLabelSlot={teamSelectorSlot}
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}

@@ -1,5 +1,6 @@
 "use client";
 
+import { type ReactNode } from "react";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
@@ -51,6 +52,8 @@ type MonthTeamCapacityProps = {
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
   onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
+  teamFilterIds?: string[];
+  teamSelectorSlot?: ReactNode;
 };
 
 export function MonthTeamCapacityBoard({
@@ -62,10 +65,15 @@ export function MonthTeamCapacityBoard({
   onOpenEpic,
   onRemoveEpicFromCapacity,
   onEpicOriginalEstimateChange,
+  teamFilterIds = [],
+  teamSelectorSlot,
 }: MonthTeamCapacityProps) {
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
   const gradientKey = `month-${year}-${month}`.replace(/[^a-zA-Z0-9]+/g, "-");
-  const visibleTeams = MONTH_TEAM_COLUMNS;
+  const visibleTeams =
+    teamFilterIds.length > 0
+      ? MONTH_TEAM_COLUMNS.filter((team) => teamFilterIds.includes(team.id))
+      : MONTH_TEAM_COLUMNS;
 
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
@@ -79,7 +87,14 @@ export function MonthTeamCapacityBoard({
   return (
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
-        teamLabel="All teams (combined)"
+        teamLabel={
+          teamFilterIds.length > 1
+            ? `${teamFilterIds.length} teams selected`
+            : teamFilterIds.length === 1
+              ? (visibleTeams[0]?.label ?? "Team")
+              : "All teams (combined)"
+        }
+        teamLabelSlot={teamSelectorSlot}
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}

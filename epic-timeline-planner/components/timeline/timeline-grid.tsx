@@ -807,7 +807,7 @@ export function TimelineGrid({
   const [capacityTeamMenuOpen, setCapacityTeamMenuOpen] = useState(false);
   const [showYearSprintChips, setShowYearSprintChips] = useState(true);
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
-  const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(1248);
+  const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(960);
   const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
   const [expandedEstimateEpicIds, setExpandedEstimateEpicIds] = useState<Set<string>>(new Set());
   const capacityTeamFilterRef = useRef<HTMLDivElement | null>(null);
@@ -864,8 +864,9 @@ export function TimelineGrid({
     function onPointerMove(moveEvent: PointerEvent) {
       const delta = moveEvent.clientX - startX;
       const nextWidth = startWidth - delta;
-      const maxWidth = Math.max(980, window.innerWidth - 12);
-      setEstEpicsPanelWidthPx(Math.max(980, Math.min(maxWidth, nextWidth)));
+      const minWidth = Math.max(720, Math.round(window.innerWidth * 0.4));
+      const maxWidth = Math.max(minWidth, window.innerWidth - 12);
+      setEstEpicsPanelWidthPx(Math.max(minWidth, Math.min(maxWidth, nextWidth)));
     }
 
     function onPointerUp() {
@@ -888,8 +889,9 @@ export function TimelineGrid({
     function onPointerMove(moveEvent: PointerEvent) {
       const delta = moveEvent.clientX - startX;
       const nextWidth = startWidth + delta;
-      const maxWidth = Math.max(980, window.innerWidth - startLeft);
-      const boundedWidth = Math.max(980, Math.min(maxWidth, nextWidth));
+      const minWidth = Math.max(720, Math.round(window.innerWidth * 0.4));
+      const maxWidth = Math.max(minWidth, window.innerWidth - startLeft);
+      const boundedWidth = Math.max(minWidth, Math.min(maxWidth, nextWidth));
       const nextRight = Math.max(0, window.innerWidth - startLeft - boundedWidth);
       setEstEpicsPanelWidthPx(boundedWidth);
       setEstEpicsPanelPosition((prev) => ({ ...prev, right: nextRight }));
@@ -915,7 +917,7 @@ export function TimelineGrid({
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
       const maxRight = Math.max(0, window.innerWidth - estEpicsPanelWidthPx);
-      const maxTop = Math.max(0, window.innerHeight - 220);
+      const maxTop = Math.max(0, window.innerHeight - 180);
       setEstEpicsPanelPosition({
         right: Math.max(0, Math.min(maxRight, startRight - dx)),
         top: Math.max(0, Math.min(maxTop, startTop + dy)),
@@ -932,6 +934,8 @@ export function TimelineGrid({
   }, [estEpicsPanelPosition.right, estEpicsPanelPosition.top, estEpicsPanelWidthPx]);
   useEffect(() => {
     if (!estEpicsPanelOpen) return;
+    const defaultWidth = Math.max(720, Math.min(window.innerWidth - 16, Math.round(window.innerWidth * 0.56)));
+    setEstEpicsPanelWidthPx(defaultWidth);
     setEstEpicsPanelPosition({ right: 0, top: 0 });
   }, [estEpicsPanelOpen]);
   const scheduledInitiatives = useMemo(() => {
@@ -2003,7 +2007,6 @@ export function TimelineGrid({
     activeMonth != null &&
     (monthPlanTab === "sprint-kanban" ||
       monthPlanTab === "sprint-status" ||
-      monthPlanTab === "sprint-capacity" ||
       monthPlanTab === "sprint-retrospective" ||
       monthPlanTab === "month-status");
   const selectedSprintTeamId = isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : "all";
@@ -2208,12 +2211,13 @@ export function TimelineGrid({
                     onSummaryStatusQuickFilterChange?.(null);
                   }}
                   className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                     roadmapBarMode === "initiatives"
                       ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
+                  <MapIcon className="size-3.5" aria-hidden />
                   {summaryBadgesForScope.totalInitiatives} Initiatives
                 </button>
                 <button
@@ -2223,12 +2227,13 @@ export function TimelineGrid({
                     onSummaryStatusQuickFilterChange?.(null);
                   }}
                   className={cn(
-                    "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                     roadmapBarMode === "epics" && summaryStatusQuickFilter == null
                       ? "bg-amber-100 text-amber-800 ring-amber-200"
                       : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                   )}
                 >
+                  <Flag className="size-3.5" aria-hidden />
                   {("totalEpics" in summaryBadgesForScope
                     ? summaryBadgesForScope.totalEpics
                     : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2254,9 +2259,10 @@ export function TimelineGrid({
                       strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
                     />
                   </svg>
-                  {estimatedEpicsPercentForScope}% Est Epics
+                  {estimatedEpicsPercentForScope}% Epic Estimated
                 </button>
-                <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
+                  <ClipboardList className="size-3.5" aria-hidden />
                   {summaryBadgesForScope.totalStories} User Stories
                 </div>
                 {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
@@ -2289,12 +2295,13 @@ export function TimelineGrid({
                       onSummaryStatusQuickFilterChange?.(null);
                     }}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                       roadmapBarMode === "epics" && summaryStatusQuickFilter == null
                         ? "bg-amber-100 text-amber-800 ring-amber-200"
                         : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                     )}
                   >
+                    <Flag className="size-3.5" aria-hidden />
                     {sprintKanbanSummaryStats.epicCount} Epics
                   </button>
                   <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300">
@@ -2320,9 +2327,10 @@ export function TimelineGrid({
                         strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
                       />
                     </svg>
-                    {estimatedEpicsPercentForScope}% Est Epics
+                    {estimatedEpicsPercentForScope}% Epic Estimated
                   </button>
-                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
+                    <ClipboardList className="size-3.5" aria-hidden />
                     {sprintKanbanSummaryStats.storyTotal} User Stories
                   </div>
                 </>
@@ -2348,12 +2356,13 @@ export function TimelineGrid({
                       onSummaryStatusQuickFilterChange?.(null);
                     }}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                       roadmapBarMode === "initiatives"
                         ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
                         : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                     )}
                   >
+                    <MapIcon className="size-3.5" aria-hidden />
                     {summaryBadgesForScope.totalInitiatives} Initiatives
                   </button>
                   <button
@@ -2363,12 +2372,13 @@ export function TimelineGrid({
                       onSummaryStatusQuickFilterChange?.(null);
                     }}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                       roadmapBarMode === "epics" && summaryStatusQuickFilter == null
                         ? "bg-amber-100 text-amber-800 ring-amber-200"
                         : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
                     )}
                   >
+                    <Flag className="size-3.5" aria-hidden />
                     {("totalEpics" in summaryBadgesForScope
                       ? summaryBadgesForScope.totalEpics
                       : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2394,9 +2404,10 @@ export function TimelineGrid({
                         strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
                       />
                     </svg>
-                    {estimatedEpicsPercentForScope}% Est Epics
+                    {estimatedEpicsPercentForScope}% Epic Estimated
                   </button>
-                  <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
+                    <ClipboardList className="size-3.5" aria-hidden />
                     {summaryBadgesForScope.totalStories} User Stories
                   </div>
                 </>
@@ -3044,6 +3055,82 @@ export function TimelineGrid({
                   onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
                     onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
                   }
+                  teamFilterIds={capacityTeamFilterIds}
+                  teamSelectorSlot={
+                    <div ref={capacityTeamFilterRef} className="relative inline-flex min-w-[13rem] max-w-[22rem] align-middle">
+                      <div
+                        className="flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800"
+                        onClick={() => setCapacityTeamMenuOpen(true)}
+                      >
+                        {capacityTeamFilterIds.map((id) => {
+                          const label = MONTH_TEAM_COLUMNS.find((team) => team.id === id)?.label ?? id;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setCapacityTeamFilterIds((prev) => prev.filter((teamId) => teamId !== id));
+                              }}
+                            >
+                              {label}
+                              <X className="size-3" />
+                            </button>
+                          );
+                        })}
+                        <input
+                          value={capacityTeamSearch}
+                          onChange={(event) => {
+                            setCapacityTeamSearch(event.target.value);
+                            setCapacityTeamMenuOpen(true);
+                          }}
+                          onFocus={() => setCapacityTeamMenuOpen(true)}
+                          placeholder={capacityTeamFilterIds.length === 0 ? "All teams" : "Search teams..."}
+                          className="h-6 min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-[12px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+                          aria-label="Filter month capacity by team"
+                        />
+                      </div>
+                      {capacityTeamMenuOpen ? (
+                        <div className="absolute left-0 top-[calc(100%+0.25rem)] z-40 max-h-52 w-full overflow-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
+                            onClick={() => {
+                              setCapacityTeamFilterIds([]);
+                              setCapacityTeamSearch("");
+                              setCapacityTeamMenuOpen(false);
+                            }}
+                          >
+                            <span>All teams</span>
+                            {capacityTeamFilterIds.length === 0 ? <Check className="size-3.5" /> : null}
+                          </button>
+                          {capacityTeamOptions.map((team) => {
+                            const selected = capacityTeamFilterIds.includes(team.id);
+                            return (
+                              <button
+                                key={team.id}
+                                type="button"
+                                className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
+                                onClick={() => {
+                                  setCapacityTeamFilterIds((prev) =>
+                                    prev.includes(team.id) ? prev.filter((id) => id !== team.id) : [...prev, team.id],
+                                  );
+                                  setCapacityTeamSearch("");
+                                }}
+                              >
+                                <span>{team.label}</span>
+                                {selected ? <Check className="size-3.5 text-sky-700" /> : null}
+                              </button>
+                            );
+                          })}
+                          {capacityTeamOptions.length === 0 ? (
+                            <p className="px-2 py-1.5 text-[12px] text-slate-500">No matching teams</p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  }
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
@@ -3075,6 +3162,44 @@ export function TimelineGrid({
                   }
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onOpenStory={onOpenStory ?? (() => {})}
+                  teamSelectorSlot={
+                    <div className="relative inline-flex min-w-[12rem] max-w-[20rem] align-middle" ref={sprintTeamMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
+                        className="inline-flex h-7 min-w-[9.25rem] items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                        aria-label="Filter sprint capacity by team"
+                        aria-expanded={isSprintTeamMenuOpen}
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                          {selectedSprintTeamOption.icon}
+                          <span className="truncate">{selectedSprintTeamOption.label}</span>
+                        </span>
+                        <ChevronDown className="size-3.5 text-slate-500" aria-hidden />
+                      </button>
+                      {isSprintTeamMenuOpen ? (
+                        <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                          {sprintTeamOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                onSprintStoryBoardTeamChange?.(option.value === "all" ? null : option.value);
+                                setIsSprintTeamMenuOpen(false);
+                              }}
+                              className={cn(
+                                "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                selectedSprintTeamId === option.value && "bg-slate-100",
+                              )}
+                            >
+                              {option.icon}
+                              <span>{option.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  }
                 />
               </div>
             ) : monthPlanTab === "sprint-retrospective" ? (
@@ -3454,33 +3579,56 @@ export function TimelineGrid({
           hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
         )}
       >
-        {!activeMonth && quarterViewTab === "capacity" ? (
-          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2 shadow-sm ring-1 ring-slate-100/80">
-            {!focusedQuarter ? (
-              <label className="inline-flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Quarter</span>
-                <select
-                  value={capacityQuarterFilterLabel}
-                  onChange={(event) =>
-                    setCapacityQuarterFilterLabel(event.target.value as "all" | "Q1" | "Q2" | "Q3" | "Q4")
-                  }
-                  className="h-8 min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
-                  aria-label="Filter quarter capacity by quarter"
-                >
-                  <option value="all">All quarters</option>
-                  {QUARTERS.map((quarter) => (
-                    <option key={quarter.label} value={quarter.label}>
-                      {quarter.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <label className="inline-flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
-              <div ref={capacityTeamFilterRef} className="relative min-w-[16rem]">
+        {activeMonth ? null : !focusedQuarter && quarterViewTab === "insights" ? (
+          <MonthAnalytics
+            initiatives={initiatives}
+            month={1}
+            periodMonths={MONTHS.map((_, i) => i + 1)}
+            periodLabel="Year"
+            planYear={currentYear}
+            onOpenEpic={onOpenEpic}
+            onOpenStory={onOpenStory ?? (() => {})}
+            onOpenSprintKanban={(yearSprint, teamId) =>
+              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+            }
+          />
+        ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
+          <MonthAnalytics
+            initiatives={initiatives}
+            month={focusedQuarter.months[0]}
+            periodMonths={focusedQuarter.months}
+            periodLabel={focusedQuarter.label}
+            planYear={currentYear}
+            onOpenEpic={onOpenEpic}
+            onOpenStory={onOpenStory ?? (() => {})}
+            onOpenSprintKanban={(yearSprint, teamId) =>
+              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+            }
+          />
+        ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
+          <QuarterTeamCapacityBoard
+            initiatives={initiatives}
+            quarterLabel={filteredCapacityQuarter?.label ?? "All quarters"}
+            quarterMonths={filteredCapacityQuarter?.months ?? MONTHS.map((_, i) => i + 1)}
+            year={currentYear}
+            monthTeamCapacityByKey={monthTeamCapacityByKey}
+            onCapacityChange={(teamId, totalDays) => {
+              if (filteredCapacityQuarter) {
+                onQuarterTeamCapacityChange?.(filteredCapacityQuarter.label, teamId, totalDays);
+                return;
+              }
+              onYearTeamCapacityChange?.(teamId, totalDays);
+            }}
+            onOpenEpic={onOpenEpic}
+            onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
+            onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
+              onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
+            }
+            teamFilterIds={capacityTeamFilterIds}
+            teamSelectorSlot={
+              <div ref={capacityTeamFilterRef} className="relative inline-flex min-w-[13rem] max-w-[22rem] align-middle">
                 <div
-                  className="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] font-semibold text-slate-800"
+                  className="flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800"
                   onClick={() => setCapacityTeamMenuOpen(true)}
                 >
                   {capacityTeamFilterIds.map((id) => {
@@ -3551,55 +3699,7 @@ export function TimelineGrid({
                   </div>
                 ) : null}
               </div>
-            </label>
-          </div>
-        ) : null}
-        {activeMonth ? null : !focusedQuarter && quarterViewTab === "insights" ? (
-          <MonthAnalytics
-            initiatives={initiatives}
-            month={1}
-            periodMonths={MONTHS.map((_, i) => i + 1)}
-            periodLabel="Year"
-            planYear={currentYear}
-            onOpenEpic={onOpenEpic}
-            onOpenStory={onOpenStory ?? (() => {})}
-            onOpenSprintKanban={(yearSprint, teamId) =>
-              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
             }
-          />
-        ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
-          <MonthAnalytics
-            initiatives={initiatives}
-            month={focusedQuarter.months[0]}
-            periodMonths={focusedQuarter.months}
-            periodLabel={focusedQuarter.label}
-            planYear={currentYear}
-            onOpenEpic={onOpenEpic}
-            onOpenStory={onOpenStory ?? (() => {})}
-            onOpenSprintKanban={(yearSprint, teamId) =>
-              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
-            }
-          />
-        ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
-          <QuarterTeamCapacityBoard
-            initiatives={initiatives}
-            quarterLabel={filteredCapacityQuarter?.label ?? "All quarters"}
-            quarterMonths={filteredCapacityQuarter?.months ?? MONTHS.map((_, i) => i + 1)}
-            year={currentYear}
-            monthTeamCapacityByKey={monthTeamCapacityByKey}
-            onCapacityChange={(teamId, totalDays) => {
-              if (filteredCapacityQuarter) {
-                onQuarterTeamCapacityChange?.(filteredCapacityQuarter.label, teamId, totalDays);
-                return;
-              }
-              onYearTeamCapacityChange?.(teamId, totalDays);
-            }}
-            onOpenEpic={onOpenEpic}
-            onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
-            onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
-              onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
-            }
-            teamFilterIds={capacityTeamFilterIds}
           />
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard
@@ -3617,6 +3717,81 @@ export function TimelineGrid({
               onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
             }
             teamFilterIds={capacityTeamFilterIds}
+            teamSelectorSlot={
+              <div ref={capacityTeamFilterRef} className="relative inline-flex min-w-[13rem] max-w-[22rem] align-middle">
+                <div
+                  className="flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800"
+                  onClick={() => setCapacityTeamMenuOpen(true)}
+                >
+                  {capacityTeamFilterIds.map((id) => {
+                    const label = MONTH_TEAM_COLUMNS.find((team) => team.id === id)?.label ?? id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setCapacityTeamFilterIds((prev) => prev.filter((teamId) => teamId !== id));
+                        }}
+                      >
+                        {label}
+                        <X className="size-3" />
+                      </button>
+                    );
+                  })}
+                  <input
+                    value={capacityTeamSearch}
+                    onChange={(event) => {
+                      setCapacityTeamSearch(event.target.value);
+                      setCapacityTeamMenuOpen(true);
+                    }}
+                    onFocus={() => setCapacityTeamMenuOpen(true)}
+                    placeholder={capacityTeamFilterIds.length === 0 ? "All teams" : "Search teams..."}
+                    className="h-6 min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-[12px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+                    aria-label="Filter quarter capacity by team"
+                  />
+                </div>
+                {capacityTeamMenuOpen ? (
+                  <div className="absolute left-0 top-[calc(100%+0.25rem)] z-40 max-h-52 w-full overflow-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
+                      onClick={() => {
+                        setCapacityTeamFilterIds([]);
+                        setCapacityTeamSearch("");
+                        setCapacityTeamMenuOpen(false);
+                      }}
+                    >
+                      <span>All teams</span>
+                      {capacityTeamFilterIds.length === 0 ? <Check className="size-3.5" /> : null}
+                    </button>
+                    {capacityTeamOptions.map((team) => {
+                      const selected = capacityTeamFilterIds.includes(team.id);
+                      return (
+                        <button
+                          key={team.id}
+                          type="button"
+                          className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
+                          onClick={() => {
+                            setCapacityTeamFilterIds((prev) =>
+                              prev.includes(team.id) ? prev.filter((id) => id !== team.id) : [...prev, team.id],
+                            );
+                            setCapacityTeamSearch("");
+                          }}
+                        >
+                          <span>{team.label}</span>
+                          {selected ? <Check className="size-3.5 text-sky-700" /> : null}
+                        </button>
+                      );
+                    })}
+                    {capacityTeamOptions.length === 0 ? (
+                      <p className="px-2 py-1.5 text-[12px] text-slate-500">No matching teams</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            }
           />
         ) : roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : (
@@ -3809,19 +3984,19 @@ export function TimelineGrid({
         )}
       </div>
       {estEpicsPanelOpen ? (
-        <div className="pointer-events-none absolute inset-0 z-[140] flex justify-end">
+        <div className="pointer-events-none fixed inset-0 z-[140]">
           <div
             className="pointer-events-auto absolute inset-0 bg-transparent"
             onClick={() => setEstEpicsPanelOpen(false)}
           />
           <aside
-            className="pointer-events-auto absolute border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 shadow-lg ring-1 ring-indigo-100/80"
+            className="pointer-events-auto fixed border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 shadow-lg ring-1 ring-indigo-100/80"
             style={{
               width: `${estEpicsPanelWidthPx}px`,
-              maxWidth: "98vw",
+              maxWidth: "99vw",
               right: `${estEpicsPanelPosition.right}px`,
               top: `${estEpicsPanelPosition.top}px`,
-              height: `calc(100% - ${estEpicsPanelPosition.top}px)`,
+              height: "100vh",
             }}
           >
             <div

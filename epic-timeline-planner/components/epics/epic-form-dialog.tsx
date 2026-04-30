@@ -29,7 +29,7 @@ import {
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
-import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -524,6 +524,13 @@ export function EpicFormDialog({
       )
       .filter((initiative) => (initiative.epics ?? []).length > 0);
   }, [epic, initiatives]);
+  const getEpicDetailsSeparatorX = useCallback(() => {
+    const rect = dialogShellRef.current?.getBoundingClientRect();
+    if (!rect) return window.innerWidth;
+    const visualLeft = rect.left + dialogOffset.x;
+    const separatorX = visualLeft + rect.width - detailsPanelWidthPx - 44;
+    return Math.max(0, Math.min(window.innerWidth, separatorX));
+  }, [dialogOffset.x, detailsPanelWidthPx]);
 
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
@@ -780,7 +787,8 @@ export function EpicFormDialog({
     function onPointerMove(moveEvent: PointerEvent) {
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
-      const maxX = Math.max(0, window.innerWidth - epicInsightsPanelWidthPx);
+      const separatorX = getEpicDetailsSeparatorX();
+      const maxX = Math.max(0, separatorX - epicInsightsPanelWidthPx);
       const maxY = Math.max(0, window.innerHeight - 180);
       setEpicInsightsPanelOffset({
         x: Math.max(0, Math.min(maxX, startOffset.x + dx)),
@@ -807,7 +815,8 @@ export function EpicFormDialog({
 
     function onPointerMove(moveEvent: PointerEvent) {
       const delta = moveEvent.clientX - startX;
-      const maxWidth = Math.max(520, window.innerWidth - currentLeft);
+      const separatorX = getEpicDetailsSeparatorX();
+      const maxWidth = Math.max(520, separatorX - currentLeft);
       const next = Math.max(520, Math.min(maxWidth, startWidth + delta));
       setEpicInsightsPanelWidthPx(next);
     }
@@ -831,11 +840,12 @@ export function EpicFormDialog({
 
     function onPointerMove(moveEvent: PointerEvent) {
       const delta = moveEvent.clientX - startX;
+      const separatorX = getEpicDetailsSeparatorX();
       const nextLeft = startLeft + delta;
-      const boundedLeft = Math.max(0, Math.min(window.innerWidth - 520, nextLeft));
+      const boundedLeft = Math.max(0, Math.min(separatorX - 520, nextLeft));
       const adjustedDelta = boundedLeft - startLeft;
       const nextWidth = startWidth - adjustedDelta;
-      const maxWidth = Math.max(520, window.innerWidth - boundedLeft);
+      const maxWidth = Math.max(520, separatorX - boundedLeft);
       const boundedWidth = Math.max(520, Math.min(maxWidth, nextWidth));
       setEpicInsightsPanelOffset((prev) => ({ ...prev, x: boundedLeft }));
       setEpicInsightsPanelWidthPx(boundedWidth);
@@ -988,8 +998,11 @@ export function EpicFormDialog({
                   onClick={() =>
                     setEpicInsightsPanelOpen((prev) => {
                       if (!prev) {
-                        setEpicInsightsPanelOffset({ x: Math.round(window.innerWidth * 0.02), y: 0 });
-                        setEpicInsightsPanelWidthPx(Math.round(window.innerWidth * 0.96));
+                        const initialLeft = 0;
+                        const separatorX = getEpicDetailsSeparatorX();
+                        const initialWidth = Math.max(520, Math.min(Math.round(window.innerWidth * 0.96), separatorX - initialLeft));
+                        setEpicInsightsPanelOffset({ x: initialLeft, y: 0 });
+                        setEpicInsightsPanelWidthPx(initialWidth);
                       }
                       return !prev;
                     })
@@ -1624,7 +1637,7 @@ export function EpicFormDialog({
                         setPlanMonthDraft("");
                       }
                     }}
-                    disabled={Boolean(lockInitiativeId)}
+                    disabled={Boolean(lockInitiativeId) && !epic}
                   >
                     <option value="">Select initiative</option>
                     {initiativeOptions.map((option) => (
@@ -1672,7 +1685,7 @@ export function EpicFormDialog({
                   )}
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Orig. Est.</p>
+                  <p className="text-sm font-normal text-slate-700">Days Est</p>
                   <input
                     type="number"
                     min={0}

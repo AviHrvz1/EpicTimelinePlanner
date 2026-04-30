@@ -857,7 +857,7 @@ export function InitiativeFormDialog({
                                       className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
                                       onClick={() => toggleChildEpicSort("originalEstimateDays")}
                                     >
-                                      Orig. Est.
+                                      Days Est
                                       {childEpicSortKey === "originalEstimateDays" ? (
                                         childEpicSortDir === "asc" ? (
                                           <ChevronUp className="size-3.5 shrink-0" />
