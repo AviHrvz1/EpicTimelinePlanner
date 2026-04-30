@@ -53,8 +53,7 @@ type QuarterTeamCapacityBoardProps = {
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
   onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
-  teamFilterId?: string | null;
-  onTeamFilterChange?: (teamId: string | null) => void;
+  teamFilterIds?: string[];
 };
 
 export function QuarterTeamCapacityBoard({
@@ -67,17 +66,17 @@ export function QuarterTeamCapacityBoard({
   onOpenEpic,
   onRemoveEpicFromCapacity,
   onEpicOriginalEstimateChange,
-  teamFilterId = null,
-  onTeamFilterChange,
+  teamFilterIds = [],
 }: QuarterTeamCapacityBoardProps) {
   const rows = collectQuarterEpics(initiatives, quarterMonths);
   const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
   const gaugeScaleMax = 60 * quarterMonths.length;
   const capacityInputMax = 200 * quarterMonths.length;
 
-  const visibleTeams = teamFilterId
-    ? MONTH_TEAM_COLUMNS.filter((team) => team.id === teamFilterId)
-    : MONTH_TEAM_COLUMNS;
+  const visibleTeams =
+    teamFilterIds.length > 0
+      ? MONTH_TEAM_COLUMNS.filter((team) => teamFilterIds.includes(team.id))
+      : MONTH_TEAM_COLUMNS;
 
   const teamQuarterCapacity = new Map<string, number>();
   for (const team of visibleTeams) {
@@ -100,13 +99,16 @@ export function QuarterTeamCapacityBoard({
   return (
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
-        teamLabel={teamFilterId ? (visibleTeams[0]?.label ?? "Team") : "All teams (combined)"}
+        teamLabel={
+          teamFilterIds.length > 1
+            ? `${teamFilterIds.length} teams selected`
+            : teamFilterIds.length === 1
+              ? (visibleTeams[0]?.label ?? "Team")
+              : "All teams (combined)"
+        }
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
-        teamOptions={MONTH_TEAM_COLUMNS.map((team) => ({ id: team.id, label: team.label }))}
-        selectedTeamId={teamFilterId}
-        onTeamSelect={(teamId) => onTeamFilterChange?.(teamId)}
       />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {visibleTeams.map((team) => {

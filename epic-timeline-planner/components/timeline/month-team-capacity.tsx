@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
@@ -67,10 +65,7 @@ export function MonthTeamCapacityBoard({
 }: MonthTeamCapacityProps) {
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
   const gradientKey = `month-${year}-${month}`.replace(/[^a-zA-Z0-9]+/g, "-");
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const visibleTeams = selectedTeamId
-    ? MONTH_TEAM_COLUMNS.filter((team) => team.id === selectedTeamId)
-    : MONTH_TEAM_COLUMNS;
+  const visibleTeams = MONTH_TEAM_COLUMNS;
 
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
@@ -84,13 +79,10 @@ export function MonthTeamCapacityBoard({
   return (
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
-        teamLabel={selectedTeamId ? (visibleTeams[0]?.label ?? "Team") : "All teams (combined)"}
+        teamLabel="All teams (combined)"
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
-        teamOptions={MONTH_TEAM_COLUMNS.map((team) => ({ id: team.id, label: team.label }))}
-        selectedTeamId={selectedTeamId}
-        onTeamSelect={setSelectedTeamId}
       />
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {visibleTeams.map((team) => {

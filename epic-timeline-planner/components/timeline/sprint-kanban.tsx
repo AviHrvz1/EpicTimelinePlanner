@@ -269,26 +269,29 @@ export function SprintKanbanBoard({
   return (
     <div className="relative flex w-full min-h-0 flex-1 flex-col gap-2">
       {sprintClosed ? (
-        <div className="pointer-events-none absolute inset-x-3 top-2 z-30 flex justify-center">
-          <div
-            className="px-4 py-2 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
-            style={{
-              background: "rgba(255, 255, 255, 0.2)",
-              borderRadius: "16px",
-              boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
-              backdropFilter: "blur(1.2px)",
-              WebkitBackdropFilter: "blur(1.2px)",
-              border: "1px solid rgba(255, 255, 255, 0.44)",
-            }}
-          >
-            <img
-              src="/closed-sign-transparent.png"
-              alt={`Sprint ${yearSprint} is closed`}
-              className="h-40 w-auto object-contain"
-              draggable={false}
-            />
+        <>
+          <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/10 backdrop-blur-[1px]" />
+          <div className="pointer-events-none absolute inset-x-3 top-2 z-30 flex justify-center">
+            <div
+              className="px-4 py-2 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
+              style={{
+                background: "rgba(255, 255, 255, 0.2)",
+                borderRadius: "16px",
+                boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+                backdropFilter: "blur(1.2px)",
+                WebkitBackdropFilter: "blur(1.2px)",
+                border: "1px solid rgba(255, 255, 255, 0.44)",
+              }}
+            >
+              <img
+                src="/closed-sign-transparent.png"
+                alt={`Sprint ${yearSprint} is closed`}
+                className="h-40 w-auto object-contain"
+                draggable={false}
+              />
+            </div>
           </div>
-        </div>
+        </>
       ) : null}
       {assigneeOptions.length > 0 ? (
         <div className="shrink-0 px-2.5 py-1">

@@ -8,6 +8,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
+  Bot,
   Bold,
   CheckCheck,
   CheckCircle2,
@@ -48,6 +49,10 @@ import {
   usePlanningSurfaceRect,
 } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
+
+function isSystemHistoryEntry(entry: string): boolean {
+  return entry.toLowerCase().startsWith("system auto-move:");
+}
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 type StoryWithEpic = UserStoryItem & { epicTitle: string };
@@ -1057,7 +1062,14 @@ export function StoryDetailsDialog({
                     ) : (
                       story.history.map((entry) => (
                         <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                          <p className="text-slate-800">{entry.entry}</p>
+                          <p className="inline-flex items-center gap-1.5 text-slate-800">
+                            {isSystemHistoryEntry(entry.entry) ? (
+                              <span className="inline-flex items-center rounded-md bg-sky-50 px-1 py-0.5 text-sky-700 ring-1 ring-sky-200">
+                                <Bot className="size-3.5" aria-hidden />
+                              </span>
+                            ) : null}
+                            <span>{entry.entry}</span>
+                          </p>
                           <p className="mt-1 text-[12px] text-slate-500">
                             {new Date(entry.createdAt).toLocaleString()}
                           </p>

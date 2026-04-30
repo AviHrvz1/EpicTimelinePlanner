@@ -1819,7 +1819,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             const response = await fetch(`/api/stories/${entry.storyId}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sprint: entry.toSprint }),
+              body: JSON.stringify({
+                sprint: entry.toSprint,
+                historyEntry: `System auto-move: story moved from Sprint ${entry.fromSprint} to Sprint ${entry.toSprint} after sprint close.`,
+              }),
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return { ok: true as const, entry };

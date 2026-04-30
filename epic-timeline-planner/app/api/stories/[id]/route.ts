@@ -20,6 +20,8 @@ const updateStorySchema = z.object({
   daysLeft: z.number().int().min(0).max(3650).optional().nullable(),
   status: z.nativeEnum(StoryStatus).optional(),
   epicId: z.string().uuid().optional(),
+  /** Optional explicit history line for system-driven updates (e.g. sprint auto-rollover). */
+  historyEntry: z.string().trim().min(1).max(240).optional(),
 });
 
 function quarterFromMonth(month: number | null | undefined): number | null {
@@ -76,7 +78,9 @@ export async function PATCH(
   if (patch.assignee !== undefined && patch.assignee !== existing.assignee) changes.push("Assignee updated");
   if (patch.labels !== undefined && patch.labels !== existing.labels) changes.push("Labels updated");
   if (patch.priority !== undefined && patch.priority !== existing.priority) changes.push("Priority updated");
-  if (patch.sprint !== undefined && patch.sprint !== existing.sprint) changes.push("Sprint updated");
+  if (patch.sprint !== undefined && patch.sprint !== existing.sprint) {
+    changes.push(patch.historyEntry ?? "Sprint updated");
+  }
   if (patch.estimatedDays !== undefined && patch.estimatedDays !== existing.estimatedDays)
     changes.push("Estimated days updated");
   if (patch.daysLeft !== undefined && patch.daysLeft !== existing.daysLeft) changes.push("Days left updated");

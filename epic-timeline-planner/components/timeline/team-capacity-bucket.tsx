@@ -110,7 +110,7 @@ export function TeamEpicCard({
             </span>
           </div>
           <label className="grid w-full grid-cols-[4.5rem_3.5rem] items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-            <span>Orig. Est.</span>
+            <span>Est days</span>
             <input
               type="number"
               min={0}
@@ -118,7 +118,7 @@ export function TeamEpicCard({
               step={1}
               value={originalEstimateDays}
               onChange={(event) => onOriginalEstimateChange(epicId, Math.max(0, Number(event.target.value || 0)))}
-              className="h-6 w-[3.5rem] rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="h-6 w-[3.5rem] rounded-md border border-slate-200 bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
               aria-label="Original estimate days"
             />
           </label>
@@ -293,7 +293,7 @@ export function TeamCapacityBucket({
                 fill={`url(#${fluidGradId})`}
                 opacity="0.95"
               />
-              {overCapacity ? <AlertTriangle x={38} y={-2} className="size-4 text-rose-600" /> : null}
+              {overCapacity ? <AlertTriangle x={30} y={-25} className="size-4 text-rose-600" /> : null}
             </svg>
           </div>
           <div className="text-center text-[11px] font-semibold text-slate-600">
