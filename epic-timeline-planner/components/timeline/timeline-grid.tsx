@@ -876,6 +876,33 @@ export function TimelineGrid({
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
   }, [estEpicsPanelWidthPx]);
+  const beginEstimateCoverageResizeRight = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = estEpicsPanelWidthPx;
+    const startRight = estEpicsPanelPosition.right;
+    const startLeft = window.innerWidth - startRight - startWidth;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = startWidth + delta;
+      const maxWidth = Math.max(980, window.innerWidth - startLeft);
+      const boundedWidth = Math.max(980, Math.min(maxWidth, nextWidth));
+      const nextRight = Math.max(0, window.innerWidth - startLeft - boundedWidth);
+      setEstEpicsPanelWidthPx(boundedWidth);
+      setEstEpicsPanelPosition((prev) => ({ ...prev, right: nextRight }));
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }, [estEpicsPanelPosition.right, estEpicsPanelWidthPx]);
   const beginEstimateCoverageDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -3801,6 +3828,12 @@ export function TimelineGrid({
               className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
               onPointerDown={beginEstimateCoverageResize}
               aria-label="Resize epic estimation coverage panel"
+              role="separator"
+            />
+            <div
+              className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              onPointerDown={beginEstimateCoverageResizeRight}
+              aria-label="Resize epic estimation coverage panel from right"
               role="separator"
             />
             <div className="mb-3 flex cursor-move items-center justify-between" onPointerDown={beginEstimateCoverageDrag}>

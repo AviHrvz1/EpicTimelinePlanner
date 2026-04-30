@@ -1538,7 +1538,7 @@ export function MonthAnalytics({
             </div>
           </div>
         ) : (
-          <div className={`grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
+          <div className={`grid flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_10.5rem] lg:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
             <div
               className={`relative rounded-lg ${SPRINT_CHART_BOX}`}
             >
@@ -1593,7 +1593,7 @@ export function MonthAnalytics({
                 </div>
               </div>
             </div>
-            <div className={`space-y-0.5 md:pt-1 ${PIE_LEGEND_CAP}`}>
+            <div className={`space-y-0.5 lg:pt-1 ${PIE_LEGEND_CAP}`}>
               <button
                 type="button"
                 onClick={() => openStatusDrilldown("All")}

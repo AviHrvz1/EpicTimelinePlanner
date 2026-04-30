@@ -186,7 +186,7 @@ export function EpicFormDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [epicInsightsPanelOpen, setEpicInsightsPanelOpen] = useState(false);
-  const [dialogWidthVw, setDialogWidthVw] = useState(75);
+  const [dialogWidthVw, setDialogWidthVw] = useState(56);
   const [epicInsightsPanelOffset, setEpicInsightsPanelOffset] = useState({ x: 0, y: 0 });
   const [epicInsightsPanelWidthPx, setEpicInsightsPanelWidthPx] = useState(560);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
@@ -286,7 +286,7 @@ export function EpicFormDialog({
     if (open) {
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
-      setDialogWidthVw(75);
+      setDialogWidthVw(56);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(220);
       setActivityOpen(false);
@@ -738,6 +738,36 @@ export function EpicFormDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
+  function beginDialogWidthResizeRight(event: React.PointerEvent<HTMLDivElement>) {
+    if (anchored || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const fallbackWidth = (window.innerWidth * dialogWidthVw) / 100;
+    const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
+    const startDetailsWidth = detailsPanelWidthPx;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = startWidth + delta;
+      const minWidth = Math.min(900, window.innerWidth * 0.55);
+      const maxWidth = Math.max(minWidth, window.innerWidth - 8);
+      const bounded = Math.max(minWidth, Math.min(maxWidth, nextWidth));
+      setDialogWidthVw((bounded / window.innerWidth) * 100);
+      const widthDelta = bounded - startWidth;
+      const nextDetails = startDetailsWidth + widthDelta * 0.35;
+      setDetailsPanelWidthPx(Math.max(296, Math.min(bounded - 320, nextDetails)));
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
   function beginEpicInsightsDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (!epicInsightsPanelOpen || event.button !== 0) return;
     event.preventDefault();
@@ -765,7 +795,7 @@ export function EpicFormDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
-  function beginEpicInsightsResize(event: React.PointerEvent<HTMLDivElement>) {
+  function beginEpicInsightsResizeRight(event: React.PointerEvent<HTMLDivElement>) {
     if (!epicInsightsPanelOpen || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
@@ -778,6 +808,35 @@ export function EpicFormDialog({
       const maxWidth = Math.max(520, window.innerWidth - currentLeft);
       const next = Math.max(520, Math.min(maxWidth, startWidth + delta));
       setEpicInsightsPanelWidthPx(next);
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
+  function beginEpicInsightsResizeLeft(event: React.PointerEvent<HTMLDivElement>) {
+    if (!epicInsightsPanelOpen || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = epicInsightsPanelWidthPx;
+    const startLeft = epicInsightsPanelOffset.x;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextLeft = startLeft + delta;
+      const boundedLeft = Math.max(0, Math.min(window.innerWidth - 520, nextLeft));
+      const adjustedDelta = boundedLeft - startLeft;
+      const nextWidth = startWidth - adjustedDelta;
+      const maxWidth = Math.max(520, window.innerWidth - boundedLeft);
+      const boundedWidth = Math.max(520, Math.min(maxWidth, nextWidth));
+      setEpicInsightsPanelOffset((prev) => ({ ...prev, x: boundedLeft }));
+      setEpicInsightsPanelWidthPx(boundedWidth);
     }
 
     function onPointerUp() {
@@ -877,6 +936,14 @@ export function EpicFormDialog({
             role="separator"
           />
         ) : null}
+        {!anchored ? (
+          <div
+            className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+            onPointerDown={beginDialogWidthResizeRight}
+            aria-label="Resize epic panel width from right"
+            role="separator"
+          />
+        ) : null}
         <div
           className={cn(
             "flex h-full min-h-0 w-full flex-col p-5",
@@ -916,7 +983,15 @@ export function EpicFormDialog({
                 <Button
                   size="icon-sm"
                   variant={epicInsightsPanelOpen ? "secondary" : "ghost"}
-                  onClick={() => setEpicInsightsPanelOpen((prev) => !prev)}
+                  onClick={() =>
+                    setEpicInsightsPanelOpen((prev) => {
+                      if (!prev) {
+                        setEpicInsightsPanelOffset({ x: Math.round(window.innerWidth * 0.02), y: 0 });
+                        setEpicInsightsPanelWidthPx(Math.round(window.innerWidth * 0.96));
+                      }
+                      return !prev;
+                    })
+                  }
                   aria-label={epicInsightsPanelOpen ? "Close epic insights panel" : "Open epic insights panel"}
                   title="Epic insights"
                   className="text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
@@ -1896,9 +1971,15 @@ export function EpicFormDialog({
           </div>
         </div>
         <div
+          className="absolute inset-y-0 left-0 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+          onPointerDown={beginEpicInsightsResizeLeft}
+          aria-label="Resize epic insights panel from left"
+          role="separator"
+        />
+        <div
           className="absolute inset-y-0 right-0 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
-          onPointerDown={beginEpicInsightsResize}
-          aria-label="Resize epic insights panel"
+          onPointerDown={beginEpicInsightsResizeRight}
+          aria-label="Resize epic insights panel from right"
           role="separator"
         />
       </div>

@@ -536,6 +536,32 @@ export function StoryDetailsDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
+  function beginDialogWidthResizeRight(event: React.PointerEvent<HTMLDivElement>) {
+    if (anchored || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
+    const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = startWidth + delta;
+      const minWidth = Math.min(900, window.innerWidth * 0.55);
+      const maxWidth = Math.min(window.innerWidth - 12, 1700);
+      const bounded = Math.max(minWidth, Math.min(maxWidth, nextWidth));
+      setDialogWidthVw((bounded / window.innerWidth) * 100);
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
   return (
     <div
       className={cn(
@@ -567,6 +593,14 @@ export function StoryDetailsDialog({
             className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
             onPointerDown={beginDialogWidthResize}
             aria-label="Resize user story panel width"
+            role="separator"
+          />
+        ) : null}
+        {!anchored ? (
+          <div
+            className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+            onPointerDown={beginDialogWidthResizeRight}
+            aria-label="Resize user story panel width from right"
             role="separator"
           />
         ) : null}
