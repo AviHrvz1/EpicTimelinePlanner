@@ -2,6 +2,7 @@
 
 import {
   Activity as ActivityIcon,
+  BarChart3,
   ArrowUpDown,
   Bold,
   Check,
@@ -40,6 +41,7 @@ import { ActivityCommentComposer } from "@/components/ui/activity-comment-compos
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
 import { useResizableTableColumns } from "@/lib/use-resizable-table-columns";
@@ -183,6 +185,7 @@ export function EpicFormDialog({
   const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [epicInsightsPanelOpen, setEpicInsightsPanelOpen] = useState(false);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
@@ -283,6 +286,7 @@ export function EpicFormDialog({
       setActivityPanelHeightPx(220);
       setActivityOpen(false);
       setDescriptionAccordionOpen(true);
+      setEpicInsightsPanelOpen(false);
       dragStartRef.current = null;
     }
   }, [open]);
@@ -497,6 +501,20 @@ export function EpicFormDialog({
   const showTeamSelect = !persistedTeam || forceTeamFieldEdit;
   const planningYearDisplay =
     selectedInitiative?.year != null ? String(selectedInitiative.year) : epic?.planYear != null ? String(epic.planYear) : "Not set";
+  const epicInsightsMonth = epic?.planStartMonth ?? selectedInitiative?.startMonth ?? 1;
+  const epicInsightsQuarter = quarterNumFromMonth(epicInsightsMonth);
+  const epicInsightsMonths = monthIndicesForQuarter(epicInsightsQuarter);
+  const epicInsightsPlanYear = selectedInitiative?.year ?? epic?.planYear ?? initiatives[0]?.year ?? new Date().getFullYear();
+  const epicScopedInitiativesForInsights = useMemo(() => {
+    if (!epic) return [];
+    return initiatives
+      .map((initiative) =>
+        initiative.id === epic.initiativeId
+          ? { ...initiative, epics: (initiative.epics ?? []).filter((row) => row.id === epic.id) }
+          : { ...initiative, epics: [] },
+      )
+      .filter((initiative) => (initiative.epics ?? []).length > 0);
+  }, [epic, initiatives]);
 
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
@@ -791,6 +809,18 @@ export function EpicFormDialog({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              {epic ? (
+                <Button
+                  size="icon-sm"
+                  variant={epicInsightsPanelOpen ? "secondary" : "ghost"}
+                  onClick={() => setEpicInsightsPanelOpen((prev) => !prev)}
+                  aria-label={epicInsightsPanelOpen ? "Close epic insights panel" : "Open epic insights panel"}
+                  title="Epic insights"
+                  className="text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                >
+                  <BarChart3 className="size-4" />
+                </Button>
+              ) : null}
               {epic ? (
                 <Button
                   size="icon-sm"
@@ -1704,6 +1734,55 @@ export function EpicFormDialog({
               ) : null}
             </section>
           </div>
+          </div>
+        </div>
+      </div>
+      <div
+        className={cn(
+          "fixed right-[min(75vw,1320px)] top-0 z-[60] h-full w-[calc(100vw-min(75vw,1320px))] border-l border-slate-200/90 bg-white shadow-2xl transition-transform duration-300",
+          !epicInsightsPanelOpen && "pointer-events-none",
+        )}
+        style={{
+          transform: epicInsightsPanelOpen
+            ? "translateX(0)"
+            : "translateX(-140%)",
+        }}
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex items-center justify-between border-b border-slate-200/90 px-4 py-3">
+            <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <BarChart3 className="size-4 text-indigo-600" aria-hidden />
+              Epic Insights · {`Q${epicInsightsQuarter}`}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setEpicInsightsPanelOpen(false)}
+              aria-label="Close epic insights"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            {epic ? (
+              <MonthAnalytics
+                initiatives={epicScopedInitiativesForInsights}
+                month={epicInsightsMonth}
+                periodMonths={epicInsightsMonths}
+                periodLabel={`Q${epicInsightsQuarter}`}
+                planYear={epicInsightsPlanYear}
+                initialSelectedEpicId={epic.id}
+                onOpenEpic={() => {
+                  setEpicInsightsPanelOpen(false);
+                }}
+                onOpenStory={onOpenStory}
+              />
+            ) : (
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                Save this epic first to view insights.
+              </p>
+            )}
           </div>
         </div>
       </div>

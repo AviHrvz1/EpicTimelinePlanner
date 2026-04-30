@@ -1073,6 +1073,7 @@ export function TimelineGrid({
     if (scopedEpicsForEstimatePanel.all.length === 0) return 0;
     return Math.round((scopedEpicsForEstimatePanel.estimated.length / scopedEpicsForEstimatePanel.all.length) * 100);
   }, [scopedEpicsForEstimatePanel]);
+  const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
 
   const estimatePanelScopeLabel = activeMonth
     ? `${MONTHS[activeMonth - 1]}`
@@ -1084,7 +1085,7 @@ export function TimelineGrid({
   const estimatePanelHeadCellClass =
     "border-b border-[#7cd3f7]/95 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600";
   const estimatePanelBodyRowClass =
-    "group border-t border-[#7cd3f7]/95 hover:bg-[#c5ebff]";
+    "group border-t border-[#7cd3f7]/95 transition hover:bg-[#c5ebff]";
   const estimatePanelCellClass = "px-3 py-2.5";
   const toggleEstimateEpicExpanded = (epicId: string) =>
     setExpandedEstimateEpicIds((prev) => {
@@ -1119,7 +1120,7 @@ export function TimelineGrid({
           </tr>
         </thead>
         <tbody>
-          {displayRows.map((row) => {
+          {displayRows.map((row, rowIndex) => {
             const isExpanded = expandedEstimateEpicIds.has(row.epic.id);
             const stories = row.epic.userStories ?? [];
             const estimatedStories = stories.filter((story) => Number(story.estimatedDays ?? 0) > 0).length;
@@ -1130,7 +1131,12 @@ export function TimelineGrid({
 
             return (
               <Fragment key={row.epic.id}>
-                <tr className={estimatePanelBodyRowClass}>
+                <tr
+                  className={cn(
+                    estimatePanelBodyRowClass,
+                    rowIndex % 2 === 0 ? "bg-[#d8f2ff]" : "bg-white",
+                  )}
+                >
                   <td className={estimatePanelCellClass}>
                     <div className="inline-flex min-w-0 items-center gap-1.5">
                       <button
@@ -1154,7 +1160,16 @@ export function TimelineGrid({
                     </div>
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-slate-600")}>
-                    <span className="truncate">{row.initiative.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEstEpicsPanelOpen(false);
+                        onOpenInitiative(row.initiative.id);
+                      }}
+                      className="inline-flex max-w-[20rem] items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                    >
+                      <span className="truncate">{row.initiative.title}</span>
+                    </button>
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-center font-semibold tabular-nums text-slate-700")}>
                     {Math.max(0, Number(row.epic.originalEstimateDays ?? 0))}d
@@ -1183,7 +1198,7 @@ export function TimelineGrid({
                   ) : null}
                 </tr>
                 {isExpanded ? (
-                  <tr className="border-t border-[#d6eefc] bg-[#f4fbff]">
+                  <tr className={cn("border-t border-[#d6eefc]", rowIndex % 2 === 0 ? "bg-[#edf8ff]" : "bg-[#f4fbff]")}>
                     <td className="px-3 py-2" colSpan={showEstimatedColumns ? 5 : 3}>
                       {stories.length === 0 ? (
                         <p className="text-[12px] text-slate-500">No user stories yet.</p>
@@ -1223,7 +1238,13 @@ export function TimelineGrid({
             );
           })}
           {Array.from({ length: emptyRowCount }, (_, idx) => (
-            <tr key={`empty-${variant}-${idx}`} className="border-t border-[#d6eefc] bg-white/70">
+            <tr
+              key={`empty-${variant}-${idx}`}
+              className={cn(
+                "border-t border-[#d6eefc]",
+                (displayRows.length + idx) % 2 === 0 ? "bg-[#d8f2ff]/70" : "bg-white/80",
+              )}
+            >
               <td className={cn(estimatePanelCellClass, "text-slate-300")}>-</td>
               <td className={cn(estimatePanelCellClass, "text-slate-300")}>-</td>
               <td className={cn(estimatePanelCellClass, "text-center text-slate-300")}>-</td>
@@ -2134,8 +2155,23 @@ export function TimelineGrid({
                 <button
                   type="button"
                   onClick={() => setEstEpicsPanelOpen(true)}
-                  className="rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
                 >
+                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                    <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                    <circle
+                      cx="8"
+                      cy="8"
+                      r="6"
+                      fill="none"
+                      stroke="#c026d3"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      transform="rotate(-90 8 8)"
+                      strokeDasharray={`${2 * Math.PI * 6}`}
+                      strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
+                    />
+                  </svg>
                   {estimatedEpicsPercentForScope}% Est Epics
                 </button>
                 <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
@@ -2185,8 +2221,23 @@ export function TimelineGrid({
                   <button
                     type="button"
                     onClick={() => setEstEpicsPanelOpen(true)}
-                    className="rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
                   >
+                    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="6"
+                        fill="none"
+                        stroke="#c026d3"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        transform="rotate(-90 8 8)"
+                        strokeDasharray={`${2 * Math.PI * 6}`}
+                        strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
+                      />
+                    </svg>
                     {estimatedEpicsPercentForScope}% Est Epics
                   </button>
                   <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
@@ -2244,8 +2295,23 @@ export function TimelineGrid({
                   <button
                     type="button"
                     onClick={() => setEstEpicsPanelOpen(true)}
-                    className="rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
                   >
+                    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="6"
+                        fill="none"
+                        stroke="#c026d3"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        transform="rotate(-90 8 8)"
+                        strokeDasharray={`${2 * Math.PI * 6}`}
+                        strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
+                      />
+                    </svg>
                     {estimatedEpicsPercentForScope}% Est Epics
                   </button>
                   <div className="rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">

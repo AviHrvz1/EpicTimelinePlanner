@@ -246,6 +246,7 @@ type MonthAnalyticsProps = {
   periodLabel?: string;
   planYear: number;
   filterEpicTeamId?: string | null;
+  initialSelectedEpicId?: string;
   onOpenEpic?: (epicId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onOpenSprintKanban?: (yearSprint: number, teamId: string | null) => void;
@@ -392,6 +393,7 @@ export function MonthAnalytics({
   periodLabel,
   planYear,
   filterEpicTeamId = null,
+  initialSelectedEpicId,
   onOpenEpic,
   onOpenStory,
   onOpenSprintKanban,
@@ -400,7 +402,7 @@ export function MonthAnalytics({
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
-  const [selectedEpicId, setSelectedEpicId] = useState<string>("all");
+  const [selectedEpicId, setSelectedEpicId] = useState<string>(initialSelectedEpicId ?? "all");
   const [epicInput, setEpicInput] = useState("");
   const [isEpicDropdownOpen, setIsEpicDropdownOpen] = useState(false);
   const [showAllEpicSuggestions, setShowAllEpicSuggestions] = useState(false);
@@ -439,6 +441,12 @@ export function MonthAnalytics({
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
     [monthEpics, selectedEpicId],
   );
+  useEffect(() => {
+    if (!initialSelectedEpicId) return;
+    setSelectedEpicId(initialSelectedEpicId);
+    const selected = monthEpics.find(({ epic }) => epic.id === initialSelectedEpicId);
+    setEpicInput(selected ? `${selected.epic.title} (${selected.initiative.title})` : "");
+  }, [initialSelectedEpicId, monthEpics]);
   const filteredEpicOptions = useMemo(() => {
     if (showAllEpicSuggestions) return epicComboOptions;
     const query = epicInput.trim().toLowerCase();
@@ -1508,7 +1516,7 @@ export function MonthAnalytics({
                 onClick={() => scrollStatusDrilldownBy(-96)}
                 className={cn(
                   sharedDrilldownArrowClass,
-                  "top-9 z-30",
+                  "top-0 z-30",
                   canScrollStatusDrilldownUp && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll up status drilldown table"
