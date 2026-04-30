@@ -1160,6 +1160,18 @@ export function TimelineGrid({
     return Math.round((scopedEpicsForEstimatePanel.estimated.length / scopedEpicsForEstimatePanel.all.length) * 100);
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
+  const summaryChipBaseClass =
+    "inline-flex max-w-full whitespace-nowrap items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold tracking-[0.015em] ring-1 transition sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[12px] lg:px-3 lg:text-[13px]";
+  const summaryChipNeutralClass = `${summaryChipBaseClass} bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80`;
+  const summaryChipProgressOnClass = `${summaryChipBaseClass} bg-emerald-100 text-emerald-800 ring-emerald-300`;
+  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} bg-indigo-100 text-indigo-800 ring-indigo-300`;
+  const summaryChipEpicsOnClass = `${summaryChipBaseClass} bg-amber-100 text-amber-800 ring-amber-200`;
+  const summaryChipEstimatedClass = `${summaryChipBaseClass} bg-fuchsia-100 text-fuchsia-800 ring-fuchsia-200/80 hover:bg-fuchsia-200/80`;
+  const summaryChipStoriesClass = `${summaryChipBaseClass} bg-blue-100 text-blue-800 ring-blue-200/80`;
+  const summaryChipStoriesStaticClass = `${summaryChipBaseClass} bg-blue-100 text-blue-800`;
+  const summaryChipStaticNeutralClass = `${summaryChipBaseClass} bg-slate-200 text-slate-800 ring-slate-300`;
+  const summaryChipIconClass = "size-3 shrink-0 sm:size-3.5";
+  const summaryChipProgressCircleClass = "size-3.5 shrink-0 sm:size-4";
 
   const estimatePanelScopeLabel = activeMonth
     ? `${MONTHS[activeMonth - 1]}`
@@ -2161,47 +2173,21 @@ export function TimelineGrid({
           </div>
         ) : null}
         {!activeMonth ? (
-          <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            {!focusedQuarter ? (
-              <div className="ml-3 inline-flex items-center gap-3">
-                <label className="inline-flex items-center gap-3 rounded-md border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 py-1 shadow-sm ring-1 ring-indigo-200/60">
-                  <span className="shrink-0 text-[12px] font-semibold tracking-[0.045em] text-slate-700 uppercase">
-                    Roadmap
-                  </span>
-                  <div className="relative">
-                    <select
-                      value={currentYear}
-                      onChange={(event) => onYearChange?.(Number(event.target.value))}
-                      className="h-[30px] min-w-[5.75rem] cursor-pointer appearance-none rounded-md border border-indigo-300/75 bg-white/95 py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-slate-800 shadow-[0_1px_2px_rgba(67,56,202,0.06)] outline-none transition hover:border-indigo-400/85 hover:bg-white hover:shadow-[0_1px_4px_rgba(67,56,202,0.1)] focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-300/55"
-                    >
-                      <option value={2024}>2024</option>
-                      <option value={2025}>2025</option>
-                      <option value={2026}>2026</option>
-                      <option value={2027}>2027</option>
-                    </select>
-                    <ChevronDown
-                      className="pointer-events-none absolute right-1.5 top-1/2 size-[13px] -translate-y-1/2 text-indigo-600/90"
-                      aria-hidden
-                    />
-                  </div>
-                </label>
-              </div>
-            ) : (
+          <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2">
               <div />
-            )}
-            {summaryBadgesForScope ? (
-              <div className="flex flex-wrap items-center justify-end gap-3 pr-3">
-                <button
+              {summaryBadgesForScope ? (
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
+                  <button
                   type="button"
                   onClick={() => setShowRoadmapProgress((v) => !v)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    summaryChipBaseClass,
                     showRoadmapProgress
-                      ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                      ? summaryChipProgressOnClass
+                      : summaryChipNeutralClass,
                   )}
                 >
-                  <Eye className="size-3.5" aria-hidden />
+                  <Eye className={summaryChipIconClass} aria-hidden />
                   Progress
                 </button>
                 <button
@@ -2211,14 +2197,16 @@ export function TimelineGrid({
                     onSummaryStatusQuickFilterChange?.(null);
                   }}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    summaryChipBaseClass,
                     roadmapBarMode === "initiatives"
-                      ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                      ? summaryChipInitiativesOnClass
+                      : summaryChipNeutralClass,
                   )}
                 >
-                  <MapIcon className="size-3.5" aria-hidden />
-                  {summaryBadgesForScope.totalInitiatives} Initiatives
+                  <MapIcon className={summaryChipIconClass} aria-hidden />
+                  <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
+                  <span className="hidden xl:inline">Initiatives</span>
+                  <span className="xl:hidden">Inits</span>
                 </button>
                 <button
                   type="button"
@@ -2227,13 +2215,13 @@ export function TimelineGrid({
                     onSummaryStatusQuickFilterChange?.(null);
                   }}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                    summaryChipBaseClass,
                     roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                      ? "bg-amber-100 text-amber-800 ring-amber-200"
-                      : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                      ? summaryChipEpicsOnClass
+                      : summaryChipNeutralClass,
                   )}
                 >
-                  <Flag className="size-3.5" aria-hidden />
+                  <Flag className={summaryChipIconClass} aria-hidden />
                   {("totalEpics" in summaryBadgesForScope
                     ? summaryBadgesForScope.totalEpics
                     : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2242,9 +2230,9 @@ export function TimelineGrid({
                 <button
                   type="button"
                   onClick={() => setEstEpicsPanelOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
+                  className={summaryChipEstimatedClass}
                 >
-                  <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                  <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
                     <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
                     <circle
                       cx="8"
@@ -2259,33 +2247,38 @@ export function TimelineGrid({
                       strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
                     />
                   </svg>
-                  {estimatedEpicsPercentForScope}% Epic Estimated
+                  <span className="truncate">{estimatedEpicsPercentForScope}%</span>
+                  <span className="hidden xl:inline">Epic Estimated</span>
+                  <span className="xl:hidden">Estimated</span>
                 </button>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
-                  <ClipboardList className="size-3.5" aria-hidden />
-                  {summaryBadgesForScope.totalStories} User Stories
+                <div className={summaryChipStoriesStaticClass}>
+                  <ClipboardList className={summaryChipIconClass} aria-hidden />
+                  <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+                  <span className="hidden xl:inline">User Stories</span>
+                  <span className="xl:hidden">Stories</span>
                 </div>
-                {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-                  <button
+                  {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
+                    <button
                     type="button"
                     onClick={() => setShowYearSprintChips((prev) => !prev)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryChipBaseClass,
                       showYearSprintChips
-                        ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
-                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                        ? summaryChipInitiativesOnClass
+                        : summaryChipNeutralClass,
                     )}
                   >
-                    <CalendarDays className="size-3.5" aria-hidden />
-                    Sprints
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+                    <CalendarDays className={summaryChipIconClass} aria-hidden />
+                    <span className="hidden xl:inline">Sprints</span>
+                    <span className="xl:hidden">Spr</span>
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="flex w-full flex-wrap items-center gap-3 pr-3">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-3">
+          <div className="flex w-full flex-wrap items-start gap-2 pr-3 sm:gap-3">
+            <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
               {sprintKanbanSummaryStats ? (
                 <>
                   <button
@@ -2295,24 +2288,26 @@ export function TimelineGrid({
                       onSummaryStatusQuickFilterChange?.(null);
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryChipBaseClass,
                       roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                        ? "bg-amber-100 text-amber-800 ring-amber-200"
-                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                        ? summaryChipEpicsOnClass
+                        : summaryChipNeutralClass,
                     )}
                   >
-                    <Flag className="size-3.5" aria-hidden />
+                    <Flag className={summaryChipIconClass} aria-hidden />
                     {sprintKanbanSummaryStats.epicCount} Epics
                   </button>
-                  <div className="rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300">
-                    {sprintKanbanSummaryStats.storyUnscheduled} User Stories Unscheduled
+                  <div className={summaryChipStaticNeutralClass}>
+                    <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
+                    <span className="hidden sm:inline">User Stories Unscheduled</span>
+                    <span className="sm:hidden">US Unsch.</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setEstEpicsPanelOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
+                    className={summaryChipEstimatedClass}
                   >
-                    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                    <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
                       <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
                       <circle
                         cx="8"
@@ -2327,12 +2322,19 @@ export function TimelineGrid({
                         strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
                       />
                     </svg>
-                    {estimatedEpicsPercentForScope}% Epic Estimated
+                    <span className="truncate">{estimatedEpicsPercentForScope}%</span>
+                    <span className="hidden sm:inline">Epic Estimated</span>
+                    <span className="sm:hidden">Estimated</span>
                   </button>
-                  <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800 ring-1 ring-blue-200/80">
-                    <ClipboardList className="size-3.5" aria-hidden />
-                    {sprintKanbanSummaryStats.storyTotal} User Stories
+                  <div className={summaryChipStoriesClass}>
+                    <ClipboardList className={summaryChipIconClass} aria-hidden />
+                    <span className="truncate">{sprintKanbanSummaryStats.storyTotal}</span>
+                    <span className="hidden sm:inline">User Stories</span>
+                    <span className="sm:hidden">Stories</span>
                   </div>
+                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                    <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                  ) : null}
                 </>
               ) : summaryBadgesForScope ? (
                 <>
@@ -2340,13 +2342,13 @@ export function TimelineGrid({
                     type="button"
                     onClick={() => setShowRoadmapProgress((v) => !v)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryChipBaseClass,
                       showRoadmapProgress
-                        ? "bg-emerald-100 text-emerald-800 ring-emerald-300"
-                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                        ? summaryChipProgressOnClass
+                        : summaryChipNeutralClass,
                     )}
                   >
-                    <Eye className="size-3.5" aria-hidden />
+                    <Eye className={summaryChipIconClass} aria-hidden />
                     Progress
                   </button>
                   <button
@@ -2356,14 +2358,16 @@ export function TimelineGrid({
                       onSummaryStatusQuickFilterChange?.(null);
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryChipBaseClass,
                       roadmapBarMode === "initiatives"
-                        ? "bg-indigo-100 text-indigo-800 ring-indigo-300"
-                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                        ? summaryChipInitiativesOnClass
+                        : summaryChipNeutralClass,
                     )}
                   >
-                    <MapIcon className="size-3.5" aria-hidden />
-                    {summaryBadgesForScope.totalInitiatives} Initiatives
+                    <MapIcon className={summaryChipIconClass} aria-hidden />
+                    <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
+                    <span className="hidden sm:inline">Initiatives</span>
+                    <span className="sm:hidden">Inits</span>
                   </button>
                   <button
                     type="button"
@@ -2372,13 +2376,13 @@ export function TimelineGrid({
                       onSummaryStatusQuickFilterChange?.(null);
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      summaryChipBaseClass,
                       roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                        ? "bg-amber-100 text-amber-800 ring-amber-200"
-                        : "bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80",
+                        ? summaryChipEpicsOnClass
+                        : summaryChipNeutralClass,
                     )}
                   >
-                    <Flag className="size-3.5" aria-hidden />
+                    <Flag className={summaryChipIconClass} aria-hidden />
                     {("totalEpics" in summaryBadgesForScope
                       ? summaryBadgesForScope.totalEpics
                       : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2387,9 +2391,9 @@ export function TimelineGrid({
                   <button
                     type="button"
                     onClick={() => setEstEpicsPanelOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-fuchsia-800 ring-1 ring-fuchsia-200/80 transition hover:bg-fuchsia-200/80"
+                    className={summaryChipEstimatedClass}
                   >
-                    <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+                    <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
                       <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
                       <circle
                         cx="8"
@@ -2404,18 +2408,22 @@ export function TimelineGrid({
                         strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
                       />
                     </svg>
-                    {estimatedEpicsPercentForScope}% Epic Estimated
+                    <span className="truncate">{estimatedEpicsPercentForScope}%</span>
+                    <span className="hidden sm:inline">Epic Estimated</span>
+                    <span className="sm:hidden">Estimated</span>
                   </button>
-                  <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-blue-800">
-                    <ClipboardList className="size-3.5" aria-hidden />
-                    {summaryBadgesForScope.totalStories} User Stories
+                  <div className={summaryChipStoriesStaticClass}>
+                    <ClipboardList className={summaryChipIconClass} aria-hidden />
+                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+                    <span className="hidden sm:inline">User Stories</span>
+                    <span className="sm:hidden">Stories</span>
                   </div>
+                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                    <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                  ) : null}
                 </>
               ) : null}
             </div>
-            {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
-              <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
-            ) : null}
           </div>
         ) : focusedQuarter ? (
           <div className="flex items-center gap-2" />

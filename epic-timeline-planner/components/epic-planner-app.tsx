@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { Archive, Map as MapIcon, PanelLeftOpen } from "lucide-react";
+import { Archive, ChevronDown, Map as MapIcon, PanelLeftOpen } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
@@ -3161,15 +3161,53 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           <div className="rounded-2xl bg-card p-4 shadow-lg ring-1 ring-black/5">
             <div className="flex items-start justify-between gap-6">
               <div className="min-w-0 flex-1">
-                <div className="inline-flex flex-col p-1">
+                <div className="inline-flex flex-col p-1 pl-10">
                   <img
                     src="/bird-eye-lockup-wide.png"
                     alt="Bird Eye Viewer logo"
-                    className="h-[90px] w-auto max-w-[760px] rounded-md object-contain object-left"
+                    className="h-[96px] w-auto max-w-[820px] rounded-md object-contain object-left"
                   />
                 </div>
               </div>
-              <div className="shrink-0" />
+              <div className="shrink-0 self-end pb-0">
+                {topMode === "roadmap" ? (
+                  <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
+                    <label className="inline-flex h-8 items-center overflow-hidden rounded-lg border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+                      <span className="shrink-0 border-r border-primary-foreground/20 px-2.5 text-[10px] font-bold tracking-[0.05em] uppercase">
+                        Roadmap
+                      </span>
+                      <div className="relative">
+                        <select
+                          value={selectedYear}
+                          onChange={async (event) => {
+                            const nextYear = Number(event.target.value);
+                            if (nextYear === selectedYear) return;
+                            setSelectedYear(nextYear);
+                            await refresh(nextYear);
+                            setFocusedQuarterLabel(null);
+                            setActiveTimelineMonth(null);
+                            setActiveYearSprint(null);
+                            setActiveSprintTab("kanban");
+                            setActiveMonthPlanTab("epic-gantt");
+                            setActiveQuarterViewTab("gantt");
+                            setSprintStoryBoardTeamId(null);
+                          }}
+                          className="h-8 min-w-[5.2rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 font-sans text-[11px] font-semibold leading-none text-primary-foreground outline-none"
+                        >
+                          <option value={2024}>2024</option>
+                          <option value={2025}>2025</option>
+                          <option value={2026}>2026</option>
+                          <option value={2027}>2027</option>
+                        </select>
+                        <ChevronDown
+                          className="pointer-events-none absolute right-2 top-1/2 size-[12px] -translate-y-1/2 text-primary-foreground opacity-90"
+                          aria-hidden
+                        />
+                      </div>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
