@@ -3171,16 +3171,30 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
               {topMode === "roadmap" ? (
                 <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-                  <div className="relative inline-block pb-3">
+                  <div className="relative inline-block">
+                    <svg
+                      className="mb-[-1px] block h-[38px] w-full drop-shadow-sm"
+                      viewBox="0 0 200 40"
+                      preserveAspectRatio="none"
+                      aria-hidden
+                    >
+                      <path
+                        d="M 44 36 L 100 4 L 156 36"
+                        fill="none"
+                        stroke="#475569"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle cx="100" cy="4" r="3.2" fill="#f8fafc" stroke="#64748b" strokeWidth="1" />
+                      <circle cx="44" cy="36" r="2.2" fill="#e2e8f0" stroke="#64748b" strokeWidth="0.85" />
+                      <circle cx="156" cy="36" r="2.2" fill="#e2e8f0" stroke="#64748b" strokeWidth="0.85" />
+                    </svg>
                     <div className="relative z-20 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
                       <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
                         Roadmap&nbsp;{selectedYear}
                       </span>
                     </div>
-                    <div
-                      className="absolute left-1/2 top-full z-10 min-w-[20rem] -translate-x-1/2 -translate-y-9 rounded-md bg-gradient-to-b from-sky-400 via-blue-600 to-blue-950 px-16 py-1 shadow-md shadow-blue-900/35"
-                      aria-hidden
-                    />
                   </div>
                 </div>
               ) : null}
