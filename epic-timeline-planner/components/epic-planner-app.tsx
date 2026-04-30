@@ -3171,30 +3171,30 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
               {topMode === "roadmap" ? (
                 <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-                  <div className="relative inline-block">
+                  <div className="relative isolate inline-block">
+                    <div className="relative z-10 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
+                      <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
+                        Roadmap&nbsp;{selectedYear}
+                      </span>
+                    </div>
                     <svg
-                      className="mb-[-1px] block h-[38px] w-full drop-shadow-sm"
-                      viewBox="0 0 200 40"
+                      className="absolute bottom-full left-0 z-30 h-[48px] w-full drop-shadow-sm"
+                      viewBox="0 -14 200 56"
                       preserveAspectRatio="none"
                       aria-hidden
                     >
                       <path
-                        d="M 44 36 L 100 4 L 156 36"
+                        d="M 56 42 L 100 -10 L 144 42"
                         fill="none"
                         stroke="#475569"
                         strokeWidth="1.6"
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
-                      <circle cx="100" cy="4" r="3.2" fill="#f8fafc" stroke="#64748b" strokeWidth="1" />
-                      <circle cx="44" cy="36" r="2.2" fill="#e2e8f0" stroke="#64748b" strokeWidth="0.85" />
-                      <circle cx="156" cy="36" r="2.2" fill="#e2e8f0" stroke="#64748b" strokeWidth="0.85" />
+                      <circle cx="100" cy="-10" r="3.2" fill="#f8fafc" stroke="#64748b" strokeWidth="1" />
+                      <circle cx="56" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
+                      <circle cx="144" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
                     </svg>
-                    <div className="relative z-20 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
-                      <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
-                        Roadmap&nbsp;{selectedYear}
-                      </span>
-                    </div>
                   </div>
                 </div>
               ) : null}
