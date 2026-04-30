@@ -186,6 +186,9 @@ export function EpicFormDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [epicInsightsPanelOpen, setEpicInsightsPanelOpen] = useState(false);
+  const [dialogWidthVw, setDialogWidthVw] = useState(75);
+  const [epicInsightsPanelOffset, setEpicInsightsPanelOffset] = useState({ x: 0, y: 0 });
+  const [epicInsightsPanelWidthPx, setEpicInsightsPanelWidthPx] = useState(560);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
@@ -206,6 +209,7 @@ export function EpicFormDialog({
     EPIC_CHILD_TABLE_DEFAULT_WIDTHS,
   );
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
+  const dialogShellRef = useRef<HTMLDivElement | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
   const sprintInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionEditor = useEditor({
@@ -282,11 +286,16 @@ export function EpicFormDialog({
     if (open) {
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
+      setDialogWidthVw(75);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(220);
       setActivityOpen(false);
       setDescriptionAccordionOpen(true);
       setEpicInsightsPanelOpen(false);
+      setEpicInsightsPanelOffset({ x: 0, y: 0 });
+      const epicPanelWidth = Math.min(window.innerWidth * 0.75, 1320);
+      const available = Math.max(520, Math.floor(window.innerWidth - epicPanelWidth));
+      setEpicInsightsPanelWidthPx(available);
       dragStartRef.current = null;
     }
   }, [open]);
@@ -699,6 +708,87 @@ export function EpicFormDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
+  function beginDialogWidthResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (anchored || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const fallbackWidth = (window.innerWidth * dialogWidthVw) / 100;
+    const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
+    const startDetailsWidth = detailsPanelWidthPx;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = startWidth - delta;
+      const minWidth = Math.min(900, window.innerWidth * 0.55);
+      const maxWidth = Math.max(minWidth, window.innerWidth - 8);
+      const bounded = Math.max(minWidth, Math.min(maxWidth, nextWidth));
+      setDialogWidthVw((bounded / window.innerWidth) * 100);
+      const widthDelta = bounded - startWidth;
+      const nextDetails = startDetailsWidth + widthDelta * 0.35;
+      setDetailsPanelWidthPx(Math.max(296, Math.min(bounded - 320, nextDetails)));
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
+  function beginEpicInsightsDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!epicInsightsPanelOpen || event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startOffset = epicInsightsPanelOffset;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const maxX = Math.max(0, window.innerWidth - epicInsightsPanelWidthPx);
+      const maxY = Math.max(0, window.innerHeight - 180);
+      setEpicInsightsPanelOffset({
+        x: Math.max(0, Math.min(maxX, startOffset.x + dx)),
+        y: Math.max(0, Math.min(maxY, startOffset.y + dy)),
+      });
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
+  function beginEpicInsightsResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (!epicInsightsPanelOpen || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = epicInsightsPanelWidthPx;
+    const currentLeft = epicInsightsPanelOffset.x;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const maxWidth = Math.max(520, window.innerWidth - currentLeft);
+      const next = Math.max(520, Math.min(maxWidth, startWidth + delta));
+      setEpicInsightsPanelWidthPx(next);
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
   function beginChildCellEdit(
     storyId: string,
     field: "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft",
@@ -766,14 +856,27 @@ export function EpicFormDialog({
       )}
     >
       <div
+        ref={dialogShellRef}
         className={cn(
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
           anchored
             ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06]"
-            : "relative h-full w-[min(75vw,1320px)] max-w-[min(75vw,1320px)] shrink-0",
+            : "relative h-full shrink-0",
         )}
-        style={anchored ? (surfaceRect ? planningDetailPanelAnchorStyle(surfaceRect) : undefined) : undefined}
+        style={
+          anchored
+            ? (surfaceRect ? planningDetailPanelAnchorStyle(surfaceRect) : undefined)
+            : { width: `${dialogWidthVw}vw`, maxWidth: "99.5vw" }
+        }
       >
+        {!anchored ? (
+          <div
+            className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+            onPointerDown={beginDialogWidthResize}
+            aria-label="Resize epic panel width"
+            role="separator"
+          />
+        ) : null}
         <div
           className={cn(
             "flex h-full min-h-0 w-full flex-col p-5",
@@ -783,7 +886,7 @@ export function EpicFormDialog({
           style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
         >
           <div
-            className="mb-4 flex cursor-move items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+            className="mb-4 flex cursor-move items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5"
             onPointerDown={beginDialogDrag}
           >
             <div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-slate-700">
@@ -873,7 +976,7 @@ export function EpicFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
+                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-white px-2.5 py-2.5">
                   <p className="text-sm font-normal text-slate-700">Quarter</p>
                   <select
                     value={planQuarterDraft}
@@ -920,7 +1023,7 @@ export function EpicFormDialog({
                     readOnly
                     value={planningYearDisplay}
                     title="Year comes from the parent initiative"
-                    className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
                   />
                 </div>
 
@@ -931,7 +1034,7 @@ export function EpicFormDialog({
                     aria-expanded={descriptionAccordionOpen}
                     aria-controls="epic-form-description-accordion-panel"
                     onClick={() => setDescriptionAccordionOpen((v) => !v)}
-                    className="flex w-full items-center gap-2 rounded-md py-1 text-left text-base font-medium text-slate-600 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
+                    className="flex w-full items-center gap-2 rounded-md py-1 text-left text-base font-medium text-slate-600 transition-colors hover:bg-slate-100/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
                   >
                     {descriptionAccordionOpen ? (
                       <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -948,7 +1051,7 @@ export function EpicFormDialog({
                     hidden={!descriptionAccordionOpen}
                     className="flex flex-col gap-1"
                   >
-                    <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+                    <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1">
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
@@ -971,7 +1074,7 @@ export function EpicFormDialog({
                   </div>
                 </div>
 
-                <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
                   <div className="flex shrink-0 items-center justify-between">
                     <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
                       <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1474,7 +1577,7 @@ export function EpicFormDialog({
                       <input
                         value={MONTH_TEAM_COLUMNS.find((t) => t.id === persistedTeam)?.label ?? persistedTeam ?? "Not set"}
                         readOnly
-                        className="h-7 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[13px] text-slate-700"
+                        className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-700"
                       />
                       <Button
                         type="button"
@@ -1520,7 +1623,7 @@ export function EpicFormDialog({
                   <input
                     value={totalUserStoryEstimate}
                     readOnly
-                    className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[13px] font-medium text-slate-700"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] font-medium text-slate-700"
                   />
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -1623,7 +1726,7 @@ export function EpicFormDialog({
             ) : null}
             <section
               className={cn(
-                "flex min-h-0 flex-col rounded-xl bg-slate-50 ring-1 ring-slate-200",
+                "flex min-h-0 flex-col rounded-xl bg-white ring-1 ring-slate-200",
                 activityOpen ? "space-y-3 p-3" : "p-3",
               )}
               style={
@@ -1739,17 +1842,24 @@ export function EpicFormDialog({
       </div>
       <div
         className={cn(
-          "fixed right-[min(75vw,1320px)] top-0 z-[60] h-full w-[calc(100vw-min(75vw,1320px))] border-l border-slate-200/90 bg-white shadow-2xl transition-transform duration-300",
+          "fixed left-0 top-0 z-[60] border-l border-slate-200/90 bg-white shadow-2xl transition-transform duration-300",
           !epicInsightsPanelOpen && "pointer-events-none",
         )}
         style={{
+          left: epicInsightsPanelOffset.x,
+          top: epicInsightsPanelOffset.y,
+          width: epicInsightsPanelWidthPx,
+          height: `calc(100vh - ${epicInsightsPanelOffset.y}px)`,
           transform: epicInsightsPanelOpen
             ? "translateX(0)"
             : "translateX(-140%)",
         }}
       >
         <div className="flex h-full min-h-0 flex-col">
-          <div className="flex items-center justify-between border-b border-slate-200/90 px-4 py-3">
+          <div
+            className="flex cursor-move items-center justify-between border-b border-slate-200/90 px-4 py-3"
+            onPointerDown={beginEpicInsightsDrag}
+          >
             <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
               <BarChart3 className="size-4 text-indigo-600" aria-hidden />
               Epic Insights · {`Q${epicInsightsQuarter}`}
@@ -1779,12 +1889,18 @@ export function EpicFormDialog({
                 onOpenStory={onOpenStory}
               />
             ) : (
-              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
                 Save this epic first to view insights.
               </p>
             )}
           </div>
         </div>
+        <div
+          className="absolute inset-y-0 right-0 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+          onPointerDown={beginEpicInsightsResize}
+          aria-label="Resize epic insights panel"
+          role="separator"
+        />
       </div>
       {typeof document !== "undefined" &&
       isSprintAutocompleteOpen &&

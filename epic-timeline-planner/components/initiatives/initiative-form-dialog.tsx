@@ -125,6 +125,7 @@ export function InitiativeFormDialog({
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
+  const [dialogWidthVw, setDialogWidthVw] = useState(75);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(180);
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
@@ -142,6 +143,7 @@ export function InitiativeFormDialog({
   );
 
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
+  const dialogShellRef = useRef<HTMLDivElement | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
   const descriptionEditor = useEditor({
     extensions: [
@@ -190,6 +192,7 @@ export function InitiativeFormDialog({
     if (open) {
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
+      setDialogWidthVw(75);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(180);
       setActivityOpen(false);
@@ -492,6 +495,32 @@ export function InitiativeFormDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
+  function beginDialogWidthResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (anchored || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
+    const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = startWidth - delta;
+      const minWidth = Math.min(900, window.innerWidth * 0.55);
+      const maxWidth = Math.min(window.innerWidth - 12, 1700);
+      const bounded = Math.max(minWidth, Math.min(maxWidth, nextWidth));
+      setDialogWidthVw((bounded / window.innerWidth) * 100);
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
   function beginChildCellEdit(storyId: string, field: "title" | "assignee" | "team" | "originalEstimateDays") {
     const draft = childEpicDrafts[storyId];
     if (!draft) return;
@@ -547,14 +576,27 @@ export function InitiativeFormDialog({
       )}
     >
       <div
+        ref={dialogShellRef}
         className={cn(
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
           anchored
             ? "fixed flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06]"
-            : "relative h-full w-[min(75vw,1320px)] max-w-[min(75vw,1320px)] shrink-0",
+            : "relative h-full shrink-0",
         )}
-        style={anchored ? (surfaceRect ? planningDetailPanelAnchorStyle(surfaceRect) : undefined) : undefined}
+        style={
+          anchored
+            ? (surfaceRect ? planningDetailPanelAnchorStyle(surfaceRect) : undefined)
+            : { width: `min(${dialogWidthVw}vw, 1320px)`, maxWidth: `min(${dialogWidthVw}vw, 1320px)` }
+        }
       >
+        {!anchored ? (
+          <div
+            className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+            onPointerDown={beginDialogWidthResize}
+            aria-label="Resize initiative panel width"
+            role="separator"
+          />
+        ) : null}
         <div
           className={cn(
             "flex h-full min-h-0 w-full flex-col p-5",

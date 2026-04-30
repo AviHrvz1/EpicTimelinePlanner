@@ -166,6 +166,7 @@ export function StoryDetailsDialog({
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
+  const dialogShellRef = useRef<HTMLDivElement | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
   const descriptionEditor = useEditor({
     extensions: [
@@ -509,6 +510,32 @@ export function StoryDetailsDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
+  function beginDialogWidthResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (anchored || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
+    const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = startWidth - delta;
+      const minWidth = Math.min(900, window.innerWidth * 0.55);
+      const maxWidth = Math.min(window.innerWidth - 12, 1700);
+      const bounded = Math.max(minWidth, Math.min(maxWidth, nextWidth));
+      setDialogWidthVw((bounded / window.innerWidth) * 100);
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }
+
   return (
     <div
       className={cn(
@@ -520,6 +547,7 @@ export function StoryDetailsDialog({
       )}
     >
       <div
+        ref={dialogShellRef}
         className={cn(
           !leaving ? "epic-dialog-panel-entrance" : "epic-dialog-panel--exit",
           anchored
@@ -534,6 +562,14 @@ export function StoryDetailsDialog({
             : { width: `min(${dialogWidthVw}vw, 1320px)`, maxWidth: `min(${dialogWidthVw}vw, 1320px)` }
         }
       >
+        {!anchored ? (
+          <div
+            className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+            onPointerDown={beginDialogWidthResize}
+            aria-label="Resize user story panel width"
+            role="separator"
+          />
+        ) : null}
         <div
           className={cn(
             "flex h-full min-h-0 w-full flex-col p-5",

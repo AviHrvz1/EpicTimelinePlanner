@@ -807,6 +807,8 @@ export function TimelineGrid({
   const [capacityTeamMenuOpen, setCapacityTeamMenuOpen] = useState(false);
   const [showYearSprintChips, setShowYearSprintChips] = useState(true);
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
+  const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(1248);
+  const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
   const [expandedEstimateEpicIds, setExpandedEstimateEpicIds] = useState<Set<string>>(new Set());
   const capacityTeamFilterRef = useRef<HTMLDivElement | null>(null);
   const [isSprintTeamMenuOpen, setIsSprintTeamMenuOpen] = useState(false);
@@ -852,6 +854,59 @@ export function TimelineGrid({
     document.addEventListener("mousedown", onDocMouseDown);
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
+  const beginEstimateCoverageResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = estEpicsPanelWidthPx;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = startWidth - delta;
+      const maxWidth = Math.max(980, window.innerWidth - 12);
+      setEstEpicsPanelWidthPx(Math.max(980, Math.min(maxWidth, nextWidth)));
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }, [estEpicsPanelWidthPx]);
+  const beginEstimateCoverageDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startRight = estEpicsPanelPosition.right;
+    const startTop = estEpicsPanelPosition.top;
+
+    function onPointerMove(moveEvent: PointerEvent) {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const maxRight = Math.max(0, window.innerWidth - estEpicsPanelWidthPx);
+      const maxTop = Math.max(0, window.innerHeight - 220);
+      setEstEpicsPanelPosition({
+        right: Math.max(0, Math.min(maxRight, startRight - dx)),
+        top: Math.max(0, Math.min(maxTop, startTop + dy)),
+      });
+    }
+
+    function onPointerUp() {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  }, [estEpicsPanelPosition.right, estEpicsPanelPosition.top, estEpicsPanelWidthPx]);
+  useEffect(() => {
+    if (!estEpicsPanelOpen) return;
+    setEstEpicsPanelPosition({ right: 0, top: 0 });
+  }, [estEpicsPanelOpen]);
   const scheduledInitiatives = useMemo(() => {
     const list = initiatives.filter(
       (i) => i.status === "scheduled" && i.startMonth != null && i.endMonth != null,
@@ -3732,8 +3787,23 @@ export function TimelineGrid({
             className="pointer-events-auto absolute inset-0 bg-transparent"
             onClick={() => setEstEpicsPanelOpen(false)}
           />
-          <aside className="pointer-events-auto relative h-full w-[min(78rem,98vw)] border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 shadow-lg ring-1 ring-indigo-100/80">
-            <div className="mb-3 flex items-center justify-between">
+          <aside
+            className="pointer-events-auto absolute border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 shadow-lg ring-1 ring-indigo-100/80"
+            style={{
+              width: `${estEpicsPanelWidthPx}px`,
+              maxWidth: "98vw",
+              right: `${estEpicsPanelPosition.right}px`,
+              top: `${estEpicsPanelPosition.top}px`,
+              height: `calc(100% - ${estEpicsPanelPosition.top}px)`,
+            }}
+          >
+            <div
+              className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              onPointerDown={beginEstimateCoverageResize}
+              aria-label="Resize epic estimation coverage panel"
+              role="separator"
+            />
+            <div className="mb-3 flex cursor-move items-center justify-between" onPointerDown={beginEstimateCoverageDrag}>
               <div>
                 <h3 className="inline-flex items-center gap-2 text-[18px] font-bold text-slate-900">
                   <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-700 ring-1 ring-fuchsia-200">
