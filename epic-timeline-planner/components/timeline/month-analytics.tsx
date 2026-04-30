@@ -1,6 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   ArrowLeft,
@@ -141,6 +152,123 @@ function AnalyticsTooltipRow({
       </span>
       <span className="shrink-0 font-semibold text-slate-800">{value}</span>
     </div>
+  );
+}
+
+/** Same visual language as Gantt bar + form info hovers (indigo gradient). */
+const INSIGHTS_TRUNCATION_PORTAL_TOOLTIP_CLASS =
+  "pointer-events-none w-max max-w-[min(22rem,calc(100vw-2rem))] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug text-slate-700 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm";
+
+function useTextTruncationFlag<T extends HTMLElement>(text: string) {
+  const ref = useRef<T | null>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setIsTruncated(el.scrollWidth > el.clientWidth + 1);
+  }, []);
+
+  useLayoutEffect(() => {
+    measure();
+  }, [text, measure]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  return { ref, isTruncated };
+}
+
+function InsightsTruncationTooltipPortal({
+  show,
+  anchorRef,
+  text,
+}: {
+  show: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
+  text: string;
+}) {
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+  const updatePosition = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCoords({ top: r.bottom + 6, left: r.left });
+  }, [anchorRef]);
+
+  useLayoutEffect(() => {
+    if (!show) return;
+    updatePosition();
+    const onReposition = () => updatePosition();
+    window.addEventListener("scroll", onReposition, true);
+    window.addEventListener("resize", onReposition);
+    return () => {
+      window.removeEventListener("scroll", onReposition, true);
+      window.removeEventListener("resize", onReposition);
+    };
+  }, [show, updatePosition, text]);
+
+  if (!show || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{ position: "fixed", top: coords.top, left: coords.left, zIndex: 9999 }}
+      className={INSIGHTS_TRUNCATION_PORTAL_TOOLTIP_CLASS}
+    >
+      {text}
+    </div>,
+    document.body,
+  );
+}
+
+function InsightsTruncatedHoverLabel({ text }: { text: string }) {
+  const { ref, isTruncated } = useTextTruncationFlag<HTMLSpanElement>(text);
+  const [hover, setHover] = useState(false);
+
+  return (
+    <>
+      <span
+        className="block min-w-0 max-w-full"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
+        <span ref={ref} className="block min-w-0 max-w-full truncate">
+          {text}
+        </span>
+      </span>
+      <InsightsTruncationTooltipPortal show={hover && isTruncated} anchorRef={ref} text={text} />
+    </>
+  );
+}
+
+function InsightsTruncatedHoverButton({
+  label,
+  className,
+  ...props
+}: Omit<ComponentProps<"button">, "children"> & { label: string }) {
+  const { ref, isTruncated } = useTextTruncationFlag<HTMLButtonElement>(label);
+  const [hover, setHover] = useState(false);
+
+  return (
+    <>
+      <span
+        className="block min-w-0 max-w-full"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
+        <button ref={ref} type="button" className={className} {...props}>
+          {label}
+        </button>
+      </span>
+      <InsightsTruncationTooltipPortal show={hover && isTruncated} anchorRef={ref} text={label} />
+    </>
   );
 }
 
@@ -1487,31 +1615,23 @@ export function MonthAnalytics({
                         return (
                         <tr key={epic.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                           <td className="min-w-0 px-2 py-0.5">
-                            <button
-                              type="button"
+                            <InsightsTruncatedHoverButton
+                              label={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
                               onClick={() => onOpenEpic?.(epic.id)}
-                              className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                              title={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
-                            >
-                              {scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
-                            </button>
+                              className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            />
                           </td>
-                          <td className="min-w-0 px-2 py-0.5" title={epic.title}>
-                            <span className="block min-w-0 truncate">{epic.title}</span>
+                          <td className="min-w-0 px-2 py-0.5">
+                            <InsightsTruncatedHoverLabel text={epic.title} />
                           </td>
-                          <td
-                            className="min-w-0 px-2 py-0.5"
-                            title={initiativeTitleByEpicId.get(epic.id) ?? "—"}
-                          >
-                            <span className="block min-w-0 truncate">
-                              {initiativeTitleByEpicId.get(epic.id) ?? "—"}
-                            </span>
+                          <td className="min-w-0 px-2 py-0.5">
+                            <InsightsTruncatedHoverLabel text={initiativeTitleByEpicId.get(epic.id) ?? "—"} />
                           </td>
-                          <td className="min-w-0 px-2 py-0.5" title={epic.assignee?.trim() || "Unassigned"}>
-                            <span className="block min-w-0 truncate">{epic.assignee?.trim() || "Unassigned"}</span>
+                          <td className="min-w-0 px-2 py-0.5">
+                            <InsightsTruncatedHoverLabel text={epic.assignee?.trim() || "Unassigned"} />
                           </td>
-                          <td className="min-w-0 px-2 py-0.5" title={epicStatusLabel}>
-                            <span className="block min-w-0 truncate">{epicStatusLabel}</span>
+                          <td className="min-w-0 px-2 py-0.5">
+                            <InsightsTruncatedHoverLabel text={epicStatusLabel} />
                           </td>
                         </tr>
                         );
@@ -1530,43 +1650,35 @@ export function MonthAnalytics({
                         return (
                         <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                           <td className="min-w-0 px-2 py-0.5">
-                            <button
-                              type="button"
+                            <InsightsTruncatedHoverButton
+                              label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                               onClick={() => onOpenStory?.(story.id)}
-                              className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                              title={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                            >
-                              {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                            </button>
+                              className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            />
                           </td>
-                          <td className="min-w-0 px-2 py-0.5" title={story.title}>
-                            <span className="block min-w-0 truncate">{story.title}</span>
+                          <td className="min-w-0 px-2 py-0.5">
+                            <InsightsTruncatedHoverLabel text={story.title} />
                           </td>
                           <td className="min-w-0 px-2 py-0.5">
                             {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                              <button
-                                type="button"
+                              <InsightsTruncatedHoverButton
+                                label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                                 onClick={() => {
                                   const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
                                   if (targetYearSprint == null) return;
                                   onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
                                 }}
-                                className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                                title={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                              >
-                                {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                              </button>
+                                className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                              />
                             ) : (
-                              <span className="block min-w-0 truncate" title="Unscheduled">
-                                Unscheduled
-                              </span>
+                              <InsightsTruncatedHoverLabel text="Unscheduled" />
                             )}
                           </td>
-                          <td className="min-w-0 px-2 py-0.5" title={story.assignee?.trim() || "Unassigned"}>
-                            <span className="block min-w-0 truncate">{story.assignee?.trim() || "Unassigned"}</span>
+                          <td className="min-w-0 px-2 py-0.5">
+                            <InsightsTruncatedHoverLabel text={story.assignee?.trim() || "Unassigned"} />
                           </td>
-                          <td className="min-w-0 px-2 py-0.5" title={storyStatusLabel}>
-                            <span className="block min-w-0 truncate">{storyStatusLabel}</span>
+                          <td className="min-w-0 px-2 py-0.5">
+                            <InsightsTruncatedHoverLabel text={storyStatusLabel} />
                           </td>
                         </tr>
                         );
@@ -2035,43 +2147,35 @@ export function MonthAnalytics({
                     return (
                     <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                       <td className="min-w-0 px-2 py-0.5">
-                        <button
-                          type="button"
+                        <InsightsTruncatedHoverButton
+                          label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                           onClick={() => onOpenStory?.(story.id)}
-                          className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                          title={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                        >
-                          {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                        </button>
+                          className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                        />
                       </td>
-                      <td className="min-w-0 px-2 py-0.5" title={story.title}>
-                        <span className="block min-w-0 truncate">{story.title}</span>
+                      <td className="min-w-0 px-2 py-0.5">
+                        <InsightsTruncatedHoverLabel text={story.title} />
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
                         {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                          <button
-                            type="button"
+                          <InsightsTruncatedHoverButton
+                            label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                             onClick={() => {
                               const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
                               if (targetYearSprint == null) return;
                               onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
                             }}
-                            className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                            title={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                          >
-                            {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                          </button>
+                            className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          />
                         ) : (
-                          <span className="block min-w-0 truncate" title="Unscheduled">
-                            Unscheduled
-                          </span>
+                          <InsightsTruncatedHoverLabel text="Unscheduled" />
                         )}
                       </td>
-                      <td className="min-w-0 px-2 py-0.5" title={story.assignee?.trim() || "Unassigned"}>
-                        <span className="block min-w-0 truncate">{story.assignee?.trim() || "Unassigned"}</span>
+                      <td className="min-w-0 px-2 py-0.5">
+                        <InsightsTruncatedHoverLabel text={story.assignee?.trim() || "Unassigned"} />
                       </td>
-                      <td className="min-w-0 px-2 py-0.5" title={workloadStatusLabel}>
-                        <span className="block min-w-0 truncate">{workloadStatusLabel}</span>
+                      <td className="min-w-0 px-2 py-0.5">
+                        <InsightsTruncatedHoverLabel text={workloadStatusLabel} />
                       </td>
                     </tr>
                     );
