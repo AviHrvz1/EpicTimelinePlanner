@@ -610,6 +610,7 @@ function InitiativeTreeCard({
   initiative,
   isOpen,
   onToggle,
+  isSprintModeActive,
   onEditInitiative,
   onDeleteInitiative,
   onOpenEpic,
@@ -624,6 +625,7 @@ function InitiativeTreeCard({
   initiative: InitiativeItem;
   isOpen: boolean;
   onToggle: () => void;
+  isSprintModeActive: boolean;
   onEditInitiative: (initiative: InitiativeItem) => void;
   onDeleteInitiative: (id: string) => void;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
@@ -635,6 +637,7 @@ function InitiativeTreeCard({
   planContextMonth: number | null;
   epicPlanDragEnabled: boolean;
 }) {
+  const inMonthView = planContextMonth != null;
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
     id: backlogDropIndex != null ? backlogSlotDropId(backlogDropIndex) : `initiative-card:${initiative.id}`,
     disabled: backlogDropIndex == null,
@@ -1769,6 +1772,7 @@ export function InitiativeListPanel({
                   <InitiativeTreeCard
                     initiative={initiative}
                     isOpen={openInitiativeIds[initiative.id] ?? false}
+                    isSprintModeActive={isSprintModeActive}
                     backlogDropIndex={idx}
                     planContextMonth={activeMonth}
                     epicPlanDragEnabled={epicPlanDragEnabled}

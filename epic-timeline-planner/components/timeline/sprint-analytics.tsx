@@ -55,7 +55,8 @@ const CFD_FLOW_SEGMENTS = [
  * Compact plot height so two rows of charts fit without excess scrolling (uses dynamic viewport height).
  * Matches pie, burndown, cumulative flow, and caps workload list beside pie.
  */
-const SPRINT_CHART_BOX = "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full";
+const SPRINT_CHART_BOX =
+  "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full border border-slate-200/80 bg-white/85 ring-1 ring-slate-100/80";
 /** Keep legend beside pie from growing taller than the pie plot on md+. */
 const PIE_LEGEND_CAP = "max-h-[clamp(14.75rem,30vh,19rem)] overflow-y-auto pr-1";
 const WORKLOAD_LIST_MAX =

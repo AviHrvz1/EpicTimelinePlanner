@@ -68,9 +68,12 @@ const CFD_FLOW_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
 
-const SPRINT_CHART_BOX = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] w-full";
+const SPRINT_CHART_BOX =
+  "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] w-full";
+const INSIGHTS_CONTENT_HEIGHT = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem]";
+const INSIGHTS_HEADER_ROW = "min-h-9";
 const PIE_LEGEND_CAP = "max-h-[clamp(12.5rem,27vh,20rem)] overflow-y-auto pr-1";
-const WORKLOAD_LIST_MAX = "max-h-[clamp(11.5rem,21vh,15.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain";
+const WORKLOAD_LIST_MAX = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] overflow-y-auto overflow-x-hidden overscroll-contain";
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
 
@@ -715,6 +718,8 @@ export function MonthAnalytics({
     return scopedEpics.filter((epic) => epicStatusById.get(epic.id) === statusDrilldownFilter);
   }, [statusChartShowsEpics, statusDrilldownFilter, scopedEpics, epicStatusById]);
   const statusDrilldownRowCount = statusChartShowsEpics ? statusDrilldownEpics.length : statusDrilldownStories.length;
+  const tableTargetRows = 6;
+  const statusDrilldownEmptyRows = Math.max(0, tableTargetRows - statusDrilldownRowCount);
   const statusDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollStatusDrilldownUp, setCanScrollStatusDrilldownUp] = useState(false);
   const [canScrollStatusDrilldownDown, setCanScrollStatusDrilldownDown] = useState(false);
@@ -748,6 +753,7 @@ export function MonthAnalytics({
       .filter((story) => (story.assignee?.trim() || "Unassigned") === workloadDrilldownAssignee)
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [workloadDrilldownAssignee, scopedStories]);
+  const workloadDrilldownEmptyRows = Math.max(0, tableTargetRows - workloadDrilldownStories.length);
   const scopedStoryDisplayIds = useMemo(() => {
     const rows = initiatives
       .flatMap((initiative) => initiative.epics ?? [])
@@ -1365,7 +1371,7 @@ export function MonthAnalytics({
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
               "inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -1389,15 +1395,15 @@ export function MonthAnalytics({
           ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className="relative mt-2 rounded-none bg-white px-2.5 pb-2.5 pt-1.5">
-            <div className="relative">
+          <div className={`relative mt-2 flex min-h-0 rounded-none bg-white px-2.5 pb-2.5 pt-1.5 ${INSIGHTS_CONTENT_HEIGHT}`}>
+            <div className="relative min-h-0 flex-1">
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={updateStatusDrilldownArrowState}
-                className={cn("h-[clamp(12rem,24vh,16rem)]", sharedDrilldownScrollAreaClass)}
+                className={cn("h-full min-h-0", sharedDrilldownScrollAreaClass)}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
-              <table className="min-h-full w-full border-separate border-spacing-0 text-left text-[13px]">
+              <table className="w-full border-separate border-spacing-0 text-left text-[13px]">
                 <thead className="sticky top-0 z-10 bg-[#0897d5] text-white backdrop-blur">
                   {statusChartShowsEpics ? (
                     <tr>
@@ -1421,7 +1427,7 @@ export function MonthAnalytics({
                   {statusChartShowsEpics
                     ? statusDrilldownEpics.map((epic) => (
                         <tr key={epic.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
-                          <td className="px-2 py-1.5">
+                          <td className="px-2 py-0.5">
                             <button
                               type="button"
                               onClick={() => onOpenEpic?.(epic.id)}
@@ -1430,10 +1436,10 @@ export function MonthAnalytics({
                               {scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
                             </button>
                           </td>
-                          <td className="px-2 py-1.5">{epic.title}</td>
-                          <td className="px-2 py-1.5">{initiativeTitleByEpicId.get(epic.id) ?? "—"}</td>
-                          <td className="px-2 py-1.5">{epic.assignee?.trim() || "Unassigned"}</td>
-                          <td className="px-2 py-1.5">
+                          <td className="px-2 py-0.5">{epic.title}</td>
+                          <td className="px-2 py-0.5">{initiativeTitleByEpicId.get(epic.id) ?? "—"}</td>
+                          <td className="px-2 py-0.5">{epic.assignee?.trim() || "Unassigned"}</td>
+                          <td className="px-2 py-0.5">
                             <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
                               {epicStatusById.get(epic.id) ?? "To do"}
                             </span>
@@ -1442,7 +1448,7 @@ export function MonthAnalytics({
                       ))
                     : statusDrilldownStories.map((story) => (
                         <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
-                          <td className="px-2 py-1.5">
+                          <td className="px-2 py-0.5">
                             <button
                               type="button"
                               onClick={() => onOpenStory?.(story.id)}
@@ -1451,8 +1457,8 @@ export function MonthAnalytics({
                               {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                             </button>
                           </td>
-                          <td className="px-2 py-1.5">{story.title}</td>
-                          <td className="px-2 py-1.5">
+                          <td className="px-2 py-0.5">{story.title}</td>
+                          <td className="px-2 py-0.5">
                             {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
                               <button
                                 type="button"
@@ -1469,8 +1475,8 @@ export function MonthAnalytics({
                               "Unscheduled"
                             )}
                           </td>
-                          <td className="px-2 py-1.5">{story.assignee?.trim() || "Unassigned"}</td>
-                          <td className="px-2 py-1.5">
+                          <td className="px-2 py-0.5">{story.assignee?.trim() || "Unassigned"}</td>
+                          <td className="px-2 py-0.5">
                             <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
                               {story.sprint == null
                                 ? "Unscheduled"
@@ -1485,13 +1491,15 @@ export function MonthAnalytics({
                           </td>
                         </tr>
                       ))}
-                  {statusDrilldownRowCount === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-3 py-8 text-center text-[13px] text-slate-500">
-                        No items in this status for the current scope.
-                      </td>
-                    </tr>
-                  ) : null}
+                  {statusDrilldownEmptyRows > 0
+                    ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
+                        <tr key={`status-empty-${index}`} className="border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#d8f2ff]/55 even:bg-white">
+                          <td colSpan={5} className="px-3 py-0.5 text-[13px]">
+                            {"\u00A0"}
+                          </td>
+                        </tr>
+                      ))
+                    : null}
                 </tbody>
               </table>
               </div>
@@ -1522,7 +1530,7 @@ export function MonthAnalytics({
             </div>
           </div>
         ) : (
-          <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+          <div className={`grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
             <div
               className={`relative rounded-lg ${SPRINT_CHART_BOX}`}
             >
@@ -1622,7 +1630,7 @@ export function MonthAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
-        <div className="mb-6 flex shrink-0 items-center justify-between gap-2">
+        <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
               "ml-[48px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -1637,7 +1645,7 @@ export function MonthAnalytics({
               <button
                 type="button"
                 onClick={() => setMetric("daysLeft")}
-                className={`rounded-md px-2 py-0 text-[13px] font-medium ${
+                className={`rounded-md px-3 py-1 text-[13px] font-medium ${
                   metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
@@ -1646,7 +1654,7 @@ export function MonthAnalytics({
               <button
                 type="button"
                 onClick={() => setMetric("storyCount")}
-                className={`rounded-md px-2 py-0 text-[13px] font-medium ${
+                className={`rounded-md px-3 py-1 text-[13px] font-medium ${
                   metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
@@ -1658,7 +1666,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => setEstimateSource("stories")}
                 className={cn(
-                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  "rounded-md px-3 py-1 text-[13px] font-medium",
                   estimateSource === "stories"
                     ? "bg-white text-slate-900 ring-1 ring-slate-300"
                     : "text-slate-600",
@@ -1670,7 +1678,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => setEstimateSource("original")}
                 className={cn(
-                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  "rounded-md px-3 py-1 text-[13px] font-medium",
                   estimateSource === "original"
                     ? "bg-white text-slate-900 ring-1 ring-slate-300"
                     : "text-slate-600",
@@ -1681,7 +1689,7 @@ export function MonthAnalytics({
             </div>
           </div>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className={`grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
@@ -1788,11 +1796,11 @@ export function MonthAnalytics({
               </div>
             )}
           </div>
-          <div className="relative max-h-[clamp(11.5rem,21vh,15.5rem)]">
+          <div className={`relative ${INSIGHTS_CONTENT_HEIGHT}`}>
             <div
               ref={burndownLegendScrollRef}
               onScroll={updateBurndownArrowState}
-              className="max-h-[clamp(11.5rem,21vh,15.5rem)] space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden"
+              className="h-full min-h-0 space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <button
@@ -1869,7 +1877,7 @@ export function MonthAnalytics({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
-        <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
+        <div className={cn("flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW, isMultiPeriodInsights ? "mb-3" : "mb-2")}>
           <h3
             className={cn(
               "inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -1915,12 +1923,12 @@ export function MonthAnalytics({
           )}
         </div>
         {workloadDrilldownAssignee ? (
-          <div className="mt-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
-            <div className="relative">
+          <div className={`mt-0 flex min-h-0 rounded-none bg-white p-2 ${INSIGHTS_CONTENT_HEIGHT}`}>
+            <div className="relative min-h-0 flex-1">
             <div
               ref={workloadDrilldownScrollRef}
               onScroll={updateWorkloadDrilldownArrowState}
-              className={cn("h-[clamp(12rem,24vh,16rem)]", sharedDrilldownScrollAreaClass)}
+              className={cn("h-full min-h-0", sharedDrilldownScrollAreaClass)}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <table className="w-full border-collapse text-left text-[13px]">
@@ -1936,7 +1944,7 @@ export function MonthAnalytics({
                 <tbody>
                   {workloadDrilldownStories.map((story) => (
                     <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-0.5">
                         <button
                           type="button"
                           onClick={() => onOpenStory?.(story.id)}
@@ -1945,8 +1953,8 @@ export function MonthAnalytics({
                           {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                         </button>
                       </td>
-                      <td className="px-2 py-1">{story.title}</td>
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-0.5">{story.title}</td>
+                      <td className="px-2 py-0.5">
                         {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
                           <button
                             type="button"
@@ -1963,10 +1971,10 @@ export function MonthAnalytics({
                           "Unscheduled"
                         )}
                       </td>
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-0.5">
                         {story.assignee?.trim() || "Unassigned"}
                       </td>
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-0.5">
                         {story.status === "todo"
                           ? "To do"
                           : story.status === "inProgress"
@@ -1977,6 +1985,15 @@ export function MonthAnalytics({
                       </td>
                     </tr>
                   ))}
+                  {workloadDrilldownEmptyRows > 0
+                    ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
+                        <tr key={`workload-empty-${index}`} className="border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#d8f2ff]/55 even:bg-white">
+                          <td colSpan={5} className="px-3 py-0.5 text-[13px]">
+                            {"\u00A0"}
+                          </td>
+                        </tr>
+                      ))
+                    : null}
                 </tbody>
               </table>
             </div>
@@ -2008,12 +2025,12 @@ export function MonthAnalytics({
           </div>
         ) : null}
         {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
-          <div className="relative min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] flex-1">
-            <div className="grid min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
+          <div className={`relative min-h-0 flex-1 ${INSIGHTS_CONTENT_HEIGHT}`}>
+            <div className="grid h-full min-h-0 gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
             <div
               ref={workloadStoriesScrollRef}
               onScroll={updateWorkloadArrowState}
-              className="min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
+              className="h-full min-h-0 space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {analytics.workloadByAssignee.length > 0 ? (
@@ -2222,14 +2239,14 @@ export function MonthAnalytics({
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
         <h3
           className={cn(
-            "ml-[48px] inline-flex shrink-0 items-center gap-1.5 font-semibold text-slate-800",
+            "ml-[48px] inline-flex min-h-9 shrink-0 items-center gap-1.5 font-semibold text-slate-800",
             isMultiPeriodInsights ? "mb-3 text-[16px]" : "mb-2 text-[15px]",
           )}
         >
           <Activity className="size-4 text-slate-600" />
           Cumulative Flow
         </h3>
-        <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className={`grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {flowResolved.length > 0 ? (
               <div className="absolute inset-0">

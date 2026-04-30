@@ -154,7 +154,7 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
             </select>
           </div>
         </div>
-        <div className="h-60">
+        <div className="h-60 rounded-lg border border-slate-200/80 bg-white/85 ring-1 ring-slate-100/80">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={burndownData} margin={{ top: 8, right: 20, left: 8, bottom: 12 }}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -229,7 +229,7 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
           User stories status
         </h3>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
-          <div className="relative h-60 rounded-lg bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80">
+          <div className="relative h-60 rounded-lg border border-slate-200/80 bg-gradient-to-br from-slate-50/80 via-white to-slate-50/80 ring-1 ring-slate-100/80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <defs>
