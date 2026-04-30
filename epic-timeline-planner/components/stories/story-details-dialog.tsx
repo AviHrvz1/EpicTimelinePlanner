@@ -543,6 +543,7 @@ export function StoryDetailsDialog({
     const startX = event.clientX;
     const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
     const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
+    const startOffsetX = dialogOffset.x;
 
     function onPointerMove(moveEvent: PointerEvent) {
       const delta = moveEvent.clientX - startX;
@@ -551,6 +552,8 @@ export function StoryDetailsDialog({
       const maxWidth = Math.min(window.innerWidth - 12, 1700);
       const bounded = Math.max(minWidth, Math.min(maxWidth, nextWidth));
       setDialogWidthVw((bounded / window.innerWidth) * 100);
+      const widthDelta = bounded - startWidth;
+      setDialogOffset((prev) => ({ ...prev, x: startOffsetX + widthDelta }));
     }
 
     function onPointerUp() {
@@ -588,25 +591,9 @@ export function StoryDetailsDialog({
             : { width: `min(${dialogWidthVw}vw, 1320px)`, maxWidth: `min(${dialogWidthVw}vw, 1320px)` }
         }
       >
-        {!anchored ? (
-          <div
-            className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
-            onPointerDown={beginDialogWidthResize}
-            aria-label="Resize user story panel width"
-            role="separator"
-          />
-        ) : null}
-        {!anchored ? (
-          <div
-            className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
-            onPointerDown={beginDialogWidthResizeRight}
-            aria-label="Resize user story panel width from right"
-            role="separator"
-          />
-        ) : null}
         <div
           className={cn(
-            "flex h-full min-h-0 w-full flex-col p-5",
+            "relative flex h-full min-h-0 w-full flex-col p-5",
             anchored
               ? "h-full min-h-0 flex-1 shadow-none ring-0"
               : "h-full min-h-0 rounded-none border-0 bg-white shadow-none",
@@ -614,6 +601,22 @@ export function StoryDetailsDialog({
           )}
           style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
         >
+          {!anchored ? (
+            <div
+              className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              onPointerDown={beginDialogWidthResize}
+              aria-label="Resize user story panel width"
+              role="separator"
+            />
+          ) : null}
+          {!anchored ? (
+            <div
+              className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              onPointerDown={beginDialogWidthResizeRight}
+              aria-label="Resize user story panel width from right"
+              role="separator"
+            />
+          ) : null}
         <div className="mb-4 flex cursor-move items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5" onPointerDown={beginDialogDrag}>
           <div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-slate-700">
             <button

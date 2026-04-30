@@ -746,6 +746,7 @@ export function EpicFormDialog({
     const fallbackWidth = (window.innerWidth * dialogWidthVw) / 100;
     const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
     const startDetailsWidth = detailsPanelWidthPx;
+    const startOffsetX = dialogOffset.x;
 
     function onPointerMove(moveEvent: PointerEvent) {
       const delta = moveEvent.clientX - startX;
@@ -755,6 +756,7 @@ export function EpicFormDialog({
       const bounded = Math.max(minWidth, Math.min(maxWidth, nextWidth));
       setDialogWidthVw((bounded / window.innerWidth) * 100);
       const widthDelta = bounded - startWidth;
+      setDialogOffset((prev) => ({ ...prev, x: startOffsetX + widthDelta }));
       const nextDetails = startDetailsWidth + widthDelta * 0.35;
       setDetailsPanelWidthPx(Math.max(296, Math.min(bounded - 320, nextDetails)));
     }
@@ -928,30 +930,30 @@ export function EpicFormDialog({
             : { width: `${dialogWidthVw}vw`, maxWidth: "99.5vw" }
         }
       >
-        {!anchored ? (
-          <div
-            className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
-            onPointerDown={beginDialogWidthResize}
-            aria-label="Resize epic panel width"
-            role="separator"
-          />
-        ) : null}
-        {!anchored ? (
-          <div
-            className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
-            onPointerDown={beginDialogWidthResizeRight}
-            aria-label="Resize epic panel width from right"
-            role="separator"
-          />
-        ) : null}
         <div
           className={cn(
-            "flex h-full min-h-0 w-full flex-col p-5",
+            "relative flex h-full min-h-0 w-full flex-col p-5",
             anchored ? "h-full min-h-0 flex-1 shadow-none ring-0" : "h-full min-h-0 rounded-none border-0 bg-white shadow-none",
             isDraggingDialog && "select-none",
           )}
           style={{ transform: `translate(${dialogOffset.x}px, ${dialogOffset.y}px)` }}
         >
+          {!anchored ? (
+            <div
+              className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              onPointerDown={beginDialogWidthResize}
+              aria-label="Resize epic panel width"
+              role="separator"
+            />
+          ) : null}
+          {!anchored ? (
+            <div
+              className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              onPointerDown={beginDialogWidthResizeRight}
+              aria-label="Resize epic panel width from right"
+              role="separator"
+            />
+          ) : null}
           <div
             className="mb-4 flex cursor-move items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5"
             onPointerDown={beginDialogDrag}
