@@ -1300,7 +1300,17 @@ export function MonthAnalytics({
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
   const sharedDrilldownScrollAreaClass =
-    "overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden";
+    "overflow-y-auto overflow-x-hidden rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden";
+  const drilldownTableClass = "w-full table-fixed border-collapse text-left text-[13px]";
+  const drilldownColgroup = (
+    <colgroup>
+      <col className="w-[12%]" />
+      <col className="w-[30%]" />
+      <col className="w-[26%]" />
+      <col className="w-[17%]" />
+      <col className="w-[15%]" />
+    </colgroup>
+  );
   const sharedDrilldownArrowClass =
     "absolute -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
 
@@ -1441,7 +1451,7 @@ export function MonthAnalytics({
           ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className={`relative mt-2 flex min-h-0 rounded-none bg-white px-2.5 pb-2.5 pt-1.5 ${INSIGHTS_CONTENT_HEIGHT}`}>
+          <div className={`mt-0 flex min-h-0 rounded-none bg-white p-2 ${INSIGHTS_CONTENT_HEIGHT}`}>
             <div className="relative min-h-0 flex-1">
               <div
                 ref={statusDrilldownScrollRef}
@@ -1449,62 +1459,90 @@ export function MonthAnalytics({
                 className={cn("h-full min-h-0", sharedDrilldownScrollAreaClass)}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
-              <table className="w-full border-separate border-spacing-0 text-left text-[13px]">
-                <thead className="sticky top-0 z-10 bg-[#0897d5] text-white backdrop-blur">
+              <table className={drilldownTableClass}>
+                {drilldownColgroup}
+                <thead className="sticky top-0 bg-[#0897d5] text-white">
                   {statusChartShowsEpics ? (
                     <tr>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Epic ID</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Epic name</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Initiative</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Epic ID</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Epic name</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Initiative</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
                     </tr>
                   ) : (
                     <tr>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Story ID</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Story name</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Sprint</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
-                      <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story ID</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story name</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Sprint</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
                     </tr>
                   )}
                 </thead>
                 <tbody>
                   {statusChartShowsEpics
-                    ? statusDrilldownEpics.map((epic) => (
+                    ? statusDrilldownEpics.map((epic) => {
+                        const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
+                        return (
                         <tr key={epic.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
-                          <td className="px-2 py-0.5">
+                          <td className="min-w-0 px-2 py-0.5">
                             <button
                               type="button"
                               onClick={() => onOpenEpic?.(epic.id)}
-                              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                              className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                              title={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
                             >
                               {scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
                             </button>
                           </td>
-                          <td className="px-2 py-0.5">{epic.title}</td>
-                          <td className="px-2 py-0.5">{initiativeTitleByEpicId.get(epic.id) ?? "—"}</td>
-                          <td className="px-2 py-0.5">{epic.assignee?.trim() || "Unassigned"}</td>
-                          <td className="px-2 py-0.5">
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
-                              {epicStatusById.get(epic.id) ?? "To do"}
+                          <td className="min-w-0 px-2 py-0.5" title={epic.title}>
+                            <span className="block min-w-0 truncate">{epic.title}</span>
+                          </td>
+                          <td
+                            className="min-w-0 px-2 py-0.5"
+                            title={initiativeTitleByEpicId.get(epic.id) ?? "—"}
+                          >
+                            <span className="block min-w-0 truncate">
+                              {initiativeTitleByEpicId.get(epic.id) ?? "—"}
                             </span>
                           </td>
+                          <td className="min-w-0 px-2 py-0.5" title={epic.assignee?.trim() || "Unassigned"}>
+                            <span className="block min-w-0 truncate">{epic.assignee?.trim() || "Unassigned"}</span>
+                          </td>
+                          <td className="min-w-0 px-2 py-0.5" title={epicStatusLabel}>
+                            <span className="block min-w-0 truncate">{epicStatusLabel}</span>
+                          </td>
                         </tr>
-                      ))
-                    : statusDrilldownStories.map((story) => (
+                        );
+                      })
+                    : statusDrilldownStories.map((story) => {
+                        const storyStatusLabel =
+                          story.sprint == null
+                            ? "Unscheduled"
+                            : story.status === "todo"
+                              ? "To do"
+                              : story.status === "inProgress"
+                                ? "In progress"
+                                : story.status === "done"
+                                  ? "Done"
+                                  : "Approved";
+                        return (
                         <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
-                          <td className="px-2 py-0.5">
+                          <td className="min-w-0 px-2 py-0.5">
                             <button
                               type="button"
                               onClick={() => onOpenStory?.(story.id)}
-                              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                              className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                              title={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                             >
                               {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                             </button>
                           </td>
-                          <td className="px-2 py-0.5">{story.title}</td>
-                          <td className="px-2 py-0.5">
+                          <td className="min-w-0 px-2 py-0.5" title={story.title}>
+                            <span className="block min-w-0 truncate">{story.title}</span>
+                          </td>
+                          <td className="min-w-0 px-2 py-0.5">
                             {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
                               <button
                                 type="button"
@@ -1513,30 +1551,26 @@ export function MonthAnalytics({
                                   if (targetYearSprint == null) return;
                                   onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
                                 }}
-                                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                title={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                               >
                                 {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                               </button>
                             ) : (
-                              "Unscheduled"
+                              <span className="block min-w-0 truncate" title="Unscheduled">
+                                Unscheduled
+                              </span>
                             )}
                           </td>
-                          <td className="px-2 py-0.5">{story.assignee?.trim() || "Unassigned"}</td>
-                          <td className="px-2 py-0.5">
-                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
-                              {story.sprint == null
-                                ? "Unscheduled"
-                                : story.status === "todo"
-                                  ? "To do"
-                                  : story.status === "inProgress"
-                                    ? "In progress"
-                                    : story.status === "done"
-                                      ? "Done"
-                                      : "Approved"}
-                            </span>
+                          <td className="min-w-0 px-2 py-0.5" title={story.assignee?.trim() || "Unassigned"}>
+                            <span className="block min-w-0 truncate">{story.assignee?.trim() || "Unassigned"}</span>
+                          </td>
+                          <td className="min-w-0 px-2 py-0.5" title={storyStatusLabel}>
+                            <span className="block min-w-0 truncate">{storyStatusLabel}</span>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`status-empty-${index}`} className="border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#d8f2ff]/55 even:bg-white">
@@ -1554,7 +1588,7 @@ export function MonthAnalytics({
                 onClick={() => scrollStatusDrilldownBy(-96)}
                 className={cn(
                   sharedDrilldownArrowClass,
-                  "top-0 z-30",
+                  "top-0",
                   canScrollStatusDrilldownUp && "bg-slate-200/70 text-slate-800",
                 )}
                 aria-label="Scroll up status drilldown table"
@@ -1977,30 +2011,43 @@ export function MonthAnalytics({
               className={cn("h-full min-h-0", sharedDrilldownScrollAreaClass)}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
-              <table className="w-full border-collapse text-left text-[13px]">
+              <table className={drilldownTableClass}>
+                {drilldownColgroup}
                 <thead className="sticky top-0 bg-[#0897d5] text-white">
                   <tr>
-                    <th className="px-2 py-1 text-[14px] font-semibold">Story ID</th>
-                    <th className="px-2 py-1 text-[14px] font-semibold">Story name</th>
-                    <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
-                    <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
-                    <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story ID</th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story name</th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Sprint</th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {workloadDrilldownStories.map((story) => (
+                  {workloadDrilldownStories.map((story) => {
+                    const workloadStatusLabel =
+                      story.status === "todo"
+                        ? "To do"
+                        : story.status === "inProgress"
+                          ? "In progress"
+                          : story.status === "done"
+                            ? "Done"
+                            : "Approved";
+                    return (
                     <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
-                      <td className="px-2 py-0.5">
+                      <td className="min-w-0 px-2 py-0.5">
                         <button
                           type="button"
                           onClick={() => onOpenStory?.(story.id)}
-                          className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          title={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                         >
                           {scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
                         </button>
                       </td>
-                      <td className="px-2 py-0.5">{story.title}</td>
-                      <td className="px-2 py-0.5">
+                      <td className="min-w-0 px-2 py-0.5" title={story.title}>
+                        <span className="block min-w-0 truncate">{story.title}</span>
+                      </td>
+                      <td className="min-w-0 px-2 py-0.5">
                         {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
                           <button
                             type="button"
@@ -2009,28 +2056,26 @@ export function MonthAnalytics({
                               if (targetYearSprint == null) return;
                               onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
                             }}
-                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            className="block max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            title={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                           >
                             {storySprintDisplayLabel(story.sprint, scopeStartMonth)}
                           </button>
                         ) : (
-                          "Unscheduled"
+                          <span className="block min-w-0 truncate" title="Unscheduled">
+                            Unscheduled
+                          </span>
                         )}
                       </td>
-                      <td className="px-2 py-0.5">
-                        {story.assignee?.trim() || "Unassigned"}
+                      <td className="min-w-0 px-2 py-0.5" title={story.assignee?.trim() || "Unassigned"}>
+                        <span className="block min-w-0 truncate">{story.assignee?.trim() || "Unassigned"}</span>
                       </td>
-                      <td className="px-2 py-0.5">
-                        {story.status === "todo"
-                          ? "To do"
-                          : story.status === "inProgress"
-                            ? "In progress"
-                            : story.status === "done"
-                              ? "Done"
-                              : "Approved"}
+                      <td className="min-w-0 px-2 py-0.5" title={workloadStatusLabel}>
+                        <span className="block min-w-0 truncate">{workloadStatusLabel}</span>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {workloadDrilldownEmptyRows > 0
                     ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`workload-empty-${index}`} className="border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#d8f2ff]/55 even:bg-white">
