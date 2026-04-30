@@ -433,7 +433,11 @@ export function MonthAnalytics({
     () =>
       monthEpics.map(({ epic, initiative }) => ({
         id: epic.id,
-        label: `${epic.title} (${initiative.title})`,
+        label: epic.title,
+        initiativeId: initiative.id,
+        initiativeTitle: initiative.title,
+        initiativeIcon: initiative.icon && initiative.icon.trim().length > 0 ? initiative.icon : "📁",
+        searchText: `${epic.title} ${initiative.title}`.toLowerCase(),
       })),
     [monthEpics],
   );
@@ -445,14 +449,38 @@ export function MonthAnalytics({
     if (!initialSelectedEpicId) return;
     setSelectedEpicId(initialSelectedEpicId);
     const selected = monthEpics.find(({ epic }) => epic.id === initialSelectedEpicId);
-    setEpicInput(selected ? `${selected.epic.title} (${selected.initiative.title})` : "");
+    setEpicInput(selected ? selected.epic.title : "");
   }, [initialSelectedEpicId, monthEpics]);
   const filteredEpicOptions = useMemo(() => {
     if (showAllEpicSuggestions) return epicComboOptions;
     const query = epicInput.trim().toLowerCase();
     if (!query) return epicComboOptions;
-    return epicComboOptions.filter((opt) => opt.label.toLowerCase().includes(query));
+    return epicComboOptions.filter((opt) => opt.searchText.includes(query));
   }, [epicComboOptions, epicInput, showAllEpicSuggestions]);
+  const filteredEpicGroups = useMemo(() => {
+    const groups: Array<{
+      initiativeId: string;
+      initiativeTitle: string;
+      initiativeIcon: string;
+      epics: typeof filteredEpicOptions;
+    }> = [];
+    const byInitiative = new Map<string, number>();
+    filteredEpicOptions.forEach((opt) => {
+      const idx = byInitiative.get(opt.initiativeId);
+      if (idx == null) {
+        byInitiative.set(opt.initiativeId, groups.length);
+        groups.push({
+          initiativeId: opt.initiativeId,
+          initiativeTitle: opt.initiativeTitle,
+          initiativeIcon: opt.initiativeIcon,
+          epics: [opt],
+        });
+      } else {
+        groups[idx]!.epics.push(opt);
+      }
+    });
+    return groups;
+  }, [filteredEpicOptions]);
   const selectedWorkloadStatuses = useMemo<WorkloadStatusKey[]>(
     () =>
       workloadStatusFilters.includes("all")
@@ -1342,23 +1370,33 @@ export function MonthAnalytics({
                   setShowAllEpicSuggestions(false);
                 }}
               >
-                {filteredEpicOptions.length > 0 ? (
-                  filteredEpicOptions.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        setSelectedEpicId(opt.id);
-                        setEpicInput(opt.label);
-                        setIsEpicDropdownOpen(false);
-                        setShowAllEpicSuggestions(false);
-                      }}
-                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
-                    >
-                      <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
-                      {opt.label}
-                    </button>
+                {filteredEpicGroups.length > 0 ? (
+                  filteredEpicGroups.map((group) => (
+                    <div key={group.initiativeId} className="mb-1 rounded-lg border border-slate-100 bg-slate-50/60 p-1">
+                      <div className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                        <span className="text-[12px] leading-none" aria-hidden>
+                          {group.initiativeIcon && group.initiativeIcon.trim().length > 0 ? group.initiativeIcon : "📁"}
+                        </span>
+                        {group.initiativeTitle}
+                      </div>
+                      {group.epics.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setSelectedEpicId(opt.id);
+                            setEpicInput(opt.label);
+                            setIsEpicDropdownOpen(false);
+                            setShowAllEpicSuggestions(false);
+                          }}
+                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
+                        >
+                          <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   ))
                 ) : (
                   <p className="px-2 py-1.5 text-[12px] text-slate-500">No matching epics</p>
