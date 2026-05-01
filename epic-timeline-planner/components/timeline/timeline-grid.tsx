@@ -19,7 +19,17 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
@@ -824,6 +834,10 @@ export function TimelineGrid({
   const [capacityTeamMenuOpen, setCapacityTeamMenuOpen] = useState(false);
   const [showYearSprintChips, setShowYearSprintChips] = useState(false);
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
+  /** Drives slide-in/out (mirror of epic insights panel: translate + duration-300). */
+  const [estEpicsPanelEntered, setEstEpicsPanelEntered] = useState(false);
+  const skipEstEpicsPanelEnterRef = useRef(false);
+  const estEpicsPanelCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(960);
   const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
   const [expandedEstimateEpicIds, setExpandedEstimateEpicIds] = useState<Set<string>>(new Set());
@@ -957,6 +971,55 @@ export function TimelineGrid({
     setEstEpicsPanelWidthPx(defaultWidth);
     setEstEpicsPanelPosition({ right: 0, top: 0 });
   }, [estEpicsPanelOpen]);
+
+  const closeEstEpicsPanel = useCallback(() => {
+    skipEstEpicsPanelEnterRef.current = true;
+    setEstEpicsPanelEntered(false);
+    if (estEpicsPanelCloseTimerRef.current) clearTimeout(estEpicsPanelCloseTimerRef.current);
+    estEpicsPanelCloseTimerRef.current = setTimeout(() => {
+      estEpicsPanelCloseTimerRef.current = null;
+      setEstEpicsPanelOpen(false);
+      skipEstEpicsPanelEnterRef.current = false;
+    }, 300);
+  }, []);
+
+  const openEstEpicsPanel = useCallback(() => {
+    if (estEpicsPanelCloseTimerRef.current) {
+      clearTimeout(estEpicsPanelCloseTimerRef.current);
+      estEpicsPanelCloseTimerRef.current = null;
+    }
+    skipEstEpicsPanelEnterRef.current = false;
+    if (estEpicsPanelOpen) {
+      setEstEpicsPanelEntered(true);
+      return;
+    }
+    setEstEpicsPanelOpen(true);
+  }, [estEpicsPanelOpen]);
+
+  useLayoutEffect(() => {
+    if (!estEpicsPanelOpen) {
+      setEstEpicsPanelEntered(false);
+      return;
+    }
+    skipEstEpicsPanelEnterRef.current = false;
+    setEstEpicsPanelEntered(false);
+    let alive = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (alive && !skipEstEpicsPanelEnterRef.current) setEstEpicsPanelEntered(true);
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [estEpicsPanelOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (estEpicsPanelCloseTimerRef.current) clearTimeout(estEpicsPanelCloseTimerRef.current);
+    };
+  }, []);
+
   const scheduledInitiatives = useMemo(() => {
     const list = initiatives.filter(
       (i) => i.status === "scheduled" && i.startMonth != null && i.endMonth != null,
@@ -1203,7 +1266,7 @@ export function TimelineGrid({
     const scopeChangedWhileOpen =
       estEpicsPanelOpen && estimatePanelScopeLabel !== prevEstScopeKeyRef.current;
     if (justOpened || scopeChangedWhileOpen) {
-      setExpandedEstimateEpicIds(new Set(scopedEpicsForEstimatePanel.all.map((r) => r.epic.id)));
+      setExpandedEstimateEpicIds(new Set());
     }
     prevEstPanelOpenRef.current = estEpicsPanelOpen;
     prevEstScopeKeyRef.current = estimatePanelScopeLabel;
@@ -1212,9 +1275,9 @@ export function TimelineGrid({
   const estimatePanelTableClass =
     "w-full table-fixed border-collapse text-[13px] text-slate-700";
   const estimatePanelHeadCellClass =
-    "border-b border-[#7cd3f7]/95 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600";
+    "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600";
   const estimatePanelBodyRowClass =
-    "group border-t border-[#7cd3f7]/95 transition hover:bg-[#c5ebff]";
+    "group transition hover:bg-[#c5ebff]";
   const estimatePanelCellClass = "px-3 py-2.5";
   const toggleEstimateEpicExpanded = (epicId: string) =>
     setExpandedEstimateEpicIds((prev) => {
@@ -1309,7 +1372,7 @@ export function TimelineGrid({
                       <button
                         type="button"
                         onClick={() => {
-                          setEstEpicsPanelOpen(false);
+                          closeEstEpicsPanel();
                           onOpenEpic(row.epic.id);
                         }}
                         className="inline-flex max-w-[22rem] items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
@@ -1322,7 +1385,7 @@ export function TimelineGrid({
                     <button
                       type="button"
                       onClick={() => {
-                        setEstEpicsPanelOpen(false);
+                        closeEstEpicsPanel();
                         onOpenInitiative(row.initiative.id);
                       }}
                       className="inline-flex max-w-[20rem] items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
@@ -1357,19 +1420,19 @@ export function TimelineGrid({
                   ) : null}
                 </tr>
                 {isExpanded ? (
-                  <tr className="border-t border-[#d6eefc] bg-white">
+                  <tr className="bg-white">
                     <td className="px-3 py-2" colSpan={showEstimatedColumns ? 5 : 3}>
                       {stories.length === 0 ? (
                         <p className="text-[12px] text-slate-500">No user stories yet.</p>
                       ) : (
-                        <div className="divide-y divide-[#7cd3f7]/40">
+                        <div>
                           {stories.map((story) => (
                             <button
                               key={story.id}
                               type="button"
                               onClick={() => {
                                 if (!onOpenStory) return;
-                                setEstEpicsPanelOpen(false);
+                                closeEstEpicsPanel();
                                 onOpenStory(story.id);
                               }}
                               className={cn(
@@ -1400,7 +1463,6 @@ export function TimelineGrid({
             <tr
               key={`empty-${variant}-${idx}`}
               className={cn(
-                "border-t border-[#d6eefc]",
                 (displayRows.length + idx) % 2 === 0 ? "bg-[#d8f2ff]/70" : "bg-white/80",
               )}
             >
@@ -2258,7 +2320,10 @@ export function TimelineGrid({
                       : summaryChipNeutralClass,
                   )}
                 >
-                  <MapIcon className={summaryChipIconClass} aria-hidden />
+                  <InitiativePlanBarIcon
+                    icon={null}
+                    className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
+                  />
                   <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
                   <span className="hidden xl:inline">Initiatives</span>
                   <span className="xl:hidden">Inits</span>
@@ -2276,7 +2341,10 @@ export function TimelineGrid({
                       : summaryChipNeutralClass,
                   )}
                 >
-                  <Flag className={summaryChipIconClass} aria-hidden />
+                  <EpicPlanBarIcon
+                    icon={null}
+                    className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
+                  />
                   {("totalEpics" in summaryBadgesForScope
                     ? summaryBadgesForScope.totalEpics
                     : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2284,7 +2352,7 @@ export function TimelineGrid({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEstEpicsPanelOpen(true)}
+                  onClick={() => openEstEpicsPanel()}
                   className={summaryChipEstimatedClass}
                 >
                   <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
@@ -2323,7 +2391,7 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <CalendarDays className={summaryChipIconClass} aria-hidden />
+                    <Flag className={summaryChipIconClass} aria-hidden />
                     <span className="hidden xl:inline">Sprints</span>
                     <span className="xl:hidden">Spr</span>
                     </button>
@@ -2349,7 +2417,10 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <Flag className={summaryChipIconClass} aria-hidden />
+                    <EpicPlanBarIcon
+                      icon={null}
+                      className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
+                    />
                     {sprintKanbanSummaryStats.epicCount} Epics
                   </button>
                   <div className={summaryChipStaticNeutralClass}>
@@ -2359,7 +2430,7 @@ export function TimelineGrid({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setEstEpicsPanelOpen(true)}
+                    onClick={() => openEstEpicsPanel()}
                     className={summaryChipEstimatedClass}
                   >
                     <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
@@ -2419,7 +2490,10 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <MapIcon className={summaryChipIconClass} aria-hidden />
+                    <InitiativePlanBarIcon
+                      icon={null}
+                      className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
+                    />
                     <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
                     <span className="hidden sm:inline">Initiatives</span>
                     <span className="sm:hidden">Inits</span>
@@ -2437,7 +2511,10 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <Flag className={summaryChipIconClass} aria-hidden />
+                    <EpicPlanBarIcon
+                      icon={null}
+                      className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
+                    />
                     {("totalEpics" in summaryBadgesForScope
                       ? summaryBadgesForScope.totalEpics
                       : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2445,7 +2522,7 @@ export function TimelineGrid({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEstEpicsPanelOpen(true)}
+                    onClick={() => openEstEpicsPanel()}
                     className={summaryChipEstimatedClass}
                   >
                     <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
@@ -4062,16 +4139,20 @@ export function TimelineGrid({
         <div className="pointer-events-none fixed inset-0 z-[140]">
           <div
             className="pointer-events-auto absolute inset-0 bg-transparent"
-            onClick={() => setEstEpicsPanelOpen(false)}
+            onClick={() => closeEstEpicsPanel()}
           />
           <aside
-            className="pointer-events-auto fixed flex flex-col border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 pb-6 shadow-lg ring-1 ring-indigo-100/80"
+            className={cn(
+              "fixed flex flex-col border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 pb-6 shadow-lg ring-1 ring-indigo-100/80 transition-transform duration-300 ease-out",
+              estEpicsPanelEntered ? "pointer-events-auto" : "pointer-events-none",
+            )}
             style={{
               width: `${estEpicsPanelWidthPx}px`,
               maxWidth: "99vw",
               right: `${estEpicsPanelPosition.right}px`,
               top: `${estEpicsPanelPosition.top}px`,
               height: "100vh",
+              transform: estEpicsPanelEntered ? "translateX(0)" : "translateX(100%)",
             }}
           >
             <div
@@ -4103,7 +4184,7 @@ export function TimelineGrid({
               </div>
               <button
                 type="button"
-                onClick={() => setEstEpicsPanelOpen(false)}
+                onClick={() => closeEstEpicsPanel()}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100"
                 aria-label="Close estimated epics panel"
               >
@@ -4111,8 +4192,8 @@ export function TimelineGrid({
               </button>
             </div>
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
-              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#7cd3f7]/85 bg-white shadow-sm ring-1 ring-slate-100/90">
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#19abeb]/70 bg-[#0897d5] px-3 py-2.5">
+              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+                <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
                   <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
                     <ClipboardList className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
                     <span className="truncate">
@@ -4148,8 +4229,8 @@ export function TimelineGrid({
                   {renderEstimatePanelTable(scopedEpicsForEstimatePanel.unestimated, "unestimated")}
                 </div>
               </section>
-              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#7cd3f7]/85 bg-white shadow-sm ring-1 ring-slate-100/90">
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#19abeb]/70 bg-[#0897d5] px-3 py-2.5">
+              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
+                <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
                   <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
                     <BarChart3 className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
                     <span className="truncate">

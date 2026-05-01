@@ -3216,7 +3216,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
               <div className="shrink-0 self-end pb-0">
                 <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
-                  <label className="inline-flex h-7 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:outline-none focus-within:ring-0">
+                  <label className="inline-flex h-7 items-center overflow-hidden rounded-full border border-primary-foreground/35 bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 hover:border-primary-foreground/45 focus-within:outline-none focus-within:ring-0">
                     <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
                       Roadmap
                     </span>
