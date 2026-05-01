@@ -143,7 +143,7 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
 ]);
 
 function backlogCellClassName(key: BacklogColumnKey): string {
-  if (key === "workItem") return "relative min-w-0";
+  if (key === "workItem") return "relative min-w-0 pl-[3px]";
   if (key === "progress") return "min-w-0";
   return cn("min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "justify-self-center text-center");
 }
@@ -1004,7 +1004,7 @@ export function BacklogPlanningPanel({
           <div
             key={`${keyPrefix}-story-${row.storyId}`}
             className={cn(
-              "group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2",
+              "group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2",
               "hover:bg-[#c5ebff]",
             )}
             data-backlog-zebra-row="true"
@@ -1341,7 +1341,7 @@ export function BacklogPlanningPanel({
     return (
       <div key={folderId}>
         <div
-          className="grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-1.5 hover:bg-[#c5ebff]"
+          className="grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-1.5 hover:bg-[#c5ebff]"
           style={{ gridTemplateColumns: tableGridTemplate }}
           data-backlog-zebra-row="true"
           data-backlog-zebra-kind="folder"
@@ -1424,7 +1424,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -1556,7 +1556,7 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-epic:${epicId}` ? (
-            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
               <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx + 18 }}>
                 <input
                   value={createDraftTitle}
@@ -1588,7 +1588,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -1716,7 +1716,7 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
-            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
               <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx + 18 }}>
                 <input
                   value={createDraftTitle}
@@ -1842,7 +1842,7 @@ export function BacklogPlanningPanel({
         return (
               <div key={initFolderId}>
                 <div
-                  className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+                  className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
                   style={{
                     gridTemplateColumns: tableGridTemplate,
                   }}
@@ -1958,7 +1958,7 @@ export function BacklogPlanningPanel({
               })}
             </div>
             {createSelection?.anchorKey === `group-standalone-initiative:${initiative.initiativeId}` ? (
-              <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+              <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
                 <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 18 }}>
                   <input
                     value={createDraftTitle}
@@ -1979,7 +1979,7 @@ export function BacklogPlanningPanel({
                 {initiative.epics.map((epic) => (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div
-                      className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2 hover:bg-[#c5ebff]"
+                      className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
                       style={{
                         gridTemplateColumns: tableGridTemplate,
                       }}
@@ -2084,7 +2084,7 @@ export function BacklogPlanningPanel({
                       })}
                     </div>
                     {createSelection?.anchorKey === `group-standalone-epic:${epic.epicId}` ? (
-                      <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 px-3 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+                      <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
                         <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 52 }}>
                           <input
                             value={createDraftTitle}
@@ -2441,7 +2441,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="mb-6 rounded-xl border border-slate-300/70 bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pt-3 pb-5 shadow-sm ring-1 ring-white/60">
+      <div className="mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
         <div className="relative flex items-center">
           <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
           <input
@@ -2577,16 +2577,23 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-none border border-[#19abeb]/70 bg-white text-[16px] shadow-inner">
+      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-none bg-white px-4 text-[16px]">
         <>
         {showTableHeaderRow ? (
           <div className="sticky top-0 z-10 relative border-b border-[#19abeb]/70 bg-[#0897d5]">
             <div
-              className="grid items-center gap-3 px-3 py-2.5 pr-28 text-[13px] font-semibold tracking-[0.02em] text-white uppercase"
+              className="grid items-center gap-3 py-2.5 pr-28 pl-0 text-[13px] font-semibold tracking-[0.02em] text-white uppercase"
               style={{ gridTemplateColumns: tableGridTemplate }}
             >
               {visibleColumnKeys.map((key, index) => (
-                <div key={key} className={cn("relative min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center")}>
+                <div
+                  key={key}
+                  className={cn(
+                    "relative min-w-0",
+                    key === "workItem" && "pl-[3px]",
+                    CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center",
+                  )}
+                >
                   {key === "workItem" ? (
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
@@ -2682,7 +2689,7 @@ export function BacklogPlanningPanel({
             </div>
           </div>
         ) : (
-          <div className="sticky top-0 z-10 flex justify-end border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-3 py-2">
+          <div className="sticky top-0 z-10 flex justify-end border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 py-2">
             <div className="relative" ref={columnsMenuRef}>
               <button
                 type="button"
@@ -2738,7 +2745,7 @@ export function BacklogPlanningPanel({
         )}
 
         {fullyFiltered.length === 0 ? (
-          <div className="p-4 text-[16px] text-slate-600">No items match your search/filter settings.</div>
+          <div className="py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
           <div className="divide-y divide-slate-100 bg-white" ref={backlogRowsRootRef}>
             {groupLevels.length > 0 ? (
@@ -2757,7 +2764,7 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div
-                    className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2"
+                    className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2"
                     style={{
                       gridTemplateColumns: tableGridTemplate,
                     }}
@@ -2956,7 +2963,7 @@ export function BacklogPlanningPanel({
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
                     <form
                       onSubmit={handleCreateSubmit}
-                      className="grid items-center gap-3 bg-slate-50 px-3 py-2"
+                      className="grid items-center gap-3 bg-slate-50 py-2"
                       style={{ gridTemplateColumns: tableGridTemplate }}
                     >
                       <div className="flex min-w-0 items-center gap-2">
@@ -3001,7 +3008,7 @@ export function BacklogPlanningPanel({
                       {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
                         <form
                           onSubmit={handleCreateSubmit}
-                          className="grid items-center gap-3 px-3 py-2"
+                          className="grid items-center gap-3 py-2"
                           style={{ gridTemplateColumns: tableGridTemplate }}
                         >
                           <div className="flex min-w-0 items-center gap-2 pl-6">
@@ -3070,7 +3077,7 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div
-                            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 px-3 py-2"
+                            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2"
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             data-backlog-zebra-row="true"
                             data-backlog-zebra-kind="epic"
@@ -3264,7 +3271,7 @@ export function BacklogPlanningPanel({
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
                               <form
                                 onSubmit={handleCreateSubmit}
-                                className="grid items-center gap-3 px-3 py-2"
+                                className="grid items-center gap-3 py-2"
                                 style={{ gridTemplateColumns: tableGridTemplate }}
                               >
                                 <div className="flex min-w-0 items-center gap-2 pl-12">
@@ -3322,7 +3329,7 @@ export function BacklogPlanningPanel({
                                       const progress = storyCompletion(story);
                                                                             return (
                                     <div
-                                      className="group grid w-full items-center gap-3 px-3 py-2 text-left"
+                                      className="group grid w-full items-center gap-3 py-2 text-left"
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                     {renderBacklogCells({
@@ -3701,7 +3708,7 @@ export function BacklogPlanningPanel({
                                   {createSelection?.anchorKey === `story:${story.id}` ? (
                                     <form
                                       onSubmit={handleCreateSubmit}
-                                      className="grid items-center gap-3 bg-slate-50 px-3 py-2"
+                                      className="grid items-center gap-3 bg-slate-50 py-2"
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                       <div className="flex min-w-0 items-center gap-2 pl-16">
