@@ -2090,12 +2090,12 @@ export function MonthAnalytics({
               <ArrowLeft className="size-3.5" aria-hidden />
             </button>
           ) : (
-            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200">
+            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
               <button
                 type="button"
                 onClick={() => setWorkloadView("stories")}
                 className={cn(
-                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  "rounded-md px-3 py-1 text-[13px] font-medium",
                   workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
                 )}
               >
@@ -2105,7 +2105,7 @@ export function MonthAnalytics({
                 type="button"
                 onClick={() => setWorkloadView("monthLoad")}
                 className={cn(
-                  "rounded-md px-2 py-0 text-[13px] font-medium",
+                  "rounded-md px-3 py-1 text-[13px] font-medium",
                   workloadView === "monthLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
                 )}
               >
