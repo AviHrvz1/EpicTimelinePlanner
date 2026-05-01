@@ -932,6 +932,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
   const hasHydratedFromUrlRef = useRef(false);
 
+  /**
+   * Same month scope as TimelineGrid’s `activeMonth`: when a quarter is focused, a stale
+   * `activeTimelineMonth` outside that quarter must not drive the left panel (epic vs initiative).
+   */
+  const initiativeListActiveMonth = useMemo(() => {
+    if (activeTimelineMonth == null) return null;
+    if (focusedQuarterLabel == null) return activeTimelineMonth;
+    const visible = QUARTERS.find((q) => q.label === focusedQuarterLabel)?.months ?? null;
+    if (visible == null || visible.length === 0) return activeTimelineMonth;
+    return visible.includes(activeTimelineMonth) ? activeTimelineMonth : null;
+  }, [activeTimelineMonth, focusedQuarterLabel]);
+
   const handleInitiativeAccordionChange = useCallback(
     (initiativeId: string, isOpen: boolean) => {
       console.log("[accordion->gantt] initiative toggle", {
@@ -3756,7 +3768,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-row gap-2.5 overflow-x-hidden overflow-y-visible">
           <div
             className={cn(
-              "relative z-30 flex h-full min-h-0 shrink-0 flex-col self-stretch overflow-hidden rounded-md border border-slate-200/75 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] ring-1 ring-inset ring-white/70 transition-[width] duration-200 ease-out [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.85)]",
+              "relative z-30 flex h-full min-h-0 shrink-0 flex-col self-stretch overflow-hidden rounded-md border border-slate-200/75 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] ring-1 ring-inset ring-white/70 transition-[width] duration-200 ease-out [box-shadow:0_4px_20px_-6px_rgba(15,23,42,0.09),inset_0_1px_0_0_rgba(255,255,255,0.85)]",
               isModeRailExpanded ? "w-[240px]" : "w-[54px]",
             )}
             onMouseEnter={() => setIsModeRailExpanded(true)}
@@ -3792,19 +3804,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             {topMode === "roadmap" ? (
             <div
               ref={layoutRef}
-              className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
+              className={cn("grid min-h-0 flex-1 items-stretch gap-x-0.5", isResizingPanel && "select-none")}
               style={{
                 gridTemplateColumns: isLeftPanelHidden
-                  ? "14px minmax(0, 1fr)"
-                  : `${panelWidth}px 14px minmax(0, 1fr)`,
+                  ? "12px minmax(0, 1fr)"
+                  : `${panelWidth}px 12px minmax(0, 1fr)`,
               }}
             >
               {!isLeftPanelHidden ? (
                 <InitiativeListPanel
                   initiatives={initiatives}
-                  activeMonth={activeTimelineMonth}
+                  activeMonth={initiativeListActiveMonth}
                   useEpicPlanLeftPanel={
-                    activeTimelineMonth != null && activeMonthPlanTab === "epic-gantt"
+                    initiativeListActiveMonth != null && activeMonthPlanTab === "epic-gantt"
                   }
                   activeYearSprint={activeYearSprint}
                   storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
@@ -3898,7 +3910,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               ) : null}
               {!isLeftPanelHidden ? (
                 <div
-                  className="group relative flex cursor-col-resize items-stretch justify-center"
+                  className="group relative flex h-full min-h-0 cursor-col-resize items-center justify-center self-stretch"
                   onMouseDown={(event) => {
                     event.preventDefault();
                     setIsResizingPanel(true);
@@ -3907,7 +3919,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   aria-orientation="vertical"
                   aria-label="Resize panel"
                 >
-                  <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
+                  <div
+                    className="pointer-events-none h-[58%] min-h-[7.5rem] max-h-[34rem] w-1 shrink-0 rounded-full bg-[linear-gradient(180deg,transparent_0%,rgba(100,116,139,0.48)_20%,rgba(91,80,217,0.38)_50%,rgba(100,116,139,0.48)_80%,transparent_100%)] shadow-[0_1px_2px_rgba(15,23,42,0.08)] transition-[background,box-shadow] duration-200 group-hover:bg-[linear-gradient(180deg,transparent_0%,rgba(71,85,105,0.58)_18%,rgba(79,70,229,0.46)_50%,rgba(71,85,105,0.58)_82%,transparent_100%)] group-hover:shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
+                    aria-hidden
+                  />
                   <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
                 </div>
               ) : null}

@@ -11,7 +11,6 @@ import {
   ChevronsDown,
   ChevronsUp,
   ClipboardList,
-  Eye,
   Flag,
   Map as MapIcon,
   PieChart,
@@ -32,7 +31,7 @@ import {
 } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
-import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
@@ -676,7 +675,7 @@ function QuarterYearProgressIcon({
   );
 }
 
-/** Matches the app header roadmap year control; duplicated next to timeline summary chips. */
+/** Year control styled like timeline summary chips (slate pill + ring), not primary CTA. */
 function RoadmapYearSelect({
   year,
   onYearChange,
@@ -685,11 +684,11 @@ function RoadmapYearSelect({
   onYearChange: (nextYear: number) => void | Promise<void>;
 }) {
   return (
-    <label className="inline-flex h-7 shrink-0 items-center overflow-hidden rounded-full border border-primary-foreground/35 bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 hover:border-primary-foreground/45 focus-within:outline-none focus-within:ring-0">
-      <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
+    <label className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-full bg-slate-200 text-slate-800 shadow-none ring-1 ring-slate-300 transition-colors outline-none select-none hover:bg-slate-300/80 focus-within:ring-2 focus-within:ring-slate-400/45">
+      <span className="flex shrink-0 items-center border-r border-slate-300/90 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
         Roadmap
       </span>
-      <div className="relative">
+      <div className="relative flex items-center">
         <select
           value={year}
           onChange={(event) => {
@@ -697,7 +696,7 @@ function RoadmapYearSelect({
             if (nextYear === year) return;
             void Promise.resolve(onYearChange(nextYear));
           }}
-          className="h-7 min-w-[5rem] cursor-pointer appearance-none bg-transparent py-0 pl-3 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[12px]"
+          className="h-8 min-w-[4.75rem] cursor-pointer appearance-none bg-transparent py-0 pl-2.5 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-slate-800 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[5rem] sm:text-[12px]"
           aria-label="Roadmap year"
         >
           <option value={2024}>2024</option>
@@ -706,7 +705,7 @@ function RoadmapYearSelect({
           <option value={2027}>2027</option>
         </select>
         <ChevronDown
-          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-primary-foreground opacity-90 sm:size-[13px]"
+          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-slate-600 sm:size-[13px]"
           aria-hidden
         />
       </div>
@@ -1302,7 +1301,6 @@ export function TimelineGrid({
   const summaryChipStoriesClass = `${summaryChipBaseClass} bg-blue-100 text-blue-800 ring-blue-200/80`;
   const summaryChipStoriesStaticClass = `${summaryChipBaseClass} bg-blue-100 text-blue-800`;
   const summaryChipStaticNeutralClass = `${summaryChipBaseClass} bg-slate-200 text-slate-800 ring-slate-300`;
-  const summaryChipIconClass = "size-3 shrink-0 sm:size-3.5";
   const summaryChipProgressCircleClass = "size-3.5 shrink-0 sm:size-4";
 
   const estimatePanelScopeLabel = activeMonth
@@ -2281,7 +2279,7 @@ export function TimelineGrid({
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
-          "relative z-30 mb-4 shrink-0 flex items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-r from-slate-100 via-slate-50 to-white px-1.5 py-2.5 shadow-none ring-0",
+          "relative z-30 mb-4 shrink-0 flex items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] px-1.5 py-2.5 shadow-none ring-0",
           hasBreadcrumbs ? "justify-between" : "justify-start",
         )}
       >
@@ -2382,7 +2380,6 @@ export function TimelineGrid({
                       : summaryChipNeutralClass,
                   )}
                 >
-                  <Eye className={summaryChipIconClass} aria-hidden />
                   Progress
                 </button>
                 <button
@@ -2398,10 +2395,6 @@ export function TimelineGrid({
                       : summaryChipNeutralClass,
                   )}
                 >
-                  <InitiativePlanBarIcon
-                    icon={null}
-                    className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
-                  />
                   <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
                   <span className="hidden xl:inline">Initiatives</span>
                   <span className="xl:hidden">Inits</span>
@@ -2419,10 +2412,6 @@ export function TimelineGrid({
                       : summaryChipNeutralClass,
                   )}
                 >
-                  <EpicPlanBarIcon
-                    icon={null}
-                    className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
-                  />
                   {("totalEpics" in summaryBadgesForScope
                     ? summaryBadgesForScope.totalEpics
                     : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2453,7 +2442,6 @@ export function TimelineGrid({
                   <span className="xl:hidden">Estimated</span>
                 </button>
                 <div className={summaryChipStoriesStaticClass}>
-                  <ClipboardList className={summaryChipIconClass} aria-hidden />
                   <span className="truncate">{summaryBadgesForScope.totalStories}</span>
                   <span className="hidden xl:inline">User Stories</span>
                   <span className="xl:hidden">Stories</span>
@@ -2469,7 +2457,6 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <Flag className={summaryChipIconClass} aria-hidden />
                     <span className="hidden xl:inline">Sprints</span>
                     <span className="xl:hidden">Spr</span>
                     </button>
@@ -2498,10 +2485,6 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <EpicPlanBarIcon
-                      icon={null}
-                      className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
-                    />
                     {sprintKanbanSummaryStats.epicCount} Epics
                   </button>
                   <div className={summaryChipStaticNeutralClass}>
@@ -2534,7 +2517,6 @@ export function TimelineGrid({
                     <span className="sm:hidden">Estimated</span>
                   </button>
                   <div className={summaryChipStoriesClass}>
-                    <ClipboardList className={summaryChipIconClass} aria-hidden />
                     <span className="truncate">{sprintKanbanSummaryStats.storyTotal}</span>
                     <span className="hidden sm:inline">User Stories</span>
                     <span className="sm:hidden">Stories</span>
@@ -2560,7 +2542,6 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <Eye className={summaryChipIconClass} aria-hidden />
                     Progress
                   </button>
                   <button
@@ -2576,10 +2557,6 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <InitiativePlanBarIcon
-                      icon={null}
-                      className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
-                    />
                     <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
                     <span className="hidden sm:inline">Initiatives</span>
                     <span className="sm:hidden">Inits</span>
@@ -2597,10 +2574,6 @@ export function TimelineGrid({
                         : summaryChipNeutralClass,
                     )}
                   >
-                    <EpicPlanBarIcon
-                      icon={null}
-                      className={cn("mr-0 inline-flex shrink-0 items-center justify-center text-current", summaryChipIconClass, "[&_svg]:size-3 sm:[&_svg]:size-3.5")}
-                    />
                     {("totalEpics" in summaryBadgesForScope
                       ? summaryBadgesForScope.totalEpics
                       : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
@@ -2631,7 +2604,6 @@ export function TimelineGrid({
                     <span className="sm:hidden">Estimated</span>
                   </button>
                   <div className={summaryChipStoriesStaticClass}>
-                    <ClipboardList className={summaryChipIconClass} aria-hidden />
                     <span className="truncate">{summaryBadgesForScope.totalStories}</span>
                     <span className="hidden sm:inline">User Stories</span>
                     <span className="sm:hidden">Stories</span>
@@ -2660,7 +2632,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 shadow-lg ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
             onMouseEnter={() => {
@@ -2870,7 +2842,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 shadow-lg ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
             onMouseEnter={() => {
@@ -2965,7 +2937,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 shadow-lg ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
             onMouseEnter={() => setIsRailExpanded(true)}

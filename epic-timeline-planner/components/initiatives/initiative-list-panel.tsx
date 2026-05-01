@@ -1231,7 +1231,8 @@ export function InitiativeListPanel({
     id: EPICS_UNPLAN_DROP_ID,
   });
 
-  const epicPlanPanelMode = useEpicPlanLeftPanel ?? activeMonth != null;
+  const epicPlanPanelMode =
+    useEpicPlanLeftPanel === undefined ? activeMonth != null : useEpicPlanLeftPanel;
   const epicListScopeMonth = epicPlanPanelMode ? activeMonth : null;
   const epicPlanDragEnabled = !isSprintModeActive;
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
@@ -1570,7 +1571,7 @@ export function InitiativeListPanel({
   const showNewButton = epicPlanPanelMode || !isSprintModeActive;
 
   return (
-    <aside className="h-full min-h-0 overflow-x-hidden overflow-y-auto rounded-xl bg-white p-4 shadow-lg ring-1 ring-black/5">
+    <aside className="h-full min-h-0 overflow-x-hidden overflow-y-auto rounded-xl bg-white p-4 shadow-xl ring-1 ring-black/8">
       <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center justify-between border-b border-slate-200 bg-white px-4 pb-3">
         <div>
           <h2
