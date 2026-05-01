@@ -3226,8 +3226,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <div className="shrink-0 self-end pb-0">
                 {topMode === "roadmap" ? (
                   <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
-                    <label className="inline-flex h-8 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:outline-none focus-within:ring-0">
-                      <span className="shrink-0 border-r border-primary-foreground/20 px-2.5 text-[11px] font-bold tracking-[0.05em] uppercase sm:text-[12px]">
+                    <label className="inline-flex h-7 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:outline-none focus-within:ring-0">
+                      <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
                         Roadmap
                       </span>
                       <div className="relative">
@@ -3246,7 +3246,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                             setActiveQuarterViewTab("gantt");
                             setSprintStoryBoardTeamId(null);
                           }}
-                          className="h-8 min-w-[5.5rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[13px]"
+                          className="h-7 min-w-[5rem] cursor-pointer appearance-none bg-transparent py-0 pl-3 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[12px]"
                         >
                           <option value={2024}>2024</option>
                           <option value={2025}>2025</option>
@@ -3254,7 +3254,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                           <option value={2027}>2027</option>
                         </select>
                         <ChevronDown
-                          className="pointer-events-none absolute right-2 top-1/2 size-[13px] -translate-y-1/2 text-primary-foreground opacity-90 sm:size-3.5"
+                          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-primary-foreground opacity-90 sm:size-[13px]"
                           aria-hidden
                         />
                       </div>
