@@ -3156,10 +3156,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   return (
     <DragContext onDragEnd={onDragEnd}>
-      <main className="h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8">
-        <div className="mx-auto flex h-full w-full max-w-[2550px] flex-col gap-5 overflow-hidden">
-          <div className="rounded-2xl bg-card p-4 shadow-lg ring-1 ring-black/5">
-            <div className="relative flex items-start justify-between gap-6">
+      <main
+        className={cn(
+          "h-screen min-h-0 overflow-x-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8",
+          topMode === "roadmap" ? "overflow-y-visible" : "overflow-y-hidden",
+        )}
+      >
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-col gap-5 overflow-x-hidden overflow-y-visible">
+          <div
+            className={cn(
+              "overflow-visible rounded-2xl bg-card shadow-lg ring-1 ring-black/5",
+              topMode === "roadmap" ? "px-4 pb-4 pt-10" : "p-4",
+            )}
+          >
+            <div className="relative flex items-start justify-between gap-6 overflow-visible">
               <div className="min-w-0 flex-1">
                 <div className="inline-flex flex-col p-1 pl-10">
                   <img
@@ -3170,31 +3180,38 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 </div>
               </div>
               {topMode === "roadmap" ? (
-                <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-                  <div className="relative isolate inline-block">
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 overflow-visible">
+                  <div className="relative isolate inline-block translate-y-[2px] overflow-visible">
                     <div className="relative z-10 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
                       <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
                         Roadmap&nbsp;{selectedYear}
                       </span>
                     </div>
-                    <svg
-                      className="absolute bottom-full left-0 z-30 h-[48px] w-full drop-shadow-sm"
-                      viewBox="0 -14 200 56"
-                      preserveAspectRatio="none"
-                      aria-hidden
-                    >
-                      <path
-                        d="M 56 42 L 100 -10 L 144 42"
-                        fill="none"
-                        stroke="#475569"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                    <div className="absolute bottom-full left-0 z-30 h-[48px] w-full overflow-visible">
+                      <img
+                        src="/roadmap-hanger-pin.png"
+                        alt=""
+                        className="absolute left-1/2 top-[7%] z-10 h-11 w-auto -translate-x-1/2 -translate-y-[42%] rotate-[-38deg] object-contain drop-shadow-md"
+                        aria-hidden
                       />
-                      <circle cx="100" cy="-10" r="3.2" fill="#f8fafc" stroke="#64748b" strokeWidth="1" />
-                      <circle cx="56" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
-                      <circle cx="144" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
-                    </svg>
+                      <svg
+                        className="absolute inset-0 z-20 h-full w-full drop-shadow-sm"
+                        viewBox="0 -14 200 56"
+                        preserveAspectRatio="none"
+                        aria-hidden
+                      >
+                        <path
+                          d="M 56 42 L 100 -10 L 144 42"
+                          fill="none"
+                          stroke="#475569"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <circle cx="56" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
+                        <circle cx="144" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
               ) : null}
