@@ -335,13 +335,13 @@ function MultiCheckboxFilter({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] ring-1 ring-indigo-300/80 outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
+        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
       >
         <span className="font-semibold text-slate-700">{label}: </span>
         <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
-        <div className="absolute z-30 mt-1 w-56 rounded-lg border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 ring-1 ring-indigo-200/60 backdrop-blur-sm">
+        <div className="absolute z-30 mt-1 w-56 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
         <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
           <input
             type="checkbox"
@@ -2453,10 +2453,10 @@ export function BacklogPlanningPanel({
             onBlur={() => {
               window.setTimeout(() => setShowSearchSuggestions(false), 120);
             }}
-            className="h-9 w-full rounded-lg bg-white/95 pl-9 pr-3 text-[14px] text-slate-700 outline-none ring-1 ring-slate-300/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
+            className="h-9 w-full rounded-lg bg-white/95 pl-9 pr-3 text-[14px] text-slate-700 outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
           />
           {showSearchSuggestions && searchSuggestions.length > 0 ? (
-            <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+            <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
               {searchSuggestions.map((item) => (
                 <button
                   key={item}
@@ -2479,7 +2479,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[30px] min-w-[11.5rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80"
+              className="flex h-[30px] min-w-[11.5rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
             >
               <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
                 <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
@@ -2488,7 +2488,7 @@ export function BacklogPlanningPanel({
               <span className="ml-1 truncate font-medium text-slate-600">{groupSummaryLabel}</span>
             </button>
             {groupMenuOpen ? (
-              <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+              <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg bg-white p-2 shadow-lg">
                 {GROUP_LEVEL_ORDER.map((level, idx) => {
                   const checked = groupLevels.includes(level);
                   const disabled = idx > 0 && !groupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
@@ -2538,7 +2538,7 @@ export function BacklogPlanningPanel({
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
+              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
               aria-label="Clear all filters"
             >
               <Eraser className="size-3.5" strokeWidth={2} />
