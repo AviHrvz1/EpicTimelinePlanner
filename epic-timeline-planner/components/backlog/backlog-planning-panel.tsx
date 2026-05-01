@@ -145,7 +145,7 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
 ]);
 
 function backlogCellClassName(key: BacklogColumnKey): string {
-  if (key === "workItem") return "relative min-w-0 pl-[3px]";
+  if (key === "workItem") return "relative min-w-0 pl-2";
   if (key === "progress") return "min-w-0";
   return cn("min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "justify-self-center text-center");
 }
@@ -2621,7 +2621,7 @@ export function BacklogPlanningPanel({
                   key={key}
                   className={cn(
                     "relative min-w-0",
-                    key === "workItem" && "pl-[3px]",
+                    key === "workItem" && "pl-2",
                     CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center",
                   )}
                 >
