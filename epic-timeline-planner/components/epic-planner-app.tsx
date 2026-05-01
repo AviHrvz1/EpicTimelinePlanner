@@ -3640,7 +3640,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   const [isModeRailExpanded, setIsModeRailExpanded] = useState(false);
   const modeRailLabelClass =
-    "min-w-0 flex-1 truncate text-left text-[13px] font-semibold";
+    "min-w-0 flex-1 truncate text-left text-[14px] font-semibold leading-snug";
 
   const modeSwitchMenu = (
     <aside className="relative z-20 flex h-full min-h-0 w-full flex-col overflow-visible">
@@ -3651,23 +3651,23 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("roadmap")}
             aria-label="Roadmap Planning"
             className={cn(
-              "inline-flex h-10 w-full items-center rounded-lg transition-all duration-200",
+              "inline-flex h-11 w-full items-center rounded-lg bg-white transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "roadmap"
-                ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
-                : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
+                ? "text-indigo-800"
+                : "text-slate-600 hover:text-slate-900",
             )}
           >
             <span
               className={cn(
-                "inline-flex size-6 items-center justify-center rounded-md transition-colors",
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
                 topMode === "roadmap"
-                  ? "bg-indigo-100 text-indigo-700"
-                  : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80 group-hover:text-slate-700",
+                  ? "text-indigo-700"
+                  : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
             >
-              <MapIcon className="size-3.5" aria-hidden />
+              <MapIcon className="size-4" aria-hidden />
             </span>
             <span
               className={cn(
@@ -3687,23 +3687,23 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("backlog")}
             aria-label="Backlog Workspace"
             className={cn(
-              "inline-flex h-10 w-full items-center rounded-lg transition-all duration-200",
+              "inline-flex h-11 w-full items-center rounded-lg bg-white transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "backlog"
-                ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
-                : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
+                ? "text-amber-950"
+                : "text-slate-600 hover:text-slate-900",
             )}
           >
             <span
               className={cn(
-                "inline-flex size-6 items-center justify-center rounded-md transition-colors",
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
                 topMode === "backlog"
-                  ? "bg-indigo-100 text-indigo-700"
-                  : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80 group-hover:text-slate-700",
+                  ? "text-amber-800"
+                  : "text-slate-500 group-hover:text-amber-800",
               )}
               aria-hidden
             >
-              <Archive className="size-3.5" aria-hidden />
+              <Archive className="size-4" aria-hidden />
             </span>
             <span
               className={cn(
@@ -3723,23 +3723,23 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("users")}
             aria-label="Users"
             className={cn(
-              "inline-flex h-10 w-full items-center rounded-lg transition-all duration-200",
+              "inline-flex h-11 w-full items-center rounded-lg bg-white transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "users"
-                ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
-                : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
+                ? "text-sky-900"
+                : "text-slate-600 hover:text-slate-900",
             )}
           >
             <span
               className={cn(
-                "inline-flex size-6 items-center justify-center rounded-md transition-colors",
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
                 topMode === "users"
-                  ? "bg-indigo-100 text-indigo-700"
-                  : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80 group-hover:text-slate-700",
+                  ? "text-sky-800"
+                  : "text-slate-500 group-hover:text-sky-800",
               )}
               aria-hidden
             >
-              <Users className="size-3.5" aria-hidden />
+              <Users className="size-4" aria-hidden />
             </span>
             <span
               className={cn(
@@ -3769,7 +3769,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           <div
             className={cn(
               "relative z-30 flex h-full min-h-0 shrink-0 flex-col self-stretch overflow-hidden rounded-md border border-slate-200/75 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] ring-1 ring-inset ring-white/70 transition-[width] duration-200 ease-out [box-shadow:0_4px_20px_-6px_rgba(15,23,42,0.09),inset_0_1px_0_0_rgba(255,255,255,0.85)]",
-              isModeRailExpanded ? "w-[240px]" : "w-[54px]",
+              isModeRailExpanded ? "w-[244px]" : "w-[58px]",
             )}
             onMouseEnter={() => setIsModeRailExpanded(true)}
             onMouseLeave={() => setIsModeRailExpanded(false)}

@@ -675,7 +675,7 @@ function QuarterYearProgressIcon({
   );
 }
 
-/** Year control styled like timeline summary chips (slate pill + ring), not primary CTA. */
+/** Year control: sky family (distinct from teal Progress, indigo Initiatives, etc.). */
 function RoadmapYearSelect({
   year,
   onYearChange,
@@ -684,8 +684,8 @@ function RoadmapYearSelect({
   onYearChange: (nextYear: number) => void | Promise<void>;
 }) {
   return (
-    <label className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-full bg-slate-200 text-slate-800 shadow-none ring-1 ring-slate-300 transition-colors outline-none select-none hover:bg-slate-300/80 focus-within:ring-2 focus-within:ring-slate-400/45">
-      <span className="flex shrink-0 items-center border-r border-slate-300/90 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
+    <label className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-full bg-sky-100 text-sky-950 shadow-none ring-1 ring-sky-300/90 transition-colors outline-none select-none hover:bg-sky-200/90 focus-within:ring-2 focus-within:ring-sky-400/50">
+      <span className="flex shrink-0 items-center border-r border-sky-400/35 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
         Roadmap
       </span>
       <div className="relative flex items-center">
@@ -696,7 +696,7 @@ function RoadmapYearSelect({
             if (nextYear === year) return;
             void Promise.resolve(onYearChange(nextYear));
           }}
-          className="h-8 min-w-[4.75rem] cursor-pointer appearance-none bg-transparent py-0 pl-2.5 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-slate-800 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[5rem] sm:text-[12px]"
+          className="h-8 min-w-[4.75rem] cursor-pointer appearance-none bg-transparent py-0 pl-2.5 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-sky-950 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[5rem] sm:text-[12px]"
           aria-label="Roadmap year"
         >
           <option value={2024}>2024</option>
@@ -705,7 +705,7 @@ function RoadmapYearSelect({
           <option value={2027}>2027</option>
         </select>
         <ChevronDown
-          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-slate-600 sm:size-[13px]"
+          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-sky-800 sm:size-[13px]"
           aria-hidden
         />
       </div>
@@ -1293,14 +1293,19 @@ export function TimelineGrid({
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
     "inline-flex max-w-full whitespace-nowrap items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:py-1 sm:text-[12px] lg:px-2.5 lg:text-[13px]";
-  const summaryChipNeutralClass = `${summaryChipBaseClass} bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80`;
-  const summaryChipProgressOnClass = `${summaryChipBaseClass} bg-emerald-100 text-emerald-800 ring-emerald-300`;
-  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} bg-indigo-100 text-indigo-800 ring-indigo-300`;
-  const summaryChipEpicsOnClass = `${summaryChipBaseClass} bg-amber-100 text-amber-800 ring-amber-200`;
-  const summaryChipEstimatedClass = `${summaryChipBaseClass} bg-fuchsia-100 text-fuchsia-800 ring-fuchsia-200/80 hover:bg-fuchsia-200/80`;
-  const summaryChipStoriesClass = `${summaryChipBaseClass} bg-blue-100 text-blue-800 ring-blue-200/80`;
-  const summaryChipStoriesStaticClass = `${summaryChipBaseClass} bg-blue-100 text-blue-800`;
-  const summaryChipStaticNeutralClass = `${summaryChipBaseClass} bg-slate-200 text-slate-800 ring-slate-300`;
+  /** Distinct idle colors per chip (toolbar reads as a coordinated spectrum, not one gray). */
+  const summaryChipProgressIdleClass = `${summaryChipBaseClass} bg-teal-100 text-teal-900 ring-teal-300/90 hover:bg-teal-200/90`;
+  const summaryChipProgressOnClass = `${summaryChipBaseClass} bg-emerald-100 text-emerald-900 ring-emerald-400/90 shadow-sm`;
+  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} bg-indigo-50 text-indigo-950 ring-indigo-300/85 hover:bg-indigo-100/95`;
+  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} bg-indigo-100 text-indigo-900 ring-indigo-400/80 shadow-sm`;
+  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} bg-amber-50 text-amber-950 ring-amber-300/90 hover:bg-amber-100/95`;
+  const summaryChipEpicsOnClass = `${summaryChipBaseClass} bg-amber-100 text-amber-950 ring-amber-400/75 shadow-sm`;
+  const summaryChipEstimatedClass = `${summaryChipBaseClass} bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-300/90 hover:bg-fuchsia-200/85`;
+  const summaryChipStoriesClass = `${summaryChipBaseClass} bg-blue-100 text-blue-900 ring-blue-300/90`;
+  const summaryChipStoriesStaticClass = `${summaryChipBaseClass} bg-blue-100 text-blue-900 ring-blue-300/90`;
+  const summaryChipUnscheduledClass = `${summaryChipBaseClass} bg-orange-50 text-orange-950 ring-orange-300/85`;
+  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} bg-violet-100 text-violet-950 ring-violet-300/90 hover:bg-violet-200/85`;
+  const summaryChipSprintsOnClass = `${summaryChipBaseClass} bg-violet-200 text-violet-950 ring-violet-400/85 shadow-sm`;
   const summaryChipProgressCircleClass = "size-3.5 shrink-0 sm:size-4";
 
   const estimatePanelScopeLabel = activeMonth
@@ -2377,7 +2382,7 @@ export function TimelineGrid({
                     summaryChipBaseClass,
                     showRoadmapProgress
                       ? summaryChipProgressOnClass
-                      : summaryChipNeutralClass,
+                      : summaryChipProgressIdleClass,
                   )}
                 >
                   Progress
@@ -2392,7 +2397,7 @@ export function TimelineGrid({
                     summaryChipBaseClass,
                     roadmapBarMode === "initiatives"
                       ? summaryChipInitiativesOnClass
-                      : summaryChipNeutralClass,
+                      : summaryChipInitiativesIdleClass,
                   )}
                 >
                   <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
@@ -2409,7 +2414,7 @@ export function TimelineGrid({
                     summaryChipBaseClass,
                     roadmapBarMode === "epics" && summaryStatusQuickFilter == null
                       ? summaryChipEpicsOnClass
-                      : summaryChipNeutralClass,
+                      : summaryChipEpicsIdleClass,
                   )}
                 >
                   {("totalEpics" in summaryBadgesForScope
@@ -2453,8 +2458,8 @@ export function TimelineGrid({
                     className={cn(
                       summaryChipBaseClass,
                       showYearSprintChips
-                        ? summaryChipInitiativesOnClass
-                        : summaryChipNeutralClass,
+                        ? summaryChipSprintsOnClass
+                        : summaryChipSprintsIdleClass,
                     )}
                   >
                     <span className="hidden xl:inline">Sprints</span>
@@ -2482,12 +2487,12 @@ export function TimelineGrid({
                       summaryChipBaseClass,
                       roadmapBarMode === "epics" && summaryStatusQuickFilter == null
                         ? summaryChipEpicsOnClass
-                        : summaryChipNeutralClass,
+                        : summaryChipEpicsIdleClass,
                     )}
                   >
                     {sprintKanbanSummaryStats.epicCount} Epics
                   </button>
-                  <div className={summaryChipStaticNeutralClass}>
+                  <div className={summaryChipUnscheduledClass}>
                     <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
                     <span className="hidden sm:inline">User Stories Unscheduled</span>
                     <span className="sm:hidden">US Unsch.</span>
@@ -2539,7 +2544,7 @@ export function TimelineGrid({
                       summaryChipBaseClass,
                       showRoadmapProgress
                         ? summaryChipProgressOnClass
-                        : summaryChipNeutralClass,
+                        : summaryChipProgressIdleClass,
                     )}
                   >
                     Progress
@@ -2554,7 +2559,7 @@ export function TimelineGrid({
                       summaryChipBaseClass,
                       roadmapBarMode === "initiatives"
                         ? summaryChipInitiativesOnClass
-                        : summaryChipNeutralClass,
+                        : summaryChipInitiativesIdleClass,
                     )}
                   >
                     <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
@@ -2571,7 +2576,7 @@ export function TimelineGrid({
                       summaryChipBaseClass,
                       roadmapBarMode === "epics" && summaryStatusQuickFilter == null
                         ? summaryChipEpicsOnClass
-                        : summaryChipNeutralClass,
+                        : summaryChipEpicsIdleClass,
                     )}
                   >
                     {("totalEpics" in summaryBadgesForScope
