@@ -3226,7 +3226,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <div className="shrink-0 self-end pb-0">
                 {topMode === "roadmap" ? (
                   <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
-                    <label className="inline-flex h-8 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+                    <label className="inline-flex h-8 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:outline-none focus-within:ring-0">
                       <span className="shrink-0 border-r border-primary-foreground/20 px-2.5 text-[11px] font-bold tracking-[0.05em] uppercase sm:text-[12px]">
                         Roadmap
                       </span>
@@ -3246,7 +3246,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                             setActiveQuarterViewTab("gantt");
                             setSprintStoryBoardTeamId(null);
                           }}
-                          className="h-8 min-w-[5.5rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-primary-foreground outline-none sm:text-[13px]"
+                          className="h-8 min-w-[5.5rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[13px]"
                         >
                           <option value={2024}>2024</option>
                           <option value={2025}>2025</option>
