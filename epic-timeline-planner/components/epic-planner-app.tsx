@@ -1802,6 +1802,52 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }, []);
 
+  const patchStoryFromKanban = useCallback(
+    async (
+      storyId: string,
+      patch: { assignee?: string | null; estimatedDays?: number; daysLeft?: number },
+    ) => {
+      const body: Record<string, string | number | null> = {};
+      if (patch.assignee !== undefined) body.assignee = patch.assignee;
+      if (patch.estimatedDays !== undefined) body.estimatedDays = patch.estimatedDays;
+      if (patch.daysLeft !== undefined) body.daysLeft = patch.daysLeft;
+      if (Object.keys(body).length === 0) return;
+
+      flushSync(() => {
+        setInitiatives((prev) =>
+          prev.map((init) => ({
+            ...init,
+            epics: (init.epics ?? []).map((epic) => ({
+              ...epic,
+              userStories: (epic.userStories ?? []).map((story) =>
+                story.id === storyId
+                  ? {
+                      ...story,
+                      ...(patch.assignee !== undefined ? { assignee: patch.assignee } : {}),
+                      ...(patch.estimatedDays !== undefined ? { estimatedDays: patch.estimatedDays } : {}),
+                      ...(patch.daysLeft !== undefined ? { daysLeft: patch.daysLeft } : {}),
+                    }
+                  : story,
+              ),
+            })),
+          })),
+        );
+      });
+      try {
+        const response = await fetch(`/api/stories/${storyId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      } catch {
+        await refresh();
+        toast.error("Failed to update story");
+      }
+    },
+    [],
+  );
+
   const updateEpicOriginalEstimateFromCapacity = useCallback(async (epicId: string, estimatedDays: number) => {
     /** Epic API validates integer days; normalize inline edits before PATCH. */
     const nextEstimate = Math.max(0, Math.round(Number(estimatedDays) || 0));
@@ -3882,6 +3928,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
+                onSprintKanbanStoryPatch={patchStoryFromKanban}
                 onSprintCapacityStoryUnschedule={unscheduleStoryFromCapacity}
                 onRequestSprintKanbanStoryUnschedule={(storyId, storyTitle) => {
                   openConfirmDialog({

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -21,6 +21,7 @@ import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-p
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
+import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
@@ -31,6 +32,23 @@ function storyAssigneeLabel(story: UserStoryItem): string {
 function assigneeFilterIcon(name: string): LucideIcon {
   return name === "Unassigned" ? UserX : UserRound;
 }
+
+/** Same names as filter circles, plus the story’s current assignee (for typing/editing). No extra roster-only names. */
+function kanbanAssigneeSuggestions(
+  boardStoryAssigneeNames: ReadonlySet<string>,
+  currentAssignee: string | null | undefined,
+): string[] {
+  const set = new Set<string>(boardStoryAssigneeNames);
+  const cur = currentAssignee?.trim();
+  if (cur) set.add(cur);
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+export type SprintKanbanStoryPatch = {
+  assignee?: string | null;
+  estimatedDays?: number;
+  daysLeft?: number;
+};
 
 const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: LucideIcon }[] = [
   { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", Icon: ListTodo },
@@ -79,18 +97,22 @@ function KanbanColumn({
 
 function KanbanStoryCard({
   row,
+  boardStoryAssigneeNames,
   dragDisabled = false,
   onOpenStory,
   onUnscheduleStory,
   onRequestUnscheduleStory,
+  onPatchStory,
   emphasizeFlash = false,
   emphasizeTick = 0,
 }: {
   row: BoardStoryRow;
+  boardStoryAssigneeNames: ReadonlySet<string>;
   dragDisabled?: boolean;
   onOpenStory: (storyId: string) => void;
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
+  onPatchStory?: (storyId: string, patch: SprintKanbanStoryPatch) => void;
   emphasizeFlash?: boolean;
   emphasizeTick?: number;
 }) {
@@ -99,6 +121,72 @@ function KanbanStoryCard({
     id: storyBoardDraggableId(story.id),
     disabled: dragDisabled,
   });
+
+  const [editing, setEditing] = useState<null | "assignee" | "estimatedDays" | "daysLeft">(null);
+  const [draftEst, setDraftEst] = useState(String(story.estimatedDays ?? 0));
+  const [draftLeft, setDraftLeft] = useState(String(story.daysLeft ?? 0));
+  const [draftAssignee, setDraftAssignee] = useState(story.assignee?.trim() ?? "");
+  const assigneeInputWrapRef = useRef<HTMLDivElement>(null);
+  const estInputRef = useRef<HTMLInputElement>(null);
+  const leftInputRef = useRef<HTMLInputElement>(null);
+
+  const assigneeSuggestions = useMemo(
+    () => kanbanAssigneeSuggestions(boardStoryAssigneeNames, story.assignee),
+    [boardStoryAssigneeNames, story.assignee],
+  );
+
+  useEffect(() => {
+    setDraftEst(String(story.estimatedDays ?? 0));
+    setDraftLeft(String(story.daysLeft ?? 0));
+    setDraftAssignee(story.assignee?.trim() ?? "");
+  }, [story.estimatedDays, story.daysLeft, story.assignee, story.id]);
+
+  useLayoutEffect(() => {
+    if (editing === "estimatedDays") estInputRef.current?.focus();
+    else if (editing === "daysLeft") leftInputRef.current?.focus();
+  }, [editing]);
+
+  const commitAssignee = useCallback(() => {
+    if (!onPatchStory) return;
+    const next = draftAssignee.trim() || null;
+    const prev = story.assignee?.trim() || null;
+    if (next !== prev) onPatchStory(story.id, { assignee: next });
+    setEditing(null);
+  }, [draftAssignee, onPatchStory, story.assignee, story.id]);
+
+  const commitEst = useCallback(() => {
+    if (!onPatchStory) return;
+    const n = Math.max(0, Math.round(Number(draftEst) || 0));
+    if (n === (story.estimatedDays ?? 0)) {
+      setEditing(null);
+      return;
+    }
+    const patch: SprintKanbanStoryPatch = { estimatedDays: n };
+    /** First-time fill: copy estimate into days left only while `daysLeft` has never been set in the DB. */
+    if (story.daysLeft == null) patch.daysLeft = n;
+    onPatchStory(story.id, patch);
+    setEditing(null);
+  }, [draftEst, onPatchStory, story.daysLeft, story.estimatedDays, story.id]);
+
+  const commitLeft = useCallback(() => {
+    if (!onPatchStory) return;
+    const n = Math.max(0, Math.round(Number(draftLeft) || 0));
+    if (n !== (story.daysLeft ?? 0)) onPatchStory(story.id, { daysLeft: n });
+    setEditing(null);
+  }, [draftLeft, onPatchStory, story.daysLeft, story.id]);
+
+  useEffect(() => {
+    if (editing !== "assignee") return;
+    const fn = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (assigneeInputWrapRef.current?.contains(t)) return;
+      commitAssignee();
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [editing, commitAssignee]);
+
+  const editable = !dragDisabled && onPatchStory != null;
 
   return (
     <div
@@ -167,15 +255,108 @@ function KanbanStoryCard({
           ) : null}
         </div>
         <div className="flex w-full flex-wrap items-center justify-end gap-1.5 pr-0">
-          <span className="rounded-md bg-slate-100 px-2 py-1 text-[12px] font-medium text-slate-700">
-            {storyAssigneeLabel(story)}
-          </span>
-          <span className="rounded-md bg-blue-100 px-2 py-1 text-[12px] font-medium text-blue-700">
-            Est: {story.estimatedDays ?? 0}d
-          </span>
-          <span className="rounded-md bg-amber-100 px-2 py-1 text-[12px] font-medium text-amber-700">
-            Left: {story.daysLeft ?? 0}d
-          </span>
+          {editing === "assignee" && editable ? (
+            <div ref={assigneeInputWrapRef} className="min-w-[7.5rem] max-w-[14rem] flex-1">
+              <AssigneeCombobox
+                value={draftAssignee}
+                onChange={setDraftAssignee}
+                suggestions={assigneeSuggestions}
+                placeholder="Assignee"
+                aria-label="Assignee"
+                className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] font-medium text-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitAssignee();
+                  }
+                  if (e.key === "Escape") {
+                    setDraftAssignee(story.assignee?.trim() ?? "");
+                    setEditing(null);
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={!editable}
+              title={editable ? "Edit assignee" : undefined}
+              onClick={() => editable && setEditing("assignee")}
+              className={cn(
+                "rounded-md bg-slate-100 px-2 py-1 text-left text-[12px] font-medium text-slate-700",
+                editable && "cursor-pointer hover:bg-slate-200/90",
+                !editable && "cursor-default",
+              )}
+            >
+              {storyAssigneeLabel(story)}
+            </button>
+          )}
+          {editing === "estimatedDays" && editable ? (
+            <input
+              ref={estInputRef}
+              type="number"
+              min={0}
+              value={draftEst}
+              onChange={(e) => setDraftEst(e.target.value)}
+              onBlur={commitEst}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") {
+                  setDraftEst(String(story.estimatedDays ?? 0));
+                  setEditing(null);
+                }
+              }}
+              className="w-[4.5rem] rounded-md border border-blue-200 bg-white px-2 py-1 text-center text-[12px] font-medium text-blue-800 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+              aria-label="Estimated days"
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={!editable}
+              title={editable ? "Edit estimate" : undefined}
+              onClick={() => editable && setEditing("estimatedDays")}
+              className={cn(
+                "rounded-md bg-blue-100 px-2 py-1 text-[12px] font-medium text-blue-700",
+                editable && "cursor-pointer hover:bg-blue-200/80",
+                !editable && "cursor-default",
+              )}
+            >
+              Est: {story.estimatedDays ?? 0}d
+            </button>
+          )}
+          {editing === "daysLeft" && editable ? (
+            <input
+              ref={leftInputRef}
+              type="number"
+              min={0}
+              value={draftLeft}
+              onChange={(e) => setDraftLeft(e.target.value)}
+              onBlur={commitLeft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") {
+                  setDraftLeft(String(story.daysLeft ?? 0));
+                  setEditing(null);
+                }
+              }}
+              className="w-[4.5rem] rounded-md border border-amber-200 bg-white px-2 py-1 text-center text-[12px] font-medium text-amber-800 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+              aria-label="Days left"
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={!editable}
+              title={editable ? "Edit days left" : undefined}
+              onClick={() => editable && setEditing("daysLeft")}
+              className={cn(
+                "rounded-md bg-amber-100 px-2 py-1 text-[12px] font-medium text-amber-700",
+                editable && "cursor-pointer hover:bg-amber-200/80",
+                !editable && "cursor-default",
+              )}
+            >
+              Left: {story.daysLeft ?? 0}d
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -192,9 +373,12 @@ type SprintKanbanProps = {
   epicAccordionEmphasis?: { epicId: string; tick: number } | null;
   /** Batch sheen on all visible Kanban cards (e.g. when “Scheduled” summary filter is toggled on). */
   scheduledStoriesEmphasis?: { tick: number } | null;
+  /** Shown on the same row as assignee filter chips (e.g. sprint countdown). */
+  sprintToolbarEnd?: ReactNode;
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
   onOpenStory: (storyId: string) => void;
+  onPatchStory?: (storyId: string, patch: SprintKanbanStoryPatch) => void;
   /** When viewing a closed sprint, jump to the first still-open sprint in `planYear` (same team filter). */
   onGoToOpenSprint?: (yearSprint: number) => void;
 };
@@ -207,9 +391,11 @@ export function SprintKanbanBoard({
   filterEpicTeamId = null,
   epicAccordionEmphasis = null,
   scheduledStoriesEmphasis = null,
+  sprintToolbarEnd = null,
   onUnscheduleStory,
   onRequestUnscheduleStory,
   onOpenStory,
+  onPatchStory,
   onGoToOpenSprint,
 }: SprintKanbanProps) {
   const sprintClosed = sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
@@ -221,6 +407,16 @@ export function SprintKanbanBoard({
     () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId),
     [initiatives, month, yearSprint, filterEpicTeamId],
   );
+
+  /** Names on visible sprint stories — same set that drives filter circles; merged into edit autocomplete. */
+  const boardStoryAssigneeNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const row of allRows) {
+      const a = row.story.assignee?.trim();
+      if (a) s.add(a);
+    }
+    return s;
+  }, [allRows]);
 
   const assigneeOptions = useMemo(() => {
     const names = new Set<string>();
@@ -283,6 +479,8 @@ export function SprintKanbanBoard({
     return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
   }, []);
 
+  const showToolbarRow = assigneeOptions.length > 0 || sprintToolbarEnd != null;
+
   return (
     <div className="relative flex w-full min-h-min flex-col gap-2">
       {sprintClosed ? (
@@ -324,58 +522,65 @@ export function SprintKanbanBoard({
           </div>
         </>
       ) : null}
-      {assigneeOptions.length > 0 ? (
+      {showToolbarRow ? (
         <div className="shrink-0 px-2.5 py-1">
-          <div
-            className="flex min-w-0 items-center py-0.5"
-            onMouseEnter={() => setAssigneeFilterExpanded(true)}
-            onMouseLeave={() => setAssigneeFilterExpanded(false)}
-          >
-            <button
-              type="button"
-              aria-pressed={allAssigneesSelected}
-              title={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
-              aria-label={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
-              onClick={selectAllAssignees}
-              className={cn(
-                "relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
-                allAssigneesSelected
-                  ? "bg-sky-600 text-white ring-sky-700"
-                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
-              )}
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <div
+              className={cn("flex min-w-0 flex-1 items-center py-0.5", assigneeOptions.length === 0 && "min-h-[2.25rem]")}
+              onMouseEnter={() => assigneeOptions.length > 0 && setAssigneeFilterExpanded(true)}
+              onMouseLeave={() => assigneeOptions.length > 0 && setAssigneeFilterExpanded(false)}
             >
-              <Users className="size-[15px]" strokeWidth={2.25} aria-hidden />
-            </button>
-            {assigneeOptions.map((name, idx) => {
-              const on = selectedAssignees.includes(name);
-              const Icon = assigneeFilterIcon(name);
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggleAssigneeFilter(name)}
-                  className={cn(
-                    "relative inline-flex h-9 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
-                    assigneeFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-9 justify-center px-0",
-                    on
-                      ? "bg-sky-600 text-white ring-sky-700"
-                      : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-100",
-                  )}
-                  title={name}
-                  style={{
-                    marginLeft: assigneeFilterExpanded ? 6 : -12,
-                    zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
-                  }}
-                >
-                  {name === "Unassigned" ? <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden /> : null}
-                  {name !== "Unassigned" && !assigneeFilterExpanded ? <span>{assigneeBadgeLabel(name)}</span> : null}
-                  {assigneeFilterExpanded ? (
-                    <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
-                  ) : null}
-                </button>
-              );
-            })}
+              {assigneeOptions.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    aria-pressed={allAssigneesSelected}
+                    title={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
+                    aria-label={allAssigneesSelected ? "Clear assignee filter" : "Select all assignees"}
+                    onClick={selectAllAssignees}
+                    className={cn(
+                      "relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                      allAssigneesSelected
+                        ? "bg-sky-600 text-white ring-sky-700"
+                        : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
+                    )}
+                  >
+                    <Users className="size-[15px]" strokeWidth={2.25} aria-hidden />
+                  </button>
+                  {assigneeOptions.map((name, idx) => {
+                    const on = selectedAssignees.includes(name);
+                    const Icon = assigneeFilterIcon(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleAssigneeFilter(name)}
+                        className={cn(
+                          "relative inline-flex h-9 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
+                          assigneeFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-9 justify-center px-0",
+                          on
+                            ? "bg-sky-600 text-white ring-sky-700"
+                            : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-100",
+                        )}
+                        title={name}
+                        style={{
+                          marginLeft: assigneeFilterExpanded ? 6 : -12,
+                          zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
+                        }}
+                      >
+                        {name === "Unassigned" ? <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden /> : null}
+                        {name !== "Unassigned" && !assigneeFilterExpanded ? <span>{assigneeBadgeLabel(name)}</span> : null}
+                        {assigneeFilterExpanded ? (
+                          <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </>
+              ) : null}
+            </div>
+            {sprintToolbarEnd ? <div className="flex shrink-0 items-center">{sprintToolbarEnd}</div> : null}
           </div>
         </div>
       ) : null}
@@ -404,10 +609,12 @@ export function SprintKanbanBoard({
                 <KanbanStoryCard
                   key={row.story.id}
                   row={row}
+                  boardStoryAssigneeNames={boardStoryAssigneeNames}
                   dragDisabled={sprintClosed}
                   onOpenStory={onOpenStory}
                   onUnscheduleStory={onUnscheduleStory}
                   onRequestUnscheduleStory={onRequestUnscheduleStory}
+                  onPatchStory={onPatchStory}
                   emphasizeFlash={emphasizeFlash}
                   emphasizeTick={emphasizeTick}
                 />

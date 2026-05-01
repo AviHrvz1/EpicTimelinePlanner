@@ -597,6 +597,11 @@ type TimelineGridProps = {
   onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
   onSprintCapacityStoryUnschedule?: (storyId: string) => void;
   onRequestSprintKanbanStoryUnschedule?: (storyId: string, storyTitle: string) => void;
+  /** Sprint Kanban: inline edits for assignee / estimate / days left. */
+  onSprintKanbanStoryPatch?: (
+    storyId: string,
+    patch: { assignee?: string | null; estimatedDays?: number; daysLeft?: number },
+  ) => void;
   sprintRetrospective?: (SprintRetrospectiveDoc & { updatedAt: string }) | null;
   onSaveSprintRetrospective?: (doc: SprintRetrospectiveDoc) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
@@ -818,6 +823,7 @@ export function TimelineGrid({
   onSprintCapacityStoryEstimateChange,
   onSprintCapacityStoryUnschedule,
   onRequestSprintKanbanStoryUnschedule,
+  onSprintKanbanStoryPatch,
   sprintRetrospective = null,
   onSaveSprintRetrospective,
 }: TimelineGridProps) {
@@ -2489,7 +2495,9 @@ export function TimelineGrid({
                     <span className="hidden sm:inline">User Stories</span>
                     <span className="sm:hidden">Stories</span>
                   </div>
-                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                  {showSprintEndCountdown &&
+                  activeYearSprintForMonthDrill != null &&
+                  monthPlanTab !== "sprint-kanban" ? (
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
                 </>
@@ -2581,7 +2589,9 @@ export function TimelineGrid({
                     <span className="hidden sm:inline">User Stories</span>
                     <span className="sm:hidden">Stories</span>
                   </div>
-                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                  {showSprintEndCountdown &&
+                  activeYearSprintForMonthDrill != null &&
+                  monthPlanTab !== "sprint-kanban" ? (
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
                 </>
@@ -3331,9 +3341,15 @@ export function TimelineGrid({
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
+                  sprintToolbarEnd={
+                    showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                      <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                    ) : null
+                  }
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onRequestUnscheduleStory={onRequestSprintKanbanStoryUnschedule}
                   onOpenStory={onOpenStory ?? (() => {})}
+                  onPatchStory={onSprintKanbanStoryPatch}
                   onGoToOpenSprint={(ys) =>
                     onEnterSprintStoryBoard?.(ys, isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null)
                   }

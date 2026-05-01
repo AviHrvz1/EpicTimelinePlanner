@@ -9,7 +9,6 @@ import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
 import {
-  defaultMembersForTeam,
   fullDeliveryCapacityRoster,
   sprintCapacityAssigneeBucket,
   SPRINT_CAPACITY_OTHER_BUCKET,
@@ -327,38 +326,38 @@ export function SprintCapacityBoard({
     ]),
   );
   const fullRoster = fullDeliveryCapacityRoster();
-  const baseMembers = defaultMembersForTeam(selectedTeamId);
-  const extraAssigneeColumns = new Set<string>();
+  /**
+   * Only show capacity columns and filter chips for people who matter on this sprint — same idea as Kanban
+   * (not the full `defaultMembersForTeam` roster). Include a column if they have a story here or already have
+   * cards in that bucket from persisted capacity state.
+   */
+  const memberSet = new Set<string>();
   for (const row of rows) {
     const m = sprintCapacityAssigneeBucket(row.story.assignee, fullRoster);
-    if (m && !baseMembers.includes(m)) extraAssigneeColumns.add(m);
+    if (m) memberSet.add(m);
   }
-  for (const key of Object.keys(capacityBoard.assignments ?? {})) {
+  for (const [key, ids] of Object.entries(capacityBoard.assignments ?? {})) {
     if (key === SPRINT_CAPACITY_OTHER_BUCKET) continue;
-    if (!baseMembers.includes(key)) extraAssigneeColumns.add(key);
+    if (Array.isArray(ids) && ids.length > 0) memberSet.add(key);
   }
   const needsOtherColumn =
     (capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0 ||
     rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, fullRoster) == null);
-  const sortedExtras = [...extraAssigneeColumns].sort((a, b) => a.localeCompare(b));
-  const members = [
-    ...baseMembers,
-    ...sortedExtras,
-    ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : []),
-  ];
+  const sortedPeopleCols = [...memberSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const members = [...sortedPeopleCols, ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
+
   const assigneeFilterOptions = useMemo(() => {
     const fromStories = new Set<string>();
     for (const row of rows) {
       fromStories.add(storyAssigneeDisplayLabel(row.story));
     }
-    const roster = [...baseMembers];
-    const extra = [...fromStories]
-      .filter((n) => n !== "Unassigned" && !roster.includes(n))
+    const named = [...fromStories]
+      .filter((n) => n !== "Unassigned")
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-    const out: string[] = [...roster, ...extra];
+    const out: string[] = [...named];
     if (fromStories.has("Unassigned")) out.push("Unassigned");
     return out;
-  }, [rows, baseMembers]);
+  }, [rows]);
 
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string[]>([]);
   const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);

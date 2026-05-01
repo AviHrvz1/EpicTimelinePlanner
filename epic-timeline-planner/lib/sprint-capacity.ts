@@ -17,11 +17,27 @@ export const DEBUG_SPRINT_CAPACITY_STORAGE_KEY = "epicPlanner.debugSprintCapacit
  */
 export const SPRINT_CAPACITY_OTHER_BUCKET = "Other assignees";
 
+/**
+ * Default capacity rosters — aligned with `prisma/seed.js` story/initiative assignees so
+ * sprint capacity and Kanban autocomplete match names shown on cards (not stale placeholders).
+ */
+const PLATFORM_MEMBERS = ["Ava", "Ben", "Liam", "Maya", "Noah", "Zoe"] as const;
+const EXPERIENCE_MEMBERS = ["Dana", "Ethan", "Iris", "Mia", "Omar", "Ruth"] as const;
+const DATA_MEMBERS = ["Eitan", "Mia", "Noah", "Omer", "Yael"] as const;
+
+function mergeUniqueSorted(...groups: readonly (readonly string[])[]): string[] {
+  const set = new Set<string>();
+  for (const g of groups) {
+    for (const n of g) set.add(n);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 const DEFAULT_TEAM_MEMBERS: Record<string, string[]> = {
-  platform: ["Alex", "Maya", "Noam"],
-  experience: ["Lior", "Dana", "Ruth"],
-  data: ["Eitan", "Yael", "Omer"],
-  all: ["Alex", "Maya", "Noam", "Lior", "Dana", "Ruth", "Eitan", "Yael", "Omer"],
+  platform: [...PLATFORM_MEMBERS],
+  experience: [...EXPERIENCE_MEMBERS],
+  data: [...DATA_MEMBERS],
+  all: mergeUniqueSorted(PLATFORM_MEMBERS, EXPERIENCE_MEMBERS, DATA_MEMBERS),
 };
 
 export function sprintCapacityBoardKey(year: number, yearSprint: number, teamId: string | null): string {
@@ -77,7 +93,7 @@ function normalizeAssigneeForRosterMatch(raw: string): string {
   let s = raw.trim();
   // Jira/display quirks: "Eitan us" → Eitan (US locale/team suffix, not part of roster key)
   if (/\s+us$/i.test(s)) s = s.replace(/\s+us$/i, "").trim();
-  // "Alex (Platform)" → Alex
+  // "Ava (Platform)" → Ava
   const paren = s.match(/^(.+?)\s*\([^)]{0,120}\)\s*$/);
   if (paren) s = paren[1]!.trim();
   return s;

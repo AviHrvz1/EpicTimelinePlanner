@@ -29,6 +29,10 @@ type AssigneeComboboxProps = {
 };
 
 const MENU_Z = 8000;
+/** ~max-h-52; menu flips above the field when there isn’t room below. */
+const MENU_MAX_PX = 208;
+const VIEW_MARGIN = 8;
+const FIELD_GAP = 4;
 
 /**
  * Autocomplete with a portaled, fixed-position list so the menu stays under the field inside dialogs / transformed layouts (native datalist is often misplaced).
@@ -63,19 +67,40 @@ export function AssigneeCombobox({
     const el = inputRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setMenuStyle({
-      position: "fixed",
-      top: r.bottom + 4,
-      left: r.left,
-      width: r.width,
-      zIndex: MENU_Z,
-    });
+    const spaceBelow = window.innerHeight - r.bottom - VIEW_MARGIN;
+    const spaceAbove = r.top - VIEW_MARGIN;
+    const openUp = spaceBelow < 120 && spaceAbove > spaceBelow;
+    const cap = Math.min(MENU_MAX_PX, Math.max(96, openUp ? spaceAbove - FIELD_GAP : spaceBelow - FIELD_GAP));
+
+    if (openUp) {
+      setMenuStyle({
+        position: "fixed",
+        left: r.left,
+        width: r.width,
+        zIndex: MENU_Z,
+        top: "auto",
+        bottom: window.innerHeight - r.top + FIELD_GAP,
+        maxHeight: cap,
+        overflow: "hidden",
+      });
+    } else {
+      setMenuStyle({
+        position: "fixed",
+        top: r.bottom + FIELD_GAP,
+        left: r.left,
+        width: r.width,
+        zIndex: MENU_Z,
+        bottom: "auto",
+        maxHeight: cap,
+        overflow: "hidden",
+      });
+    }
   }, []);
 
   useLayoutEffect(() => {
     if (!open) return;
     recalcMenu();
-  }, [open, value, recalcMenu]);
+  }, [open, value, filtered.length, recalcMenu]);
 
   useEffect(() => {
     if (!open) return;
@@ -121,7 +146,10 @@ export function AssigneeCombobox({
             className="rounded-md border border-slate-200 bg-white py-1 shadow-lg"
             style={menuStyle}
           >
-            <ul className="max-h-52 overflow-y-auto py-0.5" role="listbox">
+            <ul
+              className="max-h-full overflow-y-auto overscroll-contain py-0.5 [-webkit-overflow-scrolling:touch]"
+              role="listbox"
+            >
               {filtered.map((s) => (
                 <li key={s} role="option">
                   <button
