@@ -1,7 +1,24 @@
 "use client";
 
 import { useDndContext, useDroppable } from "@dnd-kit/core";
-import { Activity, BarChart3, CalendarDays, Check, ChevronDown, ChevronRight, ClipboardList, Eye, Flag, Map as MapIcon, PieChart, Thermometer, Users, X } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  ClipboardList,
+  Eye,
+  Flag,
+  Map as MapIcon,
+  PieChart,
+  Thermometer,
+  Users,
+  X,
+} from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
@@ -810,6 +827,8 @@ export function TimelineGrid({
   const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(960);
   const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
   const [expandedEstimateEpicIds, setExpandedEstimateEpicIds] = useState<Set<string>>(new Set());
+  const prevEstPanelOpenRef = useRef(false);
+  const prevEstScopeKeyRef = useRef<string | null>(null);
   const capacityTeamFilterRef = useRef<HTMLDivElement | null>(null);
   const [isSprintTeamMenuOpen, setIsSprintTeamMenuOpen] = useState(false);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
@@ -1178,6 +1197,18 @@ export function TimelineGrid({
     : focusedQuarter
       ? focusedQuarter.label
       : "All Quarters";
+
+  useEffect(() => {
+    const justOpened = estEpicsPanelOpen && !prevEstPanelOpenRef.current;
+    const scopeChangedWhileOpen =
+      estEpicsPanelOpen && estimatePanelScopeLabel !== prevEstScopeKeyRef.current;
+    if (justOpened || scopeChangedWhileOpen) {
+      setExpandedEstimateEpicIds(new Set(scopedEpicsForEstimatePanel.all.map((r) => r.epic.id)));
+    }
+    prevEstPanelOpenRef.current = estEpicsPanelOpen;
+    prevEstScopeKeyRef.current = estimatePanelScopeLabel;
+  }, [estEpicsPanelOpen, estimatePanelScopeLabel, scopedEpicsForEstimatePanel.all]);
+
   const estimatePanelTableClass =
     "w-full table-fixed border-collapse text-[13px] text-slate-700";
   const estimatePanelHeadCellClass =
@@ -1192,6 +1223,36 @@ export function TimelineGrid({
       else next.add(epicId);
       return next;
     });
+
+  const collapseEstimatePanelRows = useCallback(
+    (variant: "estimated" | "unestimated") => {
+      const ids =
+        variant === "unestimated"
+          ? scopedEpicsForEstimatePanel.unestimated.map((r) => r.epic.id)
+          : scopedEpicsForEstimatePanel.estimated.map((r) => r.epic.id);
+      setExpandedEstimateEpicIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+    },
+    [scopedEpicsForEstimatePanel.estimated, scopedEpicsForEstimatePanel.unestimated],
+  );
+
+  const expandEstimatePanelRows = useCallback(
+    (variant: "estimated" | "unestimated") => {
+      const ids =
+        variant === "unestimated"
+          ? scopedEpicsForEstimatePanel.unestimated.map((r) => r.epic.id)
+          : scopedEpicsForEstimatePanel.estimated.map((r) => r.epic.id);
+      setExpandedEstimateEpicIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.add(id);
+        return next;
+      });
+    },
+    [scopedEpicsForEstimatePanel.estimated, scopedEpicsForEstimatePanel.unestimated],
+  );
 
   function renderEstimatePanelTable(
     rows: Array<{ epic: EpicItem; initiative: InitiativeItem }>,
@@ -3998,7 +4059,7 @@ export function TimelineGrid({
             onClick={() => setEstEpicsPanelOpen(false)}
           />
           <aside
-            className="pointer-events-auto fixed border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 shadow-lg ring-1 ring-indigo-100/80"
+            className="pointer-events-auto fixed flex flex-col border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 pb-6 shadow-lg ring-1 ring-indigo-100/80"
             style={{
               width: `${estEpicsPanelWidthPx}px`,
               maxWidth: "99vw",
@@ -4019,15 +4080,18 @@ export function TimelineGrid({
               aria-label="Resize epic estimation coverage panel from right"
               role="separator"
             />
-            <div className="mb-3 flex cursor-move items-center justify-between" onPointerDown={beginEstimateCoverageDrag}>
+            <div
+              className="mb-5 flex shrink-0 cursor-move items-center justify-between pb-1"
+              onPointerDown={beginEstimateCoverageDrag}
+            >
               <div>
-                <h3 className="inline-flex items-center gap-2 text-[18px] font-bold text-slate-900">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-700 ring-1 ring-fuchsia-200">
-                    <PieChart className="size-4" />
+                <h3 className="inline-flex items-center gap-2.5 text-[22px] font-bold leading-tight text-slate-900 sm:text-2xl">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-700 ring-1 ring-fuchsia-200 sm:h-9 sm:w-9">
+                    <PieChart className="size-4 sm:size-[1.125rem]" />
                   </span>
                   Epic Estimation Coverage
                 </h3>
-                <p className="text-[13px] text-slate-600">
+                <p className="mt-1.5 text-[13px] text-slate-600">
                   Scope: {estimatePanelScopeLabel} · {estimatedEpicsPercentForScope}% estimated
                 </p>
               </div>
@@ -4040,26 +4104,78 @@ export function TimelineGrid({
                 <X className="size-4" />
               </button>
             </div>
-            <div className="grid min-h-0 h-[calc(100%-3.5rem)] grid-cols-1 gap-3 xl:grid-cols-2">
-              <section className="min-h-0 overflow-hidden rounded-xl border border-[#7cd3f7]/85 bg-white shadow-sm ring-1 ring-slate-100/90">
-                <div className="border-b border-[#7cd3f7]/90 bg-[#dff3ff] px-3 py-2">
-                  <p className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
-                    <ClipboardList className="size-4 text-sky-700" />
-                    Unestimated Epics ({scopedEpicsForEstimatePanel.unestimated.length})
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
+              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#7cd3f7]/85 bg-white shadow-sm ring-1 ring-slate-100/90">
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#19abeb]/70 bg-[#0897d5] px-3 py-2.5">
+                  <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
+                    <ClipboardList className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
+                    <span className="truncate">
+                      Unestimated Epics ({scopedEpicsForEstimatePanel.unestimated.length})
+                    </span>
                   </p>
+                  <span
+                    className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
+                    role="group"
+                    aria-label="Unestimated epics expand and collapse"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => collapseEstimatePanelRows("unestimated")}
+                      title="Collapse all rows"
+                      aria-label="Collapse all unestimated epic rows"
+                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    >
+                      <ChevronsUp className="size-3.5" strokeWidth={2.2} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => expandEstimatePanelRows("unestimated")}
+                      title="Expand all rows"
+                      aria-label="Expand all unestimated epic rows"
+                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    >
+                      <ChevronsDown className="size-3.5" strokeWidth={2.2} />
+                    </button>
+                  </span>
                 </div>
-                <div className="max-h-full overflow-y-auto overflow-x-hidden">
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                   {renderEstimatePanelTable(scopedEpicsForEstimatePanel.unestimated, "unestimated")}
                 </div>
               </section>
-              <section className="min-h-0 overflow-hidden rounded-xl border border-[#7cd3f7]/85 bg-white shadow-sm ring-1 ring-slate-100/90">
-                <div className="border-b border-[#7cd3f7]/90 bg-[#dff3ff] px-3 py-2">
-                  <p className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
-                    <BarChart3 className="size-4 text-sky-700" />
-                    Estimated Epics ({scopedEpicsForEstimatePanel.estimated.length})
+              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-[#7cd3f7]/85 bg-white shadow-sm ring-1 ring-slate-100/90">
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#19abeb]/70 bg-[#0897d5] px-3 py-2.5">
+                  <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
+                    <BarChart3 className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
+                    <span className="truncate">
+                      Estimated Epics ({scopedEpicsForEstimatePanel.estimated.length})
+                    </span>
                   </p>
+                  <span
+                    className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
+                    role="group"
+                    aria-label="Estimated epics expand and collapse"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => collapseEstimatePanelRows("estimated")}
+                      title="Collapse all rows"
+                      aria-label="Collapse all estimated epic rows"
+                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    >
+                      <ChevronsUp className="size-3.5" strokeWidth={2.2} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => expandEstimatePanelRows("estimated")}
+                      title="Expand all rows"
+                      aria-label="Expand all estimated epic rows"
+                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    >
+                      <ChevronsDown className="size-3.5" strokeWidth={2.2} />
+                    </button>
+                  </span>
                 </div>
-                <div className="max-h-full overflow-y-auto overflow-x-hidden">
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                   {renderEstimatePanelTable(scopedEpicsForEstimatePanel.estimated, "estimated")}
                 </div>
               </section>
