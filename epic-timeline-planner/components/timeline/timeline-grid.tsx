@@ -3078,6 +3078,8 @@ export function TimelineGrid({
               monthPlanTab !== "sprint-retrospective" &&
               monthPlanTab !== "month-capacity" &&
               monthPlanTab !== "sprint-capacity" &&
+              monthPlanTab !== "month-status" &&
+              monthPlanTab !== "sprint-status" &&
               "rounded-2xl p-1.5 shadow-lg ring-1",
             monthPlanTab === "sprint-kanban" && "flex w-full flex-col min-h-min",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
@@ -3085,6 +3087,9 @@ export function TimelineGrid({
     monthPlanTab !== "sprint-retrospective" &&
     monthPlanTab !== "month-capacity" &&
     monthPlanTab !== "sprint-capacity" &&
+    monthPlanTab !== "epic-gantt" &&
+    monthPlanTab !== "month-status" &&
+    monthPlanTab !== "sprint-status" &&
     activeMonthQuarterLabel &&
     quarterPanelTone[activeMonthQuarterLabel]
       ? quarterPanelTone[activeMonthQuarterLabel]
@@ -3092,7 +3097,10 @@ export function TimelineGrid({
         ? "bg-white ring-slate-200/90"
         : monthPlanTab === "sprint-retrospective" ||
             monthPlanTab === "month-capacity" ||
-            monthPlanTab === "sprint-capacity"
+            monthPlanTab === "sprint-capacity" ||
+            monthPlanTab === "epic-gantt" ||
+            monthPlanTab === "month-status" ||
+            monthPlanTab === "sprint-status"
           ? "bg-transparent ring-0"
           : "bg-slate-100/70 ring-slate-200/90",
           )}
@@ -3105,6 +3113,8 @@ export function TimelineGrid({
                 monthPlanTab !== "sprint-retrospective" &&
                 monthPlanTab !== "month-capacity" &&
                 monthPlanTab !== "sprint-capacity" &&
+                monthPlanTab !== "month-status" &&
+                monthPlanTab !== "sprint-status" &&
                 "rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
               monthPlanTab === "sprint-kanban" ? "min-h-min overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||

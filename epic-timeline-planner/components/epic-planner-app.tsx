@@ -3628,25 +3628,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   const [isModeRailExpanded, setIsModeRailExpanded] = useState(false);
   const modeRailLabelClass =
-    "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
+    "min-w-0 flex-1 truncate text-left text-[13px] font-semibold";
 
   const modeSwitchMenu = (
-    <aside className="relative z-20 flex min-h-0 items-start overflow-visible">
-      <nav
-        className={cn(
-          "mt-1 flex flex-col gap-1.5 overflow-visible rounded-xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50/75 p-1.5 shadow-lg ring-1 ring-slate-100/90 transition-[width] duration-200",
-          isModeRailExpanded ? "w-44" : "w-full",
-        )}
-        onMouseEnter={() => setIsModeRailExpanded(true)}
-        onMouseLeave={() => setIsModeRailExpanded(false)}
-      >
+    <aside className="relative z-20 flex h-full min-h-0 w-full flex-col overflow-visible">
+      <nav className={cn("flex w-full flex-col gap-1.5 overflow-visible", isModeRailExpanded ? "p-1.5" : "p-1")}>
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
             onClick={() => setTopMode("roadmap")}
             aria-label="Roadmap Planning"
             className={cn(
-              "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
+              "inline-flex h-10 w-full items-center rounded-lg transition-all duration-200",
+              isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "roadmap"
                 ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
                 : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
@@ -3664,11 +3658,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <MapIcon className="size-3.5" aria-hidden />
             </span>
             <span
-              aria-hidden
               className={cn(
                 modeRailLabelClass,
-                isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                "overflow-hidden transition-[max-width,opacity,margin] duration-200",
+                isModeRailExpanded ? "ml-0 max-w-[12rem] opacity-100" : "ml-0 max-w-0 opacity-0",
               )}
+              aria-hidden={!isModeRailExpanded}
             >
               Roadmap Planning
             </span>
@@ -3680,7 +3675,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("backlog")}
             aria-label="Backlog Workspace"
             className={cn(
-              "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
+              "inline-flex h-10 w-full items-center rounded-lg transition-all duration-200",
+              isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "backlog"
                 ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
                 : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
@@ -3698,11 +3694,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <Archive className="size-3.5" aria-hidden />
             </span>
             <span
-              aria-hidden
               className={cn(
                 modeRailLabelClass,
-                isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                "overflow-hidden transition-[max-width,opacity,margin] duration-200",
+                isModeRailExpanded ? "ml-0 max-w-[12rem] opacity-100" : "ml-0 max-w-0 opacity-0",
               )}
+              aria-hidden={!isModeRailExpanded}
             >
               Backlog Workspace
             </span>
@@ -3714,7 +3711,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("users")}
             aria-label="Users"
             className={cn(
-              "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
+              "inline-flex h-10 w-full items-center rounded-lg transition-all duration-200",
+              isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "users"
                 ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
                 : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
@@ -3732,11 +3730,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <Users className="size-3.5" aria-hidden />
             </span>
             <span
-              aria-hidden
               className={cn(
                 modeRailLabelClass,
-                isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                "overflow-hidden transition-[max-width,opacity,margin] duration-200",
+                isModeRailExpanded ? "ml-0 max-w-[12rem] opacity-100" : "ml-0 max-w-0 opacity-0",
               )}
+              aria-hidden={!isModeRailExpanded}
             >
               Users
             </span>
@@ -3754,32 +3753,52 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           topMode === "roadmap" ? "overflow-y-visible" : topMode === "users" ? "overflow-y-auto" : "overflow-y-hidden",
         )}
       >
-        <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-col gap-5 overflow-x-hidden overflow-y-visible">
-          {topMode !== "users" ? (
-            <div className="relative z-30 overflow-visible rounded-2xl bg-card px-[5px] py-3 shadow-lg ring-1 ring-black/5">
-              <div className="relative flex items-start overflow-visible">
-                <div className="min-w-0 flex-1">
-                  <img
-                    src="/bird-eye-lockup-wide.png"
-                    alt="Bird Eye Viewer logo"
-                    className="block h-[70px] w-full rounded-md object-contain object-left"
-                  />
-                </div>
-              </div>
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-row gap-2.5 overflow-x-hidden overflow-y-visible">
+          <div
+            className={cn(
+              "relative z-30 flex h-full min-h-0 shrink-0 flex-col self-stretch overflow-hidden rounded-md border border-slate-200/75 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] ring-1 ring-inset ring-white/70 transition-[width] duration-200 ease-out [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.85)]",
+              isModeRailExpanded ? "w-[240px]" : "w-[54px]",
+            )}
+            onMouseEnter={() => setIsModeRailExpanded(true)}
+            onMouseLeave={() => setIsModeRailExpanded(false)}
+            onFocusCapture={() => setIsModeRailExpanded(true)}
+            onBlurCapture={(e) => {
+              const next = e.relatedTarget;
+              if (next instanceof Node && e.currentTarget.contains(next)) return;
+              setIsModeRailExpanded(false);
+            }}
+          >
+            <div
+              className={cn(
+                "shrink-0 overflow-hidden border-slate-200/55 bg-white/50 transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
+                isModeRailExpanded
+                  ? "max-h-[5.5rem] border-b px-3 pb-3 pt-3 opacity-100 backdrop-blur-[2px]"
+                  : "max-h-0 border-0 bg-transparent p-0 opacity-0",
+              )}
+              aria-hidden={!isModeRailExpanded}
+            >
+              <img
+                src="/bird-eye-lockup-wide.png"
+                alt="Bird Eye Viewer logo"
+                className={cn(
+                  "block w-full rounded-md object-contain object-left transition-opacity duration-200",
+                  isModeRailExpanded ? "h-[52px] opacity-100" : "h-0 opacity-0",
+                )}
+              />
             </div>
-          ) : null}
-
-          {topMode === "roadmap" ? (
+            <div className="flex min-h-0 flex-1 flex-col py-2">{modeSwitchMenu}</div>
+          </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-visible">
+            {topMode === "roadmap" ? (
             <div
               ref={layoutRef}
               className={cn("grid min-h-0 flex-1 items-stretch gap-3", isResizingPanel && "select-none")}
               style={{
                 gridTemplateColumns: isLeftPanelHidden
-                  ? "54px 14px minmax(0, 1fr)"
-                  : `54px ${panelWidth}px 14px minmax(0, 1fr)`,
+                  ? "14px minmax(0, 1fr)"
+                  : `${panelWidth}px 14px minmax(0, 1fr)`,
               }}
             >
-              {modeSwitchMenu}
               {!isLeftPanelHidden ? (
                 <InitiativeListPanel
                   initiatives={initiatives}
@@ -4190,18 +4209,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
             </div>
           ) : topMode === "users" ? (
-            <div
-              className="grid min-h-[calc(100vh-8rem)] flex-1 items-stretch gap-3"
-              style={{ gridTemplateColumns: "54px minmax(0, 1fr)" }}
-            >
-              {modeSwitchMenu}
-              <div className="min-h-0 min-w-0 overflow-hidden rounded-2xl bg-white/60 shadow-md ring-1 ring-slate-200/80">
+            <div className="min-h-0 flex-1">
+              <div className="h-full min-h-0 overflow-hidden rounded-2xl bg-white/60 shadow-md ring-1 ring-slate-200/80">
                 <UsersWorkspacePanel />
               </div>
             </div>
           ) : (
-            <div className="grid min-h-0 flex-1 items-stretch gap-3" style={{ gridTemplateColumns: "54px minmax(0, 1fr)" }}>
-              {modeSwitchMenu}
+            <div className="min-h-0 flex-1">
               <div
                 ref={planningRightSurfaceRef}
                 className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"
@@ -4297,6 +4311,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
             </div>
           )}
+          </div>
         </div>
         {dndDropInspector ? (
           <div
