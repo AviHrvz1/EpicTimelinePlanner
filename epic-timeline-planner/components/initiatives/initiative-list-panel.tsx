@@ -787,7 +787,7 @@ function InitiativeTreeCard({
 
           {isOpen ? (
             <div className="mt-3 border-t border-border/80 pt-3 font-sans antialiased">
-              <div className="rounded-lg border border-border/70 bg-gradient-to-b from-white/80 via-white/45 to-muted/35 p-2 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)] backdrop-blur-[1px]">
+              <div className="rounded-lg border border-slate-200/80 bg-white p-2 shadow-sm">
                 {epics.length === 0 ? (
                   <p className="px-1.5 py-2 text-[12px] leading-relaxed text-muted-foreground">
                     No epics yet.
@@ -1639,15 +1639,15 @@ export function InitiativeListPanel({
 
       <div
         className={cn(
-          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden [direction:rtl] [scrollbar-gutter:stable]",
-          "[scrollbar-width:thin] [scrollbar-color:#7dd3fc_#f1f5f9]",
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white [direction:rtl] [scrollbar-gutter:stable]",
+          "[scrollbar-width:thin] [scrollbar-color:#7dd3fc_#ffffff]",
           "[&::-webkit-scrollbar]:w-2.5",
-          "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-100/90",
+          "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white",
           "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-300",
           "hover:[&::-webkit-scrollbar-thumb]:bg-sky-400",
         )}
       >
-        <div className="min-h-0 ps-3 [direction:ltr]">
+        <div className="min-h-0 bg-white ps-3 [direction:ltr]">
       {showInitiativeBacklogDrop ? (
         <div
           ref={setBacklogDropRef}
@@ -1896,7 +1896,7 @@ export function InitiativeListPanel({
             Initiatives ({filteredInitiatives.length})
           </h3>
           {filteredInitiatives.length === 0 ? (
-            <p className="rounded-md bg-muted/40 p-3 text-[12px] leading-4 text-slate-600">
+            <p className="rounded-md border border-slate-200/80 bg-white p-3 text-[12px] leading-4 text-slate-600">
               {initiativeList.length === 0
                 ? "No initiatives yet. Add one to begin planning."
                 : "No initiatives match your filters/search."}

@@ -3651,11 +3651,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("roadmap")}
             aria-label="Roadmap Planning"
             className={cn(
-              "inline-flex h-11 w-full items-center rounded-lg bg-white transition-all duration-200",
+              "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "roadmap"
-                ? "text-indigo-800"
-                : "text-slate-600 hover:text-slate-900",
+                ? "bg-slate-100 text-indigo-800 shadow-sm ring-1 ring-slate-200/70"
+                : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <span
@@ -3687,11 +3687,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("backlog")}
             aria-label="Backlog Workspace"
             className={cn(
-              "inline-flex h-11 w-full items-center rounded-lg bg-white transition-all duration-200",
+              "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "backlog"
-                ? "text-amber-950"
-                : "text-slate-600 hover:text-slate-900",
+                ? "bg-slate-100 text-amber-950 shadow-sm ring-1 ring-slate-200/70"
+                : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <span
@@ -3723,11 +3723,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             onClick={() => setTopMode("users")}
             aria-label="Users"
             className={cn(
-              "inline-flex h-11 w-full items-center rounded-lg bg-white transition-all duration-200",
+              "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
               topMode === "users"
-                ? "text-sky-900"
-                : "text-slate-600 hover:text-slate-900",
+                ? "bg-slate-100 text-sky-900 shadow-sm ring-1 ring-slate-200/70"
+                : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <span
@@ -3768,7 +3768,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-row gap-2.5 overflow-x-hidden overflow-y-visible">
           <div
             className={cn(
-              "relative z-30 flex h-full min-h-0 shrink-0 flex-col self-stretch overflow-hidden rounded-md border border-slate-200/75 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] ring-1 ring-inset ring-white/70 transition-[width] duration-200 ease-out [box-shadow:0_4px_20px_-6px_rgba(15,23,42,0.09),inset_0_1px_0_0_rgba(255,255,255,0.85)]",
+              "relative z-30 flex h-full min-h-0 shrink-0 flex-col self-stretch overflow-hidden rounded-md border border-slate-200/80 bg-white shadow-[0_4px_20px_-6px_rgba(15,23,42,0.09)] transition-[width] duration-200 ease-out",
               isModeRailExpanded ? "w-[244px]" : "w-[58px]",
             )}
             onMouseEnter={() => setIsModeRailExpanded(true)}
@@ -3782,9 +3782,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           >
             <div
               className={cn(
-                "shrink-0 overflow-hidden border-slate-200/55 bg-white/50 transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
+                "shrink-0 overflow-hidden border-slate-200/55 bg-white transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
                 isModeRailExpanded
-                  ? "max-h-[5.5rem] border-b px-3 pb-3 pt-3 opacity-100 backdrop-blur-[2px]"
+                  ? "max-h-[5.5rem] border-b px-3 pb-3 pt-3 opacity-100"
                   : "max-h-0 border-0 bg-transparent p-0 opacity-0",
               )}
               aria-hidden={!isModeRailExpanded}
@@ -3812,6 +3812,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               }}
             >
               {!isLeftPanelHidden ? (
+                <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-xl bg-white">
                 <InitiativeListPanel
                   initiatives={initiatives}
                   activeMonth={initiativeListActiveMonth}
@@ -3905,6 +3906,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     activeTimelineMonth != null && activeMonthPlanTab !== "epic-gantt"
                   }
                 />
+                </div>
               ) : null}
               {!isLeftPanelHidden ? (
                 <div
