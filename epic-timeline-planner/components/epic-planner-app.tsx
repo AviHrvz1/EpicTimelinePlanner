@@ -3163,14 +3163,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         )}
       >
         <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-col gap-5 overflow-x-hidden overflow-y-visible">
-          <div
-            className={cn(
-              "overflow-visible rounded-2xl bg-card shadow-lg ring-1 ring-black/5",
-              topMode === "roadmap"
-                ? "relative z-30 px-4 pb-4 pt-10"
-                : "p-4",
-            )}
-          >
+          <div className="relative z-30 overflow-visible rounded-2xl bg-card px-4 pb-4 pt-10 shadow-lg ring-1 ring-black/5">
             <div className="relative flex items-start justify-between gap-6 overflow-visible">
               <div className="min-w-0 flex-1">
                 <div className="inline-flex flex-col p-1 pl-10">
@@ -3181,86 +3174,82 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   />
                 </div>
               </div>
-              {topMode === "roadmap" ? (
-                <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 overflow-visible">
-                  <div className="relative isolate inline-block translate-y-[2px] overflow-visible">
-                    <div className="relative z-0 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
-                      <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
-                        Roadmap&nbsp;{selectedYear}
-                      </span>
-                    </div>
-                    <div className="absolute bottom-full left-0 z-30 h-[48px] w-full overflow-visible">
-                      <img
-                        src="/roadmap-hanger-pin.png"
-                        alt=""
-                        className="absolute left-1/2 top-[7%] z-10 ml-[3px] -mt-[5px] h-11 w-auto -translate-x-1/2 -translate-y-[42%] rotate-[-38deg] object-contain"
-                        aria-hidden
+              <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 overflow-visible">
+                <div className="relative isolate inline-block translate-y-[2px] overflow-visible">
+                  <div className="relative z-0 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
+                    <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
+                      Roadmap&nbsp;{selectedYear}
+                    </span>
+                  </div>
+                  <div className="absolute bottom-full left-0 z-30 h-[48px] w-full overflow-visible">
+                    <img
+                      src="/roadmap-hanger-pin.png"
+                      alt=""
+                      className="absolute left-1/2 top-[7%] z-10 ml-[3px] -mt-[5px] h-11 w-auto -translate-x-1/2 -translate-y-[42%] rotate-[-38deg] object-contain"
+                      aria-hidden
+                    />
+                    <svg
+                      className="absolute inset-0 z-20 h-full w-full overflow-visible drop-shadow-sm"
+                      viewBox="0 -14 200 56"
+                      preserveAspectRatio="none"
+                      aria-hidden
+                    >
+                      <path
+                        d="M 56 42 L 100 -10 L 144 42"
+                        fill="none"
+                        stroke="#475569"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
-                      <svg
-                        className="absolute inset-0 z-20 h-full w-full overflow-visible drop-shadow-sm"
-                        viewBox="0 -14 200 56"
-                        preserveAspectRatio="none"
-                        aria-hidden
-                      >
-                        <path
-                          d="M 56 42 L 100 -10 L 144 42"
-                          fill="none"
-                          stroke="#475569"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      <span
-                        className="pointer-events-none absolute bottom-[-4px] left-[28%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
-                        aria-hidden
-                      />
-                      <span
-                        className="pointer-events-none absolute bottom-[-4px] left-[72%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
-                        aria-hidden
-                      />
-                    </div>
+                    </svg>
+                    <span
+                      className="pointer-events-none absolute bottom-[-4px] left-[28%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
+                      aria-hidden
+                    />
+                    <span
+                      className="pointer-events-none absolute bottom-[-4px] left-[72%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
+                      aria-hidden
+                    />
                   </div>
                 </div>
-              ) : null}
+              </div>
               <div className="shrink-0 self-end pb-0">
-                {topMode === "roadmap" ? (
-                  <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
-                    <label className="inline-flex h-7 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:outline-none focus-within:ring-0">
-                      <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
-                        Roadmap
-                      </span>
-                      <div className="relative">
-                        <select
-                          value={selectedYear}
-                          onChange={async (event) => {
-                            const nextYear = Number(event.target.value);
-                            if (nextYear === selectedYear) return;
-                            setSelectedYear(nextYear);
-                            await refresh(nextYear);
-                            setFocusedQuarterLabel(null);
-                            setActiveTimelineMonth(null);
-                            setActiveYearSprint(null);
-                            setActiveSprintTab("kanban");
-                            setActiveMonthPlanTab("epic-gantt");
-                            setActiveQuarterViewTab("gantt");
-                            setSprintStoryBoardTeamId(null);
-                          }}
-                          className="h-7 min-w-[5rem] cursor-pointer appearance-none bg-transparent py-0 pl-3 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[12px]"
-                        >
-                          <option value={2024}>2024</option>
-                          <option value={2025}>2025</option>
-                          <option value={2026}>2026</option>
-                          <option value={2027}>2027</option>
-                        </select>
-                        <ChevronDown
-                          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-primary-foreground opacity-90 sm:size-[13px]"
-                          aria-hidden
-                        />
-                      </div>
-                    </label>
-                  </div>
-                ) : null}
+                <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
+                  <label className="inline-flex h-7 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:outline-none focus-within:ring-0">
+                    <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
+                      Roadmap
+                    </span>
+                    <div className="relative">
+                      <select
+                        value={selectedYear}
+                        onChange={async (event) => {
+                          const nextYear = Number(event.target.value);
+                          if (nextYear === selectedYear) return;
+                          setSelectedYear(nextYear);
+                          await refresh(nextYear);
+                          setFocusedQuarterLabel(null);
+                          setActiveTimelineMonth(null);
+                          setActiveYearSprint(null);
+                          setActiveSprintTab("kanban");
+                          setActiveMonthPlanTab("epic-gantt");
+                          setActiveQuarterViewTab("gantt");
+                          setSprintStoryBoardTeamId(null);
+                        }}
+                        className="h-7 min-w-[5rem] cursor-pointer appearance-none bg-transparent py-0 pl-3 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[12px]"
+                      >
+                        <option value={2024}>2024</option>
+                        <option value={2025}>2025</option>
+                        <option value={2026}>2026</option>
+                        <option value={2027}>2027</option>
+                      </select>
+                      <ChevronDown
+                        className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-primary-foreground opacity-90 sm:size-[13px]"
+                        aria-hidden
+                      />
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
