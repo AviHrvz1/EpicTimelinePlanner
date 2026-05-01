@@ -57,6 +57,9 @@ const CFD_FLOW_SEGMENTS = [
  */
 const SPRINT_CHART_BOX =
   "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full border border-slate-200/80 bg-white/85 ring-1 ring-slate-100/80";
+/** Same dimensions as {@link SPRINT_CHART_BOX} without border/ring (User Stories Status pie only). */
+const SPRINT_STATUS_PIE_BOX =
+  "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full bg-white/85";
 /** Keep legend beside pie from growing taller than the pie plot on md+. */
 const PIE_LEGEND_CAP = "max-h-[clamp(14.75rem,30vh,19rem)] overflow-y-auto pr-1";
 const WORKLOAD_LIST_MAX =
@@ -325,12 +328,12 @@ export function SprintAnalytics({
           ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className="relative mt-1 rounded-none border border-slate-200/80 bg-white/80 p-2">
+          <div className="relative mt-1 rounded-none bg-white/80 p-2">
             <div className="relative">
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={() => updateArrowState(statusDrilldownScrollRef, setCanScrollStatusUp, setCanScrollStatusDown)}
-                className="h-[clamp(11.5rem,23vh,15.5rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
+                className="h-[clamp(11.5rem,23vh,15.5rem)] overflow-auto rounded-none bg-white pr-5 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 <table className="w-full border-separate border-spacing-0 text-left text-[13px]">
@@ -401,7 +404,7 @@ export function SprintAnalytics({
           </div>
         ) : (
         <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
-          <div className={`relative ${SPRINT_CHART_BOX}`}>
+          <div className={`relative ${SPRINT_STATUS_PIE_BOX}`}>
             <div className="absolute inset-0">
               <ResponsiveContainer width="100%" height="100%">
               <PieChart>

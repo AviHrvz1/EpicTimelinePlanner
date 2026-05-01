@@ -2911,17 +2911,23 @@ export function TimelineGrid({
             monthPlanTab !== "sprint-kanban" &&
               monthPlanTab !== "epic-gantt" &&
               monthPlanTab !== "sprint-retrospective" &&
+              monthPlanTab !== "month-capacity" &&
+              monthPlanTab !== "sprint-capacity" &&
               "rounded-2xl p-1.5 shadow-lg ring-1",
             monthPlanTab === "sprint-kanban" && "flex min-h-0 flex-1 flex-col",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
     monthPlanTab !== "sprint-kanban" &&
     monthPlanTab !== "sprint-retrospective" &&
+    monthPlanTab !== "month-capacity" &&
+    monthPlanTab !== "sprint-capacity" &&
     activeMonthQuarterLabel &&
     quarterPanelTone[activeMonthQuarterLabel]
       ? quarterPanelTone[activeMonthQuarterLabel]
       : monthPlanTab === "sprint-kanban"
         ? "bg-white ring-slate-200/90"
-        : monthPlanTab === "sprint-retrospective"
+        : monthPlanTab === "sprint-retrospective" ||
+            monthPlanTab === "month-capacity" ||
+            monthPlanTab === "sprint-capacity"
           ? "bg-transparent ring-0"
           : "bg-slate-100/70 ring-slate-200/90",
           )}
@@ -2932,6 +2938,8 @@ export function TimelineGrid({
               monthPlanTab !== "sprint-kanban" &&
                 monthPlanTab !== "epic-gantt" &&
                 monthPlanTab !== "sprint-retrospective" &&
+                monthPlanTab !== "month-capacity" &&
+                monthPlanTab !== "sprint-capacity" &&
                 "rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
               monthPlanTab === "sprint-kanban" ? "min-h-0 flex-1 overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||

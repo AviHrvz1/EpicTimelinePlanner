@@ -170,8 +170,8 @@ function CapacityBucket({
           ref={setNodeRef}
           style={{ ["--bucket-row-h" as string]: "calc((23rem - 1rem) / 10)" }}
           className={cn(
-            "relative flex h-[23rem] flex-col overflow-hidden rounded-2xl border border-slate-300/80 bg-white p-2 transition",
-            isOver && "border-primary ring-2 ring-primary/20",
+            "relative flex h-[23rem] flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition",
+            isOver && "ring-2 ring-primary/25",
           )}
         >
           {/* Bucket SVG hidden for now — remove `hidden` from className to show again */}
@@ -189,7 +189,7 @@ function CapacityBucket({
           />
           <div className="capacity-bucket-scroll relative z-20 flex min-h-0 flex-1 flex-col-reverse gap-2 overflow-y-auto">
             {cards.length === 0 ? (
-              <p className="rounded-md border border-dashed border-slate-200 bg-white/75 p-3 text-center text-[12px] font-medium text-slate-500">
+              <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
                 Drop story here
               </p>
             ) : (

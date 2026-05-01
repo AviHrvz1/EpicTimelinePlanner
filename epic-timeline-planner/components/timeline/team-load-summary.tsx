@@ -50,10 +50,10 @@ export function TeamLoadSummary({
   const fillW = (thermometerPct / 100) * innerW;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/40 to-slate-50/90 px-3 py-2 shadow-sm ring-1 ring-slate-100/80">
+    <section className="rounded-xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/40 to-slate-50/90 px-3 py-2 ring-1 ring-slate-100/80">
       <div className="flex flex-nowrap items-center gap-2.5 sm:gap-3.5">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm">
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
             <Thermometer className="size-3.5 text-slate-700" aria-hidden />
           </span>
           <h3 className="shrink-0 text-[14px] font-bold leading-tight text-slate-900 sm:text-[15px]">
