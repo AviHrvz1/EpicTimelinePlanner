@@ -3166,7 +3166,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           <div
             className={cn(
               "overflow-visible rounded-2xl bg-card shadow-lg ring-1 ring-black/5",
-              topMode === "roadmap" ? "px-4 pb-4 pt-10" : "p-4",
+              topMode === "roadmap"
+                ? "relative z-30 px-4 pb-4 pt-10"
+                : "p-4",
             )}
           >
             <div className="relative flex items-start justify-between gap-6 overflow-visible">
@@ -3182,7 +3184,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               {topMode === "roadmap" ? (
                 <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 overflow-visible">
                   <div className="relative isolate inline-block translate-y-[2px] overflow-visible">
-                    <div className="relative z-10 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
+                    <div className="relative z-0 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
                       <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
                         Roadmap&nbsp;{selectedYear}
                       </span>
@@ -3191,11 +3193,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       <img
                         src="/roadmap-hanger-pin.png"
                         alt=""
-                        className="absolute left-1/2 top-[7%] z-10 h-11 w-auto -translate-x-1/2 -translate-y-[42%] rotate-[-38deg] object-contain drop-shadow-md"
+                        className="absolute left-1/2 top-[7%] z-10 ml-[3px] -mt-[5px] h-11 w-auto -translate-x-1/2 -translate-y-[42%] rotate-[-38deg] object-contain"
                         aria-hidden
                       />
                       <svg
-                        className="absolute inset-0 z-20 h-full w-full drop-shadow-sm"
+                        className="absolute inset-0 z-20 h-full w-full overflow-visible drop-shadow-sm"
                         viewBox="0 -14 200 56"
                         preserveAspectRatio="none"
                         aria-hidden
@@ -3208,9 +3210,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
-                        <circle cx="56" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
-                        <circle cx="144" cy="42" r="2.5" fill="#ffffff" stroke="#64748b" strokeWidth="1" />
                       </svg>
+                      <span
+                        className="pointer-events-none absolute bottom-[-4px] left-[28%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
+                        aria-hidden
+                      />
+                      <span
+                        className="pointer-events-none absolute bottom-[-4px] left-[72%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
+                        aria-hidden
+                      />
                     </div>
                   </div>
                 </div>
@@ -3218,8 +3226,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <div className="shrink-0 self-end pb-0">
                 {topMode === "roadmap" ? (
                   <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
-                    <label className="inline-flex h-8 items-center overflow-hidden rounded-lg border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-                      <span className="shrink-0 border-r border-primary-foreground/20 px-2.5 text-[10px] font-bold tracking-[0.05em] uppercase">
+                    <label className="inline-flex h-8 items-center overflow-hidden rounded-full border border-transparent bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+                      <span className="shrink-0 border-r border-primary-foreground/20 px-2.5 text-[11px] font-bold tracking-[0.05em] uppercase sm:text-[12px]">
                         Roadmap
                       </span>
                       <div className="relative">
@@ -3238,7 +3246,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                             setActiveQuarterViewTab("gantt");
                             setSprintStoryBoardTeamId(null);
                           }}
-                          className="h-8 min-w-[5.2rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 font-sans text-[11px] font-semibold leading-none text-primary-foreground outline-none"
+                          className="h-8 min-w-[5.5rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-7 font-sans text-[12px] font-semibold leading-none text-primary-foreground outline-none sm:text-[13px]"
                         >
                           <option value={2024}>2024</option>
                           <option value={2025}>2025</option>
@@ -3246,7 +3254,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                           <option value={2027}>2027</option>
                         </select>
                         <ChevronDown
-                          className="pointer-events-none absolute right-2 top-1/2 size-[12px] -translate-y-1/2 text-primary-foreground opacity-90"
+                          className="pointer-events-none absolute right-2 top-1/2 size-[13px] -translate-y-1/2 text-primary-foreground opacity-90 sm:size-3.5"
                           aria-hidden
                         />
                       </div>
