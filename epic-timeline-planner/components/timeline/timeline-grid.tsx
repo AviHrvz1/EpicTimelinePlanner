@@ -2434,7 +2434,7 @@ export function TimelineGrid({
       <div
         key={isInsightsSurfaceRender ? `insights-${activeMonth ?? "year"}-${focusedQuarterLabel ?? "all"}` : "planning-surface"}
         ref={timelineContentScrollRef}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain"
+        className="planning-surface-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain"
       >
       {activeMonth ? (
         <div className="relative z-30 h-0">
@@ -2824,7 +2824,7 @@ export function TimelineGrid({
         </div>
       ) : null}
       {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-        <div className={cn("mb-2 w-full overflow-x-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
+        <div className={cn("mb-2 w-full overflow-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
           <div className="grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
@@ -3384,9 +3384,9 @@ export function TimelineGrid({
                       </div>
                     )
                   ) : quarterRoadmapEpics.length === 0 ? (
-                    <p className="relative z-10 rounded-md bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
-                      Create an initiative first, then drag its epics on the relevant timeline, or drag the ends of a
-                      scheduled bar to stretch or shorten it so the span matches your start and due dates.
+                    <p className="relative z-10 bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
+                      Create an initiative, then drag its epics onto the timeline. You can also stretch or shorten a
+                      scheduled bar by dragging its ends to match your start and due dates.
                     </p>
                   ) : (
                     <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
@@ -3491,7 +3491,7 @@ export function TimelineGrid({
           ) : !focusedQuarter && quarterViewTab === "gantt" ? (
             <div
               className={cn(
-                "relative mb-4 w-full overflow-x-hidden",
+                "relative mb-4 w-full overflow-hidden",
                 hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
               )}
             >
@@ -3809,9 +3809,9 @@ export function TimelineGrid({
           )
         ) : yearRoadmapEpics.length === 0 && roadmapBarMode === "epics" ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : (
-            <p className="rounded-md bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
-              Create an initiative first, then drag its epics on the relevant timeline, or drag the ends of a scheduled bar
-              to stretch or shorten it so the span matches your start and due dates.
+            <p className="bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
+              Create an initiative, then drag its epics onto the timeline. You can also stretch or shorten a scheduled bar
+              by dragging its ends to match your start and due dates.
             </p>
           )
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (
