@@ -102,6 +102,26 @@ type SprintRetrospectiveEntry = {
   updatedAt: string;
 };
 
+type DndDropInspectorPayload = {
+  at: string;
+  activeId: string;
+  overId: string;
+  delta: { x: number; y: number };
+  planner: {
+    activeTimelineMonth: number | null;
+    activeYearSprint: number | null;
+    sprintCapacityPlanMonth: number | null;
+    activeMonthPlanTab: MonthPlanSurfaceTab;
+    isActiveSprintClosed: boolean;
+    sprintStoryBoardTeamId: string | null;
+    selectedYear: number;
+    focusedQuarterLabel: string | null;
+  };
+  branch: string;
+  detail: Record<string, unknown>;
+  steps: string[];
+};
+
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw new Error("Request failed");
@@ -773,6 +793,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [panelStatusQuickFilter, setPanelStatusQuickFilter] = useState<"Scheduled" | "Unscheduled" | null>(null);
   /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
   const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
+  /** Last drag-end snapshot for debugging drops (story Kanban, plan cells, etc.). */
+  const [dndDropInspector, setDndDropInspector] = useState<DndDropInspectorPayload | null>(null);
   const [monthTeamBoardByKey, setMonthTeamBoardByKey] = useState<Record<string, MonthTeamBoardPersisted>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -2394,15 +2416,35 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   async function onDragEnd(event: DragEndEvent) {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : "";
-    console.log("[gantt-drop] app onDragEnd", { activeId, overId });
-
-    if (isStoryDraggableId(activeId)) {
-      const storyId = parseStoryIdFromDraggable(activeId);
-      if (!storyId) return;
-      if (isActiveSprintClosed) {
-        toast.message("Sprint is closed. Drag and drop is disabled.");
-        return;
+    const inspectorSteps: string[] = [];
+    const step = (m: string) => {
+      inspectorSteps.push(m);
+    };
+    let outcomeBranch = "unhandled";
+    let outcomeDetail: Record<string, unknown> = {};
+    const record = (branch: string, extra?: Record<string, unknown>) => {
+      outcomeBranch = branch;
+      if (extra && Object.keys(extra).length > 0) {
+        outcomeDetail = { ...outcomeDetail, ...extra };
       }
+    };
+
+    try {
+      step("onDragEnd");
+      console.info("[gantt-drop] app onDragEnd", { activeId, overId });
+
+      if (isStoryDraggableId(activeId)) {
+        step("story-branch");
+        const storyId = parseStoryIdFromDraggable(activeId);
+        if (!storyId) {
+          record("story:bad-draggable-id", { activeId });
+          return;
+        }
+        if (isActiveSprintClosed) {
+          record("story:blocked-closed-sprint", { storyId, activeYearSprint });
+          toast.message("Sprint is closed. Drag and drop is disabled.");
+          return;
+        }
 
       if (overId === STORIES_UNSCHEDULE_DROP_ID) {
         flushSync(() => {
@@ -2435,10 +2477,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             throw new Error(`Failed to update story: ${response.status}`);
           }
           toast.success("Story moved to unscheduled");
+          record("story:unschedule-ok", { storyId });
         } catch (err) {
           console.error("[story-move] unschedule drop failed", {
             storyId,
             overId,
+            cause: err instanceof Error ? err.message : String(err),
+          });
+          record("story:unschedule-failed", {
+            storyId,
             cause: err instanceof Error ? err.message : String(err),
           });
           await refresh();
@@ -2449,7 +2496,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
       const capacityDrop = parseSprintCapacityBucketDropId(overId);
       if (capacityDrop) {
-        if (capacityDrop.yearSprint !== activeYearSprint) return;
+        if (capacityDrop.yearSprint !== activeYearSprint) {
+          record("story:capacity-sprint-mismatch", {
+            storyId,
+            dropYearSprint: capacityDrop.yearSprint,
+            activeYearSprint,
+          });
+          return;
+        }
         const dropTeamId = MONTH_TEAM_IDS.includes(capacityDrop.teamKey) ? capacityDrop.teamKey : null;
         const boardKey = sprintCapacityBoardKey(selectedYear, capacityDrop.yearSprint, dropTeamId);
         setSprintCapacityByKey((prev) => {
@@ -2501,19 +2555,134 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           toast.success(
             skipAssigneePatch ? "Story placed in Other assignees (assignee unchanged)" : `Assigned to ${capacityDrop.member}`,
           );
+          record("story:capacity", {
+            storyId,
+            skipAssigneePatch,
+            yearSprint: capacityDrop.yearSprint,
+            member: capacityDrop.member,
+            teamKey: capacityDrop.teamKey,
+          });
         } catch {
+          record("story:capacity-patch-failed", { storyId, capacityDrop });
           await refresh();
           toast.error("Failed to assign story");
         }
         return;
       }
 
+      /** Gantt month / half-month cells (same targets as epic plan drops). */
+      let storyPlanMonth: number | null = null;
+      let storyPlanLane: 1 | 2 | null = null;
+      const storyEpicCell = /^epic-plan:(\d+):([12])$/.exec(overId);
+      if (storyEpicCell) {
+        storyPlanMonth = Number(storyEpicCell[1]);
+        storyPlanLane = Number(storyEpicCell[2]) as 1 | 2;
+      } else if (overId.startsWith("month:")) {
+        const parsed = parseMonthDropTarget(overId);
+        if (parsed) {
+          storyPlanMonth = parsed.month;
+          storyPlanLane = 1;
+          const cx = clientXCenterFromDragEnd(event);
+          const overRect = event.over?.rect;
+          if (
+            cx !== undefined &&
+            overRect &&
+            Number.isFinite(overRect.left) &&
+            Number.isFinite(overRect.width) &&
+            overRect.width > 0
+          ) {
+            const midpoint = overRect.left + overRect.width / 2;
+            storyPlanLane = cx >= midpoint ? 2 : 1;
+          }
+        }
+      }
+      if (storyPlanMonth != null && storyPlanLane != null) {
+        const yearSprint = globalSprintFromMonthLane(storyPlanMonth, storyPlanLane);
+        console.log("[gantt-drop] story plan cell drop", {
+          storyId,
+          overId,
+          storyPlanMonth,
+          storyPlanLane,
+          yearSprint,
+        });
+        flushSync(() => {
+          setInitiatives((prev) =>
+            prev.map((init) => ({
+              ...init,
+              epics: (init.epics ?? []).map((epic) => ({
+                ...epic,
+                userStories: (epic.userStories ?? []).map((s) =>
+                  s.id === storyId ? { ...s, sprint: yearSprint } : s,
+                ),
+              })),
+            })),
+          );
+        });
+        try {
+          const response = await fetch(`/api/stories/${storyId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sprint: yearSprint }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          toast.success("Story placed on sprint");
+          record("story:plan-cell", {
+            storyId,
+            storyPlanMonth,
+            storyPlanLane,
+            yearSprint,
+            overId,
+          });
+        } catch (err) {
+          console.error("[story-move] plan cell drop failed", {
+            storyId,
+            yearSprint,
+            overId,
+            cause: err instanceof Error ? err.message : String(err),
+          });
+          record("story:plan-cell-failed", {
+            storyId,
+            yearSprint,
+            overId,
+            cause: err instanceof Error ? err.message : String(err),
+          });
+          await refresh();
+          toast.error("Failed to schedule story on sprint");
+        }
+        return;
+      }
+
       const kanbanMatch = /^kanban:(\d+):(todo|inProgress|done|approved)$/.exec(overId);
-      if (!kanbanMatch) return;
+      if (!kanbanMatch) {
+        console.warn("[gantt-drop] story drag: unsupported drop target", { activeId, overId });
+        record("story:unsupported-target", { storyId, activeId, overId });
+        toast.message("That target does not accept user stories. Try a sprint column or plan cell.");
+        return;
+      }
       const sprint = clampYearSprint(Number(kanbanMatch[1]));
       // Group 1 = year sprint; group 2 = status (there is no third capture).
       const status = kanbanMatch[2] as StoryStatus;
       const nextStatus = status;
+
+      const teamFilter =
+        sprintStoryBoardTeamId && isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null;
+      const monthForBoard = sprintCapacityPlanMonth;
+      let collectRows = 0;
+      let storyInCollectRows = false;
+      if (monthForBoard != null) {
+        const patchedInitiatives = initiatives.map((init) => ({
+          ...init,
+          epics: (init.epics ?? []).map((epic) => ({
+            ...epic,
+            userStories: (epic.userStories ?? []).map((s) =>
+              s.id === storyId ? { ...s, status: nextStatus, sprint } : s,
+            ),
+          })),
+        }));
+        const rows = collectStoriesForSprintBoard(patchedInitiatives, monthForBoard, sprint, teamFilter);
+        collectRows = rows.length;
+        storyInCollectRows = rows.some((r) => r.story.id === storyId);
+      }
 
       flushSync(() => {
         setInitiatives((prev) =>
@@ -2547,12 +2716,37 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           throw new Error(`Failed to update story: ${response.status}`);
         }
         toast.success("Story updated");
+        record("story:kanban", {
+          storyId,
+          sprint,
+          nextStatus,
+          overId,
+          monthForBoard,
+          sprintCapacityPlanMonth,
+          activeTimelineMonth,
+          activeYearSprint,
+          monthLaneFromDropSprint: monthLaneFromGlobalSprint(sprint),
+          teamFilter,
+          collectRows,
+          storyInCollectRows,
+        });
       } catch (err) {
         console.error("[story-move] kanban drop failed", {
           storyId,
           nextStatus,
           sprint,
           overId,
+          cause: err instanceof Error ? err.message : String(err),
+        });
+        record("story:kanban-patch-failed", {
+          storyId,
+          nextStatus,
+          sprint,
+          overId,
+          monthForBoard,
+          teamFilter,
+          collectRows,
+          storyInCollectRows,
           cause: err instanceof Error ? err.message : String(err),
         });
         await refresh();
@@ -2562,17 +2756,24 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
 
     if (isEpicPlanDraggableId(activeId)) {
+      step("epic-branch");
       const epicId = parseEpicIdFromPlanDraggable(activeId);
       if (!epicId) {
         console.log("[gantt-drop] epic branch: no epicId", { activeId });
+        record("epic:no-epic-id", { activeId, overId });
         return;
       }
       console.log("[gantt-drop] epic branch", { epicId, overId });
+      record("epic:handling", { epicId, overId });
 
       const teamCapacityDrop = parseMonthTeamCapacityBucketDropId(overId);
       if (teamCapacityDrop) {
-        if (!MONTH_TEAM_IDS.includes(teamCapacityDrop.teamId)) return;
+        if (!MONTH_TEAM_IDS.includes(teamCapacityDrop.teamId)) {
+          record("epic:month-team-capacity-invalid-team", { epicId, teamId: teamCapacityDrop.teamId });
+          return;
+        }
         if (teamCapacityDrop.year !== selectedYear) {
+          record("epic:month-team-capacity-wrong-year", { epicId, dropYear: teamCapacityDrop.year, selectedYear });
           toast.message("Switch the roadmap year to update that month’s team capacity.");
           return;
         }
@@ -2580,6 +2781,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           (c) => c.epic.id === epicId,
         );
         if (!inMonth) {
+          record("epic:month-team-capacity-epic-not-in-month", { epicId, month: teamCapacityDrop.month });
           toast.message("Only epics tied to this month can be assigned to team capacity.");
           return;
         }
@@ -2609,7 +2811,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           toast.success("Team updated");
+          record("epic:month-team-capacity-saved", { epicId, teamId: teamCapacityDrop.teamId });
         } catch {
+          record("epic:month-team-capacity-patch-failed", { epicId });
           await refresh();
           toast.error("Failed to save team");
         }
@@ -2618,8 +2822,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
       const quarterCapacityDrop = parseQuarterTeamCapacityBucketDropId(overId);
       if (quarterCapacityDrop) {
-        if (!MONTH_TEAM_IDS.includes(quarterCapacityDrop.teamId)) return;
+        if (!MONTH_TEAM_IDS.includes(quarterCapacityDrop.teamId)) {
+          record("epic:quarter-team-capacity-invalid-team", { epicId, teamId: quarterCapacityDrop.teamId });
+          return;
+        }
         if (quarterCapacityDrop.year !== selectedYear) {
+          record("epic:quarter-team-capacity-wrong-year", { epicId, dropYear: quarterCapacityDrop.year, selectedYear });
           toast.message("Switch the roadmap year to update that quarter’s team capacity.");
           return;
         }
@@ -2629,11 +2837,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             : QUARTERS.find((item) => item.label === quarterCapacityDrop.quarterLabel)?.months;
         if (!quarterMonths?.length) {
           console.warn("[gantt-drop] quarter capacity: unknown quarter label", quarterCapacityDrop.quarterLabel);
+          record("epic:quarter-team-capacity-bad-label", { epicId, quarterLabel: quarterCapacityDrop.quarterLabel });
           toast.message("Could not resolve this capacity board’s quarter.");
           return;
         }
         const inQuarter = collectQuarterEpics(initiatives, quarterMonths).some((c) => c.epic.id === epicId);
         if (!inQuarter) {
+          record("epic:quarter-team-capacity-epic-not-in-quarter", { epicId });
           toast.message("Only epics tied to this quarter can be assigned to team capacity.");
           return;
         }
@@ -2666,7 +2876,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           toast.success("Team updated");
+          record("epic:quarter-team-capacity-saved", { epicId, teamId: quarterCapacityDrop.teamId });
         } catch {
+          record("epic:quarter-team-capacity-patch-failed", { epicId });
           await refresh();
           toast.error("Failed to save team");
         }
@@ -2676,11 +2888,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       const teamSlot = parseMonthTeamSlotDropId(overId);
       if (teamSlot) {
         if (teamSlot.year !== selectedYear) {
+          record("epic:month-team-slot-wrong-year", { epicId, dropYear: teamSlot.year, selectedYear });
           toast.message("Switch the roadmap year to update that month’s team board.");
           return;
         }
         const inMonth = collectMonthEpicsForTeamBoard(initiatives, teamSlot.month).some((c) => c.epic.id === epicId);
         if (!inMonth) {
+          record("epic:month-team-slot-epic-not-in-month", { epicId, month: teamSlot.month });
           toast.message("Only epics tied to this month can be queued for a team.");
           return;
         }
@@ -2710,7 +2924,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             throw new Error(text || `HTTP ${response.status}`);
           }
           toast.success("Team updated");
+          record("epic:month-team-slot-saved", { epicId, teamId: teamSlot.teamId, index: teamSlot.index });
         } catch (err) {
+          record("epic:month-team-slot-patch-failed", { epicId });
           await refresh();
           const description = err instanceof Error ? err.message : undefined;
           toast.error("Failed to save team", description ? { description } : undefined);
@@ -2722,9 +2938,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       if (monthEpicBoard && monthEpicBoard.status === "todo") {
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
         const epic = initiative?.epics?.find((e) => e.id === epicId);
-        if (!initiative || !epic) return;
+        if (!initiative || !epic) {
+          record("epic:month-kanban-todo-missing-epic", { epicId });
+          return;
+        }
         const storyIds = (epic.userStories ?? []).map((s) => s.id);
         if (storyIds.length === 0) {
+          record("epic:month-kanban-todo-no-stories", { epicId });
           toast.message("Epic has no stories to reset");
           return;
         }
@@ -2760,7 +2980,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             }),
           );
           toast.success("All epic stories set to To do");
+          record("epic:month-kanban-all-todo", { epicId, storyCount: storyIds.length });
         } catch {
+          record("epic:month-kanban-all-todo-failed", { epicId });
           await refresh();
           toast.error("Failed to reset epic stories");
         }
@@ -2772,9 +2994,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         const sprint = clampYearSprint(Number(epicKanbanTodoMatch[1]));
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
         const epic = initiative?.epics?.find((e) => e.id === epicId);
-        if (!initiative || !epic) return;
+        if (!initiative || !epic) {
+          record("epic:sprint-kanban-bulk-missing-epic", { epicId });
+          return;
+        }
         const storyIds = (epic.userStories ?? []).map((s) => s.id);
         if (storyIds.length === 0) {
+          record("epic:sprint-kanban-bulk-no-stories", { epicId });
           toast.message("Epic has no stories to move");
           return;
         }
@@ -2811,7 +3037,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             }),
           );
           toast.success("All epic stories moved to To do");
+          record("epic:sprint-kanban-bulk-todo", { epicId, sprint, storyCount: storyIds.length });
         } catch {
+          record("epic:sprint-kanban-bulk-failed", { epicId, sprint });
           await refresh();
           toast.error("Failed to move epic stories");
         }
@@ -2832,7 +3060,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       if (overId === EPICS_UNPLAN_DROP_ID || epicBacklogSlot != null) {
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
         const epic = initiative?.epics?.find((e) => e.id === epicId);
-        if (!initiative || !epic) return;
+        if (!initiative || !epic) {
+          record("epic:unplan-missing-epic", { epicId });
+          return;
+        }
         if (epicBacklogSlot != null) {
           setEpicBacklogOrderByMonth((prev) => {
             const month = epicBacklogSlot.month;
@@ -2846,7 +3077,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
         const isAlreadyBacklog =
           epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
-        if (isAlreadyBacklog) return;
+        if (isAlreadyBacklog) {
+          record("epic:unplan-already-backlog", { epicId });
+          return;
+        }
 
         flushSync(() => {
           setInitiatives((prev) =>
@@ -2863,7 +3097,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         try {
           await patchEpicClearPlan(epicId);
           toast.success("Epic moved to backlog");
+          record("epic:unplan-ok", { epicId, epicBacklogSlot });
         } catch (err) {
+          record("epic:unplan-failed", {
+            epicId,
+            cause: err instanceof Error ? err.message : String(err),
+          });
           await refresh();
           const description = err instanceof Error ? err.message : undefined;
           toast.error("Failed to update epic placement", description ? { description } : undefined);
@@ -2884,6 +3123,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         const parsed = parseMonthDropTarget(overId);
         if (!parsed) {
           console.log("[gantt-drop] epic month drop: parse failed", { overId });
+          record("epic:gantt-month-parse-failed", { epicId, overId });
           return;
         }
         month = parsed.month;
@@ -2904,17 +3144,22 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         console.log("[gantt-drop] epic month drop parsed", { month, laneIndex, planSprint });
       } else {
         console.log("[gantt-drop] epic branch: overId not epic-plan or month", { overId });
+        record("epic:gantt-unknown-target", { epicId, overId });
         return;
       }
       if (!Number.isFinite(month)) {
         console.log("[gantt-drop] epic branch: invalid month", { month });
+        record("epic:gantt-invalid-month", { epicId, month });
         return;
       }
 
       const before = initiatives;
       const currentInit = before.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
       const currentEpic = currentInit?.epics?.find((e) => e.id === epicId);
-      if (!currentInit || !currentEpic) return;
+      if (!currentInit || !currentEpic) {
+        record("epic:gantt-missing-epic", { epicId });
+        return;
+      }
 
       const isFirstSchedule = currentEpic.planStartMonth == null || currentEpic.planEndMonth == null;
       let hoveredLaneIndex: number | undefined;
@@ -2995,7 +3240,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }
         toast.success("Epic placed on the plan");
         flashGanttEpicEmphasis(epicId);
+        record("epic:gantt-month-placed", { epicId, month, planSprint, laneIndex, rowsChanged, movedTimelineRow });
       } catch (err) {
+        record("epic:gantt-month-failed", {
+          epicId,
+          month,
+          cause: err instanceof Error ? err.message : String(err),
+        });
         await refresh();
         const description = err instanceof Error ? err.message : undefined;
         toast.error("Failed to place epic", description ? { description } : undefined);
@@ -3005,11 +3256,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
     if (!isInitiativeDraggableId(activeId)) {
       console.log("[gantt-drop] no handler for activeId (not initiative)", { activeId, overId });
+      record("no-handler", { activeId, overId });
       return;
     }
 
+    step("initiative-branch");
     const initiativeId = parseInitiativeIdFromDraggable(activeId);
-    if (!initiativeId) return;
+    if (!initiativeId) {
+      record("initiative:bad-id", { activeId });
+      return;
+    }
 
     const backlogSlot = parseBacklogSlotDropId(overId);
     if (overId === "initiatives:backlog-drop" || backlogSlot != null) {
@@ -3052,7 +3308,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }
         await persistBacklogOrder(orderedIds);
         toast.success("Initiative placed in backlog");
+        record("initiative:backlog", { initiativeId, wasScheduled });
       } catch {
+        record("initiative:backlog-failed", { initiativeId });
         await refresh();
         toast.error("Failed to update backlog placement");
       }
@@ -3061,17 +3319,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
     if (!overId.startsWith("month:")) {
       console.log("[gantt-drop] initiative: overId not month:*", { overId });
+      record("initiative:not-month-target", { initiativeId, overId });
       return;
     }
 
     const parsedDrop = parseMonthDropTarget(overId);
     if (!parsedDrop) {
       console.log("[gantt-drop] initiative: parseMonthDropTarget null", { overId });
+      record("initiative:month-parse-failed", { initiativeId, overId });
       return;
     }
     const { month, laneIndex: laneFromTarget } = parsedDrop;
     if (!Number.isFinite(month)) {
       console.log("[gantt-drop] initiative: bad month", { month });
+      record("initiative:bad-month", { initiativeId, month });
       return;
     }
 
@@ -3111,6 +3372,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const initiativeBefore = initiatives.find((i) => i.id === initiativeId);
     if (!initiativeBefore) {
       console.log("[gantt-drop] initiative: not found", { initiativeId });
+      record("initiative:not-found", { initiativeId });
       return;
     }
     const isFirstSchedule = initiativeBefore.status === InitiativeStatus.backlog;
@@ -3161,6 +3423,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             return targetQ?.label ?? prev;
           });
         }
+        record("initiative:scheduled-first-time", {
+          initiativeId,
+          month,
+          laneIndex,
+          rowsChanged,
+          movedTimelineRow,
+        });
       } else {
         const range = monthRangeForInitiativeDrop(initiativeBefore, month, isFirstSchedule);
         console.log("[gantt-drop] initiative reschedule → patch range + persist rows", {
@@ -3189,11 +3458,40 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             return targetQ?.label ?? prev;
           });
         }
+        record("initiative:rescheduled", {
+          initiativeId,
+          month,
+          ...range,
+          rowsChanged,
+          movedTimelineRow,
+        });
       }
     } catch {
+      record("initiative:schedule-failed", { initiativeId, month });
       await refresh();
       toast.error("Failed to schedule initiative");
     }
+  } finally {
+      setDndDropInspector({
+        at: new Date().toLocaleTimeString(),
+        activeId,
+        overId: overId || "(none)",
+        delta: { x: event.delta.x, y: event.delta.y },
+        planner: {
+          activeTimelineMonth,
+          activeYearSprint,
+          sprintCapacityPlanMonth,
+          activeMonthPlanTab,
+          isActiveSprintClosed,
+          sprintStoryBoardTeamId,
+          selectedYear,
+          focusedQuarterLabel,
+        },
+        branch: outcomeBranch,
+        detail: outcomeDetail,
+        steps: inspectorSteps,
+      });
+  }
   }
 
   useEffect(() => {
@@ -3922,6 +4220,87 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             </div>
           )}
         </div>
+        {dndDropInspector ? (
+          <div
+            className="pointer-events-auto fixed bottom-4 right-4 z-[100] flex max-h-[min(420px,70vh)] w-[min(100vw-2rem,420px)] flex-col rounded-lg border border-amber-200/80 bg-amber-50/95 text-slate-900 shadow-xl ring-1 ring-amber-900/10 backdrop-blur-sm"
+            role="dialog"
+            aria-label="Drag and drop debug"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-200/90 px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-900/80">
+                  Drop debug
+                </div>
+                <div className="truncate font-mono text-[11px] text-slate-600">{dndDropInspector.at}</div>
+              </div>
+              <div className="flex shrink-0 gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 border-amber-300 bg-white px-2 text-[11px] text-slate-800 hover:bg-amber-100/80"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(JSON.stringify(dndDropInspector, null, 2));
+                    toast.message("Copied drop debug JSON");
+                  }}
+                >
+                  Copy
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 border-amber-300 bg-white px-2 text-[11px] text-slate-800 hover:bg-amber-100/80"
+                  onClick={() => setDndDropInspector(null)}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 text-[11px] leading-snug">
+              <div>
+                <span className="font-semibold text-slate-700">Branch:</span>{" "}
+                <span className="font-mono text-slate-900">{dndDropInspector.branch}</span>
+              </div>
+              <div className="font-mono text-[10px] text-slate-700">
+                <div>
+                  <span className="text-slate-500">active</span> {dndDropInspector.activeId}
+                </div>
+                <div>
+                  <span className="text-slate-500">over</span> {dndDropInspector.overId}
+                </div>
+                <div>
+                  <span className="text-slate-500">Δ</span> {dndDropInspector.delta.x.toFixed(0)},{" "}
+                  {dndDropInspector.delta.y.toFixed(0)}
+                </div>
+              </div>
+              <div className="rounded border border-amber-100 bg-white/80 p-2 font-mono text-[10px] text-slate-700">
+                <div>month {String(dndDropInspector.planner.activeTimelineMonth)}</div>
+                <div>sprint {String(dndDropInspector.planner.activeYearSprint)}</div>
+                <div>capacityMonth {String(dndDropInspector.planner.sprintCapacityPlanMonth)}</div>
+                <div>planTab {dndDropInspector.planner.activeMonthPlanTab}</div>
+                <div>sprintClosed {String(dndDropInspector.planner.isActiveSprintClosed)}</div>
+                <div>sprintTeam {String(dndDropInspector.planner.sprintStoryBoardTeamId)}</div>
+                <div>quarter {String(dndDropInspector.planner.focusedQuarterLabel)}</div>
+              </div>
+              {dndDropInspector.steps.length > 0 ? (
+                <div>
+                  <div className="mb-0.5 font-semibold text-slate-700">Steps</div>
+                  <ol className="list-decimal space-y-0.5 pl-4 font-mono text-[10px] text-slate-600">
+                    {dndDropInspector.steps.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+              {Object.keys(dndDropInspector.detail).length > 0 ? (
+                <pre className="max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 font-mono text-[10px] text-slate-800">
+                  {JSON.stringify(dndDropInspector.detail, null, 2)}
+                </pre>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </main>
       <InitiativeFormDialog
         open={initiativeDialogOpen}

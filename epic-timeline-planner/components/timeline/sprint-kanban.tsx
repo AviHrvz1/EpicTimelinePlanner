@@ -63,16 +63,16 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[24rem] w-full flex-1 flex-col rounded-xl border p-2 transition",
+        "flex min-h-[24rem] w-full flex-col rounded-xl border p-2 transition",
         tone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
     >
-      <div className="mb-2 flex items-center justify-center gap-1.5 pb-1 text-slate-600">
+      <div className="mb-2 flex shrink-0 items-center justify-center gap-1.5 pb-1 text-slate-600">
         <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
         <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
       </div>
-      <div className="flex flex-1 flex-col gap-2">{children}</div>
+      <div className="flex flex-col gap-2">{children}</div>
     </div>
   );
 }
@@ -284,7 +284,7 @@ export function SprintKanbanBoard({
   }, []);
 
   return (
-    <div className="relative flex w-full min-h-0 flex-1 flex-col gap-2">
+    <div className="relative flex w-full min-h-min flex-col gap-2">
       {sprintClosed ? (
         <>
           <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/5 backdrop-blur-[1px]" />
@@ -379,7 +379,7 @@ export function SprintKanbanBoard({
           </div>
         </div>
       ) : null}
-      <div className="grid w-full min-h-0 flex-1 grid-cols-2 items-stretch gap-3 lg:grid-cols-4">
+      <div className="grid w-full grid-cols-2 items-stretch gap-3 lg:grid-cols-4">
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
           <KanbanColumn
             key={status}

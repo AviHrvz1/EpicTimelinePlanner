@@ -48,28 +48,6 @@ export function collectPlannedEpicsForMonth(
   return out;
 }
 
-export function collectStoriesForSprintBoard(
-  initiatives: InitiativeItem[],
-  month: number,
-  yearSprint: number,
-  /** When set (e.g. sprint opened from a team lane), only stories under epics assigned to this team. */
-  filterEpicTeamId?: string | null,
-): BoardStoryRow[] {
-  const out: BoardStoryRow[] = [];
-  for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
-    for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
-      for (const story of epic.userStories ?? []) {
-        if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
-        out.push({ story, epic, initiative });
-      }
-    }
-  }
-  return out;
-}
-
 /** Epic has a Gantt plan overlapping `month` (same rule as left panel month list). */
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
   if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
@@ -107,6 +85,30 @@ export function collectMonthScopeEpicsForSprintPanel(
     }
   }
   return rows;
+}
+
+/**
+ * Stories rendered on the sprint Kanban: same epic scope as the month/sprint left panel
+ * (`collectMonthScopeEpicsForSprintPanel`), filtered to the active global sprint.
+ * Using only “scheduled initiatives overlapping month” excluded unscheduled epics that still
+ * appear in the panel, so cards could disappear after a successful drop.
+ */
+export function collectStoriesForSprintBoard(
+  initiatives: InitiativeItem[],
+  month: number,
+  yearSprint: number,
+  /** When set (e.g. sprint opened from a team lane), only stories under epics assigned to this team. */
+  filterEpicTeamId?: string | null,
+): BoardStoryRow[] {
+  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamId);
+  const out: BoardStoryRow[] = [];
+  for (const { epic, initiative } of scope) {
+    for (const story of epic.userStories ?? []) {
+      if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
+      out.push({ story, epic, initiative });
+    }
+  }
+  return out;
 }
 
 export type SprintKanbanSummaryStats = {

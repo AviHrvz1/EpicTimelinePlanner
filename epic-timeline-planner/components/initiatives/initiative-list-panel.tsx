@@ -786,7 +786,7 @@ function InitiativeTreeCard({
                           onToggleEpic={() =>
                             setOpenEpicIds((prev) => {
                               const next = !(prev[epic.id] ?? false);
-                              onEpicAccordionChange?.(epic.id, next);
+                              queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
                               return {
                                 ...prev,
                                 [epic.id]: next,
@@ -954,7 +954,7 @@ function SprintEpicCard({
               onClick={() =>
                 setIsOpen((prev) => {
                   const next = !prev;
-                  onEpicAccordionChange?.(epic.id, next);
+                  queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
                   return next;
                 })
               }

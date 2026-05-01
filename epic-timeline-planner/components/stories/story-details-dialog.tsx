@@ -1131,29 +1131,32 @@ export function StoryDetailsDialog({
             )}
             style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
           >
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
-              onClick={() => setActivityOpen((open) => !open)}
-              aria-expanded={activityOpen}
-            >
-              <span className="flex items-center gap-2 text-lg font-normal text-slate-800">
-                <ChevronDown
-                  className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
-                  aria-hidden
-                />
-                <ActivityIcon className="size-4 shrink-0 text-slate-500" aria-hidden />
-                Activity
-              </span>
+            <div className="flex w-full items-center justify-between gap-2 rounded-lg">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+                onClick={() => setActivityOpen((open) => !open)}
+                aria-expanded={activityOpen}
+              >
+                <span className="flex items-center gap-2 text-lg font-normal text-slate-800">
+                  <ChevronDown
+                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                    aria-hidden
+                  />
+                  <ActivityIcon className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  Activity
+                </span>
+              </button>
               {activityOpen ? (
                 <div
                   className="inline-flex shrink-0 rounded-lg bg-white p-1 ring-1 ring-slate-200"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  role="presentation"
+                  role="tablist"
+                  aria-label="Activity view"
                 >
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={activityTab === "comments"}
                     className={cn(
                       "rounded-md px-2.5 py-1 text-sm font-medium transition",
                       activityTab === "comments"
@@ -1167,6 +1170,8 @@ export function StoryDetailsDialog({
                   </button>
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={activityTab === "history"}
                     className={cn(
                       "rounded-md px-2.5 py-1 text-sm font-medium transition",
                       activityTab === "history"
@@ -1180,7 +1185,7 @@ export function StoryDetailsDialog({
                   </button>
                 </div>
               ) : null}
-            </button>
+            </div>
 
             {activityOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">

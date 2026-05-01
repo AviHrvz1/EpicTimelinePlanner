@@ -161,7 +161,9 @@ const storyKanbanCollision: CollisionDetection = (args) => {
 
   const isKanban = (id: string) => id.startsWith("kanban:");
   const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
-  const isStoryDropTarget = (id: string) => isKanban(id) || isSprintCapacityDrop(id);
+  /** Same Gantt cells as epics (`MonthDropCell`, `epic-plan:`) so stories can be scheduled on the plan. */
+  const isPlanCell = (id: string) => id.startsWith("month:") || id.startsWith("epic-plan:");
+  const isStoryDropTarget = (id: string) => isKanban(id) || isSprintCapacityDrop(id) || isPlanCell(id);
   const pointerHits = pointerWithin(args).filter((c) => isStoryDropTarget(String(c.id)));
   if (pointerHits.length > 0) return pointerHits;
   const rectHits = rectIntersection(args).filter((c) => isStoryDropTarget(String(c.id)));
@@ -290,10 +292,11 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
         droppable: { strategy: MeasuringStrategy.Always },
       }}
       onDragStart={(event) => {
-        console.log("[gantt-drop] dnd dragStart", { activeId: String(event.active.id) });
+        // info: visible when Console default level hides verbose "log" in some setups
+        console.info("[gantt-drop] dnd dragStart", { activeId: String(event.active.id) });
       }}
       onDragEnd={(event) => {
-        console.log("[gantt-drop] dnd dragEnd", {
+        console.info("[gantt-drop] dnd dragEnd", {
           activeId: event.active?.id,
           overId: event.over?.id,
           delta: event.delta,
@@ -302,7 +305,7 @@ export function DragContext({ onDragEnd, children }: DragContextProps) {
         onDragEnd(event);
       }}
       onDragCancel={() => {
-        console.log("[gantt-drop] dnd dragCancel");
+        console.info("[gantt-drop] dnd dragCancel");
         suppressPostDragClicksFor();
       }}
     >

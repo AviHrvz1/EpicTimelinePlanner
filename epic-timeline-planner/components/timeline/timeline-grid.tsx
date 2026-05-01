@@ -59,6 +59,7 @@ import {
   clampYearSprint,
   firstGlobalSprintForMonth,
   globalSprintFromMonthLane,
+  monthLaneFromGlobalSprint,
   monthRangeFromYearSprintRange,
   resolvedInitiativeYearSprintBounds,
 } from "@/lib/year-sprint";
@@ -1487,20 +1488,37 @@ export function TimelineGrid({
     );
   }
 
-  const activeYearSprintForMonthDrill = useMemo(() => {
-    if (activeMonth == null) return null;
+  /** Global sprint for the open sprint surface (parent-controlled and/or internal), even when quarter strip hides `activeMonth`. */
+  const resolvedActiveYearSprint = useMemo(() => {
     const fromParent =
       activeSprintExternal !== undefined && activeSprintExternal != null
         ? clampYearSprint(activeSprintExternal)
         : null;
-    return fromParent ?? (activeSprint != null ? clampYearSprint(activeSprint) : firstGlobalSprintForMonth(activeMonth));
+    if (fromParent != null) return fromParent;
+    if (activeSprint != null) return clampYearSprint(activeSprint);
+    if (activeMonth != null) return firstGlobalSprintForMonth(activeMonth);
+    return null;
   }, [activeMonth, activeSprint, activeSprintExternal]);
 
+  /**
+   * Calendar month used to resolve legacy story.sprint 1|2 and initiative month overlap for sprint Kanban/capacity.
+   * When the focused month is outside the visible quarter, `activeMonth` is null but the sprint still maps to a month.
+   */
+  const sprintBoardContextMonth = useMemo(() => {
+    if (activeMonth != null) return activeMonth;
+    if (resolvedActiveYearSprint == null) return null;
+    return monthLaneFromGlobalSprint(resolvedActiveYearSprint).month;
+  }, [activeMonth, resolvedActiveYearSprint]);
+
+  const activeYearSprintForMonthDrill = resolvedActiveYearSprint;
+
   const sprintKanbanSummaryStats = useMemo(() => {
-    if (activeMonth == null || monthPlanTab !== "sprint-kanban" || activeYearSprintForMonthDrill == null) return null;
+    if (monthPlanTab !== "sprint-kanban" || resolvedActiveYearSprint == null) return null;
+    const m = sprintBoardContextMonth;
+    if (m == null) return null;
     const teamId = isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null;
-    return computeSprintKanbanSummaryStats(initiatives, activeMonth, activeYearSprintForMonthDrill, teamId);
-  }, [activeMonth, monthPlanTab, initiatives, activeYearSprintForMonthDrill, sprintStoryBoardTeamId]);
+    return computeSprintKanbanSummaryStats(initiatives, m, resolvedActiveYearSprint, teamId);
+  }, [monthPlanTab, initiatives, resolvedActiveYearSprint, sprintBoardContextMonth, sprintStoryBoardTeamId]);
 
   const showSprintEndCountdown =
     activeMonth != null &&
@@ -3004,7 +3022,7 @@ export function TimelineGrid({
               monthPlanTab !== "month-capacity" &&
               monthPlanTab !== "sprint-capacity" &&
               "rounded-2xl p-1.5 shadow-lg ring-1",
-            monthPlanTab === "sprint-kanban" && "flex min-h-0 flex-1 flex-col",
+            monthPlanTab === "sprint-kanban" && "flex w-full flex-col min-h-min",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
     monthPlanTab !== "sprint-kanban" &&
     monthPlanTab !== "sprint-retrospective" &&
@@ -3031,12 +3049,14 @@ export function TimelineGrid({
                 monthPlanTab !== "month-capacity" &&
                 monthPlanTab !== "sprint-capacity" &&
                 "rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
-              monthPlanTab === "sprint-kanban" ? "min-h-0 flex-1 overflow-visible" : "overflow-hidden",
+              monthPlanTab === "sprint-kanban" ? "min-h-min overflow-visible" : "overflow-hidden",
               monthPlanTab === "epic-gantt" ||
               monthPlanTab === "month-capacity" ||
               monthPlanTab === "sprint-retrospective"
                 ? "min-h-[56rem]"
-                : "min-h-0",
+                : monthPlanTab === "sprint-kanban"
+                  ? "min-h-min"
+                  : "min-h-0",
             )}
           >
             {monthPlanTab === "epic-gantt" && activeMonth != null ? (
@@ -3302,12 +3322,12 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-kanban" ? (
-              <div className="flex min-h-0 flex-1">
+              <div className="flex w-full min-h-min flex-col">
                 <SprintKanbanBoard
                   initiatives={initiatives}
                   planYear={currentYear}
-                  month={activeMonth}
-                  yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+                  month={sprintBoardContextMonth ?? activeMonth ?? 1}
+                  yearSprint={resolvedActiveYearSprint ?? 1}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
@@ -3323,8 +3343,8 @@ export function TimelineGrid({
               <div className="flex-1 p-3 sm:p-5">
                 <SprintCapacityBoard
                   initiatives={initiatives}
-                  month={activeMonth}
-                  yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+                  month={sprintBoardContextMonth ?? activeMonth ?? 1}
+                  yearSprint={resolvedActiveYearSprint ?? 1}
                   selectedTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                   capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}
                   onCapacityChange={(member, days) => onSprintCapacityChange?.(member, days)}
@@ -3376,7 +3396,7 @@ export function TimelineGrid({
             ) : monthPlanTab === "sprint-retrospective" ? (
               <div className="flex-1 py-3 pr-3 pl-2 sm:py-5 sm:pr-5 sm:pl-3">
                 <SprintRetrospectiveEditor
-                  sprintLabel={`Sprint ${activeSprint ?? firstGlobalSprintForMonth(activeMonth)}`}
+                  sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
                   initialDoc={sprintRetrospective}
                   updatedAt={sprintRetrospective?.updatedAt ?? null}
                   onSave={(doc) => onSaveSprintRetrospective?.(doc)}
@@ -3400,8 +3420,8 @@ export function TimelineGrid({
               <div className="p-3 sm:p-5">
                 <SprintAnalytics
                   initiatives={initiatives}
-                  month={activeMonth}
-                  yearSprint={activeSprint ?? firstGlobalSprintForMonth(activeMonth)}
+                  month={sprintBoardContextMonth ?? activeMonth ?? 1}
+                  yearSprint={resolvedActiveYearSprint ?? 1}
                   planYear={currentYear}
                   filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
                   onOpenStory={onOpenStory ?? (() => {})}
