@@ -8,8 +8,12 @@ export type SprintCapacityBoard = {
 export const SPRINT_CAPACITY_STORAGE_KEY = "epicPlanner.sprintCapacity.v1";
 
 /**
- * Bucket for stories in this sprint whose `assignee` is not on the visible roster (e.g. cross-team
- * name while the board is filtered to one delivery team). Do not persist this label as a story assignee in the API.
+ * When set in localStorage (any value), sync logs [sprint-capacity sync] diagnostics to the console.
+ */
+export const DEBUG_SPRINT_CAPACITY_STORAGE_KEY = "epicPlanner.debugSprintCapacity";
+
+/**
+ * Bucket for stories with no assignee (or legacy rows we could not map). Do not persist as a story assignee in the API.
  */
 export const SPRINT_CAPACITY_OTHER_BUCKET = "Other assignees";
 
@@ -63,18 +67,35 @@ export function assignStoryToMember(board: SprintCapacityBoard, storyId: string,
   }
   const list = next.assignments[member] ?? [];
   next.assignments[member] = [...list, storyId];
-  if (member === SPRINT_CAPACITY_OTHER_BUCKET && next.capacities[member] == null) {
+  if (next.capacities[member] == null) {
     next.capacities[member] = 6;
   }
   return next;
 }
 
-/** Map kanban assignee string to a capacity roster name (exact or case-insensitive). */
+function normalizeAssigneeForRosterMatch(raw: string): string {
+  let s = raw.trim();
+  // Jira/display quirks: "Eitan us" → Eitan (US locale/team suffix, not part of roster key)
+  if (/\s+us$/i.test(s)) s = s.replace(/\s+us$/i, "").trim();
+  // "Alex (Platform)" → Alex
+  const paren = s.match(/^(.+?)\s*\([^)]{0,120}\)\s*$/);
+  if (paren) s = paren[1]!.trim();
+  return s;
+}
+
+/** Common spellings / typos → canonical roster first name (must exist in {@link fullDeliveryCapacityRoster}). */
+const ROSTER_ASSIGNEE_ALIASES: Record<string, string> = {
+  eithan: "Eitan",
+  eytan: "Eitan",
+  ayton: "Eitan",
+};
+
+/** Map kanban assignee string to a capacity roster name (exact, alias, or case-insensitive). */
 export function resolveCapacityMemberForAssignee(
   assignee: string | null | undefined,
   members: string[],
 ): string | null {
-  const raw = assignee?.trim() ?? "";
+  const raw = normalizeAssigneeForRosterMatch(assignee?.trim() ?? "");
   if (!raw) return null;
   const lower = raw.toLowerCase();
   if (lower === "unassigned") return null;
@@ -83,36 +104,123 @@ export function resolveCapacityMemberForAssignee(
   for (const m of members) {
     if (m.toLowerCase() === lower) return m;
   }
+  const aliasCanonical = ROSTER_ASSIGNEE_ALIASES[lower];
+  if (aliasCanonical) {
+    for (const m of members) {
+      if (m === aliasCanonical || m.toLowerCase() === aliasCanonical.toLowerCase()) return m;
+    }
+  }
   return null;
 }
 
-function assigneeRoutesToOtherBucket(
-  assignee: string | null | undefined,
-  rosterMembers: string[],
-): boolean {
-  const raw = assignee?.trim() ?? "";
-  if (!raw || raw.toLowerCase() === "unassigned") return false;
-  return resolveCapacityMemberForAssignee(assignee, rosterMembers) == null;
+/** All planner delivery people (used to match assignees even when the board is team-filtered). */
+export function fullDeliveryCapacityRoster(): string[] {
+  return defaultMembersForTeam(null);
 }
 
 /**
- * Places each sprint story under the capacity column whose name matches `story.assignee`
- * (same names as sprint kanban; matching is case-insensitive). Assignees not on `members` go to
- * {@link SPRINT_CAPACITY_OTHER_BUCKET} so capacity stays aligned with kanban when the board is
- * team-scoped or uses ad-hoc assignee labels. Stories with no assignee are unchanged unless already bucketed.
+ * Capacity column for a story: canonical roster name when it matches, otherwise the normalized free-text assignee.
+ * Null = treat as unassigned (bucketed under {@link SPRINT_CAPACITY_OTHER_BUCKET} when that column is enabled).
+ */
+export function sprintCapacityAssigneeBucket(
+  assignee: string | null | undefined,
+  fullRoster: string[],
+): string | null {
+  const matched = resolveCapacityMemberForAssignee(assignee, fullRoster);
+  if (matched) return matched;
+  const raw = normalizeAssigneeForRosterMatch(assignee?.trim() ?? "");
+  if (!raw || raw.toLowerCase() === "unassigned") return null;
+  return raw;
+}
+
+function orderedSprintCapacityBucketKeys(
+  baseMembers: string[],
+  board: SprintCapacityBoard,
+  sprintStories: Array<{ id: string; assignee: string | null | undefined }>,
+  fullRoster: string[],
+  useOtherBucket: boolean,
+): string[] {
+  const set = new Set<string>(baseMembers);
+  for (const { assignee } of sprintStories) {
+    const b = sprintCapacityAssigneeBucket(assignee, fullRoster);
+    if (b) set.add(b);
+  }
+  for (const k of Object.keys(board.assignments ?? {})) {
+    if (k === SPRINT_CAPACITY_OTHER_BUCKET) continue;
+    set.add(k);
+  }
+  if (useOtherBucket) set.add(SPRINT_CAPACITY_OTHER_BUCKET);
+
+  const rosterExtras = [...set].filter(
+    (k) => !baseMembers.includes(k) && k !== SPRINT_CAPACITY_OTHER_BUCKET && fullRoster.includes(k),
+  );
+  const dynamicExtras = [...set].filter(
+    (k) =>
+      !baseMembers.includes(k) && k !== SPRINT_CAPACITY_OTHER_BUCKET && !fullRoster.includes(k),
+  );
+  rosterExtras.sort((a, b) => a.localeCompare(b));
+  dynamicExtras.sort((a, b) => a.localeCompare(b));
+  return [...baseMembers, ...rosterExtras, ...dynamicExtras, ...(useOtherBucket ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
+}
+
+function logSprintCapacitySync(
+  sprintStories: Array<{ id: string; assignee: string | null | undefined }>,
+  fullRoster: string[],
+  memberKeys: string[],
+  nextAssignments: Record<string, string[]>,
+): void {
+  if (typeof globalThis === "undefined") return;
+  try {
+    const storage = (globalThis as unknown as { localStorage?: { getItem: (k: string) => string | null } })
+      .localStorage;
+    if (!storage?.getItem(DEBUG_SPRINT_CAPACITY_STORAGE_KEY)) return;
+  } catch {
+    return;
+  }
+  const sample = sprintStories.slice(0, 15).map((s) => ({
+    id: s.id.slice(0, 8),
+    assignee: s.assignee ?? null,
+    bucket: sprintCapacityAssigneeBucket(s.assignee, fullRoster),
+  }));
+  const unassigned = sprintStories.filter((s) => sprintCapacityAssigneeBucket(s.assignee, fullRoster) == null).length;
+  const byBucket: Record<string, number> = {};
+  for (const [k, ids] of Object.entries(nextAssignments)) {
+    byBucket[k] = ids.length;
+  }
+  console.info("[sprint-capacity sync]", {
+    storyCount: sprintStories.length,
+    unassignedCount: unassigned,
+    rosterSize: fullRoster.length,
+    columnKeys: memberKeys,
+    cardsPerColumn: byBucket,
+    sampleAssigneeResolution: sample,
+  });
+}
+
+/**
+ * Places each sprint story in a capacity column from {@link sprintCapacityAssigneeBucket}: roster match,
+ * else a dynamic column named after the assignee (any non-empty text). Unassigned stories use
+ * {@link SPRINT_CAPACITY_OTHER_BUCKET} when that bucket is present (persisted unassigned rows or any unassigned in sprint).
  */
 export function syncCapacityAssignmentsWithKanban(
   board: SprintCapacityBoard,
   members: string[],
   sprintStories: Array<{ id: string; assignee: string | null | undefined }>,
 ): SprintCapacityBoard {
-  const hasPersistedOther =
-    (board.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0;
-  const hasInSprintOther = sprintStories.some(({ assignee }) =>
-    assigneeRoutesToOtherBucket(assignee, members),
+  const fullRoster = fullDeliveryCapacityRoster();
+  const hasPersistedOther = (board.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0;
+  const hasUnassignedInSprint = sprintStories.some(
+    (s) => sprintCapacityAssigneeBucket(s.assignee, fullRoster) == null,
   );
-  const useOtherBucket = hasPersistedOther || hasInSprintOther;
-  const memberKeys = useOtherBucket ? [...members, SPRINT_CAPACITY_OTHER_BUCKET] : [...members];
+  const useOtherBucket = hasPersistedOther || hasUnassignedInSprint;
+
+  const memberKeys = orderedSprintCapacityBucketKeys(
+    members,
+    board,
+    sprintStories,
+    fullRoster,
+    useOtherBucket,
+  );
 
   const nextAssignments: Record<string, string[]> = {};
   for (const m of memberKeys) {
@@ -120,12 +228,9 @@ export function syncCapacityAssignmentsWithKanban(
   }
 
   for (const { id, assignee } of sprintStories) {
-    let memberName = resolveCapacityMemberForAssignee(assignee, members);
-    if (!memberName) {
-      if (!assigneeRoutesToOtherBucket(assignee, members)) continue;
-      if (!useOtherBucket) continue;
-      memberName = SPRINT_CAPACITY_OTHER_BUCKET;
-    }
+    const bucket = sprintCapacityAssigneeBucket(assignee, fullRoster);
+    const memberName = bucket ?? (useOtherBucket ? SPRINT_CAPACITY_OTHER_BUCKET : null);
+    if (!memberName) continue;
     for (const m of memberKeys) {
       nextAssignments[m] = (nextAssignments[m] ?? []).filter((sid) => sid !== id);
     }
@@ -136,9 +241,13 @@ export function syncCapacityAssignmentsWithKanban(
   }
 
   const nextCapacities = { ...board.capacities };
-  if (useOtherBucket && nextCapacities[SPRINT_CAPACITY_OTHER_BUCKET] == null) {
-    nextCapacities[SPRINT_CAPACITY_OTHER_BUCKET] = 6;
+  for (const m of memberKeys) {
+    if (nextCapacities[m] == null) {
+      nextCapacities[m] = 6;
+    }
   }
+
+  logSprintCapacitySync(sprintStories, fullRoster, memberKeys, nextAssignments);
 
   return {
     capacities: nextCapacities,

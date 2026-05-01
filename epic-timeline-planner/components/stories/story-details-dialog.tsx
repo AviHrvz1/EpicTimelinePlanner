@@ -36,11 +36,14 @@ import {
 import { StoryStatus } from "@/lib/generated/prisma";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
+import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
-import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
+import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
+import { MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import {
@@ -152,6 +155,7 @@ export function StoryDetailsDialog({
       ),
     [sprintPlanningYear],
   );
+  const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
   const [priority, setPriority] = useState("");
   const [sprint, setSprint] = useState("");
   const [status, setStatus] = useState<StoryStatus>(StoryStatus.todo);
@@ -422,6 +426,10 @@ export function StoryDetailsDialog({
   }
 
   async function handleSave() {
+    blurActiveField();
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 0);
+    });
     const payload = buildStoryPayload();
     if (!payload) return;
     setSaving(true);
@@ -927,23 +935,23 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Assignee</p>
-              <input value={assignee} onChange={(event) => setAssignee(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800" placeholder="e.g. Avi" />
+              <AssigneeCombobox
+                value={assignee}
+                onChange={setAssignee}
+                suggestions={assigneeNameSuggestions}
+                placeholder="Type or pick a name"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+              />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Team</p>
-              <select
-                value={epicTeamDraft}
-                onChange={(event) => setEpicTeamDraft(event.target.value)}
+              <TeamIdCombobox
+                teamId={epicTeamDraft}
+                onTeamIdChange={setEpicTeamDraft}
                 disabled={!epicId}
+                placeholder="Type or pick a team"
                 className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
-              >
-                <option value="">Not set</option>
-                {MONTH_TEAM_COLUMNS.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Sprint</p>

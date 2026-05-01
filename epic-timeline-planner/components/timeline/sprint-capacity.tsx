@@ -1,21 +1,44 @@
 "use client";
 
-import { type ReactNode } from "react";
-import { AlertTriangle, Users, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
-import { InitiativeItem } from "@/lib/types";
+import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
 import {
   defaultMembersForTeam,
-  resolveCapacityMemberForAssignee,
+  fullDeliveryCapacityRoster,
+  sprintCapacityAssigneeBucket,
   SPRINT_CAPACITY_OTHER_BUCKET,
   type SprintCapacityBoard as SprintCapacityBoardState,
 } from "@/lib/sprint-capacity";
 import { MONTH_TEAM_COLUMNS, isKnownEpicTeamId } from "@/lib/month-team-board";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+
+function storyAssigneeDisplayLabel(story: UserStoryItem): string {
+  return story.assignee?.trim() || "Unassigned";
+}
+
+function capacityBucketToFilterLabel(bucket: string): string {
+  if (bucket === SPRINT_CAPACITY_OTHER_BUCKET) return "Unassigned";
+  return bucket;
+}
+
+function assigneeFilterBadgeLabel(name: string): string {
+  if (name === "Unassigned") return "U";
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+}
+
+function assigneeFilterCircleIcon(name: string): LucideIcon {
+  return name === "Unassigned" ? UserX : UserRound;
+}
 
 type SprintCapacityBoardProps = {
   initiatives: InitiativeItem[];
@@ -303,15 +326,78 @@ export function SprintCapacityBoard({
       },
     ]),
   );
+  const fullRoster = fullDeliveryCapacityRoster();
   const baseMembers = defaultMembersForTeam(selectedTeamId);
+  const extraAssigneeColumns = new Set<string>();
+  for (const row of rows) {
+    const m = sprintCapacityAssigneeBucket(row.story.assignee, fullRoster);
+    if (m && !baseMembers.includes(m)) extraAssigneeColumns.add(m);
+  }
+  for (const key of Object.keys(capacityBoard.assignments ?? {})) {
+    if (key === SPRINT_CAPACITY_OTHER_BUCKET) continue;
+    if (!baseMembers.includes(key)) extraAssigneeColumns.add(key);
+  }
   const needsOtherColumn =
     (capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0 ||
-    rows.some((row) => {
-      const raw = row.story.assignee?.trim() ?? "";
-      if (!raw || raw.toLowerCase() === "unassigned") return false;
-      return resolveCapacityMemberForAssignee(row.story.assignee, baseMembers) == null;
+    rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, fullRoster) == null);
+  const sortedExtras = [...extraAssigneeColumns].sort((a, b) => a.localeCompare(b));
+  const members = [
+    ...baseMembers,
+    ...sortedExtras,
+    ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : []),
+  ];
+  const assigneeFilterOptions = useMemo(() => {
+    const fromStories = new Set<string>();
+    for (const row of rows) {
+      fromStories.add(storyAssigneeDisplayLabel(row.story));
+    }
+    const roster = [...baseMembers];
+    const extra = [...fromStories]
+      .filter((n) => n !== "Unassigned" && !roster.includes(n))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    const out: string[] = [...roster, ...extra];
+    if (fromStories.has("Unassigned")) out.push("Unassigned");
+    return out;
+  }, [rows, baseMembers]);
+
+  const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string[]>([]);
+  const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);
+
+  useEffect(() => {
+    setSelectedAssigneeFilter([]);
+  }, [selectedTeamId, month, yearSprint]);
+
+  useEffect(() => {
+    const valid = new Set(assigneeFilterOptions);
+    setSelectedAssigneeFilter((prev) => {
+      const next = prev.filter((n) => valid.has(n));
+      if (next.length === prev.length && next.every((n, i) => n === prev[i])) return prev;
+      return next;
     });
-  const members = needsOtherColumn ? [...baseMembers, SPRINT_CAPACITY_OTHER_BUCKET] : baseMembers;
+  }, [assigneeFilterOptions]);
+
+  const toggleCapacityAssigneeFilter = useCallback((name: string) => {
+    setSelectedAssigneeFilter((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  }, []);
+
+  const allCapacityAssigneesSelected =
+    assigneeFilterOptions.length > 0 && selectedAssigneeFilter.length === assigneeFilterOptions.length;
+
+  const selectAllCapacityAssignees = useCallback(() => {
+    setSelectedAssigneeFilter((prev) => {
+      if (assigneeFilterOptions.length === 0) return prev;
+      if (prev.length === assigneeFilterOptions.length) return [];
+      return [...assigneeFilterOptions];
+    });
+  }, [assigneeFilterOptions]);
+
+  const visibleMembers = useMemo(() => {
+    if (selectedAssigneeFilter.length === 0) return members;
+    return members.filter((m) => selectedAssigneeFilter.includes(capacityBucketToFilterLabel(m)));
+  }, [members, selectedAssigneeFilter]);
+
   const teamKey = selectedTeamId ?? "all";
   const teamLabel =
     selectedTeamId && isKnownEpicTeamId(selectedTeamId)
@@ -321,7 +407,7 @@ export function SprintCapacityBoard({
 
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
-  for (const member of members) {
+  for (const member of visibleMembers) {
     const cap = Number(capacityBoard.capacities[member] ?? 6);
     teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
     const assignedIds = capacityBoard.assignments[member] ?? [];
@@ -338,8 +424,70 @@ export function SprintCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
+      {assigneeFilterOptions.length > 0 ? (
+        <div className="shrink-0 px-0.5 py-0.5">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            People in this sprint
+          </p>
+          <div
+            className="flex min-w-0 items-center py-0.5"
+            onMouseEnter={() => setAssigneeFilterExpanded(true)}
+            onMouseLeave={() => setAssigneeFilterExpanded(false)}
+          >
+            <button
+              type="button"
+              aria-pressed={allCapacityAssigneesSelected}
+              title={allCapacityAssigneesSelected ? "Clear people filter" : "Show all people"}
+              aria-label={allCapacityAssigneesSelected ? "Clear people filter" : "Show all people"}
+              onClick={selectAllCapacityAssignees}
+              className={cn(
+                "relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
+                allCapacityAssigneesSelected
+                  ? "bg-sky-600 text-white ring-sky-700"
+                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
+              )}
+            >
+              <Users className="size-[15px]" strokeWidth={2.25} aria-hidden />
+            </button>
+            {assigneeFilterOptions.map((name, idx) => {
+              const on = selectedAssigneeFilter.includes(name);
+              const Icon = assigneeFilterCircleIcon(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleCapacityAssigneeFilter(name)}
+                  className={cn(
+                    "relative inline-flex h-9 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
+                    assigneeFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-9 justify-center px-0",
+                    on
+                      ? "bg-sky-600 text-white ring-sky-700"
+                      : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-100",
+                  )}
+                  title={name}
+                  style={{
+                    marginLeft: assigneeFilterExpanded ? 6 : -12,
+                    zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
+                  }}
+                >
+                  {name === "Unassigned" ? (
+                    <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+                  ) : null}
+                  {name !== "Unassigned" && !assigneeFilterExpanded ? (
+                    <span>{assigneeFilterBadgeLabel(name)}</span>
+                  ) : null}
+                  {assigneeFilterExpanded ? (
+                    <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-        {members.map((member) => {
+        {visibleMembers.map((member) => {
           const assignedIds = capacityBoard.assignments[member] ?? [];
           const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
           const assignedTotal = cards.reduce((sum, card) => sum + card.estimatedDays, 0);

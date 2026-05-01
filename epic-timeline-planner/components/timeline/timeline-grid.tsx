@@ -47,7 +47,7 @@ import { computeSprintKanbanSummaryStats } from "@/lib/sprint-plan";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { isEpicPlanDraggableId } from "@/lib/epic-dnd-ids";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
-import { MONTHS, QUARTERS } from "@/lib/timeline";
+import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTERS } from "@/lib/timeline";
 import {
   MONTH_TEAM_COLUMNS,
   isKnownEpicTeamId,
@@ -3768,8 +3768,8 @@ export function TimelineGrid({
         ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard
             initiatives={initiatives}
-            quarterLabel={filteredCapacityQuarter?.label ?? "All quarters"}
-            quarterMonths={filteredCapacityQuarter?.months ?? MONTHS.map((_, i) => i + 1)}
+            quarterLabel={filteredCapacityQuarter?.label ?? ALL_QUARTERS_TEAM_CAPACITY_LABEL}
+            quarterMonths={filteredCapacityQuarter?.months ?? ALL_YEAR_PLAN_MONTHS}
             year={currentYear}
             monthTeamCapacityByKey={monthTeamCapacityByKey}
             monthTeamBoardByKey={monthTeamBoardByKey}

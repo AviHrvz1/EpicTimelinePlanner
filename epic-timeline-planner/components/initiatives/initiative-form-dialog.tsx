@@ -36,8 +36,10 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
+import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
+import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
 import { type EpicItem, InitiativeItem } from "@/lib/types";
@@ -256,6 +258,8 @@ export function InitiativeFormDialog({
     });
     return { byInitiativeId, byEpicId };
   }, [initiatives]);
+
+  const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
 
   function toggleChildEpicSort(key: InitChildEpicSortKey) {
     if (key === childEpicSortKey) {
@@ -972,7 +976,41 @@ export function InitiativeFormDialog({
                                         </button>
                                       )}
                                     </td>
-                                    <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "assignee" ? <div className="relative z-20 flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{(childEpicDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}</button>}</td>
+                                    <td className="px-2 py-1.5 text-slate-600">
+                                      {childEditingCell?.rowId === row.id && childEditingCell.field === "assignee" ? (
+                                        <div className="relative z-20 flex min-w-0 items-center gap-1">
+                                          <AssigneeCombobox
+                                            value={childEditingValue}
+                                            onChange={setChildEditingValue}
+                                            suggestions={assigneeNameSuggestions}
+                                            placeholder="Assignee"
+                                            className="min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => void confirmChildCellEdit(row.id)}
+                                            className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"
+                                          >
+                                            <Check className="size-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setChildEditingCell(null)}
+                                            className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
+                                          >
+                                            <X className="size-3.5" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => beginChildCellEdit(row.id, "assignee")}
+                                          className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
+                                        >
+                                          {(childEpicDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}
+                                        </button>
+                                      )}
+                                    </td>
                                     <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "originalEstimateDays" ? <div className="relative z-20 flex items-center gap-1"><input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "originalEstimateDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.originalEstimateDays || (row.originalEstimateDays == null ? "-" : String(row.originalEstimateDays))}</button>}</td>
                                     <td className="px-2 py-1.5 text-slate-600 tabular-nums" title="Sum of estimated days from child user stories">
                                       {sumUserStoryEstDaysForEpic(row)}
@@ -1002,7 +1040,16 @@ export function InitiativeFormDialog({
                   <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Assignee</p><input className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800" value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="e.g. Avi" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-sm font-normal text-slate-700">Assignee</p>
+                  <AssigneeCombobox
+                    value={assignee}
+                    onChange={setAssignee}
+                    suggestions={assigneeNameSuggestions}
+                    placeholder="Type or pick a name"
+                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+                  />
+                </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-sm font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[13px] font-medium text-slate-700" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">

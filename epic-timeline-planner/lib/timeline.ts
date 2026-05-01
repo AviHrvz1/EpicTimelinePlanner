@@ -35,6 +35,11 @@ export const QUARTERS = [
   { label: "Q4", months: [10, 11, 12] },
 ] as const;
 
+/** Encoded in `quarter-capacity:` drop targets when the portfolio shows all months at once. */
+export const ALL_QUARTERS_TEAM_CAPACITY_LABEL = "All quarters";
+
+export const ALL_YEAR_PLAN_MONTHS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
 export function clampMonth(month: number): number {
   return Math.max(1, Math.min(12, month));
 }

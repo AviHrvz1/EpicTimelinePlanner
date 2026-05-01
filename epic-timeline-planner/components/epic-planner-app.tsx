@@ -56,7 +56,7 @@ import {
 } from "@/lib/month-team-board";
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import { splitQuarterTotalAcrossMonths } from "@/lib/quarter-team-capacity";
-import { MONTHS, QUARTERS } from "@/lib/timeline";
+import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -1641,11 +1641,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
     const members = defaultMembersForTeam(sprintStoryBoardTeamId);
     const raw = sprintCapacityByKey[activeSprintCapacityKey] ?? emptySprintCapacityBoard(members);
+    /** Same scope as {@link SprintCapacityBoard}: all stories in this global sprint (team filter only affects default columns). */
     const rows = collectStoriesForSprintBoard(
       initiatives,
       sprintCapacityPlanMonth,
       activeYearSprint,
-      sprintStoryBoardTeamId,
+      null,
     );
     return syncCapacityAssignmentsWithKanban(
       raw,
@@ -1670,7 +1671,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         initiatives,
         sprintCapacityPlanMonth,
         activeYearSprint,
-        sprintStoryBoardTeamId,
+        null,
       );
       const merged = syncCapacityAssignmentsWithKanban(
         raw,
@@ -2606,16 +2607,23 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           toast.message("Switch the roadmap year to update that quarter’s team capacity.");
           return;
         }
-        const qDef = QUARTERS.find((item) => item.label === quarterCapacityDrop.quarterLabel);
-        if (!qDef) return;
-        const inQuarter = collectQuarterEpics(initiatives, qDef.months).some((c) => c.epic.id === epicId);
+        const quarterMonths: readonly number[] | undefined =
+          quarterCapacityDrop.quarterLabel === ALL_QUARTERS_TEAM_CAPACITY_LABEL
+            ? ALL_YEAR_PLAN_MONTHS
+            : QUARTERS.find((item) => item.label === quarterCapacityDrop.quarterLabel)?.months;
+        if (!quarterMonths?.length) {
+          console.warn("[gantt-drop] quarter capacity: unknown quarter label", quarterCapacityDrop.quarterLabel);
+          toast.message("Could not resolve this capacity board’s quarter.");
+          return;
+        }
+        const inQuarter = collectQuarterEpics(initiatives, quarterMonths).some((c) => c.epic.id === epicId);
         if (!inQuarter) {
           toast.message("Only epics tied to this quarter can be assigned to team capacity.");
           return;
         }
         const targetMonth =
-          qDef.months.find((m) => collectMonthEpicsForTeamBoard(initiatives, m).some((c) => c.epic.id === epicId)) ??
-          qDef.months[0]!;
+          quarterMonths.find((m) => collectMonthEpicsForTeamBoard(initiatives, m).some((c) => c.epic.id === epicId)) ??
+          quarterMonths[0]!;
         const queueKey = monthTeamBoardStorageKey(quarterCapacityDrop.year, targetMonth);
         setMonthTeamBoardByKey((prev) => {
           const cur = prev[queueKey] ?? { queues: {} };

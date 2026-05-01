@@ -11,6 +11,48 @@ export function epicStoryEstimateDaysSum(epic: Pick<EpicItem, "userStories">): n
   return storyEstimateDaysSum(epic.userStories ?? []);
 }
 
+/**
+ * Applies a new combined story-estimate total by updating each story's `estimatedDays`.
+ * Single story: assigns the full total. Multiple: proportional split from prior weights, or even split when prior sum is 0.
+ */
+export function distributeChildEstimatesAcrossStories(
+  stories: Array<Pick<UserStoryItem, "id" | "estimatedDays">>,
+  newTotalRounded: number,
+): Array<{ id: string; estimatedDays: number }> {
+  const n = stories.length;
+  if (n === 0) return [];
+  const total = Math.max(0, Math.round(Number(newTotalRounded) || 0));
+  if (n === 1) {
+    return [{ id: stories[0]!.id, estimatedDays: total }];
+  }
+  const oldWeights = stories.map((s) => Math.max(0, Number(s.estimatedDays ?? 0)));
+  const oldSum = oldWeights.reduce((a, b) => a + b, 0);
+  if (oldSum === 0) {
+    const base = Math.floor(total / n);
+    const rem = total - base * n;
+    return stories.map((s, i) => ({
+      id: s.id,
+      estimatedDays: base + (i < rem ? 1 : 0),
+    }));
+  }
+  const raw = oldWeights.map((w) => (w / oldSum) * total);
+  const floors = raw.map((x) => Math.floor(x));
+  const assigned = floors.reduce((a, b) => a + b, 0);
+  let deficit = total - assigned;
+  const order = raw
+    .map((x, i) => ({ i, frac: x - floors[i]! }))
+    .sort((a, b) => b.frac - a.frac);
+  const bump = new Set<number>();
+  for (let k = 0; k < deficit; k++) {
+    const idx = order[k]?.i;
+    if (idx !== undefined) bump.add(idx);
+  }
+  return stories.map((s, i) => ({
+    id: s.id,
+    estimatedDays: floors[i]! + (bump.has(i) ? 1 : 0),
+  }));
+}
+
 export function epicOriginalEstimateDays(epic: Pick<EpicItem, "originalEstimateDays">): number {
   return Math.max(0, Number(epic.originalEstimateDays ?? 0));
 }

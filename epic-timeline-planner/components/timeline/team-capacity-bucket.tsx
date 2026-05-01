@@ -43,7 +43,7 @@ export function TeamEpicCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "group relative min-h-[5.6rem] rounded-lg border border-slate-200/90 bg-white px-2.5 py-2 shadow-sm transition hover:border-slate-300 hover:shadow-md",
+        "group relative min-h-[5.6rem] shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-2 shadow-sm transition hover:border-slate-300 hover:shadow-md",
         isDragging && "opacity-60 shadow-lg",
       )}
       style={{
@@ -60,7 +60,7 @@ export function TeamEpicCard({
       >
         <X className="size-3.5" aria-hidden />
       </button>
-      <div className="flex items-start gap-2">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_9.25rem] items-start gap-x-2">
         <button
           type="button"
           className="mt-0.5 shrink-0 cursor-grab rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 active:cursor-grabbing"
@@ -70,7 +70,7 @@ export function TeamEpicCard({
         >
           ::
         </button>
-        <div className="min-w-0 flex-1 pr-1.5">
+        <div className="min-w-0 pr-10">
           <button
             type="button"
             onClick={() => onOpenEpic(epicId)}
@@ -102,11 +102,15 @@ export function TeamEpicCard({
             </div>
           )}
         </div>
-        <div className="ml-auto flex w-[9.25rem] shrink-0 flex-col items-start gap-1.5 self-start pt-7">
+        <div className="flex w-full shrink-0 flex-col items-start gap-1.5 pt-8">
           <div className="grid w-full grid-cols-[4.5rem_3.5rem] items-center gap-1.5">
             <span className="text-[11px] font-semibold text-slate-600">Σ Child</span>
-            <span className="inline-flex h-6 w-[3.5rem] items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-[11px] font-semibold text-slate-800 tabular-nums">
-              {Math.round(childStoryEstimateDays)}
+            <span
+              className="flex h-6 w-[3.5rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums"
+              title="Sum of child user story estimates — edit estimates on each story"
+              aria-label="Sum of child story estimate days (read-only)"
+            >
+              <span className="-translate-x-[7px]">{Math.round(childStoryEstimateDays)}</span>
             </span>
           </div>
           <label className="grid w-full grid-cols-[4.5rem_3.5rem] items-center gap-1.5 text-[11px] font-semibold text-slate-600">

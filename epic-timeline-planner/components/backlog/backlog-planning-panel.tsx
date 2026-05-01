@@ -5,8 +5,10 @@ import type { CSSProperties, ReactNode } from "react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
@@ -662,6 +664,8 @@ export function BacklogPlanningPanel({
       .map((name) => ({ id: name, label: name }));
   }, [initiatives]);
 
+  const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
+
   const statusOptions: OptionItem[] = [
     { id: "todo", label: "To do" },
     { id: "inProgress", label: "In progress" },
@@ -1169,9 +1173,9 @@ export function BacklogPlanningPanel({
             <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "assignee" ? (
                 <span className="inline-flex items-center gap-1">
-                  <input
+                  <AssigneeCombobox
                     value={editingStoryCell.value}
-                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    onChange={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
                     onKeyDown={(event) =>
                       handleStoryCellKeyDown(event, row.storyId, "assignee", {
                         status: row.storyStatus,
@@ -1181,6 +1185,7 @@ export function BacklogPlanningPanel({
                         daysLeft: row.storyDaysLeft,
                       })
                     }
+                    suggestions={assigneeNameSuggestions}
                     placeholder="Unassigned"
                     className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
@@ -1514,11 +1519,22 @@ export function BacklogPlanningPanel({
                 <span className="text-center text-[16px] text-slate-700">
                   {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
                     <span className="inline-flex items-center gap-1">
-                      <input
+                      <AssigneeCombobox
                         value={editingParentAssignee.value}
-                        onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                        onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
+                        suggestions={assigneeNameSuggestions}
                         placeholder="Unassigned"
                         className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setEditingParentAssignee(null);
+                          }
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee);
+                          }
+                        }}
                       />
                       <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                       <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -1674,11 +1690,26 @@ export function BacklogPlanningPanel({
                 <span className="text-center text-[16px] text-slate-700">
                   {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
                     <span className="inline-flex items-center gap-1">
-                      <input
+                      <AssigneeCombobox
                         value={editingParentAssignee.value}
-                        onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                        onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
+                        suggestions={assigneeNameSuggestions}
                         placeholder="Unassigned"
                         className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setEditingParentAssignee(null);
+                          }
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void confirmParentAssigneeEdit(
+                              "initiative",
+                              initiativeId,
+                              initiativeAssignee === "Unassigned" ? null : initiativeAssignee,
+                            );
+                          }
+                        }}
                       />
                       <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                       <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiativeId, initiativeAssignee === "Unassigned" ? null : initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -2908,11 +2939,22 @@ export function BacklogPlanningPanel({
                         <span className="text-center text-[16px] text-slate-700">
                           {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiative.id ? (
                             <span className="inline-flex items-center gap-1">
-                              <input
+                              <AssigneeCombobox
                                 value={editingParentAssignee.value}
-                                onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
+                                suggestions={assigneeNameSuggestions}
                                 placeholder="Unassigned"
                                 className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    setEditingParentAssignee(null);
+                                  }
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void confirmParentAssigneeEdit("initiative", initiative.id, initiative.assignee);
+                                  }
+                                }}
                               />
                               <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                               <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiative.id, initiative.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -3212,11 +3254,22 @@ export function BacklogPlanningPanel({
                                   <span className="text-center text-[16px] text-slate-700">
                                     {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epic.id ? (
                                       <span className="inline-flex items-center gap-1">
-                                        <input
+                                        <AssigneeCombobox
                                           value={editingParentAssignee.value}
-                                          onChange={(event) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                          onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
+                                          suggestions={assigneeNameSuggestions}
                                           placeholder="Unassigned"
                                           className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Escape") {
+                                              e.preventDefault();
+                                              setEditingParentAssignee(null);
+                                            }
+                                            if (e.key === "Enter") {
+                                              e.preventDefault();
+                                              void confirmParentAssigneeEdit("epic", epic.id, epic.assignee);
+                                            }
+                                          }}
                                         />
                                         <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                         <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epic.id, epic.assignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
@@ -3544,9 +3597,9 @@ export function BacklogPlanningPanel({
                                     <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "assignee" ? (
                                         <span className="inline-flex items-center gap-1">
-                                          <input
+                                          <AssigneeCombobox
                                             value={editingStoryCell.value}
-                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                                            onChange={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
                                             onKeyDown={(event) =>
                                               handleStoryCellKeyDown(event, story.id, "assignee", {
                                                 status: story.status,
@@ -3556,6 +3609,7 @@ export function BacklogPlanningPanel({
                                                 daysLeft: story.daysLeft,
                                               })
                                             }
+                                            suggestions={assigneeNameSuggestions}
                                             placeholder="Unassigned"
                                             className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           />
