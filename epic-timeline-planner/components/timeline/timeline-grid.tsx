@@ -676,6 +676,44 @@ function QuarterYearProgressIcon({
   );
 }
 
+/** Matches the app header roadmap year control; duplicated next to timeline summary chips. */
+function RoadmapYearSelect({
+  year,
+  onYearChange,
+}: {
+  year: number;
+  onYearChange: (nextYear: number) => void | Promise<void>;
+}) {
+  return (
+    <label className="inline-flex h-7 shrink-0 items-center overflow-hidden rounded-full border border-primary-foreground/35 bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 hover:border-primary-foreground/45 focus-within:outline-none focus-within:ring-0">
+      <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
+        Roadmap
+      </span>
+      <div className="relative">
+        <select
+          value={year}
+          onChange={(event) => {
+            const nextYear = Number(event.target.value);
+            if (nextYear === year) return;
+            void Promise.resolve(onYearChange(nextYear));
+          }}
+          className="h-7 min-w-[5rem] cursor-pointer appearance-none bg-transparent py-0 pl-3 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[12px]"
+          aria-label="Roadmap year"
+        >
+          <option value={2024}>2024</option>
+          <option value={2025}>2025</option>
+          <option value={2026}>2026</option>
+          <option value={2027}>2027</option>
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-primary-foreground opacity-90 sm:size-[13px]"
+          aria-hidden
+        />
+      </div>
+    </label>
+  );
+}
+
 
 /** Drop strip under month header (quarter + month epic plan). */
 function MonthDropCell({
@@ -2331,6 +2369,9 @@ export function TimelineGrid({
               <div />
               {summaryBadgesForScope ? (
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2">
+                  {onYearChange ? (
+                    <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                  ) : null}
                   <button
                   type="button"
                   onClick={() => setShowRoadmapProgress((v) => !v)}
@@ -2441,6 +2482,9 @@ export function TimelineGrid({
             <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2">
               {sprintKanbanSummaryStats ? (
                 <>
+                  {onYearChange ? (
+                    <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
@@ -2503,6 +2547,9 @@ export function TimelineGrid({
                 </>
               ) : summaryBadgesForScope ? (
                 <>
+                  {onYearChange ? (
+                    <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => setShowRoadmapProgress((v) => !v)}

@@ -123,6 +123,24 @@ type DndDropInspectorPayload = {
   steps: string[];
 };
 
+/** Drag outcomes that completed normally — do not pop the debug panel (it reads like an error). */
+const DND_DROP_INSPECTOR_SUPPRESS_BRANCHES = new Set<string>([
+  "epic:gantt-month-placed",
+  "epic:unplan-ok",
+  "epic:month-team-capacity-saved",
+  "epic:quarter-team-capacity-saved",
+  "epic:month-team-slot-saved",
+  "epic:month-kanban-all-todo",
+  "epic:sprint-kanban-bulk-todo",
+  "initiative:rescheduled",
+  "initiative:scheduled-first-time",
+  "initiative:backlog",
+  "story:unschedule-ok",
+  "story:plan-cell",
+  "story:kanban",
+  "story:capacity",
+]);
+
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw new Error("Request failed");
@@ -278,10 +296,10 @@ function computeInitiativeMonthLanePlacement(
   /** Bottom insert (lane index past last Gantt row) uses a new `timelineRow`, not nearest row from pointer. */
   const desiredTargetRow = wantsAppendRow
     ? appendTimelineRow
-    : targetRowFromLaneForTarget != null
-      ? targetRowFromLaneForTarget
-      : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
-        ? hoveredTimelineRow
+    : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
+      ? hoveredTimelineRow
+      : targetRowFromLaneForTarget != null
+        ? targetRowFromLaneForTarget
         : targetRowFromHoverLaneForTarget;
   console.log("[gantt-drop] target-row inputs", {
     initiativeId,
@@ -544,6 +562,7 @@ function computeEpicMonthLanePlacement(
 
   const clampedLaneForTarget = laneIndex == null ? undefined : Math.max(0, laneIndex);
   const distinctScheduledRowCount = new Set(scheduledAll.map((item) => item.timelineRow)).size;
+  const distinctTimelineRows = [...new Set(scheduledAll.map((item) => item.timelineRow))].sort((a, b) => a - b);
   const maxTimelineRow = scheduledAll.length > 0 ? Math.max(...scheduledAll.map((item) => item.timelineRow)) : currentRow;
   const appendTimelineRow = maxTimelineRow + 1;
   const wantsAppendRow = laneIndex != null && laneIndex >= distinctScheduledRowCount;
@@ -555,16 +574,19 @@ function computeEpicMonthLanePlacement(
     hoveredScheduledForTarget && hoveredScheduledForTarget.epicId !== epicId
       ? hoveredScheduledForTarget.timelineRow
       : null;
+  /** `laneIndex` is a Gantt lane index (0..n), not necessarily equal to persisted `timelineRow`. */
   const targetRowFromLaneForTarget =
-    clampedLaneForTarget == null
+    clampedLaneForTarget == null || distinctTimelineRows.length === 0
       ? null
-      : clampedLaneForTarget;
+      : clampedLaneForTarget < distinctTimelineRows.length
+        ? (distinctTimelineRows[clampedLaneForTarget] ?? null)
+        : null;
   const desiredTargetRow = wantsAppendRow
     ? appendTimelineRow
-    : targetRowFromLaneForTarget != null
-      ? targetRowFromLaneForTarget
-      : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
-        ? hoveredTimelineRow
+    : hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)
+      ? hoveredTimelineRow
+      : targetRowFromLaneForTarget != null
+        ? targetRowFromLaneForTarget
         : targetRowFromHoverLaneForTarget;
   console.log("[gantt-drop][epic] target-row inputs", {
     epicId,
@@ -2821,6 +2843,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       console.log("[gantt-drop] epic branch", { epicId, overId });
       record("epic:handling", { epicId, overId });
 
+      if (
+        !overId &&
+        activeTimelineMonth != null &&
+        activeMonthPlanTab !== "epic-gantt"
+      ) {
+        toast.message("Switch to Epic Plan to move this epic on the timeline.");
+        record("epic:no-over-non-gantt-month", { epicId });
+        return;
+      }
+
       const teamCapacityDrop = parseMonthTeamCapacityBucketDropId(overId);
       if (teamCapacityDrop) {
         if (!MONTH_TEAM_IDS.includes(teamCapacityDrop.teamId)) {
@@ -3200,6 +3232,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       } else {
         console.log("[gantt-drop] epic branch: overId not epic-plan or month", { overId });
         record("epic:gantt-unknown-target", { epicId, overId });
+        if (activeTimelineMonth != null && activeMonthPlanTab !== "epic-gantt") {
+          toast.message("Switch to Epic Plan to move this epic on the timeline.");
+        }
         return;
       }
       if (!Number.isFinite(month)) {
@@ -3283,13 +3318,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         placementNext.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId) ?? null;
 
       try {
-        await patchEpicQuarterPlan(epicId, {
+        const planPatch: Parameters<typeof patchEpicQuarterPlan>[1] = {
           planSprint,
           planEndSprint: updatedEpic?.planEndSprint ?? 2,
           planStartMonth: updatedEpic?.planStartMonth ?? month,
           planEndMonth: updatedEpic?.planEndMonth ?? month,
-          ...(movedTimelineRow != null ? { timelineRow: movedTimelineRow } : {}),
-        });
+        };
+        if (rowsChanged) {
+          planPatch.timelineRow =
+            movedTimelineRow ??
+            (Number.isFinite(updatedEpic?.timelineRow) ? updatedEpic!.timelineRow : 0);
+        }
+        await patchEpicQuarterPlan(epicId, planPatch);
         if (rowsChanged) {
           await persistEpicTimelineRowPatches(before, placementNext);
         }
@@ -3527,25 +3567,29 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       toast.error("Failed to schedule initiative");
     }
   } finally {
-      setDndDropInspector({
-        at: new Date().toLocaleTimeString(),
-        activeId,
-        overId: overId || "(none)",
-        delta: { x: event.delta.x, y: event.delta.y },
-        planner: {
-          activeTimelineMonth,
-          activeYearSprint,
-          sprintCapacityPlanMonth,
-          activeMonthPlanTab,
-          isActiveSprintClosed,
-          sprintStoryBoardTeamId,
-          selectedYear,
-          focusedQuarterLabel,
-        },
-        branch: outcomeBranch,
-        detail: outcomeDetail,
-        steps: inspectorSteps,
-      });
+      if (DND_DROP_INSPECTOR_SUPPRESS_BRANCHES.has(outcomeBranch)) {
+        setDndDropInspector(null);
+      } else {
+        setDndDropInspector({
+          at: new Date().toLocaleTimeString(),
+          activeId,
+          overId: overId || "(none)",
+          delta: { x: event.delta?.x ?? 0, y: event.delta?.y ?? 0 },
+          planner: {
+            activeTimelineMonth,
+            activeYearSprint,
+            sprintCapacityPlanMonth,
+            activeMonthPlanTab,
+            isActiveSprintClosed,
+            sprintStoryBoardTeamId,
+            selectedYear,
+            focusedQuarterLabel,
+          },
+          branch: outcomeBranch,
+          detail: outcomeDetail,
+          steps: inspectorSteps,
+        });
+      }
   }
   }
 
@@ -3819,6 +3863,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 <InitiativeListPanel
                   initiatives={initiatives}
                   activeMonth={activeTimelineMonth}
+                  useEpicPlanLeftPanel={
+                    activeTimelineMonth != null && activeMonthPlanTab === "epic-gantt"
+                  }
                   activeYearSprint={activeYearSprint}
                   storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
                   isSprintModeActive={isSprintModeActive}
@@ -3904,6 +3951,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   }}
                   panelStatusQuickFilter={panelStatusQuickFilter}
                   onHidePanel={() => setIsLeftPanelHidden(true)}
+                  suppressTimelineEpicBacklogSlotDrops={
+                    activeTimelineMonth != null && activeMonthPlanTab !== "epic-gantt"
+                  }
                 />
               ) : null}
               {!isLeftPanelHidden ? (
@@ -4336,7 +4386,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-200/90 px-3 py-2">
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-900/80">
-                  Drop debug
+                  Drop debug (unexpected / failed drops)
                 </div>
                 <div className="truncate font-mono text-[11px] text-slate-600">{dndDropInspector.at}</div>
               </div>

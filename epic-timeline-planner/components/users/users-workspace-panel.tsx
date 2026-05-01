@@ -10,7 +10,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -463,6 +463,15 @@ export function UsersWorkspacePanel() {
   const [savingRowIds, setSavingRowIds] = useState<Set<string>>(() => new Set());
   const [editCell, setEditCell] = useState<{ rowId: string; field: UserEditField } | null>(null);
   const [sort, setSort] = useState<SortState>({ key: "name", dir: "asc" });
+  const [userDrawerEntered, setUserDrawerEntered] = useState(false);
+  const userDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelDrawerClose = useCallback(() => {
+    if (userDrawerCloseTimerRef.current) {
+      clearTimeout(userDrawerCloseTimerRef.current);
+      userDrawerCloseTimerRef.current = null;
+    }
+  }, []);
 
   const viewUser =
     userPanel?.kind === "view" ? (rows.find((r) => r.id === userPanel.user.id) ?? userPanel.user) : null;
@@ -498,22 +507,29 @@ export function UsersWorkspacePanel() {
     setPermFilterInput(permissionFilterLabel(permissionFilter));
   }, [permissionFilter]);
 
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (editCell) {
-        setEditCell(null);
-        return;
-      }
-      if (userPanel) {
-        if (saving) return;
-        setUserPanel(null);
-        setForm(emptyForm());
-      }
+  useLayoutEffect(() => {
+    if (!userPanel) {
+      setUserDrawerEntered(false);
+      return;
+    }
+    cancelDrawerClose();
+    setUserDrawerEntered(false);
+    let alive = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (alive) setUserDrawerEntered(true);
+      });
+    });
+    return () => {
+      alive = false;
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [editCell, userPanel, saving]);
+  }, [userPanel, cancelDrawerClose]);
+
+  useEffect(() => {
+    return () => {
+      if (userDrawerCloseTimerRef.current) clearTimeout(userDrawerCloseTimerRef.current);
+    };
+  }, []);
 
   const toggleSort = useCallback((key: SortKey) => {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
@@ -576,15 +592,42 @@ export function UsersWorkspacePanel() {
     return [...s].sort();
   }, [displayed]);
 
+  const closePanel = useCallback(() => {
+    if (!userPanel) {
+      cancelDrawerClose();
+      return;
+    }
+    setUserDrawerEntered(false);
+    cancelDrawerClose();
+    userDrawerCloseTimerRef.current = setTimeout(() => {
+      userDrawerCloseTimerRef.current = null;
+      setUserPanel(null);
+      setForm(emptyForm());
+      setUserDrawerEntered(false);
+    }, 300);
+  }, [userPanel, cancelDrawerClose]);
+
   const openCreate = () => {
+    cancelDrawerClose();
     setForm(emptyForm());
     setUserPanel({ kind: "add" });
   };
 
-  const closePanel = () => {
-    setUserPanel(null);
-    setForm(emptyForm());
-  };
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (editCell) {
+        setEditCell(null);
+        return;
+      }
+      if (userPanel) {
+        if (saving) return;
+        closePanel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editCell, userPanel, saving, closePanel]);
 
   const saveNewUser = async () => {
     blurActiveField();
@@ -684,7 +727,7 @@ export function UsersWorkspacePanel() {
         </Button>
       </header>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
+      <div className="flex flex-col gap-3 pb-8 lg:flex-row lg:items-center lg:gap-3">
         <div className="relative min-w-0 w-full flex-1 lg:max-w-md">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
@@ -784,6 +827,7 @@ export function UsersWorkspacePanel() {
                   onCancelEdit={() => setEditCell(null)}
                   onRowView={(r) => {
                     setEditCell(null);
+                    cancelDrawerClose();
                     setForm({
                       name: r.name,
                       email: r.email,
@@ -816,7 +860,10 @@ export function UsersWorkspacePanel() {
             onClick={closePanel}
           />
           <div
-            className="relative flex h-full w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl"
+            className={cn(
+              "relative flex h-full w-full max-w-lg flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out",
+              userDrawerEntered ? "translate-x-0" : "translate-x-full",
+            )}
             role="dialog"
             aria-modal="true"
             aria-labelledby="users-drawer-title"

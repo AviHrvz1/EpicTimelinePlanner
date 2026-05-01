@@ -3,6 +3,41 @@ import type { DragEndEvent } from "@dnd-kit/core";
 /** Container for Gantt lane rows; used to map pointer Y → lane insert index on month drops. */
 export const TIMELINE_GANTT_ROWS_CONTAINER_ID = "timeline-gantt-rows";
 
+/**
+ * Several roadmap surfaces mount a container with this id; duplicate ids are invalid HTML and
+ * `getElementById` only returns the first node (often the wrong / hidden one). Pick the container
+ * whose bounds best match the pointer Y at drop time.
+ */
+export function findGanttRowsContainerForPointer(clientY: number): HTMLElement | null {
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLElement>(`#${CSS.escape(TIMELINE_GANTT_ROWS_CONTAINER_ID)}`),
+  );
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0]!;
+
+  const margin = 28;
+  const containing = candidates.filter((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    return clientY >= r.top - margin && clientY <= r.bottom + margin;
+  });
+  if (containing.length === 1) return containing[0]!;
+
+  let best: HTMLElement | null = null;
+  let bestDist = Infinity;
+  for (const el of candidates) {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    const mid = (r.top + r.bottom) / 2;
+    const d = Math.abs(clientY - mid);
+    if (d < bestDist) {
+      bestDist = d;
+      best = el;
+    }
+  }
+  return best ?? candidates[0]!;
+}
+
 export function clientYCenterFromDragEnd(event: DragEndEvent): number | undefined {
   const current = event.active.rect.current;
   const rect = current?.translated ?? current?.initial;
@@ -23,7 +58,7 @@ export function clientXCenterFromDragEnd(event: DragEndEvent): number | undefine
  * to their sort index among scheduled initiatives.
  */
 export function inferGanttLaneInsertIndexFromClientY(clientY: number): number | undefined {
-  const container = document.getElementById(TIMELINE_GANTT_ROWS_CONTAINER_ID);
+  const container = findGanttRowsContainerForPointer(clientY);
   if (!container) return undefined;
 
   const cRect = container.getBoundingClientRect();
@@ -81,7 +116,7 @@ export function inferGanttLaneInsertIndexFromClientY(clientY: number): number | 
 
 /** Maps viewport Y to the nearest rendered lane index (not insert slot). */
 export function inferGanttLaneHoverIndexFromClientY(clientY: number): number | undefined {
-  const container = document.getElementById(TIMELINE_GANTT_ROWS_CONTAINER_ID);
+  const container = findGanttRowsContainerForPointer(clientY);
   if (!container) return undefined;
 
   const rows = [...container.querySelectorAll<HTMLElement>("[data-gantt-lane-index]")];
@@ -116,7 +151,7 @@ export function inferGanttLaneHoverIndexFromClientY(clientY: number): number | u
  * Use this when lanes are grouped so lane index ≠ initiative list index.
  */
 export function inferGanttLaneHoverTimelineRowFromClientY(clientY: number): number | undefined {
-  const container = document.getElementById(TIMELINE_GANTT_ROWS_CONTAINER_ID);
+  const container = findGanttRowsContainerForPointer(clientY);
   if (!container) return undefined;
 
   const rows = [...container.querySelectorAll<HTMLElement>("[data-gantt-lane-index]")];
