@@ -3815,9 +3815,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 <InitiativeListPanel
                   initiatives={initiatives}
                   activeMonth={initiativeListActiveMonth}
-                  useEpicPlanLeftPanel={
-                    initiativeListActiveMonth != null && activeMonthPlanTab === "epic-gantt"
-                  }
+                  useEpicPlanLeftPanel={initiativeListActiveMonth != null}
                   activeYearSprint={activeYearSprint}
                   storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
                   isSprintModeActive={isSprintModeActive}
@@ -3920,7 +3918,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   aria-label="Resize panel"
                 >
                   <div
-                    className="pointer-events-none h-[58%] min-h-[7.5rem] max-h-[34rem] w-1 shrink-0 rounded-full bg-[linear-gradient(180deg,transparent_0%,rgba(100,116,139,0.48)_20%,rgba(91,80,217,0.38)_50%,rgba(100,116,139,0.48)_80%,transparent_100%)] shadow-[0_1px_2px_rgba(15,23,42,0.08)] transition-[background,box-shadow] duration-200 group-hover:bg-[linear-gradient(180deg,transparent_0%,rgba(71,85,105,0.58)_18%,rgba(79,70,229,0.46)_50%,rgba(71,85,105,0.58)_82%,transparent_100%)] group-hover:shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
+                    className="pointer-events-none h-[58%] min-h-[7.5rem] max-h-[34rem] w-1 shrink-0 rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-white/80 transition-[box-shadow] duration-200 group-hover:shadow-[0_1px_4px_rgba(15,23,42,0.12)]"
                     aria-hidden
                   />
                   <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
@@ -4001,6 +3999,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 sprintStoryBoardTeamId={sprintStoryBoardTeamId}
                 onSprintStoryBoardTeamChange={setSprintStoryBoardTeamId}
                 onFocusedQuarterChange={setFocusedQuarterLabel}
+                onYearRoadmapNavigate={() => {
+                  handleSprintModeChange(false, null, null);
+                  setActiveMonthPlanTab("epic-gantt");
+                }}
+                onQuarterGanttFromMonthBreadcrumb={(quarterLabel) => {
+                  setFocusedQuarterLabel(quarterLabel);
+                  handleSprintModeChange(false, null, null);
+                  setActiveMonthPlanTab("epic-gantt");
+                }}
                 onSprintTabChange={setActiveSprintTab}
                 onOpenEpic={(epicId) => {
                   for (const initiative of initiatives) {

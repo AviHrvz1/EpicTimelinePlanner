@@ -604,6 +604,16 @@ type TimelineGridProps = {
   sprintRetrospective?: (SprintRetrospectiveDoc & { updatedAt: string }) | null;
   onSaveSprintRetrospective?: (doc: SprintRetrospectiveDoc) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
+  /**
+   * When the user clicks the year breadcrumb (back to year / all-quarters scope), clear month + sprint
+   * drill-in in the parent so URL and the middle panel (initiatives vs epics) stay in sync with the grid.
+   */
+  onYearRoadmapNavigate?: () => void;
+  /**
+   * Month breadcrumb → quarter chip: focus the quarter and clear month/sprint drill-in in the parent so the
+   * middle panel returns to Initiatives (quarter Gantt is not month-scoped).
+   */
+  onQuarterGanttFromMonthBreadcrumb?: (quarterLabel: string) => void;
   onSprintModeChange: (active: boolean, activeMonth: number | null, activeYearSprint: number | null) => void;
   onSprintTabChange?: (tab: "kanban" | "status") => void;
   onOpenEpic: (epicId: string) => void;
@@ -829,6 +839,8 @@ export function TimelineGrid({
   quarterViewTabExternal,
   onQuarterViewTabChange,
   onFocusedQuarterChange,
+  onYearRoadmapNavigate,
+  onQuarterGanttFromMonthBreadcrumb,
   onSprintModeChange,
   onSprintTabChange,
   onOpenEpic,
@@ -1991,8 +2003,12 @@ export function TimelineGrid({
   }, [activeMonth, monthPlanTab, quarterViewTab, focusedQuarterLabel]);
 
   useEffect(() => {
-    // In controlled mode, parent owns sprint-mode synchronization.
-    if (focusedMonthExternal !== undefined && activeSprintExternal !== undefined) return;
+    /**
+     * Keep parent URL/state aligned with grid `activeMonth` even when month + sprint are controlled
+     * (`focusedMonthExternal` / `activeSprintExternal` are always passed from EpicPlannerApp).
+     * Without syncing here, the user can enter month view locally while `activeTimelineMonth` stays null
+     * and the middle panel remains on Initiatives.
+     */
     if (activeMonth == null) {
       /**
        * Parent can set `focusedMonthExternal` to a month outside the visible quarter before the quarter
@@ -2029,6 +2045,7 @@ export function TimelineGrid({
     setActiveSprint(null);
     setFocusedMonth(null);
     onFocusedQuarterChange(null);
+    onYearRoadmapNavigate?.();
   };
 
   if (activeMonth) {
@@ -2041,9 +2058,14 @@ export function TimelineGrid({
       breadcrumbItems.push({
         label: quarterForMonth.label,
         onClick: () => {
+          setQuarterViewTab("gantt");
           setActiveSprint(null);
           setFocusedMonth(null);
-          onFocusedQuarterChange(quarterForMonth.label);
+          if (onQuarterGanttFromMonthBreadcrumb) {
+            onQuarterGanttFromMonthBreadcrumb(quarterForMonth.label);
+          } else {
+            onFocusedQuarterChange(quarterForMonth.label);
+          }
         },
       });
     }
@@ -2281,15 +2303,14 @@ export function TimelineGrid({
   }, [showSprintTeamPicker]);
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
-          "relative z-30 mb-4 shrink-0 flex items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] px-1.5 py-2.5 shadow-none ring-0",
-          hasBreadcrumbs ? "justify-between" : "justify-start",
+          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] py-2.5 shadow-none ring-0",
         )}
       >
         {hasBreadcrumbs ? (
-          <div className="relative z-30 inline-flex items-center gap-1 rounded-lg border-0 bg-white/85 px-1.5 py-0.5 shadow-none ring-0 backdrop-blur-sm outline-none">
+          <div className="relative z-30 inline-flex shrink-0 items-center gap-1 rounded-lg border-0 bg-white/85 py-0.5 pl-1.5 pr-1 shadow-none ring-0 backdrop-blur-sm outline-none">
             {breadcrumbItems.map((item, index) => (
               <div key={`${item.label}-${index}`} className="flex shrink-0 items-center gap-1">
                 {item.onClick ? (
@@ -2324,7 +2345,7 @@ export function TimelineGrid({
             {showSprintTeamPicker ? (
               <>
                 <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
-                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 px-1.5 py-0.5 shadow-none">
+                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 py-0.5 pl-1.5 pr-1 shadow-none">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
                   <div className="relative z-40" ref={sprintTeamMenuRef}>
                     <button
@@ -2368,10 +2389,14 @@ export function TimelineGrid({
           </div>
         ) : null}
         {!activeMonth ? (
-          <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2">
-              <div />
+          <div
+            className={cn(
+              "flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2",
+              hasBreadcrumbs ? "flex-1" : "w-full",
+            )}
+          >
               {summaryBadgesForScope ? (
-                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2">
+                <>
                   {onYearChange ? (
                     <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
                   ) : null}
@@ -2466,12 +2491,16 @@ export function TimelineGrid({
                     <span className="xl:hidden">Spr</span>
                     </button>
                   ) : null}
-                </div>
+                </>
               ) : null}
           </div>
         ) : activeMonth ? (
-          <div className="flex w-full flex-wrap items-start gap-2 pr-3 sm:gap-3">
-            <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2">
+          <div
+            className={cn(
+              "flex min-w-0 flex-wrap items-center justify-end gap-1 pr-2 sm:gap-3 md:gap-2",
+              hasBreadcrumbs ? "flex-1" : "w-full",
+            )}
+          >
               {sprintKanbanSummaryStats ? (
                 <>
                   {onYearChange ? (
@@ -2620,7 +2649,6 @@ export function TimelineGrid({
                   ) : null}
                 </>
               ) : null}
-            </div>
           </div>
         ) : focusedQuarter ? (
           <div className="flex items-center gap-2" />

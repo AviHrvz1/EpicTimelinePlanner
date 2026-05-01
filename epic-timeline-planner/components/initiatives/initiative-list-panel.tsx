@@ -355,7 +355,8 @@ type InitiativeListPanelProps = {
   activeMonth: number | null;
   /**
    * When true, show the month epic backlog layout (Epics header, + Epic). When false, show the initiatives
-   * tree even if `activeMonth` is set (Sprint/Capacity/etc. while the month rail still carries a month).
+   * tree. The parent sets this from timeline month scope: any drilled-in month (Gantt, sprint, capacity,
+   * insights, etc.) uses the epic list for that month.
    */
   useEpicPlanLeftPanel?: boolean;
   activeYearSprint: number | null;
@@ -428,7 +429,7 @@ function DraggableInitiativeCard({
               <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                 <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
               </span>
-              <p className="min-w-0 truncate text-[15px] leading-5 font-normal text-slate-900">{initiative.title}</p>
+              <p className="min-w-0 truncate text-[17px] leading-6 font-normal text-slate-900">{initiative.title}</p>
             </div>
             <div className="flex shrink-0 gap-1" />
           </div>
@@ -535,10 +536,10 @@ function InitiativeTreeEpicRow({
                 aria-label={`Open epic ${epic.title}`}
               >
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="inline-flex shrink-0 text-[15px] leading-none text-slate-700">
+                  <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-700">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
                   </span>
-                  <p className="min-w-0 truncate text-[15px] font-normal leading-snug tracking-tight text-foreground">
+                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
                     {epic.title}
                   </p>
                 </div>
@@ -726,7 +727,7 @@ function InitiativeTreeCard({
                     <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                       <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
                     </span>
-                  <p className="min-w-0 truncate text-[17px] font-normal leading-6 tracking-tight text-slate-900">
+                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
                       {initiative.title}
                     </p>
                   </div>
@@ -1002,7 +1003,7 @@ function SprintEpicCard({
                   <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                   </span>
-                  <p className="min-w-0 truncate text-[16px] font-normal leading-6 text-slate-900">{epic.title}</p>
+                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">{epic.title}</p>
                 </div>
               </div>
               <p className="truncate text-[12px] font-normal text-slate-500">{initiative.title}</p>
@@ -1571,8 +1572,8 @@ export function InitiativeListPanel({
   const showNewButton = epicPlanPanelMode || !isSprintModeActive;
 
   return (
-    <aside className="h-full min-h-0 overflow-x-hidden overflow-y-auto rounded-xl bg-white p-4 shadow-xl ring-1 ring-black/8">
-      <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center justify-between border-b border-slate-200 bg-white px-4 pb-3">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white py-4 pl-0.5 pr-4 shadow-xl ring-1 ring-black/8">
+      <div className="z-10 -ml-0.5 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pl-0.5 pr-4 pb-3">
         <div>
           <h2
             className={cn(
@@ -1622,6 +1623,17 @@ export function InitiativeListPanel({
         </div>
       </div>
 
+      <div
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden [direction:rtl] [scrollbar-gutter:stable]",
+          "[scrollbar-width:thin] [scrollbar-color:#7dd3fc_#f1f5f9]",
+          "[&::-webkit-scrollbar]:w-2.5",
+          "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-100/90",
+          "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-300",
+          "hover:[&::-webkit-scrollbar-thumb]:bg-sky-400",
+        )}
+      >
+        <div className="min-h-0 ps-3 [direction:ltr]">
       {showInitiativeBacklogDrop ? (
         <div
           ref={setBacklogDropRef}
@@ -1887,6 +1899,8 @@ export function InitiativeListPanel({
           )}
         </div>
       )}
+        </div>
+      </div>
     </aside>
   );
 }
