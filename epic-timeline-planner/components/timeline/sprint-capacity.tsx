@@ -7,7 +7,12 @@ import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
-import { defaultMembersForTeam, type SprintCapacityBoard as SprintCapacityBoardState } from "@/lib/sprint-capacity";
+import {
+  defaultMembersForTeam,
+  resolveCapacityMemberForAssignee,
+  SPRINT_CAPACITY_OTHER_BUCKET,
+  type SprintCapacityBoard as SprintCapacityBoardState,
+} from "@/lib/sprint-capacity";
 import { MONTH_TEAM_COLUMNS, isKnownEpicTeamId } from "@/lib/month-team-board";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
@@ -151,7 +156,7 @@ function CapacityBucket({
           <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
           <span className="truncate">{member}</span>
         </p>
-        <label className="relative z-10 inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
+        <label className="relative z-10 inline-flex translate-x-[3px] items-center gap-1 text-[12px] font-semibold text-slate-600">
           Capacity
           <input
             type="number"
@@ -205,7 +210,7 @@ function CapacityBucket({
             )}
           </div>
         </div>
-        <div className="flex h-[23rem] flex-col items-center rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
+        <div className="flex h-[23rem] flex-col items-center p-2">
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">
@@ -298,7 +303,15 @@ export function SprintCapacityBoard({
       },
     ]),
   );
-  const members = defaultMembersForTeam(selectedTeamId);
+  const baseMembers = defaultMembersForTeam(selectedTeamId);
+  const needsOtherColumn =
+    (capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0 ||
+    rows.some((row) => {
+      const raw = row.story.assignee?.trim() ?? "";
+      if (!raw || raw.toLowerCase() === "unassigned") return false;
+      return resolveCapacityMemberForAssignee(row.story.assignee, baseMembers) == null;
+    });
+  const members = needsOtherColumn ? [...baseMembers, SPRINT_CAPACITY_OTHER_BUCKET] : baseMembers;
   const teamKey = selectedTeamId ?? "all";
   const teamLabel =
     selectedTeamId && isKnownEpicTeamId(selectedTeamId)

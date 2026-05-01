@@ -58,14 +58,17 @@ import { MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
+  SPRINT_CAPACITY_OTHER_BUCKET,
   SPRINT_CAPACITY_STORAGE_KEY,
   assignStoryToMember,
   defaultMembersForTeam,
   emptySprintCapacityBoard,
   sanitizeSprintCapacityBoard,
   sprintCapacityBoardKey,
+  syncCapacityAssignmentsWithKanban,
   type SprintCapacityBoard,
 } from "@/lib/sprint-capacity";
+import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import {
   MONTH_TEAM_CAPACITY_STORAGE_KEY,
   emptyMonthTeamCapacityBoard,
@@ -1619,13 +1622,69 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     return sprintCapacityBoardKey(selectedYear, activeYearSprint, sprintStoryBoardTeamId);
   }, [selectedYear, activeYearSprint, sprintStoryBoardTeamId]);
 
+  /**
+   * Sprint planning uses a calendar month for legacy lane resolution (story.sprint 1|2).
+   * When the timeline has no focused month but a global sprint is active (e.g. year view),
+   * derive the month from the sprint so capacity/kanban collect the same rows as sprint 9 → May.
+   */
+  const sprintCapacityPlanMonth = useMemo(() => {
+    if (activeYearSprint == null) return null;
+    if (activeTimelineMonth != null) return activeTimelineMonth;
+    return monthLaneFromGlobalSprint(activeYearSprint).month;
+  }, [activeTimelineMonth, activeYearSprint]);
+
   const activeSprintCapacityBoard = useMemo(() => {
-    if (!activeSprintCapacityKey) return { capacities: {}, assignments: {} };
-    const existing = sprintCapacityByKey[activeSprintCapacityKey];
-    if (existing) return existing;
+    if (!activeSprintCapacityKey || activeYearSprint == null || sprintCapacityPlanMonth == null) {
+      return { capacities: {}, assignments: {} };
+    }
     const members = defaultMembersForTeam(sprintStoryBoardTeamId);
-    return emptySprintCapacityBoard(members);
-  }, [activeSprintCapacityKey, sprintCapacityByKey, sprintStoryBoardTeamId]);
+    const raw = sprintCapacityByKey[activeSprintCapacityKey] ?? emptySprintCapacityBoard(members);
+    const rows = collectStoriesForSprintBoard(
+      initiatives,
+      sprintCapacityPlanMonth,
+      activeYearSprint,
+      sprintStoryBoardTeamId,
+    );
+    return syncCapacityAssignmentsWithKanban(
+      raw,
+      members,
+      rows.map((r) => ({ id: r.story.id, assignee: r.story.assignee })),
+    );
+  }, [
+    activeSprintCapacityKey,
+    activeYearSprint,
+    sprintCapacityPlanMonth,
+    initiatives,
+    sprintCapacityByKey,
+    sprintStoryBoardTeamId,
+  ]);
+
+  useEffect(() => {
+    if (!activeSprintCapacityKey || activeYearSprint == null || sprintCapacityPlanMonth == null) return;
+    setSprintCapacityByKey((prev) => {
+      const members = defaultMembersForTeam(sprintStoryBoardTeamId);
+      const raw = prev[activeSprintCapacityKey] ?? emptySprintCapacityBoard(members);
+      const rows = collectStoriesForSprintBoard(
+        initiatives,
+        sprintCapacityPlanMonth,
+        activeYearSprint,
+        sprintStoryBoardTeamId,
+      );
+      const merged = syncCapacityAssignmentsWithKanban(
+        raw,
+        members,
+        rows.map((r) => ({ id: r.story.id, assignee: r.story.assignee })),
+      );
+      if (JSON.stringify(merged.assignments) === JSON.stringify(raw.assignments)) return prev;
+      return { ...prev, [activeSprintCapacityKey]: merged };
+    });
+  }, [
+    activeSprintCapacityKey,
+    activeYearSprint,
+    sprintCapacityPlanMonth,
+    initiatives,
+    sprintStoryBoardTeamId,
+  ]);
 
   const activeSprintRetrospectiveKey = useMemo(() => {
     if (activeYearSprint == null) return null;
@@ -2324,29 +2383,51 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           const cur = prev[boardKey] ?? emptySprintCapacityBoard(defaultMembersForTeam(dropTeamId));
           return { ...prev, [boardKey]: assignStoryToMember(cur, storyId, capacityDrop.member) };
         });
-        flushSync(() => {
-          setInitiatives((prev) =>
-            prev.map((init) => ({
-              ...init,
-              epics: (init.epics ?? []).map((epic) => ({
-                ...epic,
-                userStories: (epic.userStories ?? []).map((s) =>
-                  s.id === storyId
-                    ? { ...s, assignee: capacityDrop.member, sprint: capacityDrop.yearSprint }
-                    : s,
-                ),
+        const skipAssigneePatch = capacityDrop.member === SPRINT_CAPACITY_OTHER_BUCKET;
+        if (!skipAssigneePatch) {
+          flushSync(() => {
+            setInitiatives((prev) =>
+              prev.map((init) => ({
+                ...init,
+                epics: (init.epics ?? []).map((epic) => ({
+                  ...epic,
+                  userStories: (epic.userStories ?? []).map((s) =>
+                    s.id === storyId
+                      ? { ...s, assignee: capacityDrop.member, sprint: capacityDrop.yearSprint }
+                      : s,
+                  ),
+                })),
               })),
-            })),
-          );
-        });
+            );
+          });
+        } else {
+          flushSync(() => {
+            setInitiatives((prev) =>
+              prev.map((init) => ({
+                ...init,
+                epics: (init.epics ?? []).map((epic) => ({
+                  ...epic,
+                  userStories: (epic.userStories ?? []).map((s) =>
+                    s.id === storyId ? { ...s, sprint: capacityDrop.yearSprint } : s,
+                  ),
+                })),
+              })),
+            );
+          });
+        }
         try {
+          const patchBody = skipAssigneePatch
+            ? { sprint: capacityDrop.yearSprint }
+            : { assignee: capacityDrop.member, sprint: capacityDrop.yearSprint };
           const response = await fetch(`/api/stories/${storyId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ assignee: capacityDrop.member, sprint: capacityDrop.yearSprint }),
+            body: JSON.stringify(patchBody),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          toast.success(`Assigned to ${capacityDrop.member}`);
+          toast.success(
+            skipAssigneePatch ? "Story placed in Other assignees (assignee unchanged)" : `Assigned to ${capacityDrop.member}`,
+          );
         } catch {
           await refresh();
           toast.error("Failed to assign story");
