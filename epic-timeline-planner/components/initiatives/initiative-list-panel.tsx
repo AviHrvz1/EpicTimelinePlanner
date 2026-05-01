@@ -425,7 +425,7 @@ function DraggableInitiativeCard({
       <div className="flex items-center gap-2.5">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
               <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                 <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
               </span>
@@ -535,11 +535,11 @@ function InitiativeTreeEpicRow({
                 className="min-w-0 flex-1 rounded-md px-0.5 text-left hover:bg-white/90"
                 aria-label={`Open epic ${epic.title}`}
               >
-                <div className="flex min-w-0 items-center gap-1.5">
+                <div className="flex min-w-0 items-center gap-2 pl-0.5">
                   <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-700">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
                   </span>
-                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
+                  <p className="min-w-0 truncate text-[20px] font-normal leading-7 tracking-tight text-slate-900">
                     {epic.title}
                   </p>
                 </div>
@@ -723,7 +723,7 @@ function InitiativeTreeCard({
                 aria-label={`Open initiative ${initiative.title}`}
               >
                 <div className="flex w-full min-w-0 items-center gap-1">
-                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
                     <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                       <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
                     </span>
@@ -999,11 +999,11 @@ function SprintEpicCard({
             >
               <div className="min-w-0 flex-1 text-left">
               <div className="flex w-full min-w-0 items-center gap-1">
-                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
                   <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                   </span>
-                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">{epic.title}</p>
+                  <p className="min-w-0 truncate text-[20px] font-normal leading-7 tracking-tight text-slate-900">{epic.title}</p>
                 </div>
               </div>
               <p className="truncate text-[12px] font-normal text-slate-500">{initiative.title}</p>
@@ -1240,6 +1240,7 @@ export function InitiativeListPanel({
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [initiativeSearchFocused, setInitiativeSearchFocused] = useState(false);
   const [epicSearch, setEpicSearch] = useState("");
+  const [epicSearchFocused, setEpicSearchFocused] = useState(false);
   const [panelQuarterFilters, setPanelQuarterFilters] = useState<Array<"all" | "Q1" | "Q2" | "Q3" | "Q4">>(["all"]);
   const [panelTeamFilterIds, setPanelTeamFilterIds] = useState<string[]>(["all"]);
   const [panelStatusFilters, setPanelStatusFilters] = useState<Array<
@@ -1485,6 +1486,26 @@ export function InitiativeListPanel({
     );
   }, [monthPanelEpicsFiltered, epicSearch]);
 
+  const epicSearchSuggestionsList = useMemo(() => {
+    const titles = monthPanelEpicsFiltered
+      .map(({ epic }) => epic.title.trim())
+      .filter((t) => t.length > 0);
+    return [...new Set(titles)].sort((a, b) => a.localeCompare(b));
+  }, [monthPanelEpicsFiltered]);
+  const epicSearchSuggestionsFiltered = useMemo(() => {
+    const q = epicSearch.trim().toLowerCase();
+    if (!q) return epicSearchSuggestionsList.slice(0, 8);
+    return epicSearchSuggestionsList
+      .filter((entry) => entry.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStarts = a.toLowerCase().startsWith(q) ? 0 : 1;
+        const bStarts = b.toLowerCase().startsWith(q) ? 0 : 1;
+        if (aStarts !== bStarts) return aStarts - bStarts;
+        return a.localeCompare(b);
+      })
+      .slice(0, 8);
+  }, [epicSearch, epicSearchSuggestionsList]);
+
   const initiativeList = useMemo(
     () =>
       initiatives
@@ -1572,9 +1593,9 @@ export function InitiativeListPanel({
   const showNewButton = epicPlanPanelMode || !isSprintModeActive;
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white py-4 pl-0.5 pr-4 shadow-xl ring-1 ring-black/8">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-7 pb-4 pl-0.5 pr-4 shadow-xl ring-1 ring-black/8">
       <div className="z-10 -ml-0.5 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pl-0.5 pr-4 pb-3">
-        <div>
+        <div className="pl-1.5">
           <h2
             className={cn(
               "inline-flex items-center font-medium tracking-tight text-slate-950",
@@ -1652,16 +1673,36 @@ export function InitiativeListPanel({
             <input
               value={epicSearch}
               onChange={(event) => setEpicSearch(event.target.value)}
-              list="month-epic-search-suggestions"
+              onFocus={() => setEpicSearchFocused(true)}
+              onBlur={() => {
+                window.setTimeout(() => setEpicSearchFocused(false), 80);
+              }}
               placeholder="Search epic..."
-              className="h-10 w-full rounded-lg bg-white pl-10 pr-3 text-[13px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-[15px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
               aria-label="Search epics in selected month"
+              aria-autocomplete="list"
+              aria-expanded={epicSearchFocused && epicSearchSuggestionsFiltered.length > 0}
             />
-            <datalist id="month-epic-search-suggestions">
-              {monthPanelEpicsFiltered.map(({ epic }) => (
-                <option key={`${epic.id}-${epic.title}`} value={epic.title} />
-              ))}
-            </datalist>
+            {epicSearchFocused && epicSearchSuggestionsFiltered.length > 0 ? (
+              <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-300 bg-white p-1.5 ring-1 ring-slate-200/90">
+                {epicSearchSuggestionsFiltered.map((entry) => (
+                  <button
+                    key={entry}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                    }}
+                    onClick={() => {
+                      setEpicSearch(entry);
+                      setEpicSearchFocused(false);
+                    }}
+                    className="block w-full rounded-md px-2.5 py-2 text-left text-[15px] leading-snug text-slate-700 hover:bg-slate-100"
+                  >
+                    {entry}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             {activeMonth != null ? (
@@ -1713,7 +1754,7 @@ export function InitiativeListPanel({
               <Eraser className="size-4" aria-hidden />
             </button>
           </div>
-          <h3 className="mb-2 text-[14px] font-medium tracking-[0.01em] text-slate-900">
+          <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
             {epicPanelQuarterLabel
               ? `${epicPanelQuarterLabel} epics (${filteredMonthBacklogEpics.length})`
               : activeMonth != null
@@ -1794,11 +1835,11 @@ export function InitiativeListPanel({
                 window.setTimeout(() => setInitiativeSearchFocused(false), 80);
               }}
               placeholder="Search..."
-              className="h-11 w-full rounded-lg bg-white pl-10 pr-3 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+              className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-[14px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
               aria-label="Search initiatives, epics, or user stories"
             />
             {initiativeSearchFocused && initiativeSearchSuggestionsFiltered.length > 0 ? (
-              <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+              <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-300 bg-white p-1.5 ring-1 ring-slate-200/90">
                 {initiativeSearchSuggestionsFiltered.map((entry) => (
                   <button
                     key={entry}
@@ -1811,7 +1852,7 @@ export function InitiativeListPanel({
                       setInitiativeSearch(entry);
                       setInitiativeSearchFocused(false);
                     }}
-                    className="block w-full rounded-md px-2 py-1.5 text-left text-[12px] text-slate-700 hover:bg-slate-100"
+                    className="block w-full rounded-md px-2.5 py-2 text-left text-[15px] leading-snug text-slate-700 hover:bg-slate-100"
                   >
                     {entry}
                   </button>
