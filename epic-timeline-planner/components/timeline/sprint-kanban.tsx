@@ -270,14 +270,14 @@ export function SprintKanbanBoard({
     <div className="relative flex w-full min-h-0 flex-1 flex-col gap-2">
       {sprintClosed ? (
         <>
-          <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/10 backdrop-blur-[1px]" />
+          <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/5 backdrop-blur-[1px]" />
           <div className="pointer-events-none absolute inset-x-3 top-2 z-30 flex justify-center">
             <div
               className="px-4 py-2 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
               style={{
                 background: "rgba(255, 255, 255, 0.2)",
                 borderRadius: "16px",
-                boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+                boxShadow: "0 2px 16px rgba(15, 23, 42, 0.05)",
                 backdropFilter: "blur(1.2px)",
                 WebkitBackdropFilter: "blur(1.2px)",
                 border: "1px solid rgba(255, 255, 255, 0.44)",
