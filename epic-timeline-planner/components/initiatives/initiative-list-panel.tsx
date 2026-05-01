@@ -532,14 +532,14 @@ function InitiativeTreeEpicRow({
               <button
                 type="button"
                 onClick={() => onOpenEpic(epic, initiative)}
-                className="min-w-0 flex-1 rounded-md px-0.5 text-left hover:bg-white/90"
+                className="min-w-0 flex-1 rounded-md px-0.5 text-left font-normal hover:bg-white/90"
                 aria-label={`Open epic ${epic.title}`}
               >
                 <div className="flex min-w-0 items-center gap-2 pl-0.5">
-                  <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-700">
-                    <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
+                  <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
+                    <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                   </span>
-                  <p className="min-w-0 truncate text-[20px] font-normal leading-7 tracking-tight text-slate-900">
+                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
                     {epic.title}
                   </p>
                 </div>
@@ -937,7 +937,7 @@ function SprintEpicCard({
         setDropRef(node);
       }}
       className={cn(
-        "group rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5 transition-colors hover:bg-sky-50/70",
+        "group rounded-xl border border-slate-200/90 bg-white p-3 font-sans antialiased shadow-sm ring-1 ring-black/5 transition-colors hover:bg-sky-50/70",
         isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
@@ -994,7 +994,7 @@ function SprintEpicCard({
             <button
               type="button"
               onClick={() => onOpenEpic(epic, initiative)}
-              className="min-w-0 flex-1 rounded-md px-0.5 text-left hover:bg-slate-50"
+              className="min-w-0 flex-1 rounded-md px-0.5 text-left font-normal hover:bg-slate-50"
               aria-label={`Open epic ${epic.title}`}
             >
               <div className="min-w-0 flex-1 text-left">
@@ -1003,10 +1003,10 @@ function SprintEpicCard({
                   <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                     <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                   </span>
-                  <p className="min-w-0 truncate text-[20px] font-normal leading-7 tracking-tight text-slate-900">{epic.title}</p>
+                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">{epic.title}</p>
                 </div>
               </div>
-              <p className="truncate text-[12px] font-normal text-slate-500">{initiative.title}</p>
+              <p className="truncate text-[13px] leading-5 text-slate-600">{initiative.title}</p>
               <div className="mt-2 space-y-1">
                 <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
                   <span className="min-w-0 truncate">
@@ -1593,20 +1593,13 @@ export function InitiativeListPanel({
   const showNewButton = epicPlanPanelMode || !isSprintModeActive;
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-7 pb-4 pl-0.5 pr-4 shadow-xl ring-1 ring-black/8">
-      <div className="z-10 -ml-0.5 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pl-0.5 pr-4 pb-3">
-        <div className="pl-1.5">
-          <h2
-            className={cn(
-              "inline-flex items-center font-medium tracking-tight text-slate-950",
-              epicPlanPanelMode
-                ? "gap-1.5 text-[16px] leading-6"
-                : "gap-2 text-xl leading-8",
-            )}
-          >
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-7 pb-4 pl-0 pr-4 shadow-xl ring-1 ring-black/8">
+      <div className="z-10 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-4 pb-3">
+        <div className="min-w-0 pl-8">
+          <h2 className="inline-flex items-center gap-2 text-xl leading-8 font-bold tracking-tight text-slate-950">
             {epicPlanPanelMode ? (
               <>
-                <Folder className="size-5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                <Folder className="size-6 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                 Epics
               </>
             ) : (

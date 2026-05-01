@@ -2320,7 +2320,7 @@ export function TimelineGrid({
                       runSurfaceTransition();
                       item.onClick?.();
                     }}
-                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[16px] font-semibold leading-snug tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -2328,7 +2328,7 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "whitespace-nowrap px-1 py-0.5 text-[14px] font-semibold tracking-[0.01em]",
+                      "whitespace-nowrap px-1 py-0.5 text-[16px] font-semibold leading-snug tracking-[0.01em]",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
                         : "text-slate-900",
@@ -2338,13 +2338,13 @@ export function TimelineGrid({
                   </span>
                 )}
                 {index < breadcrumbItems.length - 1 ? (
-                  <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
+                  <ChevronRight className="size-4 text-slate-400" aria-hidden />
                 ) : null}
               </div>
             ))}
             {showSprintTeamPicker ? (
               <>
-                <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
+                <ChevronRight className="size-4 text-slate-400" aria-hidden />
                 <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 py-0.5 pl-1.5 pr-1 shadow-none">
                   <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
                   <div className="relative z-40" ref={sprintTeamMenuRef}>
