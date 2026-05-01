@@ -447,14 +447,14 @@ export function SprintRetrospectiveEditor({
   }
 
   return (
-    <section className="font-sans min-w-0 p-5 sm:p-7 md:p-8">
+    <section className="font-sans min-w-0 py-5 pr-5 pb-5 pl-2 sm:py-7 sm:pr-7 sm:pb-7 sm:pl-3 md:py-8 md:pr-8 md:pb-8 md:pl-3">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4 pb-4">
-        <div className="min-w-0 space-y-3 pl-[10px]">
+        <div className="min-w-0 space-y-3">
           <h3 className="flex items-center gap-2.5 font-sans text-xl font-normal tracking-tight text-black md:text-[1.3125rem] md:leading-snug">
             <NotebookPen className="size-7 shrink-0 text-black md:size-8" aria-hidden />
             <span>Retrospective</span>
           </h3>
-          <p className="text-sm leading-relaxed text-black">
+          <p className="text-sm leading-relaxed text-slate-700">
             {sprintLabel} - capture wins, improvements, and concrete next actions.
           </p>
         </div>
@@ -475,10 +475,10 @@ export function SprintRetrospectiveEditor({
         <RetroRichSection
           title="What went well?"
           titleIcon={ThumbsUp}
-          titleAccentClass="bg-gradient-to-r from-teal-50 via-white to-sky-50/70 text-black"
+          titleAccentClass="bg-transparent text-black"
           headerTitleClassName="text-[18px] md:text-[19px] md:leading-snug"
           titleIconClassName="size-5 md:size-6"
-          editorSurfaceClassName="bg-gradient-to-br from-teal-100/55 via-white to-sky-100/50"
+          editorSurfaceClassName="bg-transparent"
           placeholder="Highlights, wins, and practices to repeat…"
           field="wentWell"
           initialDoc={initialDoc}
@@ -488,10 +488,10 @@ export function SprintRetrospectiveEditor({
         <RetroRichSection
           title="What did not go well?"
           titleIcon={ThumbsDown}
-          titleAccentClass="bg-white text-black"
+          titleAccentClass="bg-transparent text-black"
           headerTitleClassName="text-[18px] md:text-[19px] md:leading-snug"
           titleIconClassName="size-5 md:size-6"
-          editorSurfaceClassName="bg-gradient-to-br from-violet-50/65 via-white to-indigo-50/45"
+          editorSurfaceClassName="bg-transparent"
           placeholder="Friction, misses, and risks to address…"
           field="improve"
           initialDoc={initialDoc}

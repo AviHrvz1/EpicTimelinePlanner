@@ -822,7 +822,7 @@ export function TimelineGrid({
   const [capacityTeamFilterIds, setCapacityTeamFilterIds] = useState<string[]>([]);
   const [capacityTeamSearch, setCapacityTeamSearch] = useState("");
   const [capacityTeamMenuOpen, setCapacityTeamMenuOpen] = useState(false);
-  const [showYearSprintChips, setShowYearSprintChips] = useState(true);
+  const [showYearSprintChips, setShowYearSprintChips] = useState(false);
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
   const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(960);
   const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
@@ -3278,7 +3278,7 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-retrospective" ? (
-              <div className="flex-1 p-3 sm:p-5">
+              <div className="flex-1 py-3 pr-3 pl-2 sm:py-5 sm:pr-5 sm:pl-3">
                 <SprintRetrospectiveEditor
                   sprintLabel={`Sprint ${activeSprint ?? firstGlobalSprintForMonth(activeMonth)}`}
                   initialDoc={sprintRetrospective}
