@@ -9,7 +9,6 @@ import {
   AlertCircle,
   Bold,
   CalendarDays,
-  ClipboardList,
   Heading2,
   Heading3,
   Italic,
@@ -17,6 +16,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  NotebookPen,
   Plus,
   Quote,
   Redo,
@@ -83,23 +83,23 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
 
   if (!editor) {
     return (
-      <div className="flex min-h-10 flex-wrap gap-1 rounded-lg border border-border bg-muted/20 px-2 py-1.5">
-        <span className="text-xs text-muted-foreground">Loading editor…</span>
+      <div className="flex min-h-10 flex-wrap gap-1 rounded-lg bg-muted/20 px-2 py-1.5">
+        <span className="text-xs text-black">Loading editor…</span>
       </div>
     );
   }
 
   const mkToggle = (isOn: boolean) =>
     cn(
-      "h-8 w-8 shrink-0 rounded-md border p-0 shadow-none",
+      "h-8 w-8 shrink-0 rounded-md border-0 p-0 shadow-none",
       isOn
-        ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-        : "border-border bg-background text-foreground hover:bg-muted",
+        ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+        : "bg-slate-100 text-black hover:bg-slate-200/80",
     );
 
   return (
     <div
-      className="flex flex-wrap items-center gap-0.5 rounded-lg border border-border bg-muted/15 p-1"
+      className="flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100/80 p-1"
       role="toolbar"
       aria-label="Formatting"
     >
@@ -154,7 +154,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         <Strikethrough className="size-4" />
       </Button>
 
-      <span className="mx-1 hidden h-6 w-px bg-border sm:inline" aria-hidden />
+      <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:inline" aria-hidden />
 
       <Button
         type="button"
@@ -223,7 +223,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         <Quote className="size-4" />
       </Button>
 
-      <span className="mx-1 hidden h-6 w-px bg-border sm:inline" aria-hidden />
+      <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:inline" aria-hidden />
 
       <Button
         type="button"
@@ -248,13 +248,13 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         <LinkIcon className="size-4" />
       </Button>
 
-      <span className="mx-1 hidden h-6 w-px bg-border sm:inline" aria-hidden />
+      <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:inline" aria-hidden />
 
       <Button
         type="button"
         size="sm"
         variant="outline"
-        className="h-8 w-8 shrink-0 rounded-md border-border bg-background p-0 shadow-none hover:bg-muted"
+        className="h-8 w-8 shrink-0 rounded-md border-0 bg-slate-100 p-0 text-black shadow-none hover:bg-slate-200/80"
         onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().undo().run()}
         disabled={!editor.can().undo()}
@@ -266,7 +266,7 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
         type="button"
         size="sm"
         variant="outline"
-        className="h-8 w-8 shrink-0 rounded-md border-border bg-background p-0 shadow-none hover:bg-muted"
+        className="h-8 w-8 shrink-0 rounded-md border-0 bg-slate-100 p-0 text-black shadow-none hover:bg-slate-200/80"
         onMouseDown={toolbarPointerDown}
         onClick={() => editor.chain().focus().redo().run()}
         disabled={!editor.can().redo()}
@@ -282,6 +282,11 @@ type RetroRichSectionProps = {
   title: string;
   titleIcon: LucideIcon;
   titleAccentClass: string;
+  /** Overrides default `text-base` on the section header title row. */
+  headerTitleClassName?: string;
+  titleIconClassName?: string;
+  /** Background for the editor surface (gradient). */
+  editorSurfaceClassName?: string;
   placeholder: string;
   field: "wentWell" | "improve";
   initialDoc: SprintRetrospectiveDoc | null;
@@ -293,6 +298,9 @@ function RetroRichSection({
   title,
   titleIcon: TitleIcon,
   titleAccentClass,
+  headerTitleClassName,
+  titleIconClassName,
+  editorSurfaceClassName = "bg-gradient-to-b from-slate-50/90 via-white to-indigo-50/55",
   placeholder,
   field,
   initialDoc,
@@ -312,7 +320,7 @@ function RetroRichSection({
         openOnClick: false,
         autolink: true,
         HTMLAttributes: {
-          class: "text-primary underline decoration-primary/40 underline-offset-2 font-medium",
+          class: "font-medium text-black underline decoration-black/40 underline-offset-2",
         },
       }),
       Placeholder.configure({ placeholder }),
@@ -321,15 +329,15 @@ function RetroRichSection({
     editorProps: {
       attributes: {
         class: cn(
-          "prose prose-slate dark:prose-invert max-w-none min-h-[14rem] px-3 py-2.5 text-sm text-foreground outline-none",
-          "prose-headings:font-semibold prose-p:my-1 prose-ul:my-1 prose-ol:my-1",
+          "prose max-w-none min-h-[14rem] px-3 py-2.5 text-sm text-black outline-none",
+          "prose-headings:font-normal prose-headings:text-black prose-p:my-1 prose-p:text-black prose-li:text-black prose-ul:my-1 prose-ol:my-1",
           // Make toolbar block formats visibly distinct in the retrospective editor.
-          "[&_h2]:my-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:leading-snug",
-          "[&_h3]:my-1.5 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:leading-snug",
+          "[&_h2]:my-2 [&_h2]:text-xl [&_h2]:font-normal [&_h2]:leading-snug",
+          "[&_h3]:my-1.5 [&_h3]:text-lg [&_h3]:font-normal [&_h3]:leading-snug",
           "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6",
           "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6",
           "[&_li]:my-0.5",
-          "[&_blockquote]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:italic",
+          "[&_blockquote]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-black",
           "focus:outline-none [&_.ProseMirror]:min-h-[14rem] [&_.ProseMirror]:outline-none",
         ),
       },
@@ -351,21 +359,27 @@ function RetroRichSection({
   return (
     <section
       className={cn(
-        "rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm transition-[box-shadow,border-color]",
-        editor?.isFocused && "border-primary/35 shadow-md ring-2 ring-ring/35",
+        "rounded-xl bg-transparent p-3 transition-[box-shadow]",
+        editor?.isFocused && "ring-2 ring-ring/30 ring-offset-2 ring-offset-transparent",
       )}
     >
       <div
         className={cn(
-          "mb-2.5 flex items-center gap-2 rounded-lg px-3 py-2 text-lg font-semibold text-white shadow-sm",
+          "mb-2.5 flex items-center gap-2 rounded-lg px-3 py-2 font-normal",
+          headerTitleClassName ?? "text-base",
           titleAccentClass,
         )}
       >
-        <TitleIcon className="size-4 shrink-0 opacity-95" aria-hidden />
+        <TitleIcon className={cn("size-4 shrink-0 opacity-90", titleIconClassName)} aria-hidden />
         <span>{title}</span>
       </div>
       <RetroEditorToolbar editor={editor} />
-      <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div
+        className={cn(
+          "mt-2 overflow-hidden rounded-lg border border-slate-200",
+          editorSurfaceClassName,
+        )}
+      >
         <EditorContent editor={editor} />
       </div>
     </section>
@@ -433,19 +447,14 @@ export function SprintRetrospectiveEditor({
   }
 
   return (
-    <section className="font-sans rounded-2xl bg-gradient-to-b from-slate-50/70 to-white p-5 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.06]">
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
-        <div className="min-w-0 space-y-1">
-          <h3 className="flex items-center gap-2.5 font-sans text-xl font-bold tracking-tight text-slate-700 md:text-2xl">
-            <span
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700"
-              aria-hidden
-            >
-              <ClipboardList className="size-[1.125rem]" />
-            </span>
+    <section className="font-sans min-w-0 p-5 sm:p-7 md:p-8">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4 pb-4">
+        <div className="min-w-0 space-y-3 pl-[10px]">
+          <h3 className="flex items-center gap-2.5 font-sans text-xl font-normal tracking-tight text-black md:text-[1.3125rem] md:leading-snug">
+            <NotebookPen className="size-7 shrink-0 text-black md:size-8" aria-hidden />
             <span>Retrospective</span>
           </h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm leading-relaxed text-black">
             {sprintLabel} - capture wins, improvements, and concrete next actions.
           </p>
         </div>
@@ -466,7 +475,10 @@ export function SprintRetrospectiveEditor({
         <RetroRichSection
           title="What went well?"
           titleIcon={ThumbsUp}
-          titleAccentClass="bg-gradient-to-r from-cyan-500 to-teal-500"
+          titleAccentClass="bg-gradient-to-r from-teal-50 via-white to-sky-50/70 text-black"
+          headerTitleClassName="text-[18px] md:text-[19px] md:leading-snug"
+          titleIconClassName="size-5 md:size-6"
+          editorSurfaceClassName="bg-gradient-to-br from-teal-100/55 via-white to-sky-100/50"
           placeholder="Highlights, wins, and practices to repeat…"
           field="wentWell"
           initialDoc={initialDoc}
@@ -476,7 +488,10 @@ export function SprintRetrospectiveEditor({
         <RetroRichSection
           title="What did not go well?"
           titleIcon={ThumbsDown}
-          titleAccentClass="bg-gradient-to-r from-fuchsia-600 to-purple-600"
+          titleAccentClass="bg-white text-black"
+          headerTitleClassName="text-[18px] md:text-[19px] md:leading-snug"
+          titleIconClassName="size-5 md:size-6"
+          editorSurfaceClassName="bg-gradient-to-br from-violet-50/65 via-white to-indigo-50/45"
           placeholder="Friction, misses, and risks to address…"
           field="improve"
           initialDoc={initialDoc}
@@ -485,58 +500,48 @@ export function SprintRetrospectiveEditor({
         />
       </div>
 
-      <section className="mt-4 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm">
-        <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 px-3 py-2 text-lg font-semibold text-white shadow-sm">
+      <section className="mt-4 rounded-xl bg-transparent p-3">
+        <div className="mb-2.5 rounded-lg bg-white px-3 py-2 text-lg font-normal text-black sm:text-xl">
           <span className="inline-flex items-center gap-2">
-            <ListChecks className="size-4 shrink-0" aria-hidden />
+            <ListChecks className="size-4 shrink-0 text-black sm:size-5" aria-hidden />
             What's next?
           </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={addActionItem}
-            className="h-7 gap-1.5 border border-white/35 bg-white/15 px-2 text-white hover:bg-white/25 hover:text-white"
-          >
-            <Plus className="size-3.5" />
-            Add
-          </Button>
         </div>
 
         <div className="space-y-2">
           {actionItems.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">
+            <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-black">
               No action items yet. Add one to assign owner and due date.
             </p>
           ) : (
             actionItems.map((item) => (
               <div
                 key={item.id}
-                className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2"
+                className="flex flex-col gap-2 rounded-lg bg-slate-50 p-2"
               >
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     value={item.title}
                     onChange={(e) => updateActionItem(item.id, { title: e.target.value })}
                     placeholder="Action item"
-                    className="h-9 min-w-0 flex-[4.2] rounded-md border border-slate-200 bg-white px-2.5 text-sm text-foreground shadow-none outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
+                    className="h-9 min-w-0 flex-[4.2] rounded-md border-0 bg-white px-2.5 text-sm text-black shadow-none outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-slate-400/50"
                   />
-                  <label className="flex h-9 min-w-0 flex-[0.55] items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5">
-                    <User className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  <label className="flex h-9 min-w-0 flex-[0.55] items-center gap-2 rounded-md border-0 bg-white px-2.5">
+                    <User className="size-4 shrink-0 text-black" aria-hidden />
                     <input
                       value={item.owner}
                       onChange={(e) => updateActionItem(item.id, { owner: e.target.value })}
                       placeholder="Owner"
-                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-slate-400"
+                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-black outline-none placeholder:text-black/45"
                     />
                   </label>
-                  <label className="flex h-9 min-w-0 flex-[0.5] items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5">
-                    <CalendarDays className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  <label className="flex h-9 min-w-0 flex-[0.5] items-center gap-2 rounded-md border-0 bg-white px-2.5">
+                    <CalendarDays className="size-4 shrink-0 text-black" aria-hidden />
                     <input
                       type="date"
                       value={item.dueDate}
                       onChange={(e) => updateActionItem(item.id, { dueDate: e.target.value })}
-                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-black outline-none"
                     />
                   </label>
                   <Button
@@ -554,9 +559,22 @@ export function SprintRetrospectiveEditor({
             ))
           )}
         </div>
+
+        <div className="mt-3 flex justify-start pl-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={addActionItem}
+            className="h-8 shrink-0 gap-1.5 border-black/20 bg-white px-3 text-sm font-semibold text-black shadow-none hover:border-black/40 hover:bg-slate-50 active:bg-slate-100"
+          >
+            <Plus className="size-4" strokeWidth={2.25} aria-hidden />
+            Add
+          </Button>
+        </div>
       </section>
 
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-xs text-black">
         {savedAtText ? `Last saved: ${savedAtText}` : "Not saved yet for this sprint."}
       </p>
     </section>

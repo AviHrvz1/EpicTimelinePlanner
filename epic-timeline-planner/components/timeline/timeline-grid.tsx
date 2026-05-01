@@ -2914,12 +2914,16 @@ export function TimelineGrid({
               "rounded-2xl p-1.5 shadow-lg ring-1",
             monthPlanTab === "sprint-kanban" && "flex min-h-0 flex-1 flex-col",
             hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
-            monthPlanTab !== "sprint-kanban" &&
-            activeMonthQuarterLabel && quarterPanelTone[activeMonthQuarterLabel]
-              ? quarterPanelTone[activeMonthQuarterLabel]
-              : monthPlanTab === "sprint-kanban"
-                ? "bg-white ring-slate-200/90"
-                : "bg-slate-100/70 ring-slate-200/90",
+    monthPlanTab !== "sprint-kanban" &&
+    monthPlanTab !== "sprint-retrospective" &&
+    activeMonthQuarterLabel &&
+    quarterPanelTone[activeMonthQuarterLabel]
+      ? quarterPanelTone[activeMonthQuarterLabel]
+      : monthPlanTab === "sprint-kanban"
+        ? "bg-white ring-slate-200/90"
+        : monthPlanTab === "sprint-retrospective"
+          ? "bg-transparent ring-0"
+          : "bg-slate-100/70 ring-slate-200/90",
           )}
         >
           <div
