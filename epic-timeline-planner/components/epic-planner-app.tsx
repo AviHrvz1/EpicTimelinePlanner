@@ -3308,18 +3308,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         )}
       >
         <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-col gap-5 overflow-x-hidden overflow-y-visible">
-          <div className="relative z-30 overflow-visible rounded-2xl bg-card px-4 pb-4 pt-10 shadow-lg ring-1 ring-black/5">
+          <div className="relative z-30 overflow-visible rounded-2xl bg-card px-4 pb-4 pt-8 shadow-lg ring-1 ring-black/5">
             <div className="relative flex items-start justify-between gap-6 overflow-visible">
               <div className="min-w-0 flex-1">
-                <div className="inline-flex flex-col p-1 pl-10">
+                <div className="inline-flex flex-col p-1 pl-9">
                   <img
                     src="/bird-eye-lockup-wide.png"
                     alt="Bird Eye Viewer logo"
-                    className="h-[96px] w-auto max-w-[820px] rounded-md object-contain object-left"
+                    className="h-[88px] w-auto max-w-[820px] rounded-md object-contain object-left"
                   />
                 </div>
               </div>
-              <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 overflow-visible">
+              <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-[calc(50%-18px)] overflow-visible">
                 <div className="relative isolate inline-block translate-y-[2px] overflow-visible">
                   <div className="relative z-0 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
                     <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
