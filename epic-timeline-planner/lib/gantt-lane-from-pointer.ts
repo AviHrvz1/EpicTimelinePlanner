@@ -53,6 +53,18 @@ export function clientXCenterFromDragEnd(event: DragEndEvent): number | undefine
 }
 
 /**
+ * Leading (left) edge of the dragged node in viewport coordinates. Prefer this over
+ * {@link clientXCenterFromDragEnd} when splitting a month into two sprints: a wide bar can have
+ * its start aligned with the beginning of the month while its center still sits in the second half.
+ */
+export function clientXLeadingEdgeFromDragEnd(event: DragEndEvent): number | undefined {
+  const current = event.active.rect.current;
+  const rect = current?.translated ?? current?.initial;
+  if (!rect) return undefined;
+  return rect.left;
+}
+
+/**
  * Maps viewport Y to a target insert index for `computeInitiativeMonthLanePlacement`
  * (0..n, where n appends after the last scheduled row). Rows must set `data-gantt-lane-index`
  * to their sort index among scheduled initiatives.

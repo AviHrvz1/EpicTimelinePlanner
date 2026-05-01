@@ -2296,7 +2296,7 @@ export function TimelineGrid({
                       runSurfaceTransition();
                       item.onClick?.();
                     }}
-                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[13px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[14px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -2304,7 +2304,7 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "whitespace-nowrap px-1 py-0.5 text-[13px] font-semibold tracking-[0.01em]",
+                      "whitespace-nowrap px-1 py-0.5 text-[14px] font-semibold tracking-[0.01em]",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
                         : "text-slate-900",
