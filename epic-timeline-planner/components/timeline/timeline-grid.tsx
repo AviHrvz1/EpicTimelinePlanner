@@ -3384,9 +3384,9 @@ export function TimelineGrid({
                       </div>
                     )
                   ) : quarterRoadmapEpics.length === 0 ? (
-                    <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
-                      Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled
-                      bar along the timeline.
+                    <p className="relative z-10 rounded-md bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
+                      Create an initiative first, then drag its epics on the relevant timeline, or drag the ends of a
+                      scheduled bar to stretch or shorten it so the span matches your start and due dates.
                     </p>
                   ) : (
                     <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
@@ -3507,13 +3507,13 @@ export function TimelineGrid({
                 <section
                   key={quarter.label}
                   className={cn(
-                    "space-y-1.5 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-2 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
+                    "space-y-1 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-1.5 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
                     quarterPanelTone[quarter.label] ?? "bg-slate-50/60 ring-slate-200",
                   )}
                 >
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {quarter.months.map((month) => (
-                      <div key={month} className="space-y-2">
+                      <div key={month} className="space-y-1.5">
                         <button
                           type="button"
                           className={cn(
@@ -3529,7 +3529,7 @@ export function TimelineGrid({
                           {MONTHS[month - 1]}
                         </button>
                         {showYearSprintChips ? (
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-1.5">
                             <SprintPlanDropButton
                               month={month}
                               lane={1}
@@ -3539,11 +3539,11 @@ export function TimelineGrid({
                                 setFocusedMonth(month);
                                 onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                               }}
-                              className="flex h-6 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
+                              className="flex h-5 items-center justify-center rounded-lg border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
                             >
                               <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
                                 <span className="text-[11px] font-medium">S</span>
-                                <span className="text-[10px] font-medium">
+                                <span className="text-[10px] font-medium tabular-nums">
                                   {globalSprintFromMonthLane(month, 1)}
                                 </span>
                               </span>
@@ -3557,11 +3557,11 @@ export function TimelineGrid({
                                 setFocusedMonth(month);
                                 onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                               }}
-                              className="flex h-6 items-center justify-center rounded-xl border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
+                              className="flex h-5 items-center justify-center rounded-lg border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
                             >
                               <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
                                 <span className="text-[11px] font-medium">S</span>
-                                <span className="text-[10px] font-medium">
+                                <span className="text-[10px] font-medium tabular-nums">
                                   {globalSprintFromMonthLane(month, 2)}
                                 </span>
                               </span>
@@ -3809,9 +3809,9 @@ export function TimelineGrid({
           )
         ) : yearRoadmapEpics.length === 0 && roadmapBarMode === "epics" ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : (
-            <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
-              Drag initiatives or epics onto a month column (narrow strip under the month name) or move a scheduled bar
-              along the timeline.
+            <p className="rounded-md bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
+              Create an initiative first, then drag its epics on the relevant timeline, or drag the ends of a scheduled bar
+              to stretch or shorten it so the span matches your start and due dates.
             </p>
           )
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (

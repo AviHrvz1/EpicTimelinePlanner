@@ -157,7 +157,7 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           <LinkIcon className="size-3.5" />
         </button>
       </div>
-      <div className="rounded-md border border-slate-200 bg-background">
+      <div className="rounded-md border border-slate-300/80 bg-gradient-to-l from-zinc-100/90 via-slate-100/80 to-slate-300/30">
         <EditorContent editor={editor} className="focus-within:outline-none [&_.ProseMirror]:outline-none" />
       </div>
       <div className="flex justify-end">

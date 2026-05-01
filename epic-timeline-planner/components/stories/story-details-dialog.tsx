@@ -1113,7 +1113,10 @@ export function StoryDetailsDialog({
                         <p className="text-sm text-slate-500">No comments yet.</p>
                       ) : (
                         story.comments.map((comment) => (
-                          <div key={comment.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
+                          <div
+                            key={comment.id}
+                            className="rounded-md bg-gradient-to-l from-zinc-100 via-slate-100/95 to-slate-300/35 p-2 text-sm ring-1 ring-slate-300/70"
+                          >
                             <p className="text-[12px] text-slate-500">
                               {comment.author ?? "Team"} - {new Date(comment.createdAt).toLocaleString()}
                             </p>
