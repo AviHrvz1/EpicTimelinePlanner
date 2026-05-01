@@ -1161,7 +1161,7 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex max-w-full whitespace-nowrap items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold tracking-[0.015em] ring-1 transition sm:gap-1.5 sm:px-2.5 sm:py-1.5 sm:text-[12px] lg:px-3 lg:text-[13px]";
+    "inline-flex max-w-full whitespace-nowrap items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:py-1 sm:text-[12px] lg:px-2.5 lg:text-[13px]";
   const summaryChipNeutralClass = `${summaryChipBaseClass} bg-slate-200 text-slate-800 ring-slate-300 hover:bg-slate-300/80`;
   const summaryChipProgressOnClass = `${summaryChipBaseClass} bg-emerald-100 text-emerald-800 ring-emerald-300`;
   const summaryChipInitiativesOnClass = `${summaryChipBaseClass} bg-indigo-100 text-indigo-800 ring-indigo-300`;
@@ -2089,12 +2089,12 @@ export function TimelineGrid({
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card p-5 shadow-lg ring-1 ring-black/5">
       <div
         className={cn(
-          "relative z-30 mb-4 shrink-0 flex items-center gap-3 overflow-visible rounded-xl border border-slate-200/80 bg-gradient-to-r from-slate-50/80 via-white to-indigo-50/45 px-2 py-2 shadow-sm ring-1 ring-slate-100/90 backdrop-blur-[1px]",
+          "relative z-30 mb-4 shrink-0 flex items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-r from-slate-100 via-slate-50 to-white px-1.5 py-2.5 shadow-none ring-0",
           hasBreadcrumbs ? "justify-between" : "justify-start",
         )}
       >
         {hasBreadcrumbs ? (
-          <div className="relative z-30 inline-flex items-center gap-1 rounded-xl bg-white/85 px-2 py-1.5 backdrop-blur-sm">
+          <div className="relative z-30 inline-flex items-center gap-1 rounded-lg bg-white/85 px-1.5 py-0.5 backdrop-blur-sm">
             {breadcrumbItems.map((item, index) => (
               <div key={`${item.label}-${index}`} className="flex shrink-0 items-center gap-1">
                 {item.onClick ? (
@@ -2104,7 +2104,7 @@ export function TimelineGrid({
                       runSurfaceTransition();
                       item.onClick?.();
                     }}
-                    className="cursor-pointer whitespace-nowrap px-1 py-1 text-[15px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[13px] font-semibold tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -2112,7 +2112,7 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "whitespace-nowrap px-1 py-1 text-[15px] font-semibold tracking-[0.01em]",
+                      "whitespace-nowrap px-1 py-0.5 text-[13px] font-semibold tracking-[0.01em]",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
                         : "text-slate-900",
@@ -2122,20 +2122,20 @@ export function TimelineGrid({
                   </span>
                 )}
                 {index < breadcrumbItems.length - 1 ? (
-                  <ChevronRight className="size-4 text-slate-400" aria-hidden />
+                  <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
                 ) : null}
               </div>
             ))}
             {showSprintTeamPicker ? (
               <>
-                <ChevronRight className="size-4 text-slate-400" aria-hidden />
-                <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/90 px-2 py-1 shadow-sm">
-                  <span className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
+                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 px-1.5 py-0.5 shadow-none">
+                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
                   <div className="relative z-40" ref={sprintTeamMenuRef}>
                     <button
                       type="button"
                       onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-7 min-w-[9.25rem] items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-6 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter sprint views by team"
                       aria-expanded={isSprintTeamMenuOpen}
                     >
@@ -2176,7 +2176,7 @@ export function TimelineGrid({
           <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2">
               <div />
               {summaryBadgesForScope ? (
-                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2">
                   <button
                   type="button"
                   onClick={() => setShowRoadmapProgress((v) => !v)}
@@ -2278,7 +2278,7 @@ export function TimelineGrid({
           </div>
         ) : activeMonth ? (
           <div className="flex w-full flex-wrap items-start gap-2 pr-3 sm:gap-3">
-            <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:gap-3">
+            <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2">
               {sprintKanbanSummaryStats ? (
                 <>
                   <button
