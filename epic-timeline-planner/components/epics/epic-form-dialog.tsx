@@ -29,7 +29,7 @@ import {
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -501,6 +501,52 @@ export function EpicFormDialog({
   }, [epic?.userStories]);
   const infoTooltipClass =
     "pointer-events-none absolute left-1/2 top-0 z-[320] w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
+
+  const parentSelectWrapRef = useRef<HTMLSpanElement | null>(null);
+  const [isParentTitleTruncated, setIsParentTitleTruncated] = useState(false);
+  const parentInitiativeTitle = selectedInitiative?.title ?? "";
+
+  useLayoutEffect(() => {
+    const wrap = parentSelectWrapRef.current;
+    const select = wrap?.querySelector("select");
+    if (!select || !initiativeId || !parentInitiativeTitle.trim()) {
+      setIsParentTitleTruncated(false);
+      return;
+    }
+    const selectedText = select.selectedOptions[0]?.text?.trim() ?? "";
+    if (!selectedText) {
+      setIsParentTitleTruncated(false);
+      return;
+    }
+
+    const measure = () => {
+      const text = select.selectedOptions[0]?.text?.trim() ?? "";
+      if (!text) {
+        setIsParentTitleTruncated(false);
+        return;
+      }
+      const byScroll = select.scrollWidth > select.clientWidth + 1;
+      if (byScroll) {
+        setIsParentTitleTruncated(true);
+        return;
+      }
+      const ctx = document.createElement("canvas").getContext("2d");
+      if (!ctx) {
+        setIsParentTitleTruncated(text.length > 36);
+        return;
+      }
+      const cs = window.getComputedStyle(select);
+      ctx.font = `${cs.fontSize} ${cs.fontFamily}`;
+      const textW = ctx.measureText(text).width;
+      const padFudge = 36;
+      setIsParentTitleTruncated(textW > select.clientWidth - padFudge);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(select);
+    return () => ro.disconnect();
+  }, [initiativeId, parentInitiativeTitle, open, detailsPanelWidthPx]);
 
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
@@ -1044,7 +1090,7 @@ export function EpicFormDialog({
                 className="grid h-full min-h-0 gap-0"
                 style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
               >
-              <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 border-r-0 bg-white p-4">
+              <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
                   <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
                     <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1066,7 +1112,14 @@ export function EpicFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-white px-2.5 py-2.5">
+                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border-0 bg-white py-2.5 shadow-none ring-0">
+                  <p className="text-sm font-normal text-slate-700">Year</p>
+                  <input
+                    readOnly
+                    value={planningYearDisplay}
+                    title="Year comes from the parent initiative"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+                  />
                   <p className="text-sm font-normal text-slate-700">Quarter</p>
                   <select
                     value={planQuarterDraft}
@@ -1108,16 +1161,9 @@ export function EpicFormDialog({
                       </option>
                     ))}
                   </select>
-                  <p className="text-sm font-normal text-slate-700">Year</p>
-                  <input
-                    readOnly
-                    value={planningYearDisplay}
-                    title="Year comes from the parent initiative"
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
-                  />
                 </div>
 
-                <div className="mt-5 flex shrink-0 flex-col gap-1">
+                <div className="mt-1 flex shrink-0 flex-col gap-1">
                   <button
                     type="button"
                     id="epic-form-description-accordion-trigger"
@@ -1152,10 +1198,7 @@ export function EpicFormDialog({
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
                     </div>
-                    <div
-                      className="min-h-[14rem] max-h-[min(70vh,640px)] resize-y overflow-y-auto rounded-md border bg-background px-3 py-2"
-                      title="Drag the bottom edge to resize height"
-                    >
+                    <div className="min-h-[14rem] rounded-md border bg-background px-3 py-2">
                       <EditorContent
                         editor={descriptionEditor}
                         className="focus:outline-none [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:outline-none"
@@ -1164,7 +1207,7 @@ export function EpicFormDialog({
                   </div>
                 </div>
 
-                <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                <section className="mt-5 flex shrink-0 flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
                   <div className="flex shrink-0 items-center justify-between">
                     <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
                       <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1181,13 +1224,13 @@ export function EpicFormDialog({
                     </p>
                   ) : (
                     <>
-                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+                      <div className="space-y-2">
                         {(epic.userStories ?? []).length === 0 ? (
                           <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
                             No user stories yet.
                           </p>
                         ) : (
-                          <div className="overflow-x-auto overflow-y-visible rounded-md bg-white ring-1 ring-slate-200">
+                          <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
                             <table className="w-full table-fixed text-left text-sm">
                               <colgroup>
                                 {childTableWidths.map((w, i) => (
@@ -1621,31 +1664,45 @@ export function EpicFormDialog({
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-sm font-normal text-slate-700">Parent</p>
-                  <select
-                    className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
-                    value={initiativeId}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setInitiativeId(next);
-                      if (epic) return;
-                      const nextInit = initiatives.find((i) => i.id === next);
-                      if (nextInit?.startMonth != null) {
-                        setPlanQuarterDraft(`Q${quarterNumFromMonth(nextInit.startMonth)}`);
-                        setPlanMonthDraft(MONTHS[nextInit.startMonth - 1] ?? "");
-                      } else {
-                        setPlanQuarterDraft("");
-                        setPlanMonthDraft("");
-                      }
-                    }}
-                    disabled={Boolean(lockInitiativeId) && !epic}
-                  >
-                    <option value="">Select initiative</option>
-                    {initiativeOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <span ref={parentSelectWrapRef} className="group relative min-w-0">
+                    <select
+                      className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
+                      value={initiativeId}
+                      title=""
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setInitiativeId(next);
+                        if (epic) return;
+                        const nextInit = initiatives.find((i) => i.id === next);
+                        if (nextInit?.startMonth != null) {
+                          setPlanQuarterDraft(`Q${quarterNumFromMonth(nextInit.startMonth)}`);
+                          setPlanMonthDraft(MONTHS[nextInit.startMonth - 1] ?? "");
+                        } else {
+                          setPlanQuarterDraft("");
+                          setPlanMonthDraft("");
+                        }
+                      }}
+                      disabled={Boolean(lockInitiativeId) && !epic}
+                    >
+                      <option value="">Select initiative</option>
+                      {initiativeOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    {isParentTitleTruncated && parentInitiativeTitle ? (
+                      <span
+                        role="tooltip"
+                        className={cn(
+                          infoTooltipClass,
+                          "w-max max-w-[min(22rem,calc(100vw-3rem))]",
+                        )}
+                      >
+                        {parentInitiativeTitle}
+                      </span>
+                    ) : null}
+                  </span>
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-sm font-normal text-slate-700">Team</p>
@@ -1816,7 +1873,7 @@ export function EpicFormDialog({
             ) : null}
             <section
               className={cn(
-                "flex min-h-0 flex-col rounded-xl bg-white ring-1 ring-slate-200",
+                "flex min-h-0 flex-col rounded-xl bg-white",
                 activityOpen ? "space-y-3 p-3" : "p-3",
               )}
               style={
@@ -1896,7 +1953,7 @@ export function EpicFormDialog({
                           epic.comments.map((comment) => (
                             <div
                               key={comment.id}
-                              className="rounded-md bg-gradient-to-l from-zinc-100 via-slate-100/95 to-slate-300/35 p-2 text-sm ring-1 ring-slate-300/70"
+                              className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200"
                             >
                               <p className="text-[12px] text-slate-500">
                                 {comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}

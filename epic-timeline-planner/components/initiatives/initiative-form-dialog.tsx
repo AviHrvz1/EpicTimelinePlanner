@@ -668,7 +668,7 @@ export function InitiativeFormDialog({
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-hidden">
               <div ref={splitLayoutRef} className="grid h-full min-h-0 gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
-              <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border border-slate-200 border-r-0 bg-white p-4">
+              <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
                   <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
                     <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -680,16 +680,16 @@ export function InitiativeFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2.5">
-                  <p className="text-sm font-normal text-slate-700">Quarter</p>
-                  <input readOnly value={initiativePlanningQuarter} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
-                  <p className="text-sm font-normal text-slate-700">Month</p>
-                  <input readOnly value={initiativePlanningMonth} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
+                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border-0 bg-white py-2.5 shadow-none ring-0">
                   <p className="text-sm font-normal text-slate-700">Year</p>
-                  <input readOnly value={initiativePlanningYear} className="h-8 w-full rounded-md border border-slate-300 bg-slate-100 px-2 text-[13px] text-slate-800" />
+                  <input readOnly value={initiativePlanningYear} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800" />
+                  <p className="text-sm font-normal text-slate-700">Quarter</p>
+                  <input readOnly value={initiativePlanningQuarter} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800" />
+                  <p className="text-sm font-normal text-slate-700">Month</p>
+                  <input readOnly value={initiativePlanningMonth} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800" />
                 </div>
 
-                <div className="mt-5 flex shrink-0 flex-col gap-1">
+                <div className="mt-1 flex shrink-0 flex-col gap-1">
                   <button
                     type="button"
                     id="initiative-form-description-accordion-trigger"
@@ -713,7 +713,7 @@ export function InitiativeFormDialog({
                     hidden={!descriptionAccordionOpen}
                     className="flex flex-col gap-1"
                   >
-                    <div className="flex shrink-0 flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+                    <div className="flex shrink-0 flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1">
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
@@ -724,7 +724,7 @@ export function InitiativeFormDialog({
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
                     </div>
-                    <div className="overflow-y-auto rounded-md border bg-background px-3 py-2">
+                    <div className="min-h-[10rem] rounded-md border border-slate-200 bg-white px-3 py-2">
                       <EditorContent
                         editor={descriptionEditor}
                         className="focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none"
@@ -733,7 +733,7 @@ export function InitiativeFormDialog({
                   </div>
                 </div>
 
-                <section className="mt-5 flex min-h-0 flex-1 flex-col gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <section className="mt-5 flex shrink-0 flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
                   <div className="flex shrink-0 items-center justify-between">
                     <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
                       <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -746,7 +746,7 @@ export function InitiativeFormDialog({
                     <p className="shrink-0 rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">Save this initiative first, then add and manage epics here.</p>
                   ) : (
                     <>
-                      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+                      <div className="space-y-2">
                         {(initiative.epics ?? []).length === 0 ? (
                           <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">No epics yet.</p>
                         ) : (
@@ -1099,7 +1099,7 @@ export function InitiativeFormDialog({
             ) : null}
             <section
               className={cn(
-                "flex min-h-0 flex-col rounded-xl bg-slate-50 ring-1 ring-slate-200",
+                "flex min-h-0 flex-col rounded-xl bg-white",
                 activityOpen ? "space-y-3 p-3" : "p-3",
               )}
               style={
@@ -1152,7 +1152,7 @@ export function InitiativeFormDialog({
                         {(initiative.comments ?? []).length === 0 ? <p className="text-sm text-slate-500">No comments yet.</p> : initiative.comments.map((comment) => (
                           <div
                             key={comment.id}
-                            className="rounded-md bg-gradient-to-l from-zinc-100 via-slate-100/95 to-slate-300/35 p-2 text-sm ring-1 ring-slate-300/70"
+                            className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200"
                           >
                             <p className="text-[12px] text-slate-500">{comment.author ?? "Planner"} - {new Date(comment.createdAt).toLocaleString()}</p>
                             <RichCommentBody body={comment.body} className="mt-1" />

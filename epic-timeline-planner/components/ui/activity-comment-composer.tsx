@@ -46,7 +46,7 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
 
   return (
     <div className="mt-2 space-y-1.5">
-      <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
+      <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1">
         <button
           type="button"
           onMouseDown={(event) => event.preventDefault()}
@@ -157,7 +157,7 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           <LinkIcon className="size-3.5" />
         </button>
       </div>
-      <div className="rounded-md border border-slate-300/80 bg-gradient-to-l from-zinc-100/90 via-slate-100/80 to-slate-300/30">
+      <div className="rounded-md border border-slate-200 bg-white">
         <EditorContent editor={editor} className="focus-within:outline-none [&_.ProseMirror]:outline-none" />
       </div>
       <div className="flex justify-end">

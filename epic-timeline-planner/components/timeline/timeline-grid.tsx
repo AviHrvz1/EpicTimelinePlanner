@@ -1357,12 +1357,12 @@ export function TimelineGrid({
                   ) : null}
                 </tr>
                 {isExpanded ? (
-                  <tr className={cn("border-t border-[#d6eefc]", rowIndex % 2 === 0 ? "bg-[#edf8ff]" : "bg-[#f4fbff]")}>
+                  <tr className="border-t border-[#d6eefc] bg-white">
                     <td className="px-3 py-2" colSpan={showEstimatedColumns ? 5 : 3}>
                       {stories.length === 0 ? (
                         <p className="text-[12px] text-slate-500">No user stories yet.</p>
                       ) : (
-                        <div className="space-y-1.5">
+                        <div className="divide-y divide-[#7cd3f7]/40">
                           {stories.map((story) => (
                             <button
                               key={story.id}
@@ -1373,9 +1373,9 @@ export function TimelineGrid({
                                 onOpenStory(story.id);
                               }}
                               className={cn(
-                                "flex w-full items-center justify-between rounded-md bg-white px-2 py-1.5 text-left ring-1 ring-slate-200/80 transition",
+                                "flex w-full items-center justify-between px-1 py-1.5 text-left transition first:pt-0 last:pb-0",
                                 onOpenStory
-                                  ? "hover:bg-blue-50/70 hover:text-blue-700"
+                                  ? "hover:bg-slate-100 hover:text-blue-700"
                                   : "cursor-default",
                               )}
                             >
@@ -1884,16 +1884,18 @@ export function TimelineGrid({
     currentTone?: "default" | "sprint";
   }> = [];
 
+  const yearCrumbOnClick = () => {
+    setQuarterViewTab("gantt");
+    setActiveSprint(null);
+    setFocusedMonth(null);
+    onFocusedQuarterChange(null);
+  };
+
   if (activeMonth) {
     const quarterForMonth = QUARTERS.find((q) => q.months.some((m) => m === activeMonth)) ?? null;
     breadcrumbItems.push({
-      label: "Roadmap",
-      onClick: () => {
-        setQuarterViewTab("gantt");
-        setActiveSprint(null);
-        setFocusedMonth(null);
-        onFocusedQuarterChange(null);
-      },
+      label: String(currentYear),
+      onClick: yearCrumbOnClick,
     });
     if (quarterForMonth) {
       breadcrumbItems.push({
@@ -1955,12 +1957,8 @@ export function TimelineGrid({
     }
   } else if (focusedQuarter) {
     breadcrumbItems.push({
-      label: "Roadmap",
-      onClick: () => {
-        setQuarterViewTab("gantt");
-        setFocusedMonth(null);
-        onFocusedQuarterChange(null);
-      },
+      label: String(currentYear),
+      onClick: yearCrumbOnClick,
     });
     breadcrumbItems.push({
       label: focusedQuarter.label,
@@ -1982,12 +1980,8 @@ export function TimelineGrid({
     }
   } else {
     breadcrumbItems.push({
-      label: "Roadmap",
-      onClick: () => {
-        setQuarterViewTab("gantt");
-        setFocusedMonth(null);
-        onFocusedQuarterChange(null);
-      },
+      label: String(currentYear),
+      onClick: yearCrumbOnClick,
     });
     if (quarterViewTab === "insights") {
       breadcrumbItems.push({
@@ -2155,7 +2149,7 @@ export function TimelineGrid({
         )}
       >
         {hasBreadcrumbs ? (
-          <div className="relative z-30 inline-flex items-center gap-1 rounded-lg bg-white/85 px-1.5 py-0.5 backdrop-blur-sm">
+          <div className="relative z-30 inline-flex items-center gap-1 rounded-lg border-0 bg-white/85 px-1.5 py-0.5 shadow-none ring-0 backdrop-blur-sm outline-none">
             {breadcrumbItems.map((item, index) => (
               <div key={`${item.label}-${index}`} className="flex shrink-0 items-center gap-1">
                 {item.onClick ? (
