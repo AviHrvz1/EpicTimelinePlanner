@@ -4,13 +4,23 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LucideIcon } from "lucide-react";
-import { CheckCheck, CheckCircle2, ListTodo, PlayCircle, UserRound, Users, UserX, X } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCheck,
+  CheckCircle2,
+  ListTodo,
+  PlayCircle,
+  UserRound,
+  Users,
+  UserX,
+  X,
+} from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { sprintEndDate } from "@/lib/year-sprint";
+import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
@@ -185,6 +195,8 @@ type SprintKanbanProps = {
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
   onOpenStory: (storyId: string) => void;
+  /** When viewing a closed sprint, jump to the first still-open sprint in `planYear` (same team filter). */
+  onGoToOpenSprint?: (yearSprint: number) => void;
 };
 
 export function SprintKanbanBoard({
@@ -198,8 +210,13 @@ export function SprintKanbanBoard({
   onUnscheduleStory,
   onRequestUnscheduleStory,
   onOpenStory,
+  onGoToOpenSprint,
 }: SprintKanbanProps) {
   const sprintClosed = sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
+  /** Fresh on each render so the target matches wall-clock “today” when the tab stays open across a sprint boundary. */
+  const workTargetSprint = currentWorkYearSprintForPlan(planYear);
+  const showGoToOpenSprint =
+    sprintClosed && workTargetSprint != null && workTargetSprint !== yearSprint && onGoToOpenSprint;
   const allRows = useMemo(
     () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId),
     [initiatives, month, yearSprint, filterEpicTeamId],
@@ -271,7 +288,7 @@ export function SprintKanbanBoard({
       {sprintClosed ? (
         <>
           <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/5 backdrop-blur-[1px]" />
-          <div className="pointer-events-none absolute inset-x-3 top-2 z-30 flex justify-center">
+          <div className="pointer-events-none absolute inset-x-3 top-2 z-30 flex flex-col items-center gap-3">
             <div
               className="px-4 py-2 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
               style={{
@@ -290,6 +307,20 @@ export function SprintKanbanBoard({
                 draggable={false}
               />
             </div>
+            {showGoToOpenSprint ? (
+              <a
+                href="#"
+                className="pointer-events-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-sky-700 underline decoration-sky-400 underline-offset-4 hover:text-sky-800"
+                onClick={(event) => {
+                  event.preventDefault();
+                  const target = currentWorkYearSprintForPlan(planYear);
+                  if (target != null) onGoToOpenSprint!(target);
+                }}
+              >
+                <ArrowRight className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                View current sprint (Sprint {workTargetSprint})
+              </a>
+            ) : null}
           </div>
         </>
       ) : null}

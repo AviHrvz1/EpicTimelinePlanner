@@ -1926,7 +1926,15 @@ export function TimelineGrid({
   }, [activeMonth, monthPlanTab, quarterViewTab, focusedQuarterLabel]);
 
   useEffect(() => {
+    // In controlled mode, parent owns sprint-mode synchronization.
+    if (focusedMonthExternal !== undefined && activeSprintExternal !== undefined) return;
     if (activeMonth == null) {
+      /**
+       * Parent can set `focusedMonthExternal` to a month outside the visible quarter before the quarter
+       * focus updates in the same tick. Tearing down sprint mode here caused onSprintModeChange(false) ↔
+       * parent navigation loops (max update depth).
+       */
+      if (focusedMonthExternal != null) return;
       if (lastSprintModeSyncKeyRef.current !== "__off__") {
         lastSprintModeSyncKeyRef.current = "__off__";
         onSprintModeChange(false, null, null);
@@ -1942,7 +1950,7 @@ export function TimelineGrid({
     if (lastSprintModeSyncKeyRef.current === key) return;
     lastSprintModeSyncKeyRef.current = key;
     onSprintModeChange(true, activeMonth, yearSprint);
-  }, [activeMonth, activeSprint, activeSprintExternal, onSprintModeChange]);
+  }, [activeMonth, activeSprint, activeSprintExternal, focusedMonthExternal, onSprintModeChange]);
 
   const breadcrumbItems: Array<{
     label: string;
@@ -3306,6 +3314,9 @@ export function TimelineGrid({
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onRequestUnscheduleStory={onRequestSprintKanbanStoryUnschedule}
                   onOpenStory={onOpenStory ?? (() => {})}
+                  onGoToOpenSprint={(ys) =>
+                    onEnterSprintStoryBoard?.(ys, isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null)
+                  }
                 />
               </div>
             ) : monthPlanTab === "sprint-capacity" ? (

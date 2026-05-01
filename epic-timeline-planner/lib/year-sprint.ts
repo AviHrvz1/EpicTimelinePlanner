@@ -8,6 +8,13 @@ export function globalSprintFromMonthLane(month: number, lane: 1 | 2): number {
   return (month - 1) * 2 + lane;
 }
 
+/** Local calendar sprint index for "today" (lane 1: days 1-15, lane 2: 16-end). */
+export function currentCalendarYearSprint(now: Date = new Date()): number {
+  const month = now.getMonth() + 1;
+  const lane: 1 | 2 = now.getDate() <= 15 ? 1 : 2;
+  return globalSprintFromMonthLane(month, lane);
+}
+
 export function monthLaneFromGlobalSprint(globalSprint: number): { month: number; lane: 1 | 2 } {
   const month = Math.ceil(globalSprint / 2);
   const lane = (globalSprint % 2 === 0 ? 2 : 1) as 1 | 2;
@@ -25,6 +32,48 @@ export function sprintEndDate(planYear: number, globalSprint: number): Date {
   }
   const lastDay = new Date(planYear, month, 0).getDate();
   return new Date(planYear, month - 1, lastDay, 23, 59, 59, 999);
+}
+
+/** First local instant of a sprint window (lane 1: day 1; lane 2: day 16). */
+export function sprintStartDate(planYear: number, globalSprint: number): Date {
+  const g = clampYearSprint(globalSprint);
+  const { month, lane } = monthLaneFromGlobalSprint(g);
+  if (lane === 1) {
+    return new Date(planYear, month - 1, 1, 0, 0, 0, 0);
+  }
+  return new Date(planYear, month - 1, 16, 0, 0, 0, 0);
+}
+
+/** Global sprint in `planYear` whose [start,end] window contains `instantMs` in local time. */
+export function yearSprintContainingInstant(planYear: number, instantMs: number = Date.now()): number | null {
+  for (let n = YEAR_SPRINT_MIN; n <= YEAR_SPRINT_MAX; n++) {
+    const a = sprintStartDate(planYear, n).getTime();
+    const b = sprintEndDate(planYear, n).getTime();
+    if (instantMs >= a && instantMs <= b) return n;
+  }
+  return null;
+}
+
+/** First global sprint in `planYear` whose end is still in the future; `null` if all 24 are past. */
+export function firstOpenYearSprint(planYear: number, nowMs: number = Date.now()): number | null {
+  for (let n = YEAR_SPRINT_MIN; n <= YEAR_SPRINT_MAX; n++) {
+    if (sprintEndDate(planYear, n).getTime() > nowMs) return n;
+  }
+  return null;
+}
+
+/**
+ * Sprint that “contains” wall-clock time in `planYear` (today’s calendar sprint), otherwise the first
+ * sprint whose window has not ended yet. Matches how users expect “current sprint” while viewing the roadmap year.
+ */
+export function currentWorkYearSprintForPlan(planYear: number, instantMs: number = Date.now()): number | null {
+  const now = new Date(instantMs);
+  if (now.getFullYear() === planYear) {
+    return currentCalendarYearSprint(now);
+  }
+  const inside = yearSprintContainingInstant(planYear, instantMs);
+  if (inside != null) return inside;
+  return firstOpenYearSprint(planYear, instantMs);
 }
 
 export function firstGlobalSprintForMonth(month: number): number {

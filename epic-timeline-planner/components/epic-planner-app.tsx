@@ -1607,17 +1607,33 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     [activeTimelineMonth, selectedYear],
   );
 
-  const openSprintStoryBoard = useCallback((yearSprint: number, teamId: string | null) => {
-    const clamped = clampYearSprint(yearSprint);
-    const { month } = monthLaneFromGlobalSprint(clamped);
-    setActiveTimelineMonth(month);
-    setIsSprintModeActive(true);
-    setActiveYearSprint(clamped);
-    setActiveSprintTab("kanban");
-    setActiveMonthPlanTab("sprint-kanban");
-    const normalizedTeamId = teamId?.trim() ? teamId.trim() : null;
-    setSprintStoryBoardTeamId(normalizedTeamId && isKnownEpicTeamId(normalizedTeamId) ? normalizedTeamId : null);
-  }, []);
+  const openSprintStoryBoard = useCallback(
+    (yearSprint: number, teamId: string | null) => {
+      const clamped = clampYearSprint(yearSprint);
+      const { month } = monthLaneFromGlobalSprint(clamped);
+      /**
+       * With a focused quarter, timeline `activeMonth` is null unless the month is in that quarter’s strip.
+       * Jumping to a sprint in another quarter without retargeting caused `onSprintModeChange(false, …)`
+       * and a max-update-depth loop. Year-wide view (`focusedQuarterLabel == null`) already includes all months.
+       */
+      if (focusedQuarterLabel != null) {
+        const visibleMonths =
+          QUARTERS.find((q) => q.label === focusedQuarterLabel)?.months ?? [];
+        if (!visibleMonths.includes(month)) {
+          const quarterForMonth = QUARTERS.find((q) => q.months.some((m) => m === month));
+          if (quarterForMonth) setFocusedQuarterLabel(quarterForMonth.label);
+        }
+      }
+      setActiveTimelineMonth(month);
+      setIsSprintModeActive(true);
+      setActiveYearSprint(clamped);
+      setActiveSprintTab("kanban");
+      setActiveMonthPlanTab("sprint-kanban");
+      const normalizedTeamId = teamId?.trim() ? teamId.trim() : null;
+      setSprintStoryBoardTeamId(normalizedTeamId && isKnownEpicTeamId(normalizedTeamId) ? normalizedTeamId : null);
+    },
+    [focusedQuarterLabel],
+  );
 
   const activeSprintCapacityKey = useMemo(() => {
     if (activeYearSprint == null) return null;
