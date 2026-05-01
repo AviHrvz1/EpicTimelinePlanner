@@ -206,7 +206,7 @@ export function TeamCapacityBucket({
             )}
           </span>
         </p>
-        <label className="relative z-10 inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
+        <label className="relative z-10 inline-flex translate-x-[3px] items-center gap-1 text-[12px] font-semibold text-slate-600">
           Capacity
           <input
             type="number"
@@ -257,7 +257,7 @@ export function TeamCapacityBucket({
             )}
           </div>
         </div>
-        <div className="flex h-[24rem] flex-col items-center rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
+        <div className="flex h-[24rem] flex-col items-center p-2">
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">{Math.round(utilization)}%</p>

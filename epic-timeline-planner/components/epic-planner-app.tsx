@@ -45,6 +45,8 @@ import {
 import {
   applyEpicTeamQueueMove,
   collectMonthEpicsForTeamBoard,
+  emptyMonthTeamBoard,
+  inferEpicTeamIdFromMonthTeamQueues,
   isKnownEpicTeamId,
   monthTeamBoardStorageKey,
   MONTH_TEAM_IDS,
@@ -1836,6 +1838,60 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     setInitiatives(data);
   }
 
+  /** If an epic is in a month team board queue but `team` is still null, set team from that queue (month / quarter / year capacity). */
+  useEffect(() => {
+    const desired = new Map<string, string>();
+    const conflicted = new Set<string>();
+    for (let month = 1; month <= 12; month++) {
+      const key = monthTeamBoardStorageKey(selectedYear, month);
+      const persisted = monthTeamBoardByKey[key] ?? emptyMonthTeamBoard();
+      for (const { epic } of collectMonthEpicsForTeamBoard(initiatives, month)) {
+        if (epic.team != null) continue;
+        const inferred = inferEpicTeamIdFromMonthTeamQueues(epic.id, persisted);
+        if (!inferred) continue;
+        if (conflicted.has(epic.id)) continue;
+        const cur = desired.get(epic.id);
+        if (cur === undefined) desired.set(epic.id, inferred);
+        else if (cur !== inferred) {
+          conflicted.add(epic.id);
+          desired.delete(epic.id);
+        }
+      }
+    }
+    if (desired.size === 0) return;
+
+    const updates = [...desired.entries()];
+
+    flushSync(() => {
+      setInitiatives((prev) =>
+        prev.map((i) => ({
+          ...i,
+          epics: (i.epics ?? []).map((e) => {
+            const t = desired.get(e.id);
+            return t != null && e.team == null ? { ...e, team: t } : e;
+          }),
+        })),
+      );
+    });
+
+    void (async () => {
+      for (const [epicId, teamId] of updates) {
+        try {
+          const response = await fetch(`/api/epics/${epicId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: teamId }),
+          });
+          if (!response.ok) throw new Error(String(response.status));
+        } catch {
+          await refresh();
+          toast.error("Failed to save team from board queue");
+          return;
+        }
+      }
+    })();
+  }, [initiatives, monthTeamBoardByKey, selectedYear]);
+
   useEffect(() => {
     const now = new Date();
     if (selectedYear !== now.getFullYear()) return;
@@ -3500,6 +3556,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onYearTeamCapacityChange={updateYearTeamCapacity}
                 onMonthTeamCapacityEpicRemove={removeEpicFromMonthTeamCapacity}
                 onCapacityEpicOriginalEstimateChange={updateEpicOriginalEstimateFromCapacity}
+                monthTeamBoardByKey={monthTeamBoardByKey}
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}

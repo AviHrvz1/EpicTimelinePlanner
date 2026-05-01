@@ -175,3 +175,59 @@ export function removeEpicFromMonthTeamBoardQueues(
   }
   return sanitizeMonthTeamBoardPersisted({ queues: stripped });
 }
+
+/**
+ * If `epicId` appears in exactly one delivery-team queue for this month board, returns that team id.
+ * Multiple queues or none → null (caller should not auto-assign).
+ */
+export function inferEpicTeamIdFromMonthTeamQueues(
+  epicId: string,
+  persisted: MonthTeamBoardPersisted | undefined,
+): string | null {
+  if (!persisted?.queues) return null;
+  let found: string | null = null;
+  for (const teamId of MONTH_TEAM_IDS) {
+    const list = persisted.queues[teamId] ?? [];
+    if (list.includes(epicId)) {
+      if (found != null) return null;
+      found = teamId;
+    }
+  }
+  return found;
+}
+
+/** Order quarter-scope epics for one team column using month board queue order across the quarter. */
+export function orderedEpicsForTeamInQuarterCapacity(
+  initiatives: InitiativeItem[],
+  teamId: string,
+  candidates: Array<{ epic: EpicItem; initiative: InitiativeItem }>,
+  quarterMonths: readonly number[],
+  year: number,
+  boardByKey: Record<string, MonthTeamBoardPersisted>,
+): Array<{ epic: EpicItem; initiative: InitiativeItem }> {
+  const byId = new Map(candidates.map((c) => [c.epic.id, c] as const));
+  const orderedIds: string[] = [];
+  for (const month of quarterMonths) {
+    const key = monthTeamBoardStorageKey(year, month);
+    const persisted = boardByKey[key] ?? emptyMonthTeamBoard();
+    const columns = mergeMonthTeamBoardColumns(initiatives, month, persisted);
+    const col = columns.find((c) => c.team.id === teamId);
+    if (!col) continue;
+    for (const item of col.cards) {
+      if (!orderedIds.includes(item.epic.id)) orderedIds.push(item.epic.id);
+    }
+  }
+  const rest = candidates
+    .filter((c) => !orderedIds.includes(c.epic.id))
+    .sort((a, b) => {
+      const byInit = a.initiative.title.localeCompare(b.initiative.title);
+      if (byInit !== 0) return byInit;
+      return a.epic.title.localeCompare(b.epic.title);
+    });
+  const ordered: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+  for (const id of orderedIds) {
+    const row = byId.get(id);
+    if (row) ordered.push(row);
+  }
+  return [...ordered, ...rest];
+}

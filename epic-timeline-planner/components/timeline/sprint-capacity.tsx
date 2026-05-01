@@ -338,7 +338,7 @@ export function SprintCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {members.map((member) => {
           const assignedIds = capacityBoard.assignments[member] ?? [];
           const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));

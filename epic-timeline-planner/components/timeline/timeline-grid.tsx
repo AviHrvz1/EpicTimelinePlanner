@@ -51,6 +51,8 @@ import { MONTHS, QUARTERS } from "@/lib/timeline";
 import {
   MONTH_TEAM_COLUMNS,
   isKnownEpicTeamId,
+  monthTeamBoardStorageKey,
+  type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import {
@@ -580,6 +582,8 @@ type TimelineGridProps = {
   onYearTeamCapacityChange?: (teamId: string, yearTotalDays: number) => void;
   onMonthTeamCapacityEpicRemove?: (epicId: string) => void;
   onCapacityEpicOriginalEstimateChange?: (epicId: string, estimatedDays: number) => void;
+  /** Month plan team board queues (year:month keys) for capacity ordering and queue→team sync. */
+  monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
   /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
   /** Delivery team id when sprint story board was opened from a team lane (breadcrumbs + left epic list). */
@@ -804,6 +808,7 @@ export function TimelineGrid({
   onYearTeamCapacityChange,
   onMonthTeamCapacityEpicRemove,
   onCapacityEpicOriginalEstimateChange,
+  monthTeamBoardByKey = {},
   onEnterSprintStoryBoard,
   sprintStoryBoardTeamId = null,
   onSprintStoryBoardTeamChange,
@@ -3201,6 +3206,9 @@ export function TimelineGrid({
                   year={currentYear}
                   month={activeMonth}
                   capacityBoard={monthTeamCapacityBoard}
+                  monthTeamBoardPersisted={
+                    monthTeamBoardByKey[monthTeamBoardStorageKey(currentYear, activeMonth)] ?? null
+                  }
                   onCapacityChange={(teamId, days) => onMonthTeamCapacityChange?.(teamId, days)}
                   onOpenEpic={onOpenEpic}
                   onRemoveEpicFromCapacity={(epicId) => onMonthTeamCapacityEpicRemove?.(epicId)}
@@ -3764,6 +3772,7 @@ export function TimelineGrid({
             quarterMonths={filteredCapacityQuarter?.months ?? MONTHS.map((_, i) => i + 1)}
             year={currentYear}
             monthTeamCapacityByKey={monthTeamCapacityByKey}
+            monthTeamBoardByKey={monthTeamBoardByKey}
             onCapacityChange={(teamId, totalDays) => {
               if (filteredCapacityQuarter) {
                 onQuarterTeamCapacityChange?.(filteredCapacityQuarter.label, teamId, totalDays);
@@ -3860,6 +3869,7 @@ export function TimelineGrid({
             quarterMonths={focusedQuarter.months}
             year={currentYear}
             monthTeamCapacityByKey={monthTeamCapacityByKey}
+            monthTeamBoardByKey={monthTeamBoardByKey}
             onCapacityChange={(teamId, quarterTotalDays) =>
               onQuarterTeamCapacityChange?.(focusedQuarter.label, teamId, quarterTotalDays)
             }

@@ -7,7 +7,11 @@ import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import { quarterTeamCapacityBucketDropId } from "@/lib/epic-dnd-ids";
 import { monthTeamCapacityBoardKey, type MonthTeamCapacityBoard } from "@/lib/month-team-capacity";
-import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
+import {
+  MONTH_TEAM_COLUMNS,
+  orderedEpicsForTeamInQuarterCapacity,
+  type MonthTeamBoardPersisted,
+} from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
 
 function quarterFromMonth(month: number): string {
@@ -56,6 +60,8 @@ type QuarterTeamCapacityBoardProps = {
   onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
   teamFilterIds?: string[];
   teamSelectorSlot?: ReactNode;
+  /** Per-month team board queues (same keys as month plan) for card ordering and auto-assign. */
+  monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
 };
 
 export function QuarterTeamCapacityBoard({
@@ -70,6 +76,7 @@ export function QuarterTeamCapacityBoard({
   onEpicOriginalEstimateChange,
   teamFilterIds = [],
   teamSelectorSlot,
+  monthTeamBoardByKey = {},
 }: QuarterTeamCapacityBoardProps) {
   const rows = collectQuarterEpics(initiatives, quarterMonths);
   const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
@@ -114,11 +121,18 @@ export function QuarterTeamCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {visibleTeams.map((team) => {
-          const cards = rows
-            .filter((row) => row.epic.team === team.id)
-            .map((row) => {
+          const candidates = rows.filter((row) => row.epic.team === team.id);
+          const orderedRows = orderedEpicsForTeamInQuarterCapacity(
+            initiatives,
+            team.id,
+            candidates,
+            quarterMonths,
+            year,
+            monthTeamBoardByKey,
+          );
+          const cards = orderedRows.map((row) => {
               const execution = epicExecutionStatusMeta(row.epic);
               return {
                 epicId: row.epic.id,
@@ -132,7 +146,7 @@ export function QuarterTeamCapacityBoard({
                 executionStatusLabel: execution.label,
                 executionStatusClassName: execution.className,
               };
-            });
+          });
           const capacity = Number(teamQuarterCapacity.get(team.id) ?? 0);
           return (
             <TeamCapacityBucket

@@ -5,7 +5,12 @@ import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
 import { monthTeamCapacityBucketDropId } from "@/lib/epic-dnd-ids";
-import { MONTH_TEAM_COLUMNS, collectMonthEpicsForTeamBoard } from "@/lib/month-team-board";
+import {
+  MONTH_TEAM_COLUMNS,
+  collectMonthEpicsForTeamBoard,
+  mergeMonthTeamBoardColumns,
+  type MonthTeamBoardPersisted,
+} from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
 import { type MonthTeamCapacityBoard } from "@/lib/month-team-capacity";
 
@@ -54,6 +59,8 @@ type MonthTeamCapacityProps = {
   onEpicOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
   teamFilterIds?: string[];
   teamSelectorSlot?: ReactNode;
+  /** When set, epic cards use the same queue order as the month team board. */
+  monthTeamBoardPersisted?: MonthTeamBoardPersisted | null;
 };
 
 export function MonthTeamCapacityBoard({
@@ -67,8 +74,13 @@ export function MonthTeamCapacityBoard({
   onEpicOriginalEstimateChange,
   teamFilterIds = [],
   teamSelectorSlot,
+  monthTeamBoardPersisted = null,
 }: MonthTeamCapacityProps) {
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
+  const mergedColumns =
+    monthTeamBoardPersisted != null
+      ? mergeMonthTeamBoardColumns(initiatives, month, monthTeamBoardPersisted)
+      : null;
   const gradientKey = `month-${year}-${month}`.replace(/[^a-zA-Z0-9]+/g, "-");
   const visibleTeams =
     teamFilterIds.length > 0
@@ -80,8 +92,14 @@ export function MonthTeamCapacityBoard({
   for (const team of visibleTeams) {
     const cap = Number(capacityBoard.capacities[team.id] ?? 20);
     teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
-    const cards = rows.filter((row) => row.epic.team === team.id);
-    teamTotalAssigned += cards.reduce((sum, row) => sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0)), 0);
+    const cardRows =
+      mergedColumns != null
+        ? (mergedColumns.find((c) => c.team.id === team.id)?.cards ?? [])
+        : rows.filter((row) => row.epic.team === team.id);
+    teamTotalAssigned += cardRows.reduce(
+      (sum, row) => sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0)),
+      0,
+    );
   }
 
   return (
@@ -99,11 +117,13 @@ export function MonthTeamCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {visibleTeams.map((team) => {
-          const cards = rows
-            .filter((row) => row.epic.team === team.id)
-            .map((row) => {
+          const cardRows =
+            mergedColumns != null
+              ? (mergedColumns.find((c) => c.team.id === team.id)?.cards ?? [])
+              : rows.filter((row) => row.epic.team === team.id);
+          const cards = cardRows.map((row) => {
               const execution = epicExecutionStatusMeta(row.epic);
               return {
                 epicId: row.epic.id,
@@ -117,7 +137,7 @@ export function MonthTeamCapacityBoard({
                 executionStatusLabel: execution.label,
                 executionStatusClassName: execution.className,
               };
-            });
+          });
           return (
             <TeamCapacityBucket
               key={team.id}
