@@ -26,6 +26,10 @@ type AssigneeComboboxProps = {
   /** aria-label for the text field */
   "aria-label"?: string;
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  /** Fires when the text field loses focus (current `value` is passed). */
+  onInputBlur?: (value: string) => void;
+  /** Fires when a list option is chosen (after `onChange`); use when blur may not run. */
+  onSuggestionPick?: (value: string) => void;
 };
 
 const MENU_Z = 8000;
@@ -47,6 +51,7 @@ export function AssigneeCombobox({
   id: idProp,
   "aria-label": ariaLabel,
   onKeyDown,
+  onInputBlur,
 }: AssigneeComboboxProps) {
   const uid = useId().replace(/:/g, "");
   const inputId = idProp ?? `assignee-input-${uid}`;
@@ -126,6 +131,7 @@ export function AssigneeCombobox({
 
   const pick = (s: string) => {
     onChange(s);
+    onSuggestionPick?.(s);
     setOpen(false);
     inputRef.current?.focus();
   };
@@ -182,6 +188,7 @@ export function AssigneeCombobox({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onBlur={() => onInputBlur?.(value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}

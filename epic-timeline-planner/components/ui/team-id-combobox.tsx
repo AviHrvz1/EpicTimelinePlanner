@@ -60,6 +60,8 @@ export function TeamIdCombobox({
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
+  /** Suppress blur flush when we just committed from the portaled menu (avoids stale draft clearing the pick). */
+  const skipNextBlurCloseRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState("");
@@ -121,11 +123,15 @@ export function TeamIdCombobox({
   }, [open]);
 
   const commitPick = (id: string) => {
+    skipNextBlurCloseRef.current = true;
     onTeamIdChange(id);
     setDraft(labelForTeamId(id));
     setOpen(false);
     setFocused(false);
     inputRef.current?.blur();
+    window.setTimeout(() => {
+      skipNextBlurCloseRef.current = false;
+    }, 50);
   };
 
   const flushFromDraft = () => {
@@ -189,10 +195,24 @@ export function TeamIdCombobox({
           setDraft(labelForTeamId(teamId));
           setOpen(true);
         }}
-        onBlur={() => {
+        onBlur={(e) => {
           setFocused(false);
-          flushFromDraft();
-          setOpen(false);
+          const next = e.relatedTarget as Node | null;
+          // Keep menu open when focus moves into the portaled list (blur fires before option mousedown in some browsers).
+          if (next && portalRef.current?.contains(next)) return;
+          if (next && wrapRef.current?.contains(next)) return;
+          if (next != null) {
+            flushFromDraft();
+            setOpen(false);
+            return;
+          }
+          // relatedTarget can be null (e.g. Safari); defer so option onMouseDown runs before we unmount.
+          window.setTimeout(() => {
+            if (skipNextBlurCloseRef.current) return;
+            if (portalRef.current?.contains(document.activeElement)) return;
+            flushFromDraft();
+            setOpen(false);
+          }, 0);
         }}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);

@@ -160,3 +160,22 @@ model StoryDailySnapshot {
   @@unique([storyId, snapshotDate])
   @@index([snapshotDate])
 }
+
+/** Directory users for the Users workspace (not auth accounts). */
+model WorkspaceUser {
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  /** `platform` | `experience` | `data`, or empty string if unassigned. */
+  team       String   @default("")
+  /** Display name for role, e.g. Admin, Editor, Viewer. */
+  permission String   @default("Viewer")
+  /** Directory lifecycle; not editable in UI (currently all `active`). */
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([team])
+  @@index([permission])
+  @@index([status])
+}

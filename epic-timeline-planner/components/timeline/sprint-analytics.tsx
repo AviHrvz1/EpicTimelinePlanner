@@ -142,6 +142,8 @@ type SprintAnalyticsProps = {
   yearSprint: number;
   planYear: number;
   filterEpicTeamId?: string | null;
+  /** When provided, Sprint load matches Sprint capacity board caps and bucket assignments. */
+  sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null;
   onOpenStory?: (storyId: string) => void;
 };
 
@@ -151,6 +153,7 @@ export function SprintAnalytics({
   yearSprint,
   planYear,
   filterEpicTeamId = null,
+  sprintCapacityBoard = null,
   onOpenStory,
 }: SprintAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
@@ -162,8 +165,17 @@ export function SprintAnalytics({
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
   const analytics = useMemo(
     () =>
-      buildSprintAnalytics(initiatives, month, yearSprint, metric, planYear, filterEpicTeamId, estimateSource),
-    [initiatives, month, yearSprint, metric, planYear, filterEpicTeamId, estimateSource],
+      buildSprintAnalytics(
+        initiatives,
+        month,
+        yearSprint,
+        metric,
+        planYear,
+        filterEpicTeamId,
+        estimateSource,
+        sprintCapacityBoard,
+      ),
+    [initiatives, month, yearSprint, metric, planYear, filterEpicTeamId, estimateSource, sprintCapacityBoard],
   );
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);
@@ -809,16 +821,22 @@ export function SprintAnalytics({
             analytics.workloadCapacityByAssignee.map((row) => {
               const sprintD = analytics.workloadSprintCalendarDaysLeft;
               const pct = row.utilizationPct;
-              const barW = sprintD > 0 ? Math.min(pct, 100) : row.daysLeftTotal > 0 ? 100 : 0;
+              const capBoard = row.sprintCapacity;
+              const barDenominatorOk = capBoard ? capBoard.capDays > 0 : sprintD > 0;
+              const barW = barDenominatorOk ? Math.min(pct, 100) : capBoard && capBoard.assignedDays > 0 ? 100 : !capBoard && row.daysLeftTotal > 0 ? 100 : 0;
               const pctRounded = Math.round(pct);
-              const rightMetaLabel = `${row.estimatedTotal}d est · ${row.daysLeftTotal}d left${
-                sprintD > 0 ? ` · ${sprintD}d left in sprint` : " · sprint ended"
-              }`;
+              const rightMetaLabel = capBoard
+                ? `${capBoard.assignedDays}d assigned · ${capBoard.capDays.toFixed(1)}d cap`
+                : `${row.estimatedTotal}d est · ${row.daysLeftTotal}d left${
+                    sprintD > 0 ? ` · ${sprintD}d left in sprint` : " · sprint ended"
+                  }`;
               const overByPct = Math.max(0, pctRounded - 100);
               return (
                 <div key={row.assignee}>
                   <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="w-16 shrink-0 truncate font-medium">{row.assignee}</span>
+                    <span className="w-16 shrink-0 truncate font-medium" title={row.assignee}>
+                      {row.assignee}
+                    </span>
                     <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ring-slate-200/80">
                       <div
                         className={cn(
@@ -833,13 +851,13 @@ export function SprintAnalytics({
                       {rightMetaLabel}
                     </span>
                   </div>
-                  {sprintD > 0 && pct > 100 ? (
+                  {barDenominatorOk && pct > 100 ? (
                     <p className="mt-0.5 text-[11px] font-medium tabular-nums text-red-600">
                       Overloaded by {overByPct}%
                     </p>
-                  ) : sprintD > 0 && pct <= 100 ? (
+                  ) : barDenominatorOk && pct <= 100 ? (
                     <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
-                      {pctRounded}% of sprint time used
+                      {pctRounded}% {capBoard ? "of personal capacity" : "of sprint time used"}
                     </p>
                   ) : null}
                 </div>

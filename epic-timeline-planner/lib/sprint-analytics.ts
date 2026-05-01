@@ -1,6 +1,11 @@
 import { StoryStatus } from "@/lib/generated/prisma";
 import { epicOriginalEstimateDays, epicStoryEstimateDaysSum, type EstimateSource } from "@/lib/epic-estimates";
-import { storyMatchesYearSprint } from "@/lib/sprint-plan";
+import {
+  fullDeliveryCapacityRoster,
+  SPRINT_CAPACITY_OTHER_BUCKET,
+  sprintCapacityAssigneeBucket,
+} from "@/lib/sprint-capacity";
+import { collectStoriesForSprintBoard, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 
 export type BurndownMetric = "daysLeft" | "storyCount";
@@ -14,6 +19,11 @@ export type WorkloadCapacityRow = {
   /** `daysLeftTotal / sprint calendar days left` × 100 when sprint days left > 0. */
   utilizationPct: number;
   isOverCapacity: boolean;
+  /**
+   * When set, {@link utilizationPct} / {@link isOverCapacity} match the Sprint capacity board
+   * (assigned estimate sum in bucket vs personal capacity days).
+   */
+  sprintCapacity?: { capDays: number; assignedDays: number };
 };
 
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -267,11 +277,55 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
   };
 }
 
+/**
+ * Same rules as {@link SprintCapacityBoard} member columns, but respects `filterEpicTeamId` so Insights
+ * sprint load matches Kanban assignee chips when a delivery team filter is active.
+ */
+function sprintCapacityVisibleMemberKeys(
+  initiatives: InitiativeItem[],
+  month: number,
+  yearSprint: number,
+  capacityBoard: { capacities: Record<string, number>; assignments: Record<string, string[]> },
+  filterEpicTeamId?: string | null,
+): string[] {
+  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId ?? null);
+  const fullRoster = fullDeliveryCapacityRoster();
+  const memberSet = new Set<string>();
+  for (const row of rows) {
+    const m = sprintCapacityAssigneeBucket(row.story.assignee, fullRoster);
+    if (m) memberSet.add(m);
+  }
+  for (const [key, ids] of Object.entries(capacityBoard.assignments ?? {})) {
+    if (key === SPRINT_CAPACITY_OTHER_BUCKET) continue;
+    if (Array.isArray(ids) && ids.length > 0) memberSet.add(key);
+  }
+  const needsOtherColumn =
+    (capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0 ||
+    rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, fullRoster) == null);
+  const sortedPeopleCols = [...memberSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return [...sortedPeopleCols, ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
+}
+
+function workloadLegacyAssigneeKeyToCapacityColumn(
+  assigneeLabel: string,
+  fullRoster: string[],
+  visibleHasOther: boolean,
+): string | null {
+  const raw = assigneeLabel.trim();
+  if (!raw || raw === "Unassigned") {
+    return visibleHasOther ? SPRINT_CAPACITY_OTHER_BUCKET : null;
+  }
+  return sprintCapacityAssigneeBucket(raw, fullRoster);
+}
+
 function buildWorkloadCapacityByAssignee(
   stories: UserStoryItem[],
   month: number,
   yearSprint: number,
   planYear: number,
+  initiatives: InitiativeItem[],
+  capacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
+  filterEpicTeamId?: string | null,
 ): { workloadCapacityByAssignee: WorkloadCapacityRow[]; workloadSprintCalendarDaysLeft: number } {
   const workloadSprintCalendarDaysLeft = sprintCalendarDaysRemaining(planYear, month, yearSprint);
   const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
@@ -286,32 +340,115 @@ function buildWorkloadCapacityByAssignee(
     row.daysLeftTotal += Math.max(0, daysLeftPiece);
     byAssignee.set(assignee, row);
   }
-  const workloadCapacityByAssignee = [...byAssignee.entries()]
-    .map(([assignee, v]) => {
-      const utilizationPct =
-        workloadSprintCalendarDaysLeft > 0
-          ? (v.daysLeftTotal / workloadSprintCalendarDaysLeft) * 100
-          : v.daysLeftTotal > 0
-            ? 999
-            : 0;
-      const isOverCapacity =
-        workloadSprintCalendarDaysLeft > 0
-          ? v.daysLeftTotal > workloadSprintCalendarDaysLeft
-          : v.daysLeftTotal > 0;
-      return {
-        assignee,
-        estimatedTotal: v.estimatedTotal,
-        daysLeftTotal: v.daysLeftTotal,
-        utilizationPct,
-        isOverCapacity,
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.utilizationPct - a.utilizationPct ||
-        b.daysLeftTotal - a.daysLeftTotal ||
-        a.assignee.localeCompare(b.assignee),
-    );
+
+  const useBoard =
+    capacityBoard &&
+    (Object.keys(capacityBoard.capacities ?? {}).length > 0 ||
+      Object.keys(capacityBoard.assignments ?? {}).length > 0);
+
+  if (!useBoard) {
+    const workloadCapacityByAssignee = [...byAssignee.entries()]
+      .map(([assignee, v]) => {
+        const utilizationPct =
+          workloadSprintCalendarDaysLeft > 0
+            ? (v.daysLeftTotal / workloadSprintCalendarDaysLeft) * 100
+            : v.daysLeftTotal > 0
+              ? 999
+              : 0;
+        const isOverCapacity =
+          workloadSprintCalendarDaysLeft > 0
+            ? v.daysLeftTotal > workloadSprintCalendarDaysLeft
+            : v.daysLeftTotal > 0;
+        return {
+          assignee,
+          estimatedTotal: v.estimatedTotal,
+          daysLeftTotal: v.daysLeftTotal,
+          utilizationPct,
+          isOverCapacity,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.utilizationPct - a.utilizationPct ||
+          b.daysLeftTotal - a.daysLeftTotal ||
+          a.assignee.localeCompare(b.assignee),
+      );
+    return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft };
+  }
+
+  const boardStoryRows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId ?? null);
+  const storyById = new Map(boardStoryRows.map((r) => [r.story.id, r.story]));
+  const fullRoster = fullDeliveryCapacityRoster();
+  const visibleMembers = sprintCapacityVisibleMemberKeys(
+    initiatives,
+    month,
+    yearSprint,
+    capacityBoard,
+    filterEpicTeamId,
+  );
+  const visibleSet = new Set(visibleMembers);
+  const visibleHasOther = visibleMembers.includes(SPRINT_CAPACITY_OTHER_BUCKET);
+
+  const boardRows: WorkloadCapacityRow[] = visibleMembers.map((member) => {
+    const capRaw = capacityBoard.capacities?.[member];
+    const capDays = Number.isFinite(Number(capRaw)) ? Math.max(0, Number(capRaw)) : 6;
+    const ids = capacityBoard.assignments?.[member] ?? [];
+    let assignedDays = 0;
+    let openEst = 0;
+    let openDaysLeft = 0;
+    for (const id of ids) {
+      const st = storyById.get(id);
+      if (!st) continue;
+      if (!storyMatchesYearSprint(st, month, yearSprint)) continue;
+      const est = Math.max(0, st.estimatedDays ?? st.daysLeft ?? 0);
+      assignedDays += est;
+      if (st.status === "todo" || st.status === "inProgress") {
+        openEst += est;
+        openDaysLeft += Math.max(0, st.daysLeft ?? st.estimatedDays ?? 0);
+      }
+    }
+    const utilizationPct =
+      capDays > 0 ? (assignedDays / capDays) * 100 : assignedDays > 0 ? 999 : 0;
+    const isOverCapacity = capDays > 0 ? assignedDays > capDays : assignedDays > 0;
+    return {
+      assignee: member,
+      estimatedTotal: openEst,
+      daysLeftTotal: openDaysLeft,
+      utilizationPct,
+      isOverCapacity,
+      sprintCapacity: { capDays, assignedDays },
+    };
+  });
+
+  const supplemental: WorkloadCapacityRow[] = [];
+  for (const [assignee, v] of byAssignee.entries()) {
+    const col = workloadLegacyAssigneeKeyToCapacityColumn(assignee, fullRoster, visibleHasOther);
+    if (col != null && visibleSet.has(col)) continue;
+    const utilizationPct =
+      workloadSprintCalendarDaysLeft > 0
+        ? (v.daysLeftTotal / workloadSprintCalendarDaysLeft) * 100
+        : v.daysLeftTotal > 0
+          ? 999
+          : 0;
+    const isOverCapacity =
+      workloadSprintCalendarDaysLeft > 0
+        ? v.daysLeftTotal > workloadSprintCalendarDaysLeft
+        : v.daysLeftTotal > 0;
+    supplemental.push({
+      assignee,
+      estimatedTotal: v.estimatedTotal,
+      daysLeftTotal: v.daysLeftTotal,
+      utilizationPct,
+      isOverCapacity,
+    });
+  }
+
+  const workloadCapacityByAssignee = [...boardRows, ...supplemental].sort(
+    (a, b) =>
+      b.utilizationPct - a.utilizationPct ||
+      b.daysLeftTotal - a.daysLeftTotal ||
+      a.assignee.localeCompare(b.assignee),
+  );
   return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft };
 }
 
@@ -504,29 +641,28 @@ function buildFlowTrend(
     dayDates.length === 0
       ? []
       : dayDates.map((dayDate, dayIndex) => {
-          const assigneesTodo = new Set<string>();
-          const assigneesInProgress = new Set<string>();
-          const assigneesDone = new Set<string>();
-          const assigneesApproved = new Set<string>();
+          let todo = 0;
+          let inProgress = 0;
+          let done = 0;
+          let approved = 0;
 
           for (const story of sprintStories) {
             const st = statusAtEndOfDay(story, dayDate, sprintFirstDay, sprintLastDay);
             if (st == null) continue;
-            const a = story.assignee?.trim() || "Unassigned";
-            if (st === StoryStatus.todo) assigneesTodo.add(a);
-            else if (st === StoryStatus.inProgress) assigneesInProgress.add(a);
-            else if (st === StoryStatus.done) assigneesDone.add(a);
-            else if (st === StoryStatus.approved) assigneesApproved.add(a);
+            if (st === StoryStatus.todo) todo += 1;
+            else if (st === StoryStatus.inProgress) inProgress += 1;
+            else if (st === StoryStatus.done) done += 1;
+            else if (st === StoryStatus.approved) approved += 1;
           }
 
           return {
             dayInSprint: dayIndex + 1,
             labelShort: flowChartDayLabel(dayDate),
             isToday: startOfDay(dayDate).getTime() === todayStart.getTime(),
-            todo: assigneesTodo.size,
-            inProgress: assigneesInProgress.size,
-            done: assigneesDone.size,
-            approved: assigneesApproved.size,
+            todo,
+            inProgress,
+            done,
+            approved,
           };
         });
 
@@ -542,10 +678,19 @@ export function buildSprintAnalytics(
   planYear: number,
   filterEpicTeamId?: string | null,
   estimateSource: EstimateSource = "auto",
+  sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
 ): SprintAnalyticsData {
   const stories = collectMonthStories(initiatives, month, filterEpicTeamId, estimateSource);
   const workload = buildWorkloadByAssignee(stories, month, yearSprint);
-  const capacity = buildWorkloadCapacityByAssignee(stories, month, yearSprint, planYear);
+  const capacity = buildWorkloadCapacityByAssignee(
+    stories,
+    month,
+    yearSprint,
+    planYear,
+    initiatives,
+    sprintCapacityBoard,
+    filterEpicTeamId,
+  );
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);
   return {
     statusPie: buildStatusPie(stories, month, yearSprint),

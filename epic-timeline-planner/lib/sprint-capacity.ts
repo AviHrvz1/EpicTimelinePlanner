@@ -18,12 +18,15 @@ export const DEBUG_SPRINT_CAPACITY_STORAGE_KEY = "epicPlanner.debugSprintCapacit
 export const SPRINT_CAPACITY_OTHER_BUCKET = "Other assignees";
 
 /**
- * Default capacity rosters — aligned with `prisma/seed.js` story/initiative assignees so
- * sprint capacity and Kanban autocomplete match names shown on cards (not stale placeholders).
+ * Default capacity rosters — aligned with `prisma/seed.js` so sprint capacity and Kanban autocomplete
+ * match names on cards. Combined “all teams” roster has 15 people (5 per delivery column).
  */
-const PLATFORM_MEMBERS = ["Ava", "Ben", "Liam", "Maya", "Noah", "Zoe"] as const;
-const EXPERIENCE_MEMBERS = ["Dana", "Ethan", "Iris", "Mia", "Omar", "Ruth"] as const;
-const DATA_MEMBERS = ["Eitan", "Mia", "Noah", "Omer", "Yael"] as const;
+/** Five Platform people — names start with P (aligned with demo seed). */
+const PLATFORM_MEMBERS = ["Paige", "Perry", "Poppy", "Petra", "Pascal"] as const;
+/** Five Experience people — names start with E. */
+const EXPERIENCE_MEMBERS = ["Elena", "Erin", "Evan", "Edith", "Emma"] as const;
+/** Five Data & analytics people — names start with A. */
+const DATA_MEMBERS = ["Alice", "Aaron", "Aria", "Asher", "Aiden"] as const;
 
 function mergeUniqueSorted(...groups: readonly (readonly string[])[]): string[] {
   const set = new Set<string>();

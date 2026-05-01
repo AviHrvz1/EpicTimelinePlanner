@@ -31,7 +31,11 @@ function assigneeFilterBadgeLabel(name: string): string {
   if (name === "Unassigned") return "U";
   const parts = name.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase();
+  if (parts.length === 1) {
+    const p = parts[0]!;
+    if (p.length <= 1) return p.toUpperCase();
+    return p.slice(0, 2).toUpperCase();
+  }
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
 

@@ -4,7 +4,7 @@ import { PrismaClient } from "@/lib/generated/prisma";
  * Bump when the Prisma schema changes. In development, disconnects a stale client
  * so the next import gets a new `PrismaClient` after `prisma generate`.
  */
-const PRISMA_CLIENT_CACHE_VERSION = 4;
+const PRISMA_CLIENT_CACHE_VERSION = 7;
 
 type LegacyGlobal = typeof globalThis & { prisma?: PrismaClient };
 
@@ -50,4 +50,17 @@ function getDb(): PrismaClient {
   return g.__epicPlannerPrisma;
 }
 
-export const db = getDb();
+/**
+ * Always read through `getDb()` so hot reload / cache-version bumps cannot leave importers
+ * holding a disconnected PrismaClient that predates schema changes (missing delegates).
+ */
+export const db: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getDb();
+    const value = Reflect.get(client, prop, client);
+    if (typeof value === "function") {
+      return value.bind(client);
+    }
+    return value;
+  },
+});

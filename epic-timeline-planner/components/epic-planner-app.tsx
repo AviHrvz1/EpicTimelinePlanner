@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { Archive, ChevronDown, Map as MapIcon, PanelLeftOpen } from "lucide-react";
+import { Archive, ChevronDown, Map as MapIcon, PanelLeftOpen, Users } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
+import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
 import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-dialog";
 import { InitiativeListPanel } from "@/components/initiatives/initiative-list-panel";
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
@@ -883,7 +884,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       return {};
     }
   });
-  const [topMode, setTopMode] = useState<"roadmap" | "backlog">("roadmap");
+  const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "users">("roadmap");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
@@ -1201,6 +1202,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       completionPercent,
     };
   }, [initiatives]);
+
+  /** Month-plan tabs where sprint story scope follows `sprintStoryBoardTeamId` (Kanban team selector). */
+  const sprintSurfaceUsesDeliveryTeam =
+    activeMonthPlanTab === "sprint-kanban" ||
+    activeMonthPlanTab === "sprint-capacity" ||
+    activeMonthPlanTab === "sprint-status" ||
+    activeMonthPlanTab === "sprint-retrospective";
+
   const storyRefMaps = useMemo(() => buildStoryRefMaps(initiatives), [initiatives]);
   const epicRefMaps = useMemo(() => buildEpicRefMaps(initiatives), [initiatives]);
 
@@ -3655,6 +3664,40 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             </span>
           </button>
         </div>
+        <div className="group relative w-full overflow-visible">
+          <button
+            type="button"
+            onClick={() => setTopMode("users")}
+            aria-label="Users"
+            className={cn(
+              "inline-flex h-10 w-full items-center justify-start gap-2.5 rounded-lg px-2.5 transition-all duration-200",
+              topMode === "users"
+                ? "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/90 shadow-sm"
+                : "text-slate-600 hover:bg-white hover:text-slate-800 hover:ring-1 hover:ring-slate-200/80",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-flex size-6 items-center justify-center rounded-md transition-colors",
+                topMode === "users"
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-slate-100 text-slate-500 group-hover:bg-slate-200/80 group-hover:text-slate-700",
+              )}
+              aria-hidden
+            >
+              <Users className="size-3.5" aria-hidden />
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                modeRailLabelClass,
+                isModeRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+              )}
+            >
+              Users
+            </span>
+          </button>
+        </div>
       </nav>
     </aside>
   );
@@ -3662,102 +3705,104 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   return (
     <DragContext onDragEnd={onDragEnd}>
       <main
-        className={cn(
+          className={cn(
           "h-screen min-h-0 overflow-x-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8",
-          topMode === "roadmap" ? "overflow-y-visible" : "overflow-y-hidden",
+          topMode === "roadmap" ? "overflow-y-visible" : topMode === "users" ? "overflow-y-auto" : "overflow-y-hidden",
         )}
       >
         <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-col gap-5 overflow-x-hidden overflow-y-visible">
-          <div className="relative z-30 overflow-visible rounded-2xl bg-card px-4 pb-4 pt-8 shadow-lg ring-1 ring-black/5">
-            <div className="relative flex items-start justify-between gap-6 overflow-visible">
-              <div className="min-w-0 flex-1">
-                <div className="inline-flex flex-col p-1 pl-9">
-                  <img
-                    src="/bird-eye-lockup-wide.png"
-                    alt="Bird Eye Viewer logo"
-                    className="h-[88px] w-auto max-w-[820px] rounded-md object-contain object-left"
-                  />
-                </div>
-              </div>
-              <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-[calc(50%-18px)] overflow-visible">
-                <div className="relative isolate inline-block translate-y-[2px] overflow-visible">
-                  <div className="relative z-0 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
-                    <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
-                      Roadmap&nbsp;{selectedYear}
-                    </span>
-                  </div>
-                  <div className="absolute bottom-full left-0 z-30 h-[48px] w-full overflow-visible">
+          {topMode !== "users" ? (
+            <div className="relative z-30 overflow-visible rounded-2xl bg-card px-4 pb-4 pt-8 shadow-lg ring-1 ring-black/5">
+              <div className="relative flex items-start justify-between gap-6 overflow-visible">
+                <div className="min-w-0 flex-1">
+                  <div className="inline-flex flex-col p-1 pl-9">
                     <img
-                      src="/roadmap-hanger-pin.png"
-                      alt=""
-                      className="absolute left-1/2 top-[7%] z-10 ml-[3px] -mt-[5px] h-11 w-auto -translate-x-1/2 -translate-y-[42%] rotate-[-38deg] object-contain"
-                      aria-hidden
-                    />
-                    <svg
-                      className="absolute inset-0 z-20 h-full w-full overflow-visible drop-shadow-sm"
-                      viewBox="0 -14 200 56"
-                      preserveAspectRatio="none"
-                      aria-hidden
-                    >
-                      <path
-                        d="M 56 42 L 100 -10 L 144 42"
-                        fill="none"
-                        stroke="#475569"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <span
-                      className="pointer-events-none absolute bottom-[-4px] left-[28%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
-                      aria-hidden
-                    />
-                    <span
-                      className="pointer-events-none absolute bottom-[-4px] left-[72%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
-                      aria-hidden
+                      src="/bird-eye-lockup-wide.png"
+                      alt="Bird Eye Viewer logo"
+                      className="h-[88px] w-auto max-w-[820px] rounded-md object-contain object-left"
                     />
                   </div>
                 </div>
-              </div>
-              <div className="shrink-0 self-end pb-0">
-                <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
-                  <label className="inline-flex h-7 items-center overflow-hidden rounded-full border border-primary-foreground/35 bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 hover:border-primary-foreground/45 focus-within:outline-none focus-within:ring-0">
-                    <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
-                      Roadmap
-                    </span>
-                    <div className="relative">
-                      <select
-                        value={selectedYear}
-                        onChange={async (event) => {
-                          const nextYear = Number(event.target.value);
-                          if (nextYear === selectedYear) return;
-                          setSelectedYear(nextYear);
-                          await refresh(nextYear);
-                          setFocusedQuarterLabel(null);
-                          setActiveTimelineMonth(null);
-                          setActiveYearSprint(null);
-                          setActiveSprintTab("kanban");
-                          setActiveMonthPlanTab("epic-gantt");
-                          setActiveQuarterViewTab("gantt");
-                          setSprintStoryBoardTeamId(null);
-                        }}
-                        className="h-7 min-w-[5rem] cursor-pointer appearance-none bg-transparent py-0 pl-3 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[12px]"
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-[calc(50%-18px)] overflow-visible">
+                  <div className="relative isolate inline-block translate-y-[2px] overflow-visible">
+                    <div className="relative z-0 rounded-md border border-dashed border-white bg-primary px-10 py-3 leading-none">
+                      <span className="block text-center font-sans text-[20px] font-extrabold uppercase leading-none tracking-tight text-white">
+                        Roadmap&nbsp;{selectedYear}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-full left-0 z-30 h-[48px] w-full overflow-visible">
+                      <img
+                        src="/roadmap-hanger-pin.png"
+                        alt=""
+                        className="absolute left-1/2 top-[7%] z-10 ml-[3px] -mt-[5px] h-11 w-auto -translate-x-1/2 -translate-y-[42%] rotate-[-38deg] object-contain"
+                        aria-hidden
+                      />
+                      <svg
+                        className="absolute inset-0 z-20 h-full w-full overflow-visible drop-shadow-sm"
+                        viewBox="0 -14 200 56"
+                        preserveAspectRatio="none"
+                        aria-hidden
                       >
-                        <option value={2024}>2024</option>
-                        <option value={2025}>2025</option>
-                        <option value={2026}>2026</option>
-                        <option value={2027}>2027</option>
-                      </select>
-                      <ChevronDown
-                        className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-primary-foreground opacity-90 sm:size-[13px]"
+                        <path
+                          d="M 56 42 L 100 -10 L 144 42"
+                          fill="none"
+                          stroke="#475569"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span
+                        className="pointer-events-none absolute bottom-[-4px] left-[28%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
+                        aria-hidden
+                      />
+                      <span
+                        className="pointer-events-none absolute bottom-[-4px] left-[72%] z-40 size-[7px] -translate-x-1/2 rounded-full border border-slate-500 bg-white shadow-none"
                         aria-hidden
                       />
                     </div>
-                  </label>
+                  </div>
+                </div>
+                <div className="shrink-0 self-end pb-0">
+                  <div className="inline-flex translate-y-1 items-center bg-transparent p-0">
+                    <label className="inline-flex h-7 items-center overflow-hidden rounded-full border border-primary-foreground/35 bg-primary text-primary-foreground shadow-none transition-colors outline-none select-none hover:bg-primary/80 hover:border-primary-foreground/45 focus-within:outline-none focus-within:ring-0">
+                      <span className="shrink-0 border-r border-primary-foreground/20 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
+                        Roadmap
+                      </span>
+                      <div className="relative">
+                        <select
+                          value={selectedYear}
+                          onChange={async (event) => {
+                            const nextYear = Number(event.target.value);
+                            if (nextYear === selectedYear) return;
+                            setSelectedYear(nextYear);
+                            await refresh(nextYear);
+                            setFocusedQuarterLabel(null);
+                            setActiveTimelineMonth(null);
+                            setActiveYearSprint(null);
+                            setActiveSprintTab("kanban");
+                            setActiveMonthPlanTab("epic-gantt");
+                            setActiveQuarterViewTab("gantt");
+                            setSprintStoryBoardTeamId(null);
+                          }}
+                          className="h-7 min-w-[5rem] cursor-pointer appearance-none bg-transparent py-0 pl-3 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-primary-foreground outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:text-[12px]"
+                        >
+                          <option value={2024}>2024</option>
+                          <option value={2025}>2025</option>
+                          <option value={2026}>2026</option>
+                          <option value={2027}>2027</option>
+                        </select>
+                        <ChevronDown
+                          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-primary-foreground opacity-90 sm:size-[13px]"
+                          aria-hidden
+                        />
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : null}
 
           {topMode === "roadmap" ? (
             <div
@@ -3839,10 +3884,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   epicBacklogOrderByMonth={epicBacklogOrderByMonth}
                   monthEpicTeamFilterId={
                     activeTimelineMonth != null &&
-                    (activeMonthPlanTab === "sprint-kanban" || activeMonthPlanTab === "sprint-capacity") &&
+                    sprintSurfaceUsesDeliveryTeam &&
                     isKnownEpicTeamId(sprintStoryBoardTeamId)
                       ? sprintStoryBoardTeamId
                       : null
+                  }
+                  onSprintBoardTeamFilterSync={
+                    activeTimelineMonth != null && sprintSurfaceUsesDeliveryTeam
+                      ? (teamId) => setSprintStoryBoardTeamId(teamId)
+                      : undefined
                   }
                   panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
                   panelQuarterFilterLocked={focusedQuarterLabel != null && activeTimelineMonth == null}
@@ -4166,6 +4216,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 }}
                 onSprintModeChange={handleSprintModeChange}
               />
+              </div>
+            </div>
+          ) : topMode === "users" ? (
+            <div
+              className="grid min-h-[calc(100vh-8rem)] flex-1 items-stretch gap-3"
+              style={{ gridTemplateColumns: "54px minmax(0, 1fr)" }}
+            >
+              {modeSwitchMenu}
+              <div className="min-h-0 min-w-0 overflow-hidden rounded-2xl bg-white/60 shadow-md ring-1 ring-slate-200/80">
+                <UsersWorkspacePanel />
               </div>
             </div>
           ) : (

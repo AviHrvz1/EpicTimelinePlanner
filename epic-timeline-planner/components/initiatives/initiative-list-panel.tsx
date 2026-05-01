@@ -20,7 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import Image from "next/image";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
@@ -366,8 +366,13 @@ type InitiativeListPanelProps = {
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   epicBacklogOrderByMonth: Record<number, string[]>;
-  /** When set (e.g. sprint board opened from a team lane), month epic list only shows epics assigned to this team id. */
+  /** When set (e.g. sprint board scoped to a delivery team), month epic list only shows epics assigned to this team id. */
   monthEpicTeamFilterId?: string | null;
+  /**
+   * When the user changes the left-panel team filter on a sprint surface, update the sprint board team
+   * (Kanban / capacity / insights) so both stay aligned.
+   */
+  onSprintBoardTeamFilterSync?: (teamId: string | null) => void;
   /** When set (quarter team assignment), list epics for initiatives spanning any of these months (deduped). */
   epicPanelQuarterMonths?: number[] | null;
   /** Label for quarter-scoped list (e.g. `Q1`). */
@@ -1177,6 +1182,7 @@ export function InitiativeListPanel({
   onCreateStoryQuick,
   epicBacklogOrderByMonth,
   monthEpicTeamFilterId = null,
+  onSprintBoardTeamFilterSync,
   epicPanelQuarterMonths = null,
   epicPanelQuarterLabel = null,
   panelQuarterQuickFilter = null,
@@ -1253,10 +1259,36 @@ export function InitiativeListPanel({
     panelTeamFilterIds[0] === "all" &&
     panelStatusFilters.length === 1 &&
     panelStatusFilters[0] === "all";
+  const notifySprintTeamFromPanelTeamIds = useCallback(
+    (next: string[]) => {
+      if (!onSprintBoardTeamFilterSync) return;
+      const withoutAll = next.filter((x) => x !== "all");
+      if (next.includes("all") || withoutAll.length !== 1) {
+        onSprintBoardTeamFilterSync(null);
+        return;
+      }
+      const id = withoutAll[0];
+      onSprintBoardTeamFilterSync(isKnownEpicTeamId(id) ? id : null);
+    },
+    [onSprintBoardTeamFilterSync],
+  );
+
+  const handlePanelTeamFilterToggle = useCallback(
+    (value: string) => {
+      setPanelTeamFilterIds((prev) => {
+        const next = toggleMultiFilter(prev, value, "all");
+        queueMicrotask(() => notifySprintTeamFromPanelTeamIds(next));
+        return next;
+      });
+    },
+    [notifySprintTeamFromPanelTeamIds],
+  );
+
   const resetAllFilters = () => {
     setPanelQuarterFilters(["all"]);
     setPanelTeamFilterIds(["all"]);
     setPanelStatusFilters(["all"]);
+    onSprintBoardTeamFilterSync?.(null);
   };
   const toggleMultiFilter = <T extends string>(prev: T[], value: T, allToken: T): T[] => {
     if (value === allToken) return [allToken];
@@ -1289,6 +1321,21 @@ export function InitiativeListPanel({
     }
     setPanelStatusFilters([panelStatusQuickFilter]);
   }, [panelStatusQuickFilter]);
+
+  /**
+   * Keep left-panel team chips aligned with sprint board team (Kanban / capacity / insights).
+   * When the board is scoped to one team, match that chip; when the board is “all teams”, clear a stale
+   * single-team chip so epics from every team stay visible in the list.
+   */
+  useEffect(() => {
+    if (isKnownEpicTeamId(monthEpicTeamFilterId)) {
+      setPanelTeamFilterIds([monthEpicTeamFilterId]);
+      return;
+    }
+    if (onSprintBoardTeamFilterSync != null && monthEpicTeamFilterId == null) {
+      setPanelTeamFilterIds(["all"]);
+    }
+  }, [monthEpicTeamFilterId, onSprintBoardTeamFilterSync]);
 
   const monthAssignedEpics = useMemo(() => {
     if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
@@ -1592,7 +1639,7 @@ export function InitiativeListPanel({
             )}
             <IconFilterSelect
               values={panelTeamFilterIds}
-              onToggle={(value) => setPanelTeamFilterIds((prev) => toggleMultiFilter(prev, value, "all"))}
+              onToggle={handlePanelTeamFilterToggle}
               options={teamFilterOptions}
               ariaLabel="Filter left panel by team"
               allValue="all"
@@ -1727,7 +1774,7 @@ export function InitiativeListPanel({
             />
             <IconFilterSelect
               values={panelTeamFilterIds}
-              onToggle={(value) => setPanelTeamFilterIds((prev) => toggleMultiFilter(prev, value, "all"))}
+              onToggle={handlePanelTeamFilterToggle}
               options={teamFilterOptions}
               ariaLabel="Filter initiatives by team"
               allValue="all"
