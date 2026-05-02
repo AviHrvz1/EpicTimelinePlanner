@@ -140,6 +140,75 @@ function StripedGanttLaneScrollArea({
   );
 }
 
+/** All-quarters roadmap with no rows: striped lane plus a centered empty message. */
+function YearRoadmapEmptyStripedLane({
+  currentYear,
+  roadmapLaneTodayLeft,
+  columnCount,
+  variant,
+}: {
+  currentYear: number;
+  roadmapLaneTodayLeft: number | null;
+  columnCount: number;
+  variant: "initiatives" | "epics";
+}) {
+  const srText =
+    variant === "initiatives"
+      ? `No initiatives with planned epics on the ${currentYear} roadmap. Plan epics from the initiative list when you are ready.`
+      : `No epics on the ${currentYear} roadmap yet. Drag an epic from the initiative list onto the timeline.`;
+
+  return (
+    <div
+      className={cn(
+        "relative isolate flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
+        roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
+      )}
+    >
+      {roadmapLaneTodayLeft != null ? (
+        <div
+          className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
+          style={{ left: `${roadmapLaneTodayLeft}%` }}
+          aria-hidden
+        />
+      ) : null}
+      <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
+        <p className="sr-only">{srText}</p>
+        <StripedGanttLaneScrollArea
+          id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+          columnCount={columnCount}
+          rowGapClass="space-y-1.5"
+          minHeightStyle={{ minHeight: "max(100%, calc(100dvh - 28rem))" }}
+        >
+          <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
+        </StripedGanttLaneScrollArea>
+        <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
+          <div className="max-w-md text-center text-pretty sm:max-w-lg" aria-hidden>
+            {variant === "initiatives" ? (
+              <>
+                <p className="text-base font-semibold leading-snug text-slate-800 sm:text-lg">
+                  No initiatives on the {currentYear} roadmap yet
+                </p>
+                <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                  Plan epics from the initiative list to fill the timeline.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-semibold leading-snug text-slate-800 sm:text-xl">
+                  No epics on the {currentYear} roadmap yet
+                </p>
+                <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                  Drag an epic from the initiative list onto the timeline.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type GanttLaneRowProps = {
   initiative: InitiativeItem;
   gridStyle: CSSProperties;
@@ -3319,6 +3388,17 @@ export function TimelineGrid({
                         badgePlacement="above"
                         bleedToPaddedPanel
                       />
+                      {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
+                        <p className="sr-only">
+                          No initiatives are planned in {MONTHS[activeMonth - 1]} yet. Plan epics from the initiative list
+                          to fill this month.
+                        </p>
+                      ) : roadmapBarMode !== "initiatives" && monthEpicGanttRows.length === 0 ? (
+                        <p className="sr-only">
+                          No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag an epic from the initiative list onto
+                          this month.
+                        </p>
+                      ) : null}
                       <StripedGanttLaneScrollArea
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={2}
@@ -3326,28 +3406,9 @@ export function TimelineGrid({
                         minHeightStyle={{ minHeight: "max(100%, calc(100dvh - 34rem))" }}
                       >
                         {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
-                          <div className="relative h-0 shrink-0 overflow-visible">
-                            <p className="sr-only">
-                              No initiatives are planned in {MONTHS[activeMonth - 1]} yet.
-                            </p>
-                            <div className="pointer-events-none absolute inset-x-0 top-2 z-[4] flex justify-center px-2 sm:top-3">
-                              <span className="max-w-md rounded-md bg-white/90 px-2.5 py-1 text-center text-[11px] leading-snug text-slate-600 shadow-sm ring-1 ring-slate-200/55">
-                                No initiatives in {MONTHS[activeMonth - 1]} yet — drag from the left panel.
-                              </span>
-                            </div>
-                          </div>
+                          <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         ) : roadmapBarMode !== "initiatives" && monthEpicGanttRows.length === 0 ? (
-                          <div className="relative h-0 shrink-0 overflow-visible">
-                            <p className="sr-only">
-                              No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag one from the left panel into the
-                              drop area below.
-                            </p>
-                            <div className="pointer-events-none absolute inset-x-0 top-2 z-[4] flex justify-center px-2 sm:top-3">
-                              <span className="max-w-md rounded-md bg-white/90 px-2.5 py-1 text-center text-[11px] leading-snug text-slate-600 shadow-sm ring-1 ring-slate-200/55">
-                                No epics in {MONTHS[activeMonth - 1]} yet — drag from the left panel.
-                              </span>
-                            </div>
-                          </div>
+                          <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         ) : roadmapBarMode === "initiatives" ? (
                           monthInitiativeGanttRows.map((initiative, rowIndex) => (
                             <div
@@ -3405,6 +3466,32 @@ export function TimelineGrid({
                           })
                         )}
                       </StripedGanttLaneScrollArea>
+                      {(roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0) ||
+                      (roadmapBarMode !== "initiatives" && monthEpicGanttRows.length === 0) ? (
+                        <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
+                          <div className="max-w-md text-center text-pretty sm:max-w-lg" aria-hidden>
+                            {roadmapBarMode === "initiatives" ? (
+                              <>
+                                <p className="text-base font-semibold leading-snug text-slate-800 sm:text-lg">
+                                  No initiatives in {MONTHS[activeMonth - 1]} yet
+                                </p>
+                                <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                                  Plan epics from the initiative list to fill this month.
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-lg font-semibold leading-snug text-slate-800 sm:text-xl">
+                                  No epics in {MONTHS[activeMonth - 1]} yet
+                                </p>
+                                <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                                  Drag an epic from the initiative list onto this month.
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </MonthEpicDropArea>
@@ -3712,13 +3799,29 @@ export function TimelineGrid({
                   <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
                   {roadmapBarMode === "initiatives" ? (
                     quarterRoadmapInitiativeRows.length === 0 ? (
-                      <StripedGanttLaneScrollArea
-                        id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
-                        columnCount={ganttLaneColumnCount}
-                        rowGapClass="space-y-2"
-                      >
-                        <p className="sr-only">No initiatives with planned epics in this quarter.</p>
-                      </StripedGanttLaneScrollArea>
+                      <>
+                        <p className="sr-only">
+                          No initiatives with planned epics in {focusedQuarter.label} yet. Plan epics from the initiative
+                          list to fill this quarter.
+                        </p>
+                        <StripedGanttLaneScrollArea
+                          id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                          columnCount={ganttLaneColumnCount}
+                          rowGapClass="space-y-2"
+                        >
+                          <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
+                        </StripedGanttLaneScrollArea>
+                        <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
+                          <div className="max-w-md text-center text-pretty sm:max-w-lg" aria-hidden>
+                            <p className="text-base font-semibold leading-snug text-slate-800 sm:text-lg">
+                              No initiatives in {focusedQuarter.label} yet
+                            </p>
+                            <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                              Plan epics from the initiative list to fill this quarter.
+                            </p>
+                          </div>
+                        </div>
+                      </>
                     ) : (
                       <StripedGanttLaneScrollArea
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
@@ -3769,16 +3872,29 @@ export function TimelineGrid({
                       </StripedGanttLaneScrollArea>
                     )
                   ) : quarterRoadmapEpics.length === 0 ? (
-                    <StripedGanttLaneScrollArea
-                      id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
-                      columnCount={ganttLaneColumnCount}
-                      rowGapClass="space-y-0.5"
-                    >
+                    <>
                       <p className="sr-only">
-                        No epics on the timeline yet. Create an initiative and drag epics here, or drag bar edges to
-                        resize.
+                        No epics are planned in {focusedQuarter.label} yet. Drag an epic from the initiative list onto
+                        this quarter.
                       </p>
-                    </StripedGanttLaneScrollArea>
+                      <StripedGanttLaneScrollArea
+                        id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                        columnCount={ganttLaneColumnCount}
+                        rowGapClass="space-y-0.5"
+                      >
+                        <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
+                      </StripedGanttLaneScrollArea>
+                      <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
+                        <div className="max-w-md text-center text-pretty sm:max-w-lg" aria-hidden>
+                          <p className="text-lg font-semibold leading-snug text-slate-800 sm:text-xl">
+                            No epics in {focusedQuarter.label} yet
+                          </p>
+                          <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                            Drag an epic from the initiative list onto this quarter.
+                          </p>
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <StripedGanttLaneScrollArea
                       id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
@@ -4203,13 +4319,27 @@ export function TimelineGrid({
             }
           />
         ) : roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
-          focusedQuarter && quarterViewTab === "gantt" ? null : (
+          focusedQuarter && quarterViewTab === "gantt" ? null : !focusedQuarter ? (
+            <YearRoadmapEmptyStripedLane
+              currentYear={currentYear}
+              roadmapLaneTodayLeft={roadmapLaneTodayLeft}
+              columnCount={ganttLaneColumnCount}
+              variant="initiatives"
+            />
+          ) : (
             <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
               No initiatives with planned epics to display on the roadmap.
             </p>
           )
         ) : yearRoadmapEpics.length === 0 && roadmapBarMode === "epics" ? (
-          focusedQuarter && quarterViewTab === "gantt" ? null : (
+          focusedQuarter && quarterViewTab === "gantt" ? null : !focusedQuarter ? (
+            <YearRoadmapEmptyStripedLane
+              currentYear={currentYear}
+              roadmapLaneTodayLeft={roadmapLaneTodayLeft}
+              columnCount={ganttLaneColumnCount}
+              variant="epics"
+            />
+          ) : (
             <p className="bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
               Create an initiative, then drag its epics onto the timeline. You can also stretch or shorten a scheduled bar
               by dragging its ends to match your start and due dates.
