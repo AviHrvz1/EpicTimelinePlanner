@@ -117,6 +117,10 @@ const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
 
+/** Subtle alternating row (reference: pale blue-gray, not saturated cyan). */
+const BACKLOG_ZEBRA_STRIPE_BG = "#f4f7fc";
+const BACKLOG_ZEBRA_BASE_BG = "#ffffff";
+
 const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   workItem: true,
   year: true,
@@ -145,7 +149,7 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
 ]);
 
 function backlogCellClassName(key: BacklogColumnKey): string {
-  if (key === "workItem") return "relative min-w-0 pl-2";
+  if (key === "workItem") return "relative min-w-0 pl-4";
   if (key === "progress") return "min-w-0";
   return cn("min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "justify-self-center text-center");
 }
@@ -820,7 +824,7 @@ export function BacklogPlanningPanel({
 
     const rowEls = Array.from(root.querySelectorAll<HTMLElement>('[data-backlog-zebra-row="true"]'));
     rowEls.forEach((el, idx) => {
-      const bg = idx % 2 === 0 ? "#d8f2ff" : "#ffffff";
+      const bg = idx % 2 === 0 ? BACKLOG_ZEBRA_STRIPE_BG : BACKLOG_ZEBRA_BASE_BG;
       el.style.backgroundColor = bg;
     });
   }, [
@@ -2608,12 +2612,13 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.95rem)] overflow-auto rounded-none bg-white px-4 text-[16px]">
+      <div className="h-[calc(100%-6.95rem)] min-h-0 overflow-hidden rounded-md bg-white">
+        <div className="h-full overflow-auto text-[16px]">
         <>
         {showTableHeaderRow ? (
-          <div className="sticky top-0 z-10 relative border-b border-[#19abeb]/70 bg-[#0897d5]">
+          <div className="sticky top-0 z-10 relative border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
             <div
-              className="grid items-center gap-3 py-2.5 pr-28 pl-0 text-[13px] font-semibold tracking-[0.02em] text-white uppercase"
+              className="grid items-center gap-3 py-2.5 pr-28 pl-0 text-[13px] font-semibold tracking-[0.04em] text-white uppercase"
               style={{ gridTemplateColumns: tableGridTemplate }}
             >
               {visibleColumnKeys.map((key, index) => (
@@ -2621,7 +2626,7 @@ export function BacklogPlanningPanel({
                   key={key}
                   className={cn(
                     "relative min-w-0",
-                    key === "workItem" && "pl-2",
+                    key === "workItem" && "pl-4",
                     CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center",
                   )}
                 >
@@ -2634,7 +2639,7 @@ export function BacklogPlanningPanel({
                           onClick={collapseAllRows}
                           title="Collapse all rows"
                           aria-label="Collapse all rows"
-                            className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                            className="inline-flex h-5 w-5 items-center justify-center text-white/85 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                         >
                           <ChevronsUp className="size-3.5" strokeWidth={2.2} />
                         </button>
@@ -2643,7 +2648,7 @@ export function BacklogPlanningPanel({
                           onClick={expandAllRows}
                           title="Expand all rows"
                           aria-label="Expand all rows"
-                          className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                          className="inline-flex h-5 w-5 items-center justify-center text-white/85 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                         >
                           <ChevronsDown className="size-3.5" strokeWidth={2.2} />
                         </button>
@@ -2776,7 +2781,7 @@ export function BacklogPlanningPanel({
         )}
 
         {fullyFiltered.length === 0 ? (
-          <div className="py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
+          <div className="px-4 py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
           <div className="divide-y divide-slate-100 bg-white" ref={backlogRowsRootRef}>
             {groupLevels.length > 0 ? (
@@ -3818,6 +3823,7 @@ export function BacklogPlanningPanel({
           </div>
         )}
         </>
+        </div>
       </div>
     </section>
   );
