@@ -3743,7 +3743,7 @@ export function TimelineGrid({
                           <CalendarDays className="size-3.5 shrink-0 opacity-80 sm:size-4" aria-hidden />
                           <span>{FULL_MONTHS[month - 1]}</span>
                         </button>
-                        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:mt-2.5 sm:gap-2">
+                        <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:mt-3 sm:gap-2">
                           <button
                             type="button"
                             title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateWeekdayRangeText(currentYear, month, 1)})`}
@@ -3752,12 +3752,12 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex flex-col items-center justify-center gap-0 rounded-lg bg-gradient-to-br from-sky-50 to-blue-50 px-1 py-1 text-center text-[11px] shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99] sm:rounded-xl sm:px-1.5 sm:text-[13px]"
+                            className="flex flex-col items-center justify-center gap-1 rounded-lg bg-gradient-to-br from-sky-50 to-blue-50 px-1 py-1 text-center text-[11px] shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99] sm:rounded-xl sm:px-1.5 sm:text-[13px]"
                           >
                             <span className="font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
                             </span>
-                            <span className="text-[10px] font-medium leading-tight text-slate-500 sm:text-[12px]">
+                            <span className="text-[10px] font-medium leading-snug text-slate-500 sm:text-[12px]">
                               ({sprintDateWeekdayRangeText(currentYear, month, 1)})
                             </span>
                           </button>
@@ -3769,12 +3769,12 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex flex-col items-center justify-center gap-0 rounded-lg bg-gradient-to-br from-violet-50 to-indigo-50 px-1 py-1 text-center text-[11px] shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99] sm:rounded-xl sm:px-1.5 sm:text-[13px]"
+                            className="flex flex-col items-center justify-center gap-1 rounded-lg bg-gradient-to-br from-violet-50 to-indigo-50 px-1 py-1 text-center text-[11px] shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99] sm:rounded-xl sm:px-1.5 sm:text-[13px]"
                           >
                             <span className="font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
                             </span>
-                            <span className="text-[10px] font-medium leading-tight text-slate-500 sm:text-[12px]">
+                            <span className="text-[10px] font-medium leading-snug text-slate-500 sm:text-[12px]">
                               ({sprintDateWeekdayRangeText(currentYear, month, 2)})
                             </span>
                           </button>
