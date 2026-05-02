@@ -1,5 +1,8 @@
 "use client";
 
+import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowDown,
   ArrowUp,
@@ -10,12 +13,14 @@ import {
   Users,
   X,
 } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
+import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
@@ -43,6 +48,68 @@ type PermissionFilter = "all" | "Admin" | "Editor" | "Viewer";
 type SortKey = "name" | "email" | "team" | "permission" | "status";
 type SortState = { key: SortKey; dir: "asc" | "desc" };
 type UserEditField = "name" | "email" | "team" | "permission";
+
+const USER_DIRECTORY_DEFAULT_COLUMN_ORDER: SortKey[] = ["name", "email", "team", "permission", "status"];
+const USERS_DIRECTORY_COLUMN_ORDER_STORAGE_KEY = "epic-planner.users-directory.column-order.v1";
+
+const USER_DIRECTORY_COLUMN_LABELS: Record<SortKey, string> = {
+  name: "User name",
+  email: "Email",
+  team: "Team",
+  permission: "Permission",
+  status: "Status",
+};
+
+/** With `table-fixed`, share of row width — name column gets most of the table. */
+const USER_DIRECTORY_COL_WIDTH_CLASS: Record<SortKey, string> = {
+  name: "w-[48%]",
+  email: "w-[22%]",
+  team: "w-[10%]",
+  permission: "w-[12%]",
+  status: "w-[8%]",
+};
+
+const USER_DIR_TH_CLASS =
+  "relative w-full min-w-0 whitespace-nowrap px-3 py-2.5 text-left align-middle";
+
+const USER_DIR_TD_BASE = "min-w-0 px-2 py-2 align-middle";
+
+function isSortKey(v: string): v is SortKey {
+  return v === "name" || v === "email" || v === "team" || v === "permission" || v === "status";
+}
+
+function normalizeUserDirectoryColumnOrder(order: SortKey[]): SortKey[] {
+  const seen = new Set<SortKey>();
+  const next: SortKey[] = [];
+  for (const k of order) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      next.push(k);
+    }
+  }
+  for (const k of USER_DIRECTORY_DEFAULT_COLUMN_ORDER) {
+    if (!seen.has(k)) next.push(k);
+  }
+  const nameIdx = next.indexOf("name");
+  if (nameIdx > 0) {
+    next.splice(nameIdx, 1);
+    next.unshift("name");
+  }
+  return next;
+}
+
+function parseStoredUserDirectoryColumnOrder(raw: string | null): SortKey[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    const keys = parsed.filter((x): x is SortKey => typeof x === "string" && isSortKey(x));
+    if (keys.length === 0) return null;
+    return normalizeUserDirectoryColumnOrder(keys);
+  } catch {
+    return null;
+  }
+}
 
 const TEAM_FILTER_SUGGESTIONS = [...MONTH_TEAM_COLUMNS.map((c) => c.label), "Unassigned only"] as const;
 
@@ -111,7 +178,7 @@ function formatUserStatusLabel(status: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-function SortHeader({
+function UserDirectorySortTrigger({
   label,
   col,
   sort,
@@ -124,23 +191,63 @@ function SortHeader({
 }) {
   const active = sort.key === col;
   return (
-    <th className="whitespace-nowrap px-3 py-2.5 text-left align-middle">
-      <button
-        type="button"
-        onClick={() => onToggle(col)}
-        className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white transition hover:text-white/95"
-      >
-        {label}
-        {active ? (
-          sort.dir === "asc" ? (
-            <ArrowUp className="size-3.5 shrink-0 text-white" aria-hidden />
-          ) : (
-            <ArrowDown className="size-3.5 shrink-0 text-white" aria-hidden />
-          )
+    <button
+      type="button"
+      onClick={() => onToggle(col)}
+      className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white transition hover:text-white/95"
+    >
+      <span className="truncate">{label}</span>
+      {active ? (
+        sort.dir === "asc" ? (
+          <ArrowUp className="size-3.5 shrink-0 text-white" aria-hidden />
         ) : (
-          <ArrowUpDown className="size-3.5 shrink-0 text-white/75" aria-hidden />
-        )}
-      </button>
+          <ArrowDown className="size-3.5 shrink-0 text-white" aria-hidden />
+        )
+      ) : (
+        <ArrowUpDown className="size-3.5 shrink-0 text-white/75" aria-hidden />
+      )}
+    </button>
+  );
+}
+
+function UserDirectoryNameHeader({ sort, onToggle }: { sort: SortState; onToggle: (k: SortKey) => void }) {
+  return (
+    <th className={USER_DIR_TH_CLASS}>
+      <UserDirectorySortTrigger label={USER_DIRECTORY_COLUMN_LABELS.name} col="name" sort={sort} onToggle={onToggle} />
+    </th>
+  );
+}
+
+function SortableUserDirectoryColumnHeader({
+  id,
+  sort,
+  onToggle,
+}: {
+  id: Exclude<SortKey, "name">;
+  sort: SortState;
+  onToggle: (k: SortKey) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 2 : undefined,
+  };
+  const label = USER_DIRECTORY_COLUMN_LABELS[id];
+  return (
+    <th ref={setNodeRef} style={style} className={USER_DIR_TH_CLASS}>
+      <div className="flex w-full min-w-0 items-center gap-1">
+        <button
+          type="button"
+          className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-[#0a8ec4]/45 active:cursor-grabbing"
+          aria-label={`Drag to reorder ${label} column`}
+          {...attributes}
+          {...listeners}
+        >
+          <TableColumnDragGrip />
+        </button>
+        <UserDirectorySortTrigger label={label} col={id} sort={sort} onToggle={onToggle} />
+      </div>
     </th>
   );
 }
@@ -187,6 +294,7 @@ function EditCommitButtons({
 function UsersTableRow({
   row,
   idx,
+  columnOrder,
   saving,
   editField,
   onEditField,
@@ -196,6 +304,7 @@ function UsersTableRow({
 }: {
   row: WorkspaceUserRow;
   idx: number;
+  columnOrder: SortKey[];
   saving: boolean;
   editField: UserEditField | null;
   onEditField: (field: UserEditField) => void;
@@ -282,20 +391,9 @@ function UsersTableRow({
   const editing = (f: UserEditField) => editField === f;
   const rowBusy = saving || editField != null;
 
-  return (
-    <tr
-      className={cn(
-        "group border-t border-[#7cd3f7]/95 text-[16px] text-slate-800 transition-colors hover:bg-[#c5ebff]",
-        saving && "opacity-70",
-        !rowBusy && "cursor-pointer",
-      )}
-      style={{ backgroundColor: idx % 2 === 0 ? TABLE_ZEBRA_STRIPE_BG : TABLE_ZEBRA_BASE_BG }}
-      onClick={() => {
-        if (rowBusy) return;
-        onRowView(row);
-      }}
-    >
-      <td className="max-w-[280px] px-2 py-2 align-middle">
+  const cells: Record<SortKey, ReactNode> = {
+    name: (
+      <td key="name" className={USER_DIR_TD_BASE}>
         {editing("name") ? (
           <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <input
@@ -306,7 +404,7 @@ function UsersTableRow({
                 if (e.key === "Enter") void saveName();
                 if (e.key === "Escape") onCancelEdit();
               }}
-              className={cn(cellInputCn, "min-w-0 flex-1 font-semibold text-slate-900")}
+              className={cn(cellInputCn, "min-w-0 flex-1 font-normal text-slate-900")}
               aria-label={`Edit name for ${row.email}`}
               autoFocus
             />
@@ -314,7 +412,7 @@ function UsersTableRow({
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate px-1 py-1.5 font-semibold text-slate-900">{row.name}</span>
+            <span className="min-w-0 flex-1 truncate px-1 py-1.5 font-normal text-slate-900">{row.name}</span>
             {!saving && editField == null ? (
               <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <div onClick={(e) => e.stopPropagation()}>
@@ -330,7 +428,9 @@ function UsersTableRow({
           </div>
         )}
       </td>
-      <td className="min-w-[220px] max-w-[280px] px-2 py-2 align-middle">
+    ),
+    email: (
+      <td key="email" className={USER_DIR_TD_BASE}>
         {editing("email") ? (
           <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <input
@@ -363,7 +463,9 @@ function UsersTableRow({
           </button>
         )}
       </td>
-      <td className="min-w-[200px] px-2 py-2 align-middle">
+    ),
+    team: (
+      <td key="team" className={USER_DIR_TD_BASE}>
         {editing("team") ? (
           <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <div className="min-w-0 flex-1">
@@ -405,7 +507,9 @@ function UsersTableRow({
           </button>
         )}
       </td>
-      <td className="min-w-[160px] px-2 py-2 align-middle">
+    ),
+    permission: (
+      <td key="permission" className={USER_DIR_TD_BASE}>
         {editing("permission") ? (
           <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <div className="min-w-0 flex-1">
@@ -436,7 +540,9 @@ function UsersTableRow({
           </button>
         )}
       </td>
-      <td className="whitespace-nowrap px-3 py-2 align-middle">
+    ),
+    status: (
+      <td key="status" className={cn(USER_DIR_TD_BASE, "whitespace-nowrap")}>
         <span
           className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[13px] font-semibold leading-tight text-emerald-900 ring-1 ring-emerald-200/90"
           title="Status is managed by the system"
@@ -444,6 +550,23 @@ function UsersTableRow({
           {formatUserStatusLabel(row.status ?? "active")}
         </span>
       </td>
+    ),
+  };
+
+  return (
+    <tr
+      className={cn(
+        "group border-t border-[#7cd3f7]/95 text-[16px] text-slate-800 transition-colors hover:bg-[#c5ebff]",
+        saving && "opacity-70",
+        !rowBusy && "cursor-pointer",
+      )}
+      style={{ backgroundColor: idx % 2 === 0 ? TABLE_ZEBRA_STRIPE_BG : TABLE_ZEBRA_BASE_BG }}
+      onClick={() => {
+        if (rowBusy) return;
+        onRowView(row);
+      }}
+    >
+      {columnOrder.map((col) => cells[col])}
     </tr>
   );
 }
@@ -464,8 +587,10 @@ export function UsersWorkspacePanel() {
   const [savingRowIds, setSavingRowIds] = useState<Set<string>>(() => new Set());
   const [editCell, setEditCell] = useState<{ rowId: string; field: UserEditField } | null>(null);
   const [sort, setSort] = useState<SortState>({ key: "name", dir: "asc" });
+  const [columnOrder, setColumnOrder] = useState<SortKey[]>(() => [...USER_DIRECTORY_DEFAULT_COLUMN_ORDER]);
   const [userDrawerEntered, setUserDrawerEntered] = useState(false);
   const userDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextUserDirColumnPersist = useRef(true);
 
   const cancelDrawerClose = useCallback(() => {
     if (userDrawerCloseTimerRef.current) {
@@ -501,6 +626,21 @@ export function UsersWorkspacePanel() {
   }, [load]);
 
   useEffect(() => {
+    const stored = parseStoredUserDirectoryColumnOrder(
+      localStorage.getItem(USERS_DIRECTORY_COLUMN_ORDER_STORAGE_KEY),
+    );
+    if (stored) setColumnOrder(stored);
+  }, []);
+
+  useEffect(() => {
+    if (skipNextUserDirColumnPersist.current) {
+      skipNextUserDirColumnPersist.current = false;
+      return;
+    }
+    localStorage.setItem(USERS_DIRECTORY_COLUMN_ORDER_STORAGE_KEY, JSON.stringify(columnOrder));
+  }, [columnOrder]);
+
+  useEffect(() => {
     setTeamFilterInput(teamFilterLabel(teamFilter));
   }, [teamFilter]);
 
@@ -534,6 +674,25 @@ export function UsersWorkspacePanel() {
 
   const toggleSort = useCallback((key: SortKey) => {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  }, []);
+
+  const userDirColumnDragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleUserDirectoryColumnDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const aid = active.id as SortKey;
+    const oid = over.id as SortKey;
+    if (aid === "name" || oid === "name") return;
+    setColumnOrder((prev) => {
+      const oldIndex = prev.indexOf(aid);
+      const newIndex = prev.indexOf(oid);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      return normalizeUserDirectoryColumnOrder(arrayMove(prev, oldIndex, newIndex));
+    });
   }, []);
 
   const patchUser = useCallback(
@@ -794,26 +953,44 @@ export function UsersWorkspacePanel() {
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-white">
         <div className="h-full min-h-0 overflow-auto text-[16px]">
-        <table className="w-full min-w-[860px] border-collapse text-left">
-          <thead className="sticky top-0 z-10 border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-            <tr>
-              <SortHeader label="User name" col="name" sort={sort} onToggle={toggleSort} />
-              <SortHeader label="Email" col="email" sort={sort} onToggle={toggleSort} />
-              <SortHeader label="Team" col="team" sort={sort} onToggle={toggleSort} />
-              <SortHeader label="Permission" col="permission" sort={sort} onToggle={toggleSort} />
-              <SortHeader label="Status" col="status" sort={sort} onToggle={toggleSort} />
-            </tr>
-          </thead>
+        <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
+          <colgroup>
+            {columnOrder.map((key) => (
+              <col key={key} className={USER_DIRECTORY_COL_WIDTH_CLASS[key]} />
+            ))}
+          </colgroup>
+          <DndContext
+            sensors={userDirColumnDragSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleUserDirectoryColumnDragEnd}
+          >
+            <SortableContext
+              items={columnOrder.filter((k) => k !== "name")}
+              strategy={horizontalListSortingStrategy}
+            >
+              <thead className="sticky top-0 z-10 border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+                <tr>
+                  {columnOrder.map((key) =>
+                    key === "name" ? (
+                      <UserDirectoryNameHeader key={key} sort={sort} onToggle={toggleSort} />
+                    ) : (
+                      <SortableUserDirectoryColumnHeader key={key} id={key} sort={sort} onToggle={toggleSort} />
+                    ),
+                  )}
+                </tr>
+              </thead>
+            </SortableContext>
+          </DndContext>
           <tbody className="bg-white">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-16 text-center text-slate-500">
+                <td colSpan={columnOrder.length} className="px-4 py-16 text-center text-slate-500">
                   Loading users…
                 </td>
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-16 text-center text-slate-500">
+                <td colSpan={columnOrder.length} className="px-4 py-16 text-center text-slate-500">
                   No users match the current filters.
                 </td>
               </tr>
@@ -823,6 +1000,7 @@ export function UsersWorkspacePanel() {
                   key={row.id}
                   row={row}
                   idx={idx}
+                  columnOrder={columnOrder}
                   saving={savingRowIds.has(row.id)}
                   editField={editCell?.rowId === row.id ? editCell.field : null}
                   onEditField={(field) => setEditCell({ rowId: row.id, field })}

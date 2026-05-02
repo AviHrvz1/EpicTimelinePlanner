@@ -35,8 +35,17 @@ import { toast } from "sonner";
 
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
+import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+import {
+  formatBacklogPlanDate,
+  ganttDateRangeForEpic,
+  ganttDateRangeForInitiative,
+  storyWorkPlanRangeFromProgress,
+} from "@/lib/backlog-plan-dates";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
+import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
+import { defaultMembersForTeam } from "@/lib/sprint-capacity";
 import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -74,6 +83,8 @@ type BacklogColumnKey =
   | "year"
   | "quarter"
   | "month"
+  | "startDate"
+  | "endDate"
   | "status"
   | "sprint"
   | "assignee"
@@ -91,6 +102,8 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "year",
   "quarter",
   "month",
+  "startDate",
+  "endDate",
   "status",
   "sprint",
   "assignee",
@@ -105,6 +118,8 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   year: "Year",
   quarter: "Quarter",
   month: "Month",
+  startDate: "Start",
+  endDate: "End",
   status: "Status",
   sprint: "Sprint",
   assignee: "Assignee",
@@ -119,6 +134,8 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   year: 72,
   quarter: 52,
   month: 80,
+  startDate: 96,
+  endDate: 96,
   status: 100,
   sprint: 90,
   assignee: 120,
@@ -133,6 +150,8 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   year: 96,
   quarter: 72,
   month: 120,
+  startDate: 118,
+  endDate: 118,
   status: 168,
   sprint: 148,
   assignee: 190,
@@ -151,6 +170,8 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   year: true,
   quarter: true,
   month: true,
+  startDate: true,
+  endDate: true,
   status: true,
   sprint: true,
   assignee: true,
@@ -164,6 +185,8 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "year",
   "quarter",
   "month",
+  "startDate",
+  "endDate",
   "status",
   "sprint",
   "assignee",
@@ -212,26 +235,6 @@ type SortableBacklogColumnHeaderProps = {
   resizeHandle: ReactNode;
 };
 
-/**
- * Same cyan as the title row (`bg-[#0897d5]`): gradient only nudges lighter/darker so beads stay “in” the bar but read as 3D.
- */
-function BacklogColumnDragGrip() {
-  return (
-    <span className="grid grid-cols-2 gap-[1.5px] place-content-center" aria-hidden>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <span
-          key={i}
-          className={cn(
-            "size-[3.5px] rounded-full border border-white/22",
-            "bg-gradient-to-br from-[#4dc4eb] from-10% via-[#1cabe3] to-[#0a86b8]",
-            "shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.35),inset_0_-1px_1px_rgba(0,55,78,0.28),0_0.5px_1.5px_rgba(0,40,60,0.28)]",
-          )}
-        />
-      ))}
-    </span>
-  );
-}
-
 function SortableBacklogColumnHeader({ id, className, centered, label, resizeHandle }: SortableBacklogColumnHeaderProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: CSSProperties = {
@@ -240,8 +243,8 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
     zIndex: isDragging ? 3 : undefined,
   };
   return (
-    <div ref={setNodeRef} style={style} className={className}>
-      <span className={cn("flex min-w-0 items-center gap-1", centered && "justify-center")}>
+    <div ref={setNodeRef} style={style} className={cn(className, "w-full min-w-0")}>
+      <span className={cn("flex w-full min-w-0 items-center gap-1", centered && "justify-center")}>
         <button
           type="button"
           className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-[#0a8ec4]/45 active:cursor-grabbing"
@@ -249,7 +252,7 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
           {...attributes}
           {...listeners}
         >
-          <BacklogColumnDragGrip />
+          <TableColumnDragGrip />
         </button>
         <span className="min-w-0">{label}</span>
       </span>
@@ -402,6 +405,246 @@ function workflowStatusLabel(status: WorkflowStatus): string {
   return status;
 }
 
+/** Union of demo delivery rosters for the given team column ids (e.g. platform, experience, data). */
+function rosterNamesForDeliveryTeams(teamIds: string[]): Set<string> {
+  const set = new Set<string>();
+  for (const id of teamIds) {
+    for (const n of defaultMembersForTeam(id)) set.add(n);
+  }
+  return set;
+}
+
+const BACKLOG_TEAM_FILTER_LABELS = [...MONTH_TEAM_COLUMNS.map((c) => c.label)].sort((a, b) =>
+  a.localeCompare(b, undefined, { sensitivity: "base" }),
+);
+
+function backlogTeamLabelFromId(id: string): string {
+  return MONTH_TEAM_COLUMNS.find((c) => c.id === id)?.label ?? id;
+}
+
+function BacklogTeamFilterControl({
+  selectedIds,
+  onChange,
+}: {
+  selectedIds: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const teamAutocompleteLabels = useMemo(
+    () =>
+      BACKLOG_TEAM_FILTER_LABELS.filter((label) => {
+        const col = MONTH_TEAM_COLUMNS.find((c) => c.label === label);
+        return col != null && !selectedIds.includes(col.id);
+      }),
+    [selectedIds],
+  );
+  const allSelected = selectedIds.length === 0;
+  const selectedLabel =
+    allSelected
+      ? "All"
+      : selectedIds.length === 1
+        ? backlogTeamLabelFromId(selectedIds[0]!)
+        : `${selectedIds.length} selected`;
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  function scheduleClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setIsOpen(false), 180);
+  }
+
+  function cancelScheduledClose() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
+  function pickTeam(labelPicked: string) {
+    const t = labelPicked.trim();
+    if (!t) return;
+    const col = MONTH_TEAM_COLUMNS.find(
+      (c) => c.label === t || c.label.toLowerCase() === t.toLowerCase(),
+    );
+    if (!col) return;
+    if (!allSelected && selectedIds.includes(col.id)) {
+      setDraft("");
+      return;
+    }
+    if (allSelected) onChange([col.id]);
+    else onChange([...selectedIds, col.id]);
+    setDraft("");
+  }
+
+  return (
+    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+      >
+        <span className="font-semibold text-slate-700">Team: </span>
+        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
+      </button>
+      {isOpen ? (
+        <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
+          <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => {
+                onChange([]);
+                setDraft("");
+              }}
+              className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+            />
+            All teams
+          </label>
+          <AssigneeCombobox
+            value={draft}
+            onChange={setDraft}
+            suggestions={teamAutocompleteLabels}
+            placeholder="Type to search teams…"
+            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
+            aria-label="Add team to filter"
+            onSuggestionPick={pickTeam}
+          />
+          {!allSelected && selectedIds.length > 0 ? (
+            <ul className="mt-2 max-h-36 space-y-1 overflow-auto pr-0.5">
+              {selectedIds.map((id) => {
+                const label = backlogTeamLabelFromId(id);
+                return (
+                  <li
+                    key={id}
+                    className="flex items-center justify-between gap-2 rounded-md bg-white/85 px-2 py-1 text-[13px] text-slate-800 ring-1 ring-indigo-200/60"
+                  >
+                    <span className="min-w-0 truncate font-medium">{label}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                      aria-label={`Remove ${label} from filter`}
+                      onClick={() => onChange(selectedIds.filter((x) => x !== id))}
+                    >
+                      <X className="size-3.5" strokeWidth={2} />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function BacklogAssigneeFilterControl({
+  selected,
+  onChange,
+  suggestions,
+}: {
+  selected: string[];
+  onChange: (next: string[]) => void;
+  suggestions: readonly string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const allSelected = selected.length === 0;
+  const selectedLabel =
+    allSelected ? "All" : selected.length === 1 ? selected[0]! : `${selected.length} selected`;
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  function scheduleClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setIsOpen(false), 180);
+  }
+
+  function cancelScheduledClose() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
+  function pickAssignee(name: string) {
+    const t = name.trim();
+    if (!t) return;
+    if (allSelected) onChange([t]);
+    else if (!selected.includes(t)) onChange([...selected, t]);
+    setDraft("");
+  }
+
+  return (
+    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+      >
+        <span className="font-semibold text-slate-700">Assignee: </span>
+        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
+      </button>
+      {isOpen ? (
+        <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
+          <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => {
+                onChange([]);
+                setDraft("");
+              }}
+              className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+            />
+            All
+          </label>
+          <AssigneeCombobox
+            value={draft}
+            onChange={setDraft}
+            suggestions={suggestions}
+            placeholder="Type to search…"
+            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
+            aria-label="Add assignee to filter"
+            onSuggestionPick={pickAssignee}
+          />
+          {!allSelected && selected.length > 0 ? (
+            <ul className="mt-2 max-h-36 space-y-1 overflow-auto pr-0.5">
+              {selected.map((name) => (
+                <li
+                  key={name}
+                  className="flex items-center justify-between gap-2 rounded-md bg-white/85 px-2 py-1 text-[13px] text-slate-800 ring-1 ring-indigo-200/60"
+                >
+                  <span className="min-w-0 truncate font-medium">{name}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                    aria-label={`Remove ${name} from filter`}
+                    onClick={() => onChange(selected.filter((x) => x !== name))}
+                  >
+                    <X className="size-3.5" strokeWidth={2} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MultiCheckboxFilter({
   label,
   options,
@@ -507,6 +750,8 @@ export function BacklogPlanningPanel({
   const [sprintFilter, setSprintFilter] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState<string[]>([]);
   const [quarterFilter, setQuarterFilter] = useState<string[]>([]);
+  /** Epic `team` lane ids (`platform` / `experience` / `data`). Empty = all teams. */
+  const [teamFilter, setTeamFilter] = useState<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
   const [sortBy, setSortBy] = useState<"titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status">(
@@ -757,23 +1002,26 @@ export function BacklogPlanningPanel({
       .map((year) => ({ id: year, label: year }));
   }, [initiatives]);
 
-  const assigneeOptions = useMemo(() => {
-    const names = new Set<string>(["Unassigned"]);
-    for (const initiative of initiatives) {
-      if (initiative.assignee?.trim()) names.add(initiative.assignee.trim());
-      for (const epic of initiative.epics ?? []) {
-        if (epic.assignee?.trim()) names.add(epic.assignee.trim());
-        for (const story of epic.userStories ?? []) {
-          if (story.assignee?.trim()) names.add(story.assignee.trim());
-        }
-      }
-    }
-    return Array.from(names)
-      .sort((a, b) => a.localeCompare(b))
-      .map((name) => ({ id: name, label: name }));
-  }, [initiatives]);
-
   const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
+
+  const assigneeAutocompleteSuggestions = useMemo(() => {
+    const data = assigneeNameSuggestions.filter((n) => n !== "Unassigned");
+    if (teamFilter.length === 0) return ["Unassigned", ...data];
+    const allowed = rosterNamesForDeliveryTeams(teamFilter);
+    const merged = new Set<string>();
+    for (const n of data) {
+      if (allowed.has(n)) merged.add(n);
+    }
+    for (const n of allowed) merged.add(n);
+    const rest = [...merged].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return ["Unassigned", ...rest];
+  }, [assigneeNameSuggestions, teamFilter]);
+
+  useEffect(() => {
+    if (teamFilter.length === 0) return;
+    const allowed = rosterNamesForDeliveryTeams(teamFilter);
+    setAssigneeFilter((prev) => prev.filter((n) => n === "Unassigned" || allowed.has(n)));
+  }, [teamFilter]);
 
   const statusOptions: OptionItem[] = [
     { id: "todo", label: "To do" },
@@ -828,6 +1076,10 @@ export function BacklogPlanningPanel({
             const epicEndMonth = epic.planEndMonth ?? initiative.endMonth ?? epicStartMonth;
             const epicQuarterMatch = matchesAnySelectedQuarterByRange(quarterFilter, epicStartMonth, epicEndMonth);
             if (!initiativeQuarterMatch && !epicQuarterMatch) return null;
+            if (teamFilter.length > 0) {
+              const tid = epic.team?.trim();
+              if (!tid || !teamFilter.includes(tid)) return null;
+            }
             const epicAssignee = epic.assignee?.trim() || "Unassigned";
             const stories = (epic.userStories ?? []).filter((story) => {
               if (assigneeFilter.length === 0) return true;
@@ -850,7 +1102,7 @@ export function BacklogPlanningPanel({
         return { ...initiative, epics };
       })
       .filter(Boolean) as typeof filteredWithControls;
-  }, [filteredWithControls, yearFilter, quarterFilter, assigneeFilter]);
+  }, [filteredWithControls, yearFilter, quarterFilter, teamFilter, assigneeFilter]);
 
   const fullyFiltered = useMemo(
     () => applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter),
@@ -888,6 +1140,7 @@ export function BacklogPlanningPanel({
       quarterFilter,
       statusFilter,
       sprintFilter,
+      teamFilter,
       assigneeFilter,
       workItemFilter,
       groupLevels,
@@ -915,6 +1168,7 @@ export function BacklogPlanningPanel({
     quarterFilter,
     statusFilter,
     sprintFilter,
+    teamFilter,
     assigneeFilter,
     workItemFilter,
     groupLevels,
@@ -940,6 +1194,7 @@ export function BacklogPlanningPanel({
     quarterFilter,
     statusFilter,
     sprintFilter,
+    teamFilter,
     assigneeFilter,
     workItemFilter,
     openGroupFolders,
@@ -1002,6 +1257,7 @@ export function BacklogPlanningPanel({
         (epic.userStories ?? []).map((story) => {
           const monthNum = epic.planStartMonth ?? initiative.startMonth ?? null;
           const initiativeMonthNum = initiative.startMonth ?? null;
+          const workPlan = storyWorkPlanRangeFromProgress(story);
           return {
             storyId: story.id,
             storyTitle: story.title,
@@ -1027,6 +1283,8 @@ export function BacklogPlanningPanel({
             monthNum,
             monthLabelValue: monthLabel(monthNum),
             quarterLabelValue: quarterFromMonth(monthNum),
+            storyStartDateLabel: formatBacklogPlanDate(workPlan.start),
+            storyEndDateLabel: formatBacklogPlanDate(workPlan.end),
           };
         }),
       ),
@@ -1061,6 +1319,7 @@ export function BacklogPlanningPanel({
     quarterFilter.length > 0 ||
     statusFilter.length > 0 ||
     sprintFilter.length > 0 ||
+    teamFilter.length > 0 ||
     assigneeFilter.length > 0 ||
     workItemFilter.length > 0 ||
     groupLevels.length > 0 ||
@@ -1082,6 +1341,7 @@ export function BacklogPlanningPanel({
     setSprintFilter([]);
     setYearFilter([]);
     setQuarterFilter([]);
+    setTeamFilter([]);
     setAssigneeFilter([]);
     setWorkItemFilter([]);
     setGroupLevels([]);
@@ -1189,6 +1449,12 @@ export function BacklogPlanningPanel({
               year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
               quarter: <span className="text-center text-[16px] text-slate-700">{row.quarterLabelValue}</span>,
               month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
+              startDate: (
+                <span className="text-center text-[14px] tabular-nums text-slate-700">{row.storyStartDateLabel}</span>
+              ),
+              endDate: (
+                <span className="text-center text-[14px] tabular-nums text-slate-700">{row.storyEndDateLabel}</span>
+              ),
               status: (
             <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(row.storyStatus))}>
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
@@ -1504,6 +1770,8 @@ export function BacklogPlanningPanel({
             year: <span className="text-center text-[16px] text-slate-400">-</span>,
             quarter: <span className="text-center text-[16px] text-slate-400">-</span>,
             month: <span className="text-center text-[16px] text-slate-400">-</span>,
+            startDate: <span className="text-center text-[16px] text-slate-400">-</span>,
+            endDate: <span className="text-center text-[16px] text-slate-400">-</span>,
             status: <span className="text-center text-[16px] text-slate-400">-</span>,
             sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
             assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -1561,6 +1829,13 @@ export function BacklogPlanningPanel({
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(epicRows);
       const originalEstimate = epicRows[0]?.epicOriginalEstimateDays ?? 0;
+      const initModelForEpic = fullyFiltered.find((i) => i.id === epicRows[0]?.initiativeId);
+      const epicModelForRow = initModelForEpic?.epics?.find((e) => e.id === epicId);
+      const planYearForEpic = initModelForEpic?.year ?? Number(epicRows[0]?.initiativeYear);
+      const epicGanttRange =
+        epicModelForRow && Number.isFinite(planYearForEpic)
+          ? ganttDateRangeForEpic(epicModelForRow, planYearForEpic)
+          : { start: null as Date | null, end: null as Date | null };
 
       return (
         <div key={folderId}>
@@ -1645,6 +1920,16 @@ export function BacklogPlanningPanel({
                 </span>
               ),
               month: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
+              startDate: (
+                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                  {formatBacklogPlanDate(epicGanttRange.start)}
+                </span>
+              ),
+              endDate: (
+                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                  {formatBacklogPlanDate(epicGanttRange.end)}
+                </span>
+              ),
               status: (
                 <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
                   {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
@@ -1737,6 +2022,8 @@ export function BacklogPlanningPanel({
       const folderId = `${initPath}/initiative:${initiativeId}`;
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
+      const initModelForRow = fullyFiltered.find((i) => i.id === initiativeId);
+      const initGanttRange = initModelForRow ? ganttDateRangeForInitiative(initModelForRow) : { start: null as Date | null, end: null as Date | null };
       return (
         <div key={folderId}>
           <div
@@ -1816,6 +2103,16 @@ export function BacklogPlanningPanel({
               year: <span className="text-center text-[16px] text-slate-700">{initiativeYear}</span>,
               quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>,
               month: <span className="text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>,
+              startDate: (
+                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                  {formatBacklogPlanDate(initGanttRange.start)}
+                </span>
+              ),
+              endDate: (
+                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                  {formatBacklogPlanDate(initGanttRange.end)}
+                </span>
+              ),
               status: (
                 <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeStatus))}>
                   {workflowStatusLabel(initiativeStatus)}
@@ -2006,6 +2303,8 @@ export function BacklogPlanningPanel({
       .map((initiative) => {
         const initFolderId = `standalone-init:${initiative.initiativeId}`;
         const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
+        const standInitModel = fullyFiltered.find((i) => i.id === initiative.initiativeId);
+        const standInitGantt = standInitModel ? ganttDateRangeForInitiative(standInitModel) : { start: null, end: null };
         return (
               <div key={initFolderId}>
                 <div
@@ -2095,6 +2394,16 @@ export function BacklogPlanningPanel({
                 year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
                 quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>,
                 month: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
+                startDate: (
+                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                    {formatBacklogPlanDate(standInitGantt.start)}
+                  </span>
+                ),
+                endDate: (
+                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                    {formatBacklogPlanDate(standInitGantt.end)}
+                  </span>
+                ),
                 status: (
                   <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiative.initiativeStatus))}>
                     {workflowStatusLabel(initiative.initiativeStatus)}
@@ -2143,7 +2452,14 @@ export function BacklogPlanningPanel({
             ) : null}
             {isInitOpen ? (
               <div>
-                {initiative.epics.map((epic) => (
+                {initiative.epics.map((epic) => {
+                  const standEpicModel = standInitModel?.epics?.find((e) => e.id === epic.epicId);
+                  const standPlanYear = Number(initiative.initiativeYear);
+                  const standEpicGantt =
+                    standEpicModel && Number.isFinite(standPlanYear)
+                      ? ganttDateRangeForEpic(standEpicModel, standPlanYear)
+                      : { start: null as Date | null, end: null as Date | null };
+                  return (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div
                       className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
@@ -2221,6 +2537,16 @@ export function BacklogPlanningPanel({
                         year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
                         quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>,
                         month: <span className="text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>,
+                        startDate: (
+                          <span className="text-center text-[14px] tabular-nums text-slate-700">
+                            {formatBacklogPlanDate(standEpicGantt.start)}
+                          </span>
+                        ),
+                        endDate: (
+                          <span className="text-center text-[14px] tabular-nums text-slate-700">
+                            {formatBacklogPlanDate(standEpicGantt.end)}
+                          </span>
+                        ),
                         status: <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip("todo"))}>To do</span>,
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
@@ -2268,7 +2594,8 @@ export function BacklogPlanningPanel({
                       </form>
                     ) : null}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
           </div>
@@ -2369,6 +2696,7 @@ export function BacklogPlanningPanel({
         sprintFilter?: unknown;
         yearFilter?: unknown;
         quarterFilter?: unknown;
+        teamFilter?: unknown;
         assigneeFilter?: unknown;
         groupLevels?: unknown;
       };
@@ -2377,6 +2705,12 @@ export function BacklogPlanningPanel({
       if (Array.isArray(parsed.yearFilter)) setYearFilter(parsed.yearFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.quarterFilter))
         setQuarterFilter(parsed.quarterFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.teamFilter))
+        setTeamFilter(
+          parsed.teamFilter.filter(
+            (v): v is string => typeof v === "string" && MONTH_TEAM_COLUMNS.some((c) => c.id === v),
+          ),
+        );
       if (Array.isArray(parsed.assigneeFilter))
         setAssigneeFilter(parsed.assigneeFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.groupLevels)) {
@@ -2402,6 +2736,7 @@ export function BacklogPlanningPanel({
           sprintFilter,
           yearFilter,
           quarterFilter,
+          teamFilter,
           assigneeFilter,
           groupLevels,
         }),
@@ -2409,7 +2744,7 @@ export function BacklogPlanningPanel({
     } catch {
       // Ignore write failures (private mode, quotas, etc.)
     }
-  }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, assigneeFilter, groupLevels]);
+  }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, groupLevels]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -2696,11 +3031,11 @@ export function BacklogPlanningPanel({
           <MultiCheckboxFilter label="Quarter" options={quarterOptions} selected={quarterFilter} onChange={setQuarterFilter} />
           <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
           <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
-          <MultiCheckboxFilter
-            label="Assignee"
-            options={assigneeOptions}
+          <BacklogTeamFilterControl selectedIds={teamFilter} onChange={setTeamFilter} />
+          <BacklogAssigneeFilterControl
             selected={assigneeFilter}
             onChange={setAssigneeFilter}
+            suggestions={assigneeAutocompleteSuggestions}
           />
           <span className="group relative inline-flex h-[30px] w-[30px] shrink-0">
             <button
@@ -2762,7 +3097,7 @@ export function BacklogPlanningPanel({
                 >
                   {visibleColumnKeys.map((key, index) => {
                     const cellClass = cn(
-                      "relative min-w-0",
+                      "relative min-w-0 w-full",
                       key === "workItem" && "pl-4",
                       CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center",
                     );
@@ -2772,9 +3107,9 @@ export function BacklogPlanningPanel({
                           type="button"
                           aria-label={`Resize ${BACKLOG_COLUMN_LABELS[key]} column`}
                           onMouseDown={(event) => beginColumnResize(key, event)}
-                          className="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
+                          className="absolute top-0 right-0 z-[1] h-full w-2 cursor-col-resize"
                         >
-                          <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-white/55" />
+                          <span className="absolute top-1/2 right-0 h-4 w-px -translate-y-1/2 bg-white/55" />
                         </button>
                       ) : null;
                     if (key === "workItem") {
@@ -2954,6 +3289,7 @@ export function BacklogPlanningPanel({
               const initiativeWorkflowStatus = rollupWorkflowStatus(initiativeStories);
               const initiativeDays = sumStoryDays(initiativeStories);
               const initiativeProgress = completionFromStories(initiativeStories);
+              const flatInitGantt = ganttDateRangeForInitiative(initiative);
               return (
                 <div key={initiative.id}>
                   <div
@@ -3091,6 +3427,16 @@ export function BacklogPlanningPanel({
                       year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
                       quarter: <span className="text-center text-[16px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>,
                       month: <span className="text-center text-[16px] text-slate-700">{monthLabel(initiative.startMonth)}</span>,
+                      startDate: (
+                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                          {formatBacklogPlanDate(flatInitGantt.start)}
+                        </span>
+                      ),
+                      endDate: (
+                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                          {formatBacklogPlanDate(flatInitGantt.end)}
+                        </span>
+                      ),
                       status: (
                         <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeWorkflowStatus))}>
                           {workflowStatusLabel(initiativeWorkflowStatus)}
@@ -3278,6 +3624,7 @@ export function BacklogPlanningPanel({
                         const epicWorkflowStatus = rollupWorkflowStatus(epic.userStories ?? []);
                         const epicDays = sumStoryDays(epic.userStories ?? []);
                         const epicProgress = completionFromStories(epic.userStories ?? []);
+                        const flatEpicGantt = ganttDateRangeForEpic(epic, initiative.year);
                         return (
                           <div key={epic.id}>
                             <div
@@ -3404,6 +3751,16 @@ export function BacklogPlanningPanel({
                                 month: (
                                   <span className="text-center text-[16px] text-slate-700">
                                     {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
+                                  </span>
+                                ),
+                                startDate: (
+                                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                    {formatBacklogPlanDate(flatEpicGantt.start)}
+                                  </span>
+                                ),
+                                endDate: (
+                                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                    {formatBacklogPlanDate(flatEpicGantt.end)}
                                   </span>
                                 ),
                                 status: (
@@ -3542,6 +3899,7 @@ export function BacklogPlanningPanel({
                                   >
                                     {(() => {
                                       const progress = storyCompletion(story);
+                                      const flatStoryWork = storyWorkPlanRangeFromProgress(story);
                                                                             return (
                                     <div
                                       className="group grid w-full items-center gap-3 py-2 text-left"
@@ -3641,6 +3999,16 @@ export function BacklogPlanningPanel({
                                     <span className="text-center text-[16px] text-slate-700">
                                       {monthLabel(epic.planStartMonth ?? initiative.startMonth)}
                                     </span>
+                                      ),
+                                      startDate: (
+                                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                          {formatBacklogPlanDate(flatStoryWork.start)}
+                                        </span>
+                                      ),
+                                      endDate: (
+                                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                          {formatBacklogPlanDate(flatStoryWork.end)}
+                                        </span>
                                       ),
                                       status: (
                                     <span

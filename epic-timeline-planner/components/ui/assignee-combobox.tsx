@@ -52,6 +52,7 @@ export function AssigneeCombobox({
   "aria-label": ariaLabel,
   onKeyDown,
   onInputBlur,
+  onSuggestionPick,
 }: AssigneeComboboxProps) {
   const uid = useId().replace(/:/g, "");
   const inputId = idProp ?? `assignee-input-${uid}`;
