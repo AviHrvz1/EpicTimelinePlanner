@@ -71,6 +71,50 @@ export type InitiativeScheduleRangePatch = {
   endYearSprint: number;
 };
 
+/** Vertical sprint columns + subtle month pairs (2 sprints) for roadmap Gantt lanes. */
+function GanttLaneSprintBackdrop({ columnCount, className }: { columnCount: number; className?: string }) {
+  if (columnCount <= 0) return null;
+  return (
+    <div
+      className={cn("pointer-events-none absolute inset-0 z-0 flex w-full gap-2", className)}
+      aria-hidden
+    >
+      {Array.from({ length: columnCount }, (_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "min-h-full min-w-0 flex-1 border-r border-slate-200/55 last:border-r-0",
+            Math.floor(i / 2) % 2 === 0 ? "bg-slate-50/50" : "bg-white/60",
+            (i + 1) % 2 === 0 && i < columnCount - 1 && "border-slate-400/45",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Twelve month columns behind quarter header chips (year roadmap). */
+function YearRoadmapHeaderMonthBackdrop({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn("pointer-events-none absolute inset-0 z-0 grid gap-2", className)}
+      style={{ gridTemplateColumns: `repeat(12, minmax(0, 1fr))` }}
+      aria-hidden
+    >
+      {Array.from({ length: 12 }, (_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "min-h-[3.25rem] border-r border-slate-200/50 bg-gradient-to-b from-slate-100/35 to-slate-50/15 first:rounded-l-xl last:rounded-r-xl last:border-r-0",
+            (i + 1) % 3 === 0 && i < 11 && "border-slate-400/50",
+          )}
+          style={{ gridColumn: i + 1, gridRow: 1 }}
+        />
+      ))}
+    </div>
+  );
+}
+
 type GanttLaneRowProps = {
   initiative: InitiativeItem;
   gridStyle: CSSProperties;
@@ -1892,10 +1936,9 @@ export function TimelineGrid({
     Q4: "bg-violet-50/45 ring-violet-100",
   };
   /** Initiative rows + quarter headers: 2 sprint columns per month; full-year = 24 sprints. */
+  const ganttLaneColumnCount = focusedQuarter ? visibleMonths.length * 2 : 24;
   const ganttLaneGridStyle: CSSProperties = {
-    gridTemplateColumns: focusedQuarter
-      ? `repeat(${visibleMonths.length * 2}, minmax(0, 1fr))`
-      : `repeat(24, minmax(0, 1fr))`,
+    gridTemplateColumns: `repeat(${ganttLaneColumnCount}, minmax(0, 1fr))`,
   };
 
   /** Quarter title row uses 12 month-width columns (each quarter spans 3). */
@@ -3049,8 +3092,9 @@ export function TimelineGrid({
         </div>
       ) : null}
       {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-        <div className={cn("mb-2 w-full overflow-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
-          <div className="grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
+        <div className={cn("relative mb-2 w-full overflow-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
+          <YearRoadmapHeaderMonthBackdrop />
+          <div className="relative z-[1] grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
           {visibleQuarterHeaders.map((quarter) => (
             <button
               key={quarter.label}
@@ -3060,7 +3104,7 @@ export function TimelineGrid({
                 onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
               }}
               className={cn(
-                "flex w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-white/80 px-3 py-2.5 text-center text-[15px] font-semibold tracking-[0.02em] transition duration-200",
+                "flex w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-white/80 px-3 py-2.5 text-center text-[15px] font-semibold tracking-[0.02em] shadow-sm ring-1 ring-slate-200/30 transition duration-200",
                 focusedQuarterLabel === quarter.label
                   ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
                   : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
@@ -3519,8 +3563,9 @@ export function TimelineGrid({
               )}
             >
               <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
-                <div className="shrink-0 space-y-0.5">
-                  <div className="grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                <div className="relative min-h-[11rem] shrink-0 overflow-hidden rounded-t-xl space-y-0.5 ring-1 ring-slate-200/40">
+                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                     {visibleMonths.map((month) => (
                       <div
                         key={month}
@@ -3609,11 +3654,15 @@ export function TimelineGrid({
                         {quarterRoadmapInitiativeRows.map((group, idx) => (
                           <div
                             key={`q-init-row-${group.timelineRow}`}
-                            className="relative min-w-0 z-10"
+                            className={cn(
+                              "relative min-w-0 z-10 py-0.5",
+                              idx < quarterRoadmapInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                            )}
                             data-gantt-lane-index={idx}
                             data-gantt-timeline-row={group.timelineRow}
                           >
-                            <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                            <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+                            <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                               {group.items.map((row) => {
                                 const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
                                 const columnStart = Math.max(1, row.startS - qLo + 1);
@@ -3655,11 +3704,15 @@ export function TimelineGrid({
                       {quarterRoadmapEpicRows.map((group, idx) => (
                         <div
                           key={`q-epic-row-${group.timelineRow}`}
-                          className="relative min-w-0 z-10"
+                          className={cn(
+                            "relative min-w-0 z-10 py-0.5",
+                            idx < quarterRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
+                          )}
                           data-gantt-lane-index={idx}
                           data-gantt-timeline-row={group.timelineRow}
                         >
-                          <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                          <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+                          <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                             {group.items.map((row) => {
                               const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
                               const rz = epicResizePreview?.epicId === row.epic.id ? epicResizePreview : null;
@@ -4101,11 +4154,15 @@ export function TimelineGrid({
               {yearRoadmapInitiativeRows.map((group, idx) => (
                 <div
                   key={`year-init-row-${group.timelineRow}`}
-                  className="relative min-w-0 z-10"
+                  className={cn(
+                    "relative min-w-0 z-10 py-0.5",
+                    idx < yearRoadmapInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                  )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
                 >
-                  <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                     {group.items.map((row) => {
                       const columnStart = Math.max(1, row.startS);
                       const span = Math.max(row.endS - row.startS + 1, 1);
@@ -4160,11 +4217,15 @@ export function TimelineGrid({
               {yearRoadmapEpicRows.map((group, idx) => (
                 <div
                   key={`year-epic-row-${group.timelineRow}`}
-                  className="relative min-w-0 z-10"
+                  className={cn(
+                    "relative min-w-0 z-10 py-0.5",
+                    idx < yearRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
+                  )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
                 >
-                  <div className="relative grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                     {group.items.map((row) => {
                       const rz = epicResizePreview?.epicId === row.epic.id ? epicResizePreview : null;
                       let previewStart = row.startS;
