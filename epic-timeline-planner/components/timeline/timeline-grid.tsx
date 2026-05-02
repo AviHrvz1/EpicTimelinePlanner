@@ -846,8 +846,8 @@ function RoadmapYearSelect({
   onYearChange: (nextYear: number) => void | Promise<void>;
 }) {
   return (
-    <label className="inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-full bg-sky-100 text-sky-950 shadow-none ring-1 ring-sky-300/90 transition-colors outline-none select-none hover:bg-sky-200/90 focus-within:ring-2 focus-within:ring-sky-400/50">
-      <span className="flex shrink-0 items-center border-r border-sky-400/35 px-2 text-[10px] font-bold tracking-[0.05em] uppercase sm:text-[11px]">
+    <label className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full bg-sky-100 text-sky-950 shadow-none ring-1 ring-sky-300/90 transition-colors outline-none select-none hover:bg-sky-200/90 focus-within:ring-2 focus-within:ring-sky-400/50">
+      <span className="flex shrink-0 items-center border-r border-sky-400/35 px-1.5 text-[10px] font-bold tracking-[0.05em] uppercase sm:px-2 sm:text-[11px]">
         Roadmap
       </span>
       <div className="relative flex items-center">
@@ -858,7 +858,7 @@ function RoadmapYearSelect({
             if (nextYear === year) return;
             void Promise.resolve(onYearChange(nextYear));
           }}
-          className="h-8 min-w-[4.75rem] cursor-pointer appearance-none bg-transparent py-0 pl-2.5 pr-7 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-sky-950 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[5rem] sm:text-[12px]"
+          className="h-7 min-w-[4.25rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-sky-950 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[4.75rem] sm:pl-2.5 sm:pr-7 sm:text-[12px]"
           aria-label="Roadmap year"
         >
           <option value={2024}>2024</option>
@@ -867,7 +867,7 @@ function RoadmapYearSelect({
           <option value={2027}>2027</option>
         </select>
         <ChevronDown
-          className="pointer-events-none absolute right-1.5 top-1/2 size-3 -translate-y-1/2 text-sky-800 sm:size-[13px]"
+          className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-sky-800 sm:right-1.5"
           aria-hidden
         />
       </div>
@@ -1456,7 +1456,7 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex max-w-full whitespace-nowrap items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:py-1 sm:text-[12px] lg:px-2.5 lg:text-[13px]";
+    "inline-flex h-7 max-w-full shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[11px] font-semibold leading-none tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:text-[12px] lg:px-2.5";
   /** Distinct idle colors per chip (toolbar reads as a coordinated spectrum, not one gray). */
   const summaryChipProgressIdleClass = `${summaryChipBaseClass} bg-teal-100 text-teal-900 ring-teal-300/90 hover:bg-teal-200/90`;
   const summaryChipProgressOnClass = `${summaryChipBaseClass} bg-emerald-100 text-emerald-900 ring-emerald-400/90 shadow-sm`;
@@ -1470,7 +1470,7 @@ export function TimelineGrid({
   const summaryChipUnscheduledClass = `${summaryChipBaseClass} bg-orange-50 text-orange-950 ring-orange-300/85`;
   const summaryChipSprintsIdleClass = `${summaryChipBaseClass} bg-violet-100 text-violet-950 ring-violet-300/90 hover:bg-violet-200/85`;
   const summaryChipSprintsOnClass = `${summaryChipBaseClass} bg-violet-200 text-violet-950 ring-violet-400/85 shadow-sm`;
-  const summaryChipProgressCircleClass = "size-3.5 shrink-0 sm:size-4";
+  const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
   const estimatePanelScopeLabel = activeMonth
     ? `${MONTHS[activeMonth - 1]}`

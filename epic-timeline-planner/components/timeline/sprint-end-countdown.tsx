@@ -38,12 +38,12 @@ export function SprintEndCountdown({ planYear, yearSprint }: { planYear: number;
   return (
     <div
       className={cn(
-        "inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-full bg-slate-200 px-3 py-1.5 text-[13px] font-semibold tracking-[0.02em] text-slate-800 ring-1 ring-slate-300 tabular-nums",
+        "inline-flex h-7 max-w-full shrink-0 items-center gap-1 rounded-full bg-slate-200 px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-slate-300 tabular-nums sm:gap-1.5 sm:px-3 sm:text-[12px]",
         parts.ended && "text-slate-600",
       )}
       title={parts.ended ? "Sprint window has ended" : `Sprint ends ${end.toLocaleString()}`}
     >
-      <Clock className="size-[15px] shrink-0 text-slate-700" strokeWidth={2.25} aria-hidden />
+      <Clock className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
       <span className="min-w-0 truncate" aria-live="polite">
         {parts.ended ? (
           "Sprint ended"
