@@ -12,7 +12,6 @@ import {
   Eraser,
   Filter,
   Folder,
-  GripVertical,
   Layers3,
   ListTodo,
   Plus,
@@ -213,6 +212,26 @@ type SortableBacklogColumnHeaderProps = {
   resizeHandle: ReactNode;
 };
 
+/**
+ * Same cyan as the title row (`bg-[#0897d5]`): gradient only nudges lighter/darker so beads stay “in” the bar but read as 3D.
+ */
+function BacklogColumnDragGrip() {
+  return (
+    <span className="grid grid-cols-2 gap-[1.5px] place-content-center" aria-hidden>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "size-[3.5px] rounded-full border border-white/22",
+            "bg-gradient-to-br from-[#4dc4eb] from-10% via-[#1cabe3] to-[#0a86b8]",
+            "shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.35),inset_0_-1px_1px_rgba(0,55,78,0.28),0_0.5px_1.5px_rgba(0,40,60,0.28)]",
+          )}
+        />
+      ))}
+    </span>
+  );
+}
+
 function SortableBacklogColumnHeader({ id, className, centered, label, resizeHandle }: SortableBacklogColumnHeaderProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: CSSProperties = {
@@ -225,12 +244,12 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
       <span className={cn("flex min-w-0 items-center gap-1", centered && "justify-center")}>
         <button
           type="button"
-          className="inline-flex h-6 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-white/75 outline-none hover:bg-white/15 hover:text-white active:cursor-grabbing"
+          className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-[#0a8ec4]/45 active:cursor-grabbing"
           aria-label={`Drag to reorder ${BACKLOG_COLUMN_LABELS[id]} column`}
           {...attributes}
           {...listeners}
         >
-          <GripVertical className="size-4 shrink-0 opacity-90" aria-hidden />
+          <BacklogColumnDragGrip />
         </button>
         <span className="min-w-0">{label}</span>
       </span>
@@ -2830,7 +2849,7 @@ export function BacklogPlanningPanel({
                     <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                       Visible columns
                     </div>
-                    <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the grip (⋮⋮) in a blue column header to reorder columns.</p>
+                    <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the dotted handle in a blue column header to reorder columns.</p>
                     {columnOrder.map((colKey) => {
                       const locked = colKey === "workItem";
                       return (
@@ -2886,7 +2905,7 @@ export function BacklogPlanningPanel({
                   <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                     Visible columns
                   </div>
-                  <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the grip (⋮⋮) in a blue column header to reorder columns.</p>
+                  <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the dotted handle in a blue column header to reorder columns.</p>
                   {columnOrder.map((colKey) => {
                     const locked = colKey === "workItem";
                     return (
