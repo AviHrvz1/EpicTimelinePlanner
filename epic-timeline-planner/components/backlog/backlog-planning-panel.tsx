@@ -1,8 +1,37 @@
 "use client";
 
-import { Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Eraser, Filter, Folder, Layers3, ListTodo, Plus, Search, TableProperties, X, Zap } from "lucide-react";
+import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  Eraser,
+  Filter,
+  Folder,
+  GripVertical,
+  Layers3,
+  ListTodo,
+  Plus,
+  Search,
+  TableProperties,
+  X,
+  Zap,
+} from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -149,6 +178,65 @@ function backlogCellClassName(key: BacklogColumnKey): string {
   if (key === "workItem") return "relative min-w-0 pl-4";
   if (key === "progress") return "min-w-0";
   return cn("min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "justify-self-center text-center");
+}
+
+function isBacklogColumnKey(value: unknown): value is BacklogColumnKey {
+  return typeof value === "string" && (BACKLOG_COLUMN_ORDER as string[]).includes(value);
+}
+
+/** Ensures a full permutation; `workItem` stays first; appends any missing keys. */
+function normalizeColumnOrder(input: unknown): BacklogColumnKey[] {
+  if (!Array.isArray(input)) return [...BACKLOG_COLUMN_ORDER];
+  const seen = new Set<BacklogColumnKey>();
+  const out: BacklogColumnKey[] = [];
+  for (const item of input) {
+    if (!isBacklogColumnKey(item) || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  for (const key of BACKLOG_COLUMN_ORDER) {
+    if (!seen.has(key)) out.push(key);
+  }
+  const wi = out.indexOf("workItem");
+  if (wi > 0) {
+    out.splice(wi, 1);
+    out.unshift("workItem");
+  }
+  return out;
+}
+
+type SortableBacklogColumnHeaderProps = {
+  id: BacklogColumnKey;
+  className?: string;
+  centered: boolean;
+  label: ReactNode;
+  resizeHandle: ReactNode;
+};
+
+function SortableBacklogColumnHeader({ id, className, centered, label, resizeHandle }: SortableBacklogColumnHeaderProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 3 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className={className}>
+      <span className={cn("flex min-w-0 items-center gap-1", centered && "justify-center")}>
+        <button
+          type="button"
+          className="inline-flex h-6 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-white/75 outline-none hover:bg-white/15 hover:text-white active:cursor-grabbing"
+          aria-label={`Drag to reorder ${BACKLOG_COLUMN_LABELS[id]} column`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4 shrink-0 opacity-90" aria-hidden />
+        </button>
+        <span className="min-w-0">{label}</span>
+      </span>
+      {resizeHandle}
+    </div>
+  );
 }
 const GROUP_LEVEL_ORDER: GroupLevel[] = ["year", "quarter", "month", "sprint"];
 const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
@@ -428,6 +516,7 @@ export function BacklogPlanningPanel({
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
   const [columnVisibility, setColumnVisibility] = useState<Record<BacklogColumnKey, boolean>>(DEFAULT_BACKLOG_COLUMN_VISIBILITY);
+  const [columnOrder, setColumnOrder] = useState<BacklogColumnKey[]>(() => [...BACKLOG_COLUMN_ORDER]);
   const [showTableHeaderRow, setShowTableHeaderRow] = useState(true);
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
   const [hasLoadedTableLayout, setHasLoadedTableLayout] = useState(false);
@@ -839,9 +928,36 @@ export function BacklogPlanningPanel({
     openEpics,
   ]);
 
+  const columnDragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleBacklogColumnDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const aid = active.id as BacklogColumnKey;
+    const oid = over.id as BacklogColumnKey;
+    if (aid === "workItem" || oid === "workItem") return;
+    setColumnOrder((prev) => {
+      const oldIndex = prev.indexOf(aid);
+      const newIndex = prev.indexOf(oid);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      const next = arrayMove(prev, oldIndex, newIndex);
+      if (next[0] !== "workItem") {
+        const wi = next.indexOf("workItem");
+        if (wi >= 0) {
+          const rest = next.filter((k) => k !== "workItem");
+          return ["workItem", ...rest];
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const visibleColumnKeys = useMemo(
-    () => BACKLOG_COLUMN_ORDER.filter((key) => columnVisibility[key]),
-    [columnVisibility],
+    () => columnOrder.filter((key) => columnVisibility[key]),
+    [columnOrder, columnVisibility],
   );
 
   const tableGridTemplate = useMemo(
@@ -2346,6 +2462,7 @@ export function BacklogPlanningPanel({
       if (raw) {
         const parsed = JSON.parse(raw) as {
           columnVisibility?: Partial<Record<BacklogColumnKey, boolean>>;
+          columnOrder?: unknown;
           showTableHeaderRow?: unknown;
         };
         if (parsed.columnVisibility && typeof parsed.columnVisibility === "object") {
@@ -2361,6 +2478,7 @@ export function BacklogPlanningPanel({
             return next;
           });
         }
+        setColumnOrder(normalizeColumnOrder(parsed.columnOrder));
         if (typeof parsed.showTableHeaderRow === "boolean") setShowTableHeaderRow(parsed.showTableHeaderRow);
       }
     } catch {
@@ -2375,12 +2493,12 @@ export function BacklogPlanningPanel({
     try {
       window.localStorage.setItem(
         BACKLOG_TABLE_LAYOUT_STORAGE_KEY,
-        JSON.stringify({ columnVisibility, showTableHeaderRow }),
+        JSON.stringify({ columnVisibility, columnOrder, showTableHeaderRow }),
       );
     } catch {
       // Ignore write failures (private mode, quotas, etc.)
     }
-  }, [hasLoadedTableLayout, columnVisibility, showTableHeaderRow]);
+  }, [hasLoadedTableLayout, columnVisibility, columnOrder, showTableHeaderRow]);
 
   useEffect(() => {
     try {
@@ -2614,59 +2732,80 @@ export function BacklogPlanningPanel({
         <>
         {showTableHeaderRow ? (
           <div className="sticky top-0 z-10 relative border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-            <div
-              className="grid items-center gap-3 py-2.5 pr-28 pl-0 text-[13px] font-semibold tracking-[0.04em] text-white uppercase"
-              style={{ gridTemplateColumns: tableGridTemplate }}
-            >
-              {visibleColumnKeys.map((key, index) => (
+            <DndContext sensors={columnDragSensors} collisionDetection={closestCenter} onDragEnd={handleBacklogColumnDragEnd}>
+              <SortableContext
+                items={visibleColumnKeys.filter((k) => k !== "workItem")}
+                strategy={horizontalListSortingStrategy}
+              >
                 <div
-                  key={key}
-                  className={cn(
-                    "relative min-w-0",
-                    key === "workItem" && "pl-4",
-                    CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center",
-                  )}
+                  className="grid items-center gap-3 py-2.5 pr-28 pl-0 text-[13px] font-semibold tracking-[0.04em] text-white uppercase"
+                  style={{ gridTemplateColumns: tableGridTemplate }}
                 >
-                  {key === "workItem" ? (
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
-                      <span className="mr-1.5 inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5" role="group" aria-label="Row tree expand and collapse">
+                  {visibleColumnKeys.map((key, index) => {
+                    const cellClass = cn(
+                      "relative min-w-0",
+                      key === "workItem" && "pl-4",
+                      CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "text-center",
+                    );
+                    const resizeHandle =
+                      index < visibleColumnKeys.length - 1 ? (
                         <button
                           type="button"
-                          onClick={collapseAllRows}
-                          title="Collapse all rows"
-                          aria-label="Collapse all rows"
-                            className="inline-flex h-5 w-5 items-center justify-center text-white/85 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                          aria-label={`Resize ${BACKLOG_COLUMN_LABELS[key]} column`}
+                          onMouseDown={(event) => beginColumnResize(key, event)}
+                          className="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
                         >
-                          <ChevronsUp className="size-3.5" strokeWidth={2.2} />
+                          <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-white/55" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={expandAllRows}
-                          title="Expand all rows"
-                          aria-label="Expand all rows"
-                          className="inline-flex h-5 w-5 items-center justify-center text-white/85 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                        >
-                          <ChevronsDown className="size-3.5" strokeWidth={2.2} />
-                        </button>
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
-                  )}
-                  {index < visibleColumnKeys.length - 1 ? (
-                    <button
-                      type="button"
-                      aria-label={`Resize ${BACKLOG_COLUMN_LABELS[key]} column`}
-                      onMouseDown={(event) => beginColumnResize(key, event)}
-                      className="absolute -right-1 top-0 h-full w-2 cursor-col-resize"
-                    >
-                      <span className="absolute right-0 top-1/2 h-4 w-px -translate-y-1/2 bg-white/55" />
-                    </button>
-                  ) : null}
+                      ) : null;
+                    if (key === "workItem") {
+                      return (
+                        <div key={key} className={cellClass}>
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+                            <span
+                              className="mr-1.5 inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
+                              role="group"
+                              aria-label="Row tree expand and collapse"
+                            >
+                              <button
+                                type="button"
+                                onClick={collapseAllRows}
+                                title="Collapse all rows"
+                                aria-label="Collapse all rows"
+                                className="inline-flex h-5 w-5 items-center justify-center text-white/85 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                              >
+                                <ChevronsUp className="size-3.5" strokeWidth={2.2} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={expandAllRows}
+                                title="Expand all rows"
+                                aria-label="Expand all rows"
+                                className="inline-flex h-5 w-5 items-center justify-center text-white/85 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                              >
+                                <ChevronsDown className="size-3.5" strokeWidth={2.2} />
+                              </button>
+                            </span>
+                          </span>
+                          {resizeHandle}
+                        </div>
+                      );
+                    }
+                    return (
+                      <SortableBacklogColumnHeader
+                        key={key}
+                        id={key}
+                        className={cellClass}
+                        centered={CENTER_ALIGNED_BACKLOG_COLUMNS.has(key)}
+                        label={<span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>}
+                        resizeHandle={resizeHandle}
+                      />
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
             <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
               <div className="pointer-events-auto relative" ref={columnsMenuRef}>
                 <button
@@ -2691,7 +2830,8 @@ export function BacklogPlanningPanel({
                     <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                       Visible columns
                     </div>
-                    {BACKLOG_COLUMN_ORDER.map((colKey) => {
+                    <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the grip (⋮⋮) in a blue column header to reorder columns.</p>
+                    {columnOrder.map((colKey) => {
                       const locked = colKey === "workItem";
                       return (
                         <label
@@ -2746,7 +2886,8 @@ export function BacklogPlanningPanel({
                   <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                     Visible columns
                   </div>
-                  {BACKLOG_COLUMN_ORDER.map((colKey) => {
+                  <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the grip (⋮⋮) in a blue column header to reorder columns.</p>
+                  {columnOrder.map((colKey) => {
                     const locked = colKey === "workItem";
                     return (
                       <label
