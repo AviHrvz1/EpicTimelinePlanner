@@ -83,12 +83,63 @@ function GanttLaneSprintBackdrop({ columnCount, className }: { columnCount: numb
         <div
           key={i}
           className={cn(
-            "min-h-full min-w-0 flex-1 border-r border-slate-200/55 last:border-r-0",
-            Math.floor(i / 2) % 2 === 0 ? "bg-slate-50/50" : "bg-white/60",
-            (i + 1) % 2 === 0 && i < columnCount - 1 && "border-slate-400/45",
+            "min-h-full min-w-0 flex-1 border-r border-slate-200/45 last:border-r-0",
+            Math.floor(i / 2) % 2 === 0 ? "bg-slate-50/40" : "bg-white/55",
+            (i + 1) % 2 === 0 && i < columnCount - 1 && "border-slate-300/40",
           )}
         />
       ))}
+    </div>
+  );
+}
+
+/** Faint horizontal rules in the quarter lane “tail” (matches year view row rhythm visually). */
+function QuarterGanttLaneHorizontalGuides() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 z-[1]"
+      aria-hidden
+      style={{
+        backgroundImage:
+          "repeating-linear-gradient(to bottom, transparent 0, transparent calc(2.75rem - 1px), rgba(203, 213, 225, 0.42) calc(2.75rem - 1px), rgba(203, 213, 225, 0.42) 2.75rem)",
+      }}
+    />
+  );
+}
+
+/**
+ * Quarter Gantt lane list: each data row supplies its own sprint backdrop (same pattern as all-quarters).
+ * A flex “tail” fills remaining min-height with the same vertical grid + horizontal guides so empty space
+ * still reads as a grid.
+ */
+function QuarterGanttLaneScrollArea({
+  id,
+  columnCount,
+  rowGapClass,
+  children,
+}: {
+  id?: string;
+  columnCount: number;
+  rowGapClass: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      id={id}
+      className="relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+    >
+      <div
+        className="relative isolate flex w-full flex-shrink-0 flex-col"
+        style={{ minHeight: "max(100%, calc(100dvh - 26rem))" }}
+      >
+        <div className={cn("relative z-[2] shrink-0", rowGapClass)}>{children}</div>
+        {columnCount > 0 ? (
+          <div className="relative z-0 min-h-0 flex-1 basis-0">
+            <GanttLaneSprintBackdrop columnCount={columnCount} />
+            <QuarterGanttLaneHorizontalGuides />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -3563,19 +3614,18 @@ export function TimelineGrid({
               )}
             >
               <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
-                <div className="relative min-h-[11rem] shrink-0 overflow-hidden rounded-t-xl space-y-0.5 ring-1 ring-slate-200/40">
-                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
-                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                <div className="relative shrink-0 overflow-hidden rounded-t-xl bg-slate-50/30 ring-1 ring-slate-200/40">
+                  <div className="relative grid min-w-0 gap-1.5 p-0.5 sm:gap-2" style={ganttLaneGridStyle}>
                     {visibleMonths.map((month) => (
                       <div
                         key={month}
                         style={{ gridColumn: "span 2" }}
-                        className="space-y-2 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-2.5 pb-0 shadow-sm ring-1 ring-black/[0.03]"
+                        className="space-y-1.5 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2 pt-1.5 pb-0 shadow-sm ring-1 ring-black/[0.03]"
                       >
                         <button
                           type="button"
                           className={cn(
-                            "flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-center text-[15px] font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition",
+                            "flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-center text-sm font-bold tracking-tight shadow-sm ring-1 ring-black/[0.04] transition sm:gap-1.5 sm:rounded-xl sm:py-2 sm:text-[15px]",
                             activeMonth === month
                               ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
                               : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
@@ -3587,10 +3637,10 @@ export function TimelineGrid({
                             onMonthPlanTabChange?.("epic-gantt");
                           }}
                         >
-                          <CalendarDays className="size-4 shrink-0 opacity-80" aria-hidden />
+                          <CalendarDays className="size-3.5 shrink-0 opacity-80 sm:size-4" aria-hidden />
                           <span>{FULL_MONTHS[month - 1]}</span>
                         </button>
-                        <div className="mt-3.5 grid grid-cols-2 gap-2">
+                        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:mt-2.5 sm:gap-2">
                           <button
                             type="button"
                             title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateWeekdayRangeText(currentYear, month, 1)})`}
@@ -3599,12 +3649,12 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
                             }}
-                            className="flex min-h-[2rem] flex-col items-center justify-center gap-0 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 px-1.5 py-0.5 text-center shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99]"
+                            className="flex min-h-0 flex-col items-center justify-center gap-0 rounded-lg bg-gradient-to-br from-sky-50 to-blue-50 px-1 py-1 text-center text-[11px] shadow-sm ring-1 ring-sky-200/60 transition hover:-translate-y-px hover:from-sky-100 hover:to-blue-100 hover:shadow-md active:scale-[0.99] sm:min-h-[1.75rem] sm:rounded-xl sm:px-1.5 sm:text-[13px]"
                           >
-                            <span className="text-[13px] font-semibold leading-tight text-slate-800">
+                            <span className="font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))}
                             </span>
-                            <span className="text-[12px] font-medium leading-tight text-slate-500">
+                            <span className="text-[10px] font-medium leading-tight text-slate-500 sm:text-[12px]">
                               ({sprintDateWeekdayRangeText(currentYear, month, 1)})
                             </span>
                           </button>
@@ -3616,12 +3666,12 @@ export function TimelineGrid({
                               setFocusedMonth(month);
                               onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
                             }}
-                            className="flex min-h-[2rem] flex-col items-center justify-center gap-0 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 px-1.5 py-0.5 text-center shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99]"
+                            className="flex min-h-0 flex-col items-center justify-center gap-0 rounded-lg bg-gradient-to-br from-violet-50 to-indigo-50 px-1 py-1 text-center text-[11px] shadow-sm ring-1 ring-indigo-200/60 transition hover:-translate-y-px hover:from-violet-100 hover:to-indigo-100 hover:shadow-md active:scale-[0.99] sm:min-h-[1.75rem] sm:rounded-xl sm:px-1.5 sm:text-[13px]"
                           >
-                            <span className="text-[13px] font-semibold leading-tight text-slate-800">
+                            <span className="font-semibold leading-tight text-slate-800">
                               {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 2))}
                             </span>
-                            <span className="text-[12px] font-medium leading-tight text-slate-500">
+                            <span className="text-[10px] font-medium leading-tight text-slate-500 sm:text-[12px]">
                               ({sprintDateWeekdayRangeText(currentYear, month, 2)})
                             </span>
                           </button>
@@ -3634,7 +3684,7 @@ export function TimelineGrid({
                 <div
                   className={cn(
                     "relative isolate flex min-h-0 flex-1 flex-col rounded-xl bg-slate-50/35 px-3 pb-3 ring-1 ring-slate-100/80 sm:px-4 sm:pb-4",
-                    "min-h-[calc(100vh-21rem)]",
+                    "min-h-[calc(100vh-19rem)]",
                     roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
                   )}
                 >
@@ -3643,14 +3693,22 @@ export function TimelineGrid({
                     showBadge={false}
                     badgePlacement="above"
                   />
-                  <div className="relative flex min-h-0 w-full flex-1 flex-col">
+                  <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
                   {roadmapBarMode === "initiatives" ? (
                     quarterRoadmapInitiativeRows.length === 0 ? (
-                      <p className="relative z-10 rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
-                        No initiatives with planned epics in this quarter.
-                      </p>
+                      <QuarterGanttLaneScrollArea
+                        id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                        columnCount={ganttLaneColumnCount}
+                        rowGapClass="space-y-2"
+                      >
+                        <p className="sr-only">No initiatives with planned epics in this quarter.</p>
+                      </QuarterGanttLaneScrollArea>
                     ) : (
-                      <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto">
+                      <QuarterGanttLaneScrollArea
+                        id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                        columnCount={ganttLaneColumnCount}
+                        rowGapClass="space-y-2"
+                      >
                         {quarterRoadmapInitiativeRows.map((group, idx) => (
                           <div
                             key={`q-init-row-${group.timelineRow}`}
@@ -3692,15 +3750,25 @@ export function TimelineGrid({
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </QuarterGanttLaneScrollArea>
                     )
                   ) : quarterRoadmapEpics.length === 0 ? (
-                    <p className="relative z-10 bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
-                      Create an initiative, then drag its epics onto the timeline. You can also stretch or shorten a
-                      scheduled bar by dragging its ends to match your start and due dates.
-                    </p>
+                    <QuarterGanttLaneScrollArea
+                      id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                      columnCount={ganttLaneColumnCount}
+                      rowGapClass="space-y-0.5"
+                    >
+                      <p className="sr-only">
+                        No epics on the timeline yet. Create an initiative and drag epics here, or drag bar edges to
+                        resize.
+                      </p>
+                    </QuarterGanttLaneScrollArea>
                   ) : (
-                    <div id={TIMELINE_GANTT_ROWS_CONTAINER_ID} className="relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+                    <QuarterGanttLaneScrollArea
+                      id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                      columnCount={ganttLaneColumnCount}
+                      rowGapClass="space-y-0.5"
+                    >
                       {quarterRoadmapEpicRows.map((group, idx) => (
                         <div
                           key={`q-epic-row-${group.timelineRow}`}
@@ -3797,7 +3865,7 @@ export function TimelineGrid({
                           </div>
                         </div>
                       ))}
-                    </div>
+                    </QuarterGanttLaneScrollArea>
                   )}
                   </div>
                 </div>
