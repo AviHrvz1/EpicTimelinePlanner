@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
+import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
 import {
   WORKSPACE_USER_PERMISSIONS,
   normalizeWorkspaceUserPermission,
@@ -285,10 +286,10 @@ function UsersTableRow({
     <tr
       className={cn(
         "group border-t border-[#7cd3f7]/95 text-[16px] text-slate-800 transition-colors hover:bg-[#c5ebff]",
-        idx % 2 === 0 ? "bg-[#d8f2ff]" : "bg-white",
         saving && "opacity-70",
         !rowBusy && "cursor-pointer",
       )}
+      style={{ backgroundColor: idx % 2 === 0 ? TABLE_ZEBRA_STRIPE_BG : TABLE_ZEBRA_BASE_BG }}
       onClick={() => {
         if (rowBusy) return;
         onRowView(row);
@@ -791,9 +792,10 @@ export function UsersWorkspacePanel() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-none bg-white text-[16px]">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-white">
+        <div className="h-full min-h-0 overflow-auto text-[16px]">
         <table className="w-full min-w-[860px] border-collapse text-left">
-          <thead className="sticky top-0 z-10 border-b border-[#19abeb]/70 bg-[#0897d5] shadow-sm">
+          <thead className="sticky top-0 z-10 border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
             <tr>
               <SortHeader label="User name" col="name" sort={sort} onToggle={toggleSort} />
               <SortHeader label="Email" col="email" sort={sort} onToggle={toggleSort} />
@@ -842,6 +844,7 @@ export function UsersWorkspacePanel() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <p className="text-center text-[12px] text-slate-500">

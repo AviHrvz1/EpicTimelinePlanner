@@ -1428,7 +1428,12 @@ export function MonthAnalytics({
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
   const sharedDrilldownScrollAreaClass =
-    "overflow-y-auto overflow-x-hidden rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden";
+    "h-full min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden bg-white pr-5 [&::-webkit-scrollbar]:hidden";
+  /** Matches backlog / users directory soft zebra (#f4f7fc / white) */
+  const drilldownTableRowZebra =
+    "border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#f4f7fc] even:bg-white transition hover:bg-[#c5ebff]";
+  const drilldownTableEmptyRowZebra =
+    "border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#f4f7fc]/55 even:bg-white";
   const drilldownTableClass = "w-full table-fixed border-collapse text-left text-[13px]";
   const drilldownColgroup = (
     <colgroup>
@@ -1579,17 +1584,17 @@ export function MonthAnalytics({
           ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className={`mt-0 flex min-h-0 rounded-none bg-white p-2 ${INSIGHTS_CONTENT_HEIGHT}`}>
-            <div className="relative min-h-0 flex-1">
+          <div className={cn("mt-0 w-full min-w-0 overflow-hidden rounded-md bg-white", INSIGHTS_CONTENT_HEIGHT)}>
+            <div className="relative h-full min-h-0 min-w-0">
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={updateStatusDrilldownArrowState}
-                className={cn("h-full min-h-0", sharedDrilldownScrollAreaClass)}
+                className={sharedDrilldownScrollAreaClass}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               <table className={drilldownTableClass}>
                 {drilldownColgroup}
-                <thead className="sticky top-0 bg-[#0897d5] text-white">
+                <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   {statusChartShowsEpics ? (
                     <tr>
                       <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Epic ID</th>
@@ -1613,7 +1618,7 @@ export function MonthAnalytics({
                     ? statusDrilldownEpics.map((epic) => {
                         const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
                         return (
-                        <tr key={epic.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
+                        <tr key={epic.id} className={drilldownTableRowZebra}>
                           <td className="min-w-0 px-2 py-0.5">
                             <InsightsTruncatedHoverButton
                               label={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
@@ -1648,7 +1653,7 @@ export function MonthAnalytics({
                                   ? "Done"
                                   : "Approved";
                         return (
-                        <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
+                        <tr key={story.id} className={drilldownTableRowZebra}>
                           <td className="min-w-0 px-2 py-0.5">
                             <InsightsTruncatedHoverButton
                               label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
@@ -1685,7 +1690,7 @@ export function MonthAnalytics({
                       })}
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
-                        <tr key={`status-empty-${index}`} className="border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#d8f2ff]/55 even:bg-white">
+                        <tr key={`status-empty-${index}`} className={drilldownTableEmptyRowZebra}>
                           <td colSpan={5} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
@@ -2115,17 +2120,17 @@ export function MonthAnalytics({
           )}
         </div>
         {workloadDrilldownAssignee ? (
-          <div className={`mt-0 flex min-h-0 rounded-none bg-white p-2 ${INSIGHTS_CONTENT_HEIGHT}`}>
-            <div className="relative min-h-0 flex-1">
+          <div className={cn("mt-0 w-full min-w-0 overflow-hidden rounded-md bg-white", INSIGHTS_CONTENT_HEIGHT)}>
+            <div className="relative h-full min-h-0 min-w-0">
             <div
               ref={workloadDrilldownScrollRef}
               onScroll={updateWorkloadDrilldownArrowState}
-              className={cn("h-full min-h-0", sharedDrilldownScrollAreaClass)}
+              className={sharedDrilldownScrollAreaClass}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <table className={drilldownTableClass}>
                 {drilldownColgroup}
-                <thead className="sticky top-0 bg-[#0897d5] text-white">
+                <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   <tr>
                     <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story ID</th>
                     <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story name</th>
@@ -2145,7 +2150,7 @@ export function MonthAnalytics({
                             ? "Done"
                             : "Approved";
                     return (
-                    <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
+                    <tr key={story.id} className={drilldownTableRowZebra}>
                       <td className="min-w-0 px-2 py-0.5">
                         <InsightsTruncatedHoverButton
                           label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
@@ -2182,7 +2187,7 @@ export function MonthAnalytics({
                   })}
                   {workloadDrilldownEmptyRows > 0
                     ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
-                        <tr key={`workload-empty-${index}`} className="border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#d8f2ff]/55 even:bg-white">
+                        <tr key={`workload-empty-${index}`} className={drilldownTableEmptyRowZebra}>
                           <td colSpan={5} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>

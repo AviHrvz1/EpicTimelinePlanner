@@ -9,6 +9,7 @@ import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
+import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
@@ -116,10 +117,6 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
 const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1";
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
-
-/** Subtle alternating row (reference: pale blue-gray, not saturated cyan). */
-const BACKLOG_ZEBRA_STRIPE_BG = "#f4f7fc";
-const BACKLOG_ZEBRA_BASE_BG = "#ffffff";
 
 const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   workItem: true,
@@ -824,7 +821,7 @@ export function BacklogPlanningPanel({
 
     const rowEls = Array.from(root.querySelectorAll<HTMLElement>('[data-backlog-zebra-row="true"]'));
     rowEls.forEach((el, idx) => {
-      const bg = idx % 2 === 0 ? BACKLOG_ZEBRA_STRIPE_BG : BACKLOG_ZEBRA_BASE_BG;
+      const bg = idx % 2 === 0 ? TABLE_ZEBRA_STRIPE_BG : TABLE_ZEBRA_BASE_BG;
       el.style.backgroundColor = bg;
     });
   }, [
