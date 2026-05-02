@@ -121,7 +121,7 @@ export function QuarterTeamCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="flex flex-wrap gap-6">
         {visibleTeams.map((team) => {
           const candidates = rows.filter((row) => row.epic.team === team.id);
           const orderedRows = orderedEpicsForTeamInQuarterCapacity(
@@ -149,20 +149,24 @@ export function QuarterTeamCapacityBoard({
           });
           const capacity = Number(teamQuarterCapacity.get(team.id) ?? 0);
           return (
-            <TeamCapacityBucket
+            <div
               key={team.id}
-              team={team}
-              teamLabelPrefix="Team:"
-              cards={cards}
-              capacity={capacity}
-              onCapacityChange={(days) => onCapacityChange(team.id, days)}
-              onOpenEpic={onOpenEpic}
-              onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
-              onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
-              dropId={quarterTeamCapacityBucketDropId(year, quarterLabel, team.id)}
-              gaugeScaleMax={gaugeScaleMax}
-              capacityInputMax={capacityInputMax}
-            />
+              className="box-border w-full max-w-full min-w-[min(100%,23rem)] grow basis-[23rem]"
+            >
+              <TeamCapacityBucket
+                team={team}
+                teamLabelPrefix="Team:"
+                cards={cards}
+                capacity={capacity}
+                onCapacityChange={(days) => onCapacityChange(team.id, days)}
+                onOpenEpic={onOpenEpic}
+                onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+                onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
+                dropId={quarterTeamCapacityBucketDropId(year, quarterLabel, team.id)}
+                gaugeScaleMax={gaugeScaleMax}
+                capacityInputMax={capacityInputMax}
+              />
+            </div>
           );
         })}
       </div>

@@ -3765,14 +3765,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           topMode === "roadmap" ? "overflow-y-visible" : topMode === "users" ? "overflow-y-auto" : "overflow-y-hidden",
         )}
       >
-        <div className="mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-row gap-2.5 overflow-x-hidden overflow-y-visible">
+        <div
+          className={cn(
+            "mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-row gap-2.5 overflow-y-visible",
+            isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden",
+          )}
+        >
           <div
-            className={cn(
-              "relative z-30 flex h-full min-h-0 shrink-0 flex-col self-stretch overflow-hidden rounded-md border border-slate-200/80 bg-white shadow-[0_4px_20px_-6px_rgba(15,23,42,0.09)] transition-[width] duration-200 ease-out",
-              isModeRailExpanded ? "w-[244px]" : "w-[58px]",
-            )}
-            onMouseEnter={() => setIsModeRailExpanded(true)}
-            onMouseLeave={() => setIsModeRailExpanded(false)}
+            className="relative z-30 h-full min-h-0 w-[58px] shrink-0 self-stretch overflow-visible"
             onFocusCapture={() => setIsModeRailExpanded(true)}
             onBlurCapture={(e) => {
               const next = e.relatedTarget;
@@ -3782,23 +3782,34 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           >
             <div
               className={cn(
-                "shrink-0 overflow-hidden border-slate-200/55 bg-white transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
+                "absolute top-0 left-0 flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-slate-200/80 bg-white shadow-[0_4px_20px_-6px_rgba(15,23,42,0.09)] transition-[width,box-shadow] duration-200 ease-out",
                 isModeRailExpanded
-                  ? "max-h-[5.5rem] border-b px-3 pb-3 pt-3 opacity-100"
-                  : "max-h-0 border-0 bg-transparent p-0 opacity-0",
+                  ? "z-50 w-[244px] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.22)] ring-1 ring-slate-200/70"
+                  : "z-30 w-[58px]",
               )}
-              aria-hidden={!isModeRailExpanded}
+              onMouseEnter={() => setIsModeRailExpanded(true)}
+              onMouseLeave={() => setIsModeRailExpanded(false)}
             >
-              <img
-                src="/bird-eye-lockup-wide.png"
-                alt="Bird Eye Viewer logo"
+              <div
                 className={cn(
-                  "block w-full rounded-md object-contain object-left transition-opacity duration-200",
-                  isModeRailExpanded ? "h-[52px] opacity-100" : "h-0 opacity-0",
+                  "shrink-0 overflow-hidden border-slate-200/55 bg-white transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
+                  isModeRailExpanded
+                    ? "max-h-[5.5rem] border-b px-3 pb-3 pt-3 opacity-100"
+                    : "max-h-0 border-0 bg-transparent p-0 opacity-0",
                 )}
-              />
+                aria-hidden={!isModeRailExpanded}
+              >
+                <img
+                  src="/bird-eye-lockup-wide.png"
+                  alt="Bird Eye Viewer logo"
+                  className={cn(
+                    "block w-full rounded-md object-contain object-left transition-opacity duration-200",
+                    isModeRailExpanded ? "h-[52px] opacity-100" : "h-0 opacity-0",
+                  )}
+                />
+              </div>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto py-2">{modeSwitchMenu}</div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col py-2">{modeSwitchMenu}</div>
           </div>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-visible">
             {topMode === "roadmap" ? (

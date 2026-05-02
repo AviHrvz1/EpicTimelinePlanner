@@ -117,7 +117,7 @@ export function MonthTeamCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="flex flex-wrap gap-6">
         {visibleTeams.map((team) => {
           const cardRows =
             mergedColumns != null
@@ -139,20 +139,24 @@ export function MonthTeamCapacityBoard({
               };
           });
           return (
-            <TeamCapacityBucket
+            <div
               key={team.id}
-              team={team}
-              teamLabelPrefix="Team:"
-              cards={cards}
-              capacity={Number(capacityBoard.capacities[team.id] ?? 20)}
-              onCapacityChange={(days) => onCapacityChange(team.id, days)}
-              onOpenEpic={onOpenEpic}
-              onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
-              onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
-              dropId={monthTeamCapacityBucketDropId(year, month, team.id)}
-              gaugeScaleMax={60}
-              capacityInputMax={200}
-            />
+              className="box-border w-full max-w-full min-w-[min(100%,23rem)] grow basis-[23rem]"
+            >
+              <TeamCapacityBucket
+                team={team}
+                teamLabelPrefix="Team:"
+                cards={cards}
+                capacity={Number(capacityBoard.capacities[team.id] ?? 20)}
+                onCapacityChange={(days) => onCapacityChange(team.id, days)}
+                onOpenEpic={onOpenEpic}
+                onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+                onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
+                dropId={monthTeamCapacityBucketDropId(year, month, team.id)}
+                gaugeScaleMax={60}
+                capacityInputMax={200}
+              />
+            </div>
           );
         })}
       </div>

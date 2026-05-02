@@ -60,60 +60,62 @@ export function TeamEpicCard({
       >
         <X className="size-3.5" aria-hidden />
       </button>
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_9.25rem] items-start gap-x-2">
-        <button
-          type="button"
-          className="mt-0.5 shrink-0 cursor-grab rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 active:cursor-grabbing"
-          aria-label="Drag epic card"
-          {...attributes}
-          {...listeners}
-        >
-          ::
-        </button>
-        <div className="min-w-0 pr-10">
+      <div className="flex flex-col gap-3 @min-[22rem]:grid @min-[22rem]:grid-cols-[auto_minmax(0,1fr)_9.25rem] @min-[22rem]:items-start @min-[22rem]:gap-x-2 @min-[22rem]:gap-y-0">
+        <div className="flex min-w-0 items-start gap-2 @min-[22rem]:contents">
           <button
             type="button"
-            onClick={() => onOpenEpic(epicId)}
-            className="block w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 transition hover:text-blue-700"
+            className="mt-0.5 shrink-0 cursor-grab rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 active:cursor-grabbing"
+            aria-label="Drag epic card"
+            {...attributes}
+            {...listeners}
           >
-            <span className="mr-1.5 inline-flex align-middle text-slate-600">
-              <EpicPlanBarIcon icon={icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
-            </span>
-            {title}
+            ::
           </button>
-          <p className="mt-0.5 truncate text-[11px] leading-snug text-slate-500">{initiativeTitle}</p>
-          {(planningLabel || executionStatusLabel) && (
-            <div className="mt-1.5 flex w-full flex-wrap justify-start gap-1.5">
-              {planningLabel ? (
-                <span className="inline-flex items-center rounded-md border border-violet-200/90 bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-800">
-                  {planningLabel}
-                </span>
-              ) : null}
-              {executionStatusLabel ? (
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-md border px-2 py-0.5 text-[10.5px] font-semibold",
-                    executionStatusClassName ?? "border-blue-200/90 bg-blue-50 text-blue-800",
-                  )}
-                >
-                  {executionStatusLabel}
-                </span>
-              ) : null}
-            </div>
-          )}
+          <div className="min-w-0 flex-1 pr-10">
+            <button
+              type="button"
+              onClick={() => onOpenEpic(epicId)}
+              className="block w-full text-left text-[13px] font-semibold leading-snug text-slate-900 transition hover:text-blue-700 @min-[22rem]:truncate"
+            >
+              <span className="mr-1.5 inline-flex align-middle text-slate-600">
+                <EpicPlanBarIcon icon={icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
+              </span>
+              {title}
+            </button>
+            <p className="mt-0.5 text-[11px] leading-snug text-slate-500 @min-[22rem]:truncate">{initiativeTitle}</p>
+            {(planningLabel || executionStatusLabel) && (
+              <div className="mt-1.5 flex w-full flex-wrap justify-start gap-1.5">
+                {planningLabel ? (
+                  <span className="inline-flex items-center rounded-md border border-violet-200/90 bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-800">
+                    {planningLabel}
+                  </span>
+                ) : null}
+                {executionStatusLabel ? (
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-md border px-2 py-0.5 text-[10.5px] font-semibold",
+                      executionStatusClassName ?? "border-blue-200/90 bg-blue-50 text-blue-800",
+                    )}
+                  >
+                    {executionStatusLabel}
+                  </span>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex w-full shrink-0 flex-col items-start gap-1.5 pt-8">
-          <div className="grid w-full grid-cols-[4.5rem_3.5rem] items-center gap-1.5">
+        <div className="flex w-full min-w-0 shrink-0 flex-col items-start gap-1.5 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:w-auto @min-[22rem]:pt-8">
+          <div className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1.5 @min-[22rem]:max-w-none">
             <span className="text-[11px] font-semibold text-slate-600">Σ Child</span>
             <span
               className="flex h-6 w-[3.5rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums"
               title="Sum of child user story estimates — edit estimates on each story"
               aria-label="Sum of child story estimate days (read-only)"
             >
-              <span className="-translate-x-[7px]">{Math.round(childStoryEstimateDays)}</span>
+              {Math.round(childStoryEstimateDays)}
             </span>
           </div>
-          <label className="grid w-full grid-cols-[4.5rem_3.5rem] items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+          <label className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1.5 text-[11px] font-semibold text-slate-600 @min-[22rem]:max-w-none">
             <span>Est days</span>
             <input
               type="number"
@@ -191,7 +193,7 @@ export function TeamCapacityBucket({
   return (
     <section
       className={cn(
-        "min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        "@container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
       )}
     >
       <div className="relative mb-2 flex min-h-8 items-center justify-end pr-0.5">
