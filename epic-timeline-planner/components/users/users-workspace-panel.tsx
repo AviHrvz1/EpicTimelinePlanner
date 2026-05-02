@@ -234,9 +234,10 @@ function SortableUserDirectoryColumnHeader({
     zIndex: isDragging ? 2 : undefined,
   };
   const label = USER_DIRECTORY_COLUMN_LABELS[id];
+  const centerHeader = id === "permission" || id === "status";
   return (
-    <th ref={setNodeRef} style={style} className={USER_DIR_TH_CLASS}>
-      <div className="flex w-full min-w-0 items-center gap-1">
+    <th ref={setNodeRef} style={style} className={cn(USER_DIR_TH_CLASS, centerHeader && "text-center")}>
+      <div className={cn("flex w-full min-w-0 items-center gap-1", centerHeader && "justify-center")}>
         <button
           type="button"
           className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-[#0a8ec4]/45 active:cursor-grabbing"
@@ -449,18 +450,18 @@ function UsersTableRow({
             <EditCommitButtons disabled={saving} onSave={saveEmail} onCancel={onCancelEdit} />
           </div>
         ) : (
-          <button
-            type="button"
-            disabled={saving || editField != null}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditField("email");
-            }}
-            className="w-full break-all rounded-md px-1 py-1.5 text-left text-violet-700 underline decoration-violet-200 underline-offset-2 transition hover:bg-white/35 hover:text-violet-900 disabled:cursor-default disabled:opacity-60 disabled:no-underline disabled:hover:bg-transparent"
-            aria-label={`Edit email (${row.email})`}
-          >
-            {row.email}
-          </button>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 break-all px-1 py-1.5 text-violet-700 underline decoration-violet-200 underline-offset-2">
+              {row.email}
+            </span>
+            {!saving && editField == null ? (
+              <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <div onClick={(e) => e.stopPropagation()}>
+                  <EditRowIconButton label="Edit email" onClick={() => onEditField("email")} />
+                </div>
+              </div>
+            ) : null}
+          </div>
         )}
       </td>
     ),
@@ -480,39 +481,42 @@ function UsersTableRow({
             <EditCommitButtons disabled={saving} onSave={saveTeam} onCancel={onCancelEdit} />
           </div>
         ) : (
-          <button
-            type="button"
-            disabled={saving || editField != null}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditField("team");
-            }}
-            className="w-full rounded-md px-1 py-1.5 text-left transition hover:bg-white/35 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
-            aria-label={`Edit team for ${row.name}`}
-          >
-            {row.team ? (
-              <span
-                className={cn(
-                  "inline-flex rounded-full px-2.5 py-0.5 text-[13px] font-semibold leading-tight ring-1",
-                  row.team === "platform" && "bg-sky-50 text-sky-800 ring-sky-200/80",
-                  row.team === "experience" && "bg-violet-50 text-violet-800 ring-violet-200/80",
-                  row.team === "data" && "bg-amber-50 text-amber-900 ring-amber-200/80",
-                )}
-              >
-                {teamLabelForWorkspaceUser(row.team)}
-              </span>
-            ) : (
-              <span className="text-[13px] text-slate-400">Unassigned</span>
-            )}
-          </button>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 px-1 py-1.5">
+              {row.team ? (
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-2.5 py-0.5 text-[13px] font-semibold leading-tight ring-1",
+                    row.team === "platform" && "bg-sky-50 text-sky-800 ring-sky-200/80",
+                    row.team === "experience" && "bg-violet-50 text-violet-800 ring-violet-200/80",
+                    row.team === "data" && "bg-amber-50 text-amber-900 ring-amber-200/80",
+                  )}
+                >
+                  {teamLabelForWorkspaceUser(row.team)}
+                </span>
+              ) : (
+                <span className="text-[13px] text-slate-400">Unassigned</span>
+              )}
+            </span>
+            {!saving && editField == null ? (
+              <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <div onClick={(e) => e.stopPropagation()}>
+                  <EditRowIconButton label="Edit team" onClick={() => onEditField("team")} />
+                </div>
+              </div>
+            ) : null}
+          </div>
         )}
       </td>
     ),
     permission: (
-      <td key="permission" className={USER_DIR_TD_BASE}>
+      <td key="permission" className={cn(USER_DIR_TD_BASE, "text-center")}>
         {editing("permission") ? (
-          <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <div className="min-w-0 flex-1">
+          <div
+            className="flex min-w-0 flex-wrap items-center justify-center gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="min-w-0 w-full max-w-[240px] sm:max-w-[280px]">
               <AssigneeCombobox
                 value={perm}
                 onChange={setPerm}
@@ -526,23 +530,21 @@ function UsersTableRow({
             <EditCommitButtons disabled={saving} onSave={savePermission} onCancel={onCancelEdit} />
           </div>
         ) : (
-          <button
-            type="button"
-            disabled={saving || editField != null}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditField("permission");
-            }}
-            className="w-full rounded-md px-1 py-1.5 text-left font-medium text-slate-700 transition hover:bg-white/35 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
-            aria-label={`Edit permission (${row.permission})`}
-          >
-            {row.permission}
-          </button>
+          <div className="flex min-w-0 items-center justify-center gap-2">
+            <span className="min-w-0 truncate px-1 py-1.5 text-center font-medium text-slate-700">{row.permission}</span>
+            {!saving && editField == null ? (
+              <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <div onClick={(e) => e.stopPropagation()}>
+                  <EditRowIconButton label="Edit permission" onClick={() => onEditField("permission")} />
+                </div>
+              </div>
+            ) : null}
+          </div>
         )}
       </td>
     ),
     status: (
-      <td key="status" className={cn(USER_DIR_TD_BASE, "whitespace-nowrap")}>
+      <td key="status" className={cn(USER_DIR_TD_BASE, "whitespace-nowrap text-center")}>
         <span
           className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[13px] font-semibold leading-tight text-emerald-900 ring-1 ring-emerald-200/90"
           title="Status is managed by the system"

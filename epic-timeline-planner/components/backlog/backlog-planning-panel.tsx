@@ -131,8 +131,8 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
 
 const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   workItem: 300,
-  year: 72,
-  quarter: 52,
+  year: 88,
+  quarter: 104,
   month: 80,
   startDate: 96,
   endDate: 96,
@@ -147,8 +147,8 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
 
 const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   workItem: 420,
-  year: 96,
-  quarter: 72,
+  year: 104,
+  quarter: 112,
   month: 120,
   startDate: 118,
   endDate: 118,
@@ -242,20 +242,33 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
     transition,
     zIndex: isDragging ? 3 : undefined,
   };
+  const grip = (
+    <button
+      type="button"
+      className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-[#0a8ec4]/45 active:cursor-grabbing"
+      aria-label={`Drag to reorder ${BACKLOG_COLUMN_LABELS[id]} column`}
+      {...attributes}
+      {...listeners}
+    >
+      <TableColumnDragGrip />
+    </button>
+  );
   return (
     <div ref={setNodeRef} style={style} className={cn(className, "w-full min-w-0")}>
-      <span className={cn("flex w-full min-w-0 items-center gap-1", centered && "justify-center")}>
-        <button
-          type="button"
-          className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-[#0a8ec4]/45 active:cursor-grabbing"
-          aria-label={`Drag to reorder ${BACKLOG_COLUMN_LABELS[id]} column`}
-          {...attributes}
-          {...listeners}
-        >
-          <TableColumnDragGrip />
-        </button>
-        <span className="min-w-0">{label}</span>
-      </span>
+      {/* pr-2.5 reserves the resize strip; overflow-hidden keeps label from painting past the column edge */}
+      {centered ? (
+        <span className="flex min-h-[1.25rem] w-full min-w-0 justify-center overflow-hidden pr-2.5">
+          <span className="flex min-w-0 max-w-full items-center justify-center gap-1">
+            {grip}
+            <span className="min-w-0 overflow-hidden">{label}</span>
+          </span>
+        </span>
+      ) : (
+        <span className="flex min-h-[1.25rem] w-full min-w-0 items-center gap-1 overflow-hidden pr-2.5">
+          {grip}
+          <span className="min-w-0 flex-1 overflow-hidden">{label}</span>
+        </span>
+      )}
       {resizeHandle}
     </div>
   );
@@ -1721,7 +1734,7 @@ export function BacklogPlanningPanel({
               ),
               progress: (
             <div className="space-y-1">
-              <div className="flex items-center justify-between text-[16px] text-slate-600">
+              <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                 <span>{progress.label}</span>
                 <span>{progress.percent}%</span>
               </div>
@@ -1802,7 +1815,7 @@ export function BacklogPlanningPanel({
       const { total, finished, percent } = completionForRows(storyRows);
       return (
         <div className="space-y-1">
-          <div className="flex items-center justify-between text-[16px] text-slate-600">
+          <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
             <span>{total === 0 ? "No stories" : null}</span>
             <span>
               {finished}/{total} · {percent}%
@@ -2424,7 +2437,7 @@ export function BacklogPlanningPanel({
                 ),
                 progress: (
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[16px] text-slate-600">
+                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                       <span>No stories</span>
                       <span>0/0 · 0%</span>
                     </div>
@@ -2567,7 +2580,7 @@ export function BacklogPlanningPanel({
                         ),
                         progress: (
                           <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[16px] text-slate-600">
+                            <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                               <span>No stories</span>
                               <span>0/0 · 0%</span>
                             </div>
@@ -3494,7 +3507,7 @@ export function BacklogPlanningPanel({
                       ),
                       progress: (
                         <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[16px] text-slate-600">
+                          <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                             <span>{initiativeProgress.total === 0 ? "No stories" : null}</span>
                             <span>
                               {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
@@ -3824,7 +3837,7 @@ export function BacklogPlanningPanel({
                                 ),
                                 progress: (
                                   <div className="space-y-1">
-                                    <div className="flex items-center justify-between text-[16px] text-slate-600">
+                                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                                       <span>{epicProgress.total === 0 ? "No stories" : null}</span>
                                       <span>
                                         {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
@@ -4273,7 +4286,7 @@ export function BacklogPlanningPanel({
                                       ),
                                       progress: (
                                     <div className="space-y-1">
-                                      <div className="flex items-center justify-between text-[16px] text-slate-600">
+                                      <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                                         <span>{progress.label}</span>
                                         <span>{progress.percent}%</span>
                                       </div>
