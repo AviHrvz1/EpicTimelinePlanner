@@ -2,11 +2,17 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, UserRound, Users, UserX, X } from "lucide-react";
+import { Info, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import {
+  CAPACITY_DAYS_INPUT_NO_SPIN,
+  CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
+  RollupOverCapWarn,
+  rollupOverCapacityPill,
+} from "@/components/timeline/team-capacity-bucket";
 import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
 import {
   fullDeliveryCapacityRoster,
@@ -75,7 +81,7 @@ function CapacityStoryCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "h-[var(--bucket-row-h)] rounded-none border border-slate-200/90 bg-white/95 px-2 py-1 shadow-sm",
+        "group relative min-h-[2.75rem] rounded-lg border border-slate-200/90 bg-white/95 px-2 py-1.5 shadow-sm",
         isDragging && "opacity-60",
       )}
       style={{
@@ -83,47 +89,55 @@ function CapacityStoryCard({
         zIndex: isDragging ? 30 : undefined,
       }}
     >
-      <div className="flex h-full items-center gap-2">
-        <button
-          type="button"
-          className="cursor-grab rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 active:cursor-grabbing"
-          aria-label="Drag story card"
-          {...attributes}
-          {...listeners}
-        >
-          ::
-        </button>
-        <div className="min-w-0 flex-1 pr-1">
+      <button
+        type="button"
+        onClick={() => onUnscheduleStory(card.id)}
+        className="absolute right-1.5 top-1/2 z-30 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+        aria-label="Remove story from sprint capacity bucket"
+        title="Remove from sprint"
+      >
+        <X className="size-3.5" aria-hidden />
+      </button>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 pr-8">
+        <div className="flex min-w-0 flex-1 basis-[min(100%,14rem)] items-center gap-2">
           <button
             type="button"
-            className="block w-full truncate text-left text-[13px] font-semibold text-slate-900 hover:text-blue-700"
-            onClick={() => onOpenStory(card.id)}
+            className="mt-0.5 shrink-0 cursor-grab rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 active:cursor-grabbing"
+            aria-label="Drag story card"
+            {...attributes}
+            {...listeners}
           >
-            <span className="mr-1.5 inline-flex align-middle text-slate-600">
-              <UserStoryIcon className="size-3.5" />
-            </span>
-            {card.title}
+            ::
           </button>
+          <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              className="block w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
+              onClick={() => onOpenStory(card.id)}
+            >
+              <span className="mr-1.5 inline-flex align-middle text-slate-600">
+                <UserStoryIcon className="size-3.5" />
+              </span>
+              {card.title}
+            </button>
+          </div>
         </div>
-        <span className="shrink-0 text-[11px] font-semibold text-slate-600">Est</span>
-        <input
-          type="number"
-          min={0}
-          max={20}
-          step={1}
-          value={card.estimatedDays}
-          onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
-          className="h-6 w-12 shrink-0 rounded border border-slate-200 bg-white px-1 text-[11px] font-medium text-slate-800"
-        />
-        <button
-          type="button"
-          onClick={() => onUnscheduleStory(card.id)}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-          aria-label="Remove story from sprint capacity bucket"
-          title="Remove from sprint"
-        >
-          <X className="size-3.5" aria-hidden />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5 @min-[18rem]:ml-auto">
+          <span className="text-right text-[11px] font-semibold text-slate-600">Est days</span>
+          <input
+            type="number"
+            min={0}
+            max={20}
+            step={1}
+            value={card.estimatedDays}
+            onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
+            className={cn(
+              "h-[1.375rem] w-11 shrink-0 rounded border border-slate-200 bg-white px-1 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
+              CAPACITY_DAYS_INPUT_NO_SPIN,
+            )}
+            aria-label="Story estimate days"
+          />
+        </div>
       </div>
     </article>
   );
@@ -154,12 +168,19 @@ function CapacityBucket({
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
-  const fillPct = Math.max(0, Math.min(100, (assignedTotal / 10) * 100));
-  const overCapacity = assignedTotal > capacity;
+  const memberGradientKey = member.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const svgKey = `scap-${memberGradientKey}-${teamKey.replace(/[^a-zA-Z0-9]+/g, "-")}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
+  const sprintGaugeMaxDays = 10;
+  const sumStoryEstimates = assignedTotal;
+  const storiesOverCapacity = sumStoryEstimates > capacity;
+  const fillPct = Math.max(0, Math.min(100, capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 100 : 0));
+  const overCapacity = storiesOverCapacity;
   const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
   const thermometerPct = Math.max(0, Math.min(100, utilization));
-  const capacityMarkerPct = Math.max(0, Math.min(100, (capacity / 10) * 100));
-  const memberGradientKey = member.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const capacityMarkerPct = Math.max(
+    0,
+    Math.min(100, sprintGaugeMaxDays > 0 ? (capacity / sprintGaugeMaxDays) * 100 : 0),
+  );
   const fluidStops = overCapacity
     ? { top: "#fb7185", mid: "#ef4444", bot: "#b91c1c" }
     : utilization >= 85
@@ -167,41 +188,115 @@ function CapacityBucket({
       : { top: "#22d3ee", mid: "#14b8a6", bot: "#0f766e" };
   const bucketFill =
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
+  const sprintRollupInfoId = `sprint-cap-rollup-info-${svgKey}`;
+  const sprintStoriesWarnId = `sprint-cap-stories-warn-${svgKey}`;
+  const memberTitle = capacityBucketToFilterLabel(member);
 
   return (
     <section
       className={cn(
-        "min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        "@container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
       )}
     >
-      <div className="relative mb-2 flex min-h-8 items-center justify-end pr-0.5">
-        <p
-          className="pointer-events-none absolute left-1/2 top-1/2 flex max-w-[calc(100%-9rem)] items-center justify-center gap-1.5 pr-[84px] text-center text-[15px] font-bold text-slate-800"
-          style={{ transform: "translate(-50%, -50%)" }}
-        >
-          <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
-          <span className="truncate">{member}</span>
-        </p>
-        <label className="relative z-10 inline-flex translate-x-[3px] items-center gap-1 text-[12px] font-semibold text-slate-600">
-          Capacity
-          <input
-            type="number"
-            min={0}
-            max={10}
-            step={0.5}
-            value={capacity}
-            onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
-            className="h-7 w-11 shrink-0 rounded-md border border-slate-200/90 bg-white/90 px-1 text-[11px] font-medium text-slate-800 shadow-sm"
-          />
-          d
-        </label>
+      <div className="mb-2 flex flex-col gap-2 pr-0.5">
+        <div className="flex min-h-8 min-w-0 items-center justify-center">
+          <p className="flex min-w-0 max-w-full items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800">
+            <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
+            <span className="min-w-0 truncate">{memberTitle}</span>
+          </p>
+        </div>
+        <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
+          <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
+            Capacity
+            <input
+              type="number"
+              min={0}
+              max={10}
+              step={0.5}
+              value={capacity}
+              onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
+              className={cn(
+                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 shadow-sm",
+                CAPACITY_DAYS_INPUT_NO_SPIN,
+              )}
+            />
+            <span className="text-[11px] font-semibold text-slate-600">Days</span>
+          </label>
+          <div className="flex min-w-0 shrink items-center justify-end gap-1.5">
+            <div className="min-w-0 max-w-full overflow-x-auto overflow-y-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div
+                className="flex w-max min-w-0 flex-nowrap items-center justify-end gap-x-2 text-[13px] font-semibold leading-snug text-slate-600"
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className={cn(
+                    "whitespace-nowrap",
+                    storiesOverCapacity && rollupOverCapacityPill,
+                    storiesOverCapacity && "font-medium",
+                  )}
+                >
+                  {storiesOverCapacity ? (
+                    <RollupOverCapWarn
+                      tooltipId={sprintStoriesWarnId}
+                      ariaLabel="Σ Stories exceeds capacity — details"
+                    >
+                      <span className="font-semibold text-rose-800">Over capacity</span>
+                      <span className="mt-0.5 block text-slate-600">
+                        Σ Stories is {assignedTotal.toFixed(1)} Days but Capacity is {capacity} Days. Lower story
+                        estimates, raise Capacity, or move stories.
+                      </span>
+                    </RollupOverCapWarn>
+                  ) : null}
+                  Σ Stories{" "}
+                  <span
+                    className={cn("tabular-nums", storiesOverCapacity ? "text-white" : "text-slate-800")}
+                  >
+                    {assignedTotal.toFixed(1)}
+                  </span>
+                  <span className={cn("ml-1", storiesOverCapacity && "text-white")}>Days</span>
+                </span>
+              </div>
+            </div>
+            <span className="group/sprintrollup relative inline-flex shrink-0">
+              <button
+                type="button"
+                className="rounded p-0.5 text-slate-400 outline-none transition hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                aria-label="About sprint capacity rollups"
+                aria-describedby={sprintRollupInfoId}
+              >
+                <Info className="size-4" aria-hidden />
+              </button>
+              <span
+                id={sprintRollupInfoId}
+                role="tooltip"
+                className={cn(
+                  CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
+                  "group-hover/sprintrollup:opacity-100 group-focus-within/sprintrollup:opacity-100",
+                )}
+              >
+                <span className="block font-semibold text-slate-800">Sprint capacity (per person)</span>
+                <span className="mt-1.5 block">
+                  <strong className="text-slate-800">Capacity</strong> — how many Days this person can take in this
+                  sprint bucket.
+                </span>
+                <span className="mt-1 block">
+                  <strong className="text-slate-800">Σ Stories</strong> — sum of <em>Est days</em> on all user stories in
+                  this bucket. The gauge uses this total vs Capacity.
+                </span>
+                <span className="mt-1 block text-slate-600">
+                  Σ Stories turns red when it is greater than Capacity (Days).
+                </span>
+              </span>
+            </span>
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_56px] gap-2">
         <div
           ref={setNodeRef}
-          style={{ ["--bucket-row-h" as string]: "calc((23rem - 1rem) / 10)" }}
           className={cn(
-            "relative flex h-[23rem] flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition",
+            "relative flex h-[23rem] flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition @[28rem]:h-[26rem]",
             isOver && "ring-2 ring-primary/25",
           )}
         >
@@ -236,7 +331,7 @@ function CapacityBucket({
             )}
           </div>
         </div>
-        <div className="flex h-[23rem] flex-col items-center p-2">
+        <div className="flex h-[23rem] flex-col items-center p-2 @[28rem]:h-[26rem]">
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">
@@ -246,18 +341,18 @@ function CapacityBucket({
           <div className="flex flex-1 items-center py-1">
             <svg viewBox="0 0 84 292" className="h-full w-[4rem]" aria-label="Capacity gauge">
               <defs>
-                <linearGradient id={`track-${member}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={`track-${svgKey}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#f8fafc" />
                   <stop offset="100%" stopColor="#eef2f7" />
                 </linearGradient>
-                <linearGradient id={`fluid-${memberGradientKey}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={`fluid-${svgKey}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={fluidStops.top} />
                   <stop offset="52%" stopColor={fluidStops.mid} />
                   <stop offset="100%" stopColor={fluidStops.bot} />
                 </linearGradient>
               </defs>
               <rect x="28" y="8" width="28" height="274" rx="14" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
-              <rect x="34" y="16" width="16" height="242" rx="8" fill={`url(#track-${member})`} stroke="#cbd5e1" strokeWidth="1" />
+              <rect x="34" y="16" width="16" height="242" rx="8" fill={`url(#track-${svgKey})`} stroke="#cbd5e1" strokeWidth="1" />
               {Array.from({ length: 10 }, (_, i) => {
                 const y = 258 - i * 24.2;
                 return <line key={i} x1="56" y1={y} x2="66" y2={y} stroke="#94a3b8" strokeWidth="1.5" opacity="0.9" />;
@@ -278,24 +373,16 @@ function CapacityBucket({
                 width="12"
                 height={(thermometerPct / 100) * 242}
                 rx="6"
-                fill={`url(#fluid-${memberGradientKey})`}
+                fill={`url(#fluid-${svgKey})`}
                 opacity="0.95"
               />
-              {overCapacity ? <AlertTriangle x={30} y={-25} className="size-4 text-rose-600" /> : null}
             </svg>
           </div>
           <div className="text-center text-[11px] font-semibold text-slate-600">
-            <p>{assignedTotal.toFixed(1)}d</p>
-            <p>/ {capacity.toFixed(1)}d</p>
+            <p>{assignedTotal.toFixed(1)} Days</p>
+            <p>/ {capacity.toFixed(1)} Days</p>
           </div>
         </div>
-      </div>
-      <div className="mt-2 flex items-center justify-between text-[12px] font-semibold">
-        <span className="text-slate-600">{assignedTotal.toFixed(1)}d planned</span>
-        <span className={cn("text-slate-500", overCapacity && "inline-flex items-center gap-1 text-rose-600")}>
-          {overCapacity ? <AlertTriangle className="size-3.5" aria-hidden /> : null}
-          {capacity.toFixed(1)}d available ({Math.round(utilization)}%)
-        </span>
       </div>
     </section>
   );
@@ -489,25 +576,30 @@ export function SprintCapacityBoard({
           </div>
         </div>
       ) : null}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      {/* flex-wrap + min width so columns drop to the next row when the panel is narrow (not only by viewport breakpoint). */}
+      <div className="flex min-w-0 flex-wrap gap-6">
         {visibleMembers.map((member) => {
           const assignedIds = capacityBoard.assignments[member] ?? [];
           const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
           const assignedTotal = cards.reduce((sum, card) => sum + card.estimatedDays, 0);
           return (
-            <CapacityBucket
+            <div
               key={member}
-              yearSprint={yearSprint}
-              teamKey={teamKey}
-              member={member}
-              capacity={capacityBoard.capacities[member] ?? 6}
-              assignedTotal={assignedTotal}
-              cards={cards}
-              onCapacityChange={(days) => onCapacityChange(member, days)}
-              onEstimateChange={onEstimateChange}
-              onUnscheduleStory={onUnscheduleStory}
-              onOpenStory={onOpenStory}
-            />
+              className="box-border w-full max-w-full min-w-[min(100%,22rem)] grow basis-[22rem]"
+            >
+              <CapacityBucket
+                yearSprint={yearSprint}
+                teamKey={teamKey}
+                member={member}
+                capacity={capacityBoard.capacities[member] ?? 6}
+                assignedTotal={assignedTotal}
+                cards={cards}
+                onCapacityChange={(days) => onCapacityChange(member, days)}
+                onEstimateChange={onEstimateChange}
+                onUnscheduleStory={onUnscheduleStory}
+                onOpenStory={onOpenStory}
+              />
+            </div>
           );
         })}
       </div>

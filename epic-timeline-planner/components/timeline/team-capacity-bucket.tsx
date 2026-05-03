@@ -1,5 +1,7 @@
 "use client";
 
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Info, Maximize2, Minimize2, Users, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
@@ -9,17 +11,92 @@ import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { cn } from "@/lib/utils";
 
 /** Compact number fields: hide spinners so read-only and editable cells share identical text alignment. */
-const CAPACITY_DAYS_INPUT_NO_SPIN =
+export const CAPACITY_DAYS_INPUT_NO_SPIN =
   "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
-const CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS =
+export const CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS =
   "pointer-events-none absolute left-1/2 top-0 z-[320] w-56 max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-white px-2.5 py-2 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-slate-200/80 transition-opacity duration-150";
 
-const rollupOverCapacityPill =
+export const rollupOverCapacityPill =
   "inline-flex items-center gap-0.5 rounded-sm bg-rose-600 px-1 py-px text-[12px] leading-tight text-white";
 
-const ROLLUP_OVER_CAP_TOOLTIP_BASE =
-  "pointer-events-none absolute bottom-full left-1/2 z-[340] mb-1 w-52 max-w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 whitespace-normal rounded-md border border-rose-200 bg-white px-2 py-1.5 text-[11px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-slate-200/80 transition-opacity duration-150";
+/** Portal + fixed positioning so the tooltip is not clipped by horizontal scroll or overflow parents. */
+export function RollupOverCapWarn({
+  tooltipId,
+  ariaLabel,
+  children,
+}: {
+  tooltipId: string;
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const reposition = () => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCoords({ top: r.top, left: r.left + r.width / 2 });
+  };
+
+  const show = () => {
+    reposition();
+    setOpen(true);
+  };
+
+  const hide = () => setOpen(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onScrollOrResize = () => reposition();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className="-m-px rounded p-0.5 text-white outline-none hover:text-white/90 focus-visible:ring-1 focus-visible:ring-white/90"
+        aria-label={ariaLabel}
+        aria-describedby={open ? tooltipId : undefined}
+        onPointerEnter={show}
+        onPointerLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+      >
+        <AlertTriangle className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
+      </button>
+      {mounted && open
+        ? createPortal(
+            <div
+              id={tooltipId}
+              role="tooltip"
+              className="pointer-events-none fixed z-[9999] w-52 max-w-[min(16rem,calc(100vw-2rem))] whitespace-normal rounded-md border border-rose-200 bg-white px-2 py-1.5 text-[11px] font-medium leading-snug text-slate-700 shadow-md ring-1 ring-slate-200/80"
+              style={{
+                top: coords.top,
+                left: coords.left,
+                transform: "translate(-50%, calc(-100% - 8px))",
+              }}
+            >
+              {children}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
 
 export function TeamEpicCard({
   epicId,
@@ -246,8 +323,15 @@ export function TeamCapacityBucket({
       )}
     >
       <div className="mb-2 flex flex-col gap-2 pr-0.5">
-        <div className="flex min-h-8 min-w-0 items-center gap-2">
-          <p className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 text-left text-[15px] font-bold text-slate-800">
+        <div className="relative flex min-h-8 min-w-0 items-center justify-center">
+          <p
+            className={cn(
+              "flex min-h-8 min-w-0 items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800",
+              panelExpandable && onExpandPanel && onCollapsePanel
+                ? "max-w-[calc(100%-2.75rem)]"
+                : "max-w-full",
+            )}
+          >
             <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
             <span className="min-w-0 truncate">
               {teamLabelPrefix ? (
@@ -260,27 +344,29 @@ export function TeamCapacityBucket({
             </span>
           </p>
           {panelExpandable && onExpandPanel && onCollapsePanel ? (
-            isPanelExpanded ? (
-              <button
-                type="button"
-                onClick={onCollapsePanel}
-                className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
-                aria-label="Show all team buckets"
-                title="Show all teams"
-              >
-                <Minimize2 className="size-4" aria-hidden />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onExpandPanel}
-                className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
-                aria-label="Expand this team bucket to full width"
-                title="Expand bucket"
-              >
-                <Maximize2 className="size-4" aria-hidden />
-              </button>
-            )
+            <div className="absolute right-0 top-1/2 z-10 -translate-y-1/2">
+              {isPanelExpanded ? (
+                <button
+                  type="button"
+                  onClick={onCollapsePanel}
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                  aria-label="Show all team buckets"
+                  title="Show all teams"
+                >
+                  <Minimize2 className="size-4" aria-hidden />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onExpandPanel}
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                  aria-label="Expand this team bucket to full width"
+                  title="Expand bucket"
+                >
+                  <Maximize2 className="size-4" aria-hidden />
+                </button>
+              )}
+            </div>
           ) : null}
         </div>
         <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
@@ -298,7 +384,7 @@ export function TeamCapacityBucket({
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />
-            d
+            <span className="text-[11px] font-semibold text-slate-600">Days</span>
           </label>
           <div className="flex min-w-0 shrink items-center justify-end gap-1.5">
             {/* Rollups alone scroll horizontally so overflow does not clip the info tooltip (above the button). */}
@@ -316,30 +402,16 @@ export function TeamCapacityBucket({
                   )}
                 >
                   {childSumOverCapacity ? (
-                    <span className="group/wrollup-child relative inline-flex shrink-0 items-center">
-                      <button
-                        type="button"
-                        className="-m-px rounded p-0.5 text-white outline-none hover:text-white/90 focus-visible:ring-1 focus-visible:ring-white/90"
-                        aria-label="Σ Child exceeds team capacity — details"
-                        aria-describedby={rollupWarnChildId}
-                      >
-                        <AlertTriangle className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
-                      </button>
-                      <span
-                        id={rollupWarnChildId}
-                        role="tooltip"
-                        className={cn(
-                          ROLLUP_OVER_CAP_TOOLTIP_BASE,
-                          "group-hover/wrollup-child:opacity-100 group-focus-within/wrollup-child:opacity-100",
-                        )}
-                      >
-                        <span className="font-semibold text-rose-800">Over capacity</span>
-                        <span className="mt-0.5 block text-slate-600">
-                          Σ Child totals {Math.round(sumChildStoryEstimates)}d but team Capacity is {capacity}d. Reduce
-                          story estimates, raise Capacity, or move epics.
-                        </span>
+                    <RollupOverCapWarn
+                      tooltipId={rollupWarnChildId}
+                      ariaLabel="Σ Child exceeds team capacity — details"
+                    >
+                      <span className="font-semibold text-rose-800">Over capacity</span>
+                      <span className="mt-0.5 block text-slate-600">
+                        Σ Child totals {Math.round(sumChildStoryEstimates)} Days but team Capacity is {capacity} Days.
+                        Reduce story estimates, raise Capacity, or move epics.
                       </span>
-                    </span>
+                    </RollupOverCapWarn>
                   ) : null}
                   Σ Child{" "}
                   <span
@@ -347,7 +419,7 @@ export function TeamCapacityBucket({
                   >
                     {Math.round(sumChildStoryEstimates)}
                   </span>
-                  <span className={cn("ml-0.5", childSumOverCapacity && "text-white")}>d</span>
+                  <span className={cn("ml-1", childSumOverCapacity && "text-white")}>Days</span>
                 </span>
                 <span className="shrink-0 text-slate-300" aria-hidden>
                   ·
@@ -360,36 +432,22 @@ export function TeamCapacityBucket({
                   )}
                 >
                   {estSumOverCapacity ? (
-                    <span className="group/wrollup-est relative inline-flex shrink-0 items-center">
-                      <button
-                        type="button"
-                        className="-m-px rounded p-0.5 text-white outline-none hover:text-white/90 focus-visible:ring-1 focus-visible:ring-white/90"
-                        aria-label="Σ Est exceeds team capacity — details"
-                        aria-describedby={rollupWarnEstId}
-                      >
-                        <AlertTriangle className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
-                      </button>
-                      <span
-                        id={rollupWarnEstId}
-                        role="tooltip"
-                        className={cn(
-                          ROLLUP_OVER_CAP_TOOLTIP_BASE,
-                          "group-hover/wrollup-est:opacity-100 group-focus-within/wrollup-est:opacity-100",
-                        )}
-                      >
-                        <span className="font-semibold text-rose-800">Over capacity</span>
-                        <span className="mt-0.5 block text-slate-600">
-                          Σ Est (planned load) is {Math.round(sumOriginalEstimates)}d but team Capacity is {capacity}d.
-                          Lower Est days on epics, raise Capacity, or remove epics.
-                        </span>
+                    <RollupOverCapWarn
+                      tooltipId={rollupWarnEstId}
+                      ariaLabel="Σ Est exceeds team capacity — details"
+                    >
+                      <span className="font-semibold text-rose-800">Over capacity</span>
+                      <span className="mt-0.5 block text-slate-600">
+                        Σ Est (planned load) is {Math.round(sumOriginalEstimates)} Days but team Capacity is {capacity} Days.
+                        Lower Est days on epics, raise Capacity, or remove epics.
                       </span>
-                    </span>
+                    </RollupOverCapWarn>
                   ) : null}
                   Σ Est{" "}
                   <span className={cn("tabular-nums", estSumOverCapacity ? "text-white" : "text-slate-800")}>
                     {Math.round(sumOriginalEstimates)}
                   </span>
-                  <span className={cn("ml-0.5", estSumOverCapacity && "text-white")}>d</span>
+                  <span className={cn("ml-1", estSumOverCapacity && "text-white")}>Days</span>
                 </span>
               </div>
             </div>
@@ -420,7 +478,7 @@ export function TeamCapacityBucket({
                   bucket (planned load used for the gauge and capacity math).
                 </span>
                 <span className="mt-1 block text-slate-600">
-                  Either figure turns red when it is greater than Capacity (days).
+                  Either figure turns red when it is greater than Capacity (Days).
                 </span>
               </span>
             </span>
@@ -511,8 +569,8 @@ export function TeamCapacityBucket({
             </svg>
           </div>
           <div className="text-center text-[11px] font-semibold text-slate-600">
-            <p>{assignedTotal.toFixed(1)}d</p>
-            <p>/ {capacity.toFixed(1)}d</p>
+            <p>{assignedTotal.toFixed(1)} Days</p>
+            <p>/ {capacity.toFixed(1)} Days</p>
           </div>
         </div>
       </div>
