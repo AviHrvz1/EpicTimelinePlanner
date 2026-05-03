@@ -11,9 +11,11 @@ import {
   ChevronDown,
   ChevronRight,
   Layers3,
+  ListFilter,
   Plus,
   Search,
   Tag,
+  User,
   UserPen,
   UserPlus,
   Users,
@@ -26,6 +28,7 @@ import { toast } from "sonner";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
+import { PermissionFolderIcon } from "@/components/ui/permission-folder-icon";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
@@ -69,8 +72,20 @@ const USER_DIRECTORY_GROUP_LEVEL_LABELS: Record<UserDirectoryGroupLevel, string>
   status: "Status",
 };
 
-/** Extra left inset per nested group level for the name column (px), on top of default cell padding. */
-const USER_DIRECTORY_NAME_TREE_INDENT_PX = 22;
+function userDirectoryGroupLevelIcon(level: UserDirectoryGroupLevel, size: "tree" | "menu" = "tree"): ReactNode {
+  const cls = size === "menu" ? "size-3.5 shrink-0 text-slate-500" : "size-4 shrink-0 text-slate-500";
+  switch (level) {
+    case "team":
+      return <Users className={cls} strokeWidth={2} aria-hidden />;
+    case "permission":
+      return <PermissionFolderIcon className={cls} />;
+    case "status":
+      return <ListFilter className={cls} strokeWidth={2} aria-hidden />;
+  }
+}
+
+/** Horizontal shift per tree depth for group folder rows and grouped user name cells (px). */
+const USER_DIRECTORY_TREE_LEVEL_STEP_PX = 40;
 
 const USER_DIRECTORY_COLUMN_LABELS: Record<SortKey, string> = {
   name: "User name",
@@ -399,7 +414,6 @@ function EditCommitButtons({
 
 function UsersTableRow({
   row,
-  idx,
   columnOrder,
   saving,
   editField,
@@ -411,7 +425,6 @@ function UsersTableRow({
   nameTreeDepth = 0,
 }: {
   row: WorkspaceUserRow;
-  idx: number;
   columnOrder: SortKey[];
   saving: boolean;
   editField: UserEditField | null;
@@ -431,7 +444,7 @@ function UsersTableRow({
   const nameTdStyle =
     treeDepth > 0
       ? ({
-          paddingLeft: `${8 + treeDepth * USER_DIRECTORY_NAME_TREE_INDENT_PX}px`,
+          paddingLeft: `${8 + treeDepth * USER_DIRECTORY_TREE_LEVEL_STEP_PX}px`,
         } as const)
       : undefined;
   const [name, setName] = useState(row.name);
@@ -522,6 +535,7 @@ function UsersTableRow({
       <td key="name" className={USER_DIR_TD_BASE} style={nameTdStyle}>
         {editing("name") ? (
           <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <User className="size-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
             <input
               value={name}
               disabled={saving}
@@ -537,8 +551,9 @@ function UsersTableRow({
             <EditCommitButtons disabled={saving} onSave={saveName} onCancel={onCancelEdit} />
           </div>
         ) : (
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate px-1 py-1.5 font-normal text-slate-900">{row.name}</span>
+          <div className="flex min-w-0 items-center gap-1">
+            <User className="size-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+            <span className="min-w-0 flex-1 truncate py-1.5 pr-1 font-normal text-slate-900">{row.name}</span>
             {!saving && editField == null ? (
               <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <div onClick={(e) => e.stopPropagation()}>
@@ -688,12 +703,12 @@ function UsersTableRow({
 
   return (
     <tr
+      data-users-zebra-row="true"
       className={cn(
         "group border-t border-[#7cd3f7]/95 text-[16px] text-slate-800 transition-colors hover:bg-[#c5ebff]",
         saving && "opacity-70",
         !rowBusy && "cursor-pointer",
       )}
-      style={{ backgroundColor: idx % 2 === 0 ? TABLE_ZEBRA_STRIPE_BG : TABLE_ZEBRA_BASE_BG }}
       onClick={() => {
         if (rowBusy) return;
         onRowView(row);
@@ -733,6 +748,7 @@ export function UsersWorkspacePanel() {
   const [userDirOpenGroups, setUserDirOpenGroups] = useState<Record<string, boolean>>({});
   const [userDirGroupMenuOpen, setUserDirGroupMenuOpen] = useState(false);
   const userDirGroupMenuRef = useRef<HTMLDivElement>(null);
+  const userDirZebraTbodyRef = useRef<HTMLTableSectionElement>(null);
   const skipNextUserDirGroupPersist = useRef(true);
   const defaultUserDirGroupExpanded = true;
 
@@ -981,13 +997,11 @@ export function UsersWorkspacePanel() {
   }, [rows, registeredTeamSlugs]);
 
   const userDirectoryTableRows = useMemo(() => {
-    let zebra = 0;
     const renderLeaf = (list: WorkspaceUserRow[], nameTreeDepth: number) =>
       list.map((row) => (
         <UsersTableRow
           key={row.id}
           row={row}
-          idx={zebra++}
           columnOrder={columnOrder}
           saving={savingRowIds.has(row.id)}
           editField={editCell?.rowId === row.id ? editCell.field : null}
@@ -1029,10 +1043,13 @@ export function UsersWorkspacePanel() {
             .map(([key, g]) => {
               const folderId = `${path}/${level}:${encodeURIComponent(key)}`;
               const isOpen = userDirOpenGroups[folderId] ?? defaultUserDirGroupExpanded;
-              const indent = 8 + levelIndex * 18;
+              const indent = 8 + levelIndex * USER_DIRECTORY_TREE_LEVEL_STEP_PX;
               return (
                 <Fragment key={folderId}>
-                  <tr className="border-t border-[#7cd3f7]/95 bg-slate-100/95 text-[15px]">
+                  <tr
+                    data-users-zebra-row="true"
+                    className="border-t border-[#7cd3f7]/95 text-[15px] text-slate-800"
+                  >
                     <td colSpan={columnOrder.length} className="px-2 py-1.5">
                       <button
                         type="button"
@@ -1051,6 +1068,7 @@ export function UsersWorkspacePanel() {
                         ) : (
                           <ChevronRight className="size-4 shrink-0 text-slate-600" aria-hidden />
                         )}
+                        {userDirectoryGroupLevelIcon(level)}
                         <span className="shrink-0 text-slate-600">{USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}:</span>
                         <span className="min-w-0 truncate">{g.label}</span>
                         <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">
@@ -1083,6 +1101,15 @@ export function UsersWorkspacePanel() {
     directoryTeamIds,
     cancelDrawerClose,
   ]);
+
+  useLayoutEffect(() => {
+    const root = userDirZebraTbodyRef.current;
+    if (!root) return;
+    const rowEls = Array.from(root.querySelectorAll<HTMLElement>('[data-users-zebra-row="true"]'));
+    rowEls.forEach((el, idx) => {
+      el.style.backgroundColor = idx % 2 === 0 ? TABLE_ZEBRA_STRIPE_BG : TABLE_ZEBRA_BASE_BG;
+    });
+  }, [userDirectoryTableRows, loading, columnOrder]);
 
   const teamFilterSuggestions = useMemo(() => {
     const base = MONTH_TEAM_COLUMNS.map((c) => c.label);
@@ -1405,9 +1432,6 @@ export function UsersWorkspacePanel() {
             </button>
             {userDirGroupMenuOpen ? (
               <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-100 bg-white p-2 shadow-lg">
-                <p className="mb-1.5 px-1.5 text-[11px] leading-snug text-slate-500">
-                  Combine any dimensions. Nested order is always Team → Permission → Status.
-                </p>
                 {USER_DIRECTORY_GROUP_LEVEL_ORDER.map((level) => {
                   const checked = userDirGroupLevels.includes(level);
                   return (
@@ -1421,6 +1445,7 @@ export function UsersWorkspacePanel() {
                         onChange={() => toggleUserDirGroupLevel(level)}
                         className="h-3.5 w-3.5 rounded border-slate-300 accent-violet-600"
                       />
+                      {userDirectoryGroupLevelIcon(level, "menu")}
                       {USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}
                     </label>
                   );
@@ -1460,7 +1485,7 @@ export function UsersWorkspacePanel() {
                   </tr>
                 </thead>
               </SortableContext>
-              <tbody className="bg-white">
+              <tbody ref={userDirZebraTbodyRef} className="bg-white">
             {loading ? (
               <tr>
                 <td colSpan={columnOrder.length} className="px-4 py-16 text-center text-slate-500">
