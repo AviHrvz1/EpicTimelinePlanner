@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { Info, UserRound, Users, UserX, X } from "lucide-react";
+import { Info, Maximize2, Minimize2, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -154,6 +154,10 @@ function CapacityBucket({
   onEstimateChange,
   onUnscheduleStory,
   onOpenStory,
+  panelExpandable = false,
+  isPanelExpanded = false,
+  onExpandPanel,
+  onCollapsePanel,
 }: {
   yearSprint: number;
   teamKey: string;
@@ -165,6 +169,10 @@ function CapacityBucket({
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
+  panelExpandable?: boolean;
+  isPanelExpanded?: boolean;
+  onExpandPanel?: () => void;
+  onCollapsePanel?: () => void;
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
@@ -191,19 +199,55 @@ function CapacityBucket({
   const sprintRollupInfoId = `sprint-cap-rollup-info-${svgKey}`;
   const sprintStoriesWarnId = `sprint-cap-stories-warn-${svgKey}`;
   const memberTitle = capacityBucketToFilterLabel(member);
+  const bucketColumnHeightClass = isPanelExpanded
+    ? "min-h-[28rem] h-[min(72vh,44rem)]"
+    : "h-[23rem] @[28rem]:h-[26rem]";
 
   return (
     <section
       className={cn(
-        "@container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        "group @container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        isPanelExpanded && "min-h-0",
       )}
     >
       <div className="mb-2 flex flex-col gap-2 pr-0.5">
-        <div className="flex min-h-8 min-w-0 items-center justify-center">
-          <p className="flex min-w-0 max-w-full items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800">
+        <div className="relative flex min-h-8 min-w-0 items-center justify-center">
+          <p
+            className={cn(
+              "flex min-h-8 min-w-0 items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800",
+              panelExpandable && onExpandPanel && onCollapsePanel
+                ? "max-w-[calc(100%-2.75rem)]"
+                : "max-w-full",
+            )}
+          >
             <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
             <span className="min-w-0 truncate">{memberTitle}</span>
           </p>
+          {panelExpandable && onExpandPanel && onCollapsePanel ? (
+            <div className="absolute right-0 top-1/2 z-10 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+              {isPanelExpanded ? (
+                <button
+                  type="button"
+                  onClick={onCollapsePanel}
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                  aria-label="Show all people buckets"
+                  title="Show all people"
+                >
+                  <Minimize2 className="size-3" aria-hidden />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onExpandPanel}
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                  aria-label="Expand this person bucket to full width"
+                  title="Expand bucket"
+                >
+                  <Maximize2 className="size-3" aria-hidden />
+                </button>
+              )}
+            </div>
+          ) : null}
         </div>
         <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
           <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
@@ -296,7 +340,8 @@ function CapacityBucket({
         <div
           ref={setNodeRef}
           className={cn(
-            "relative flex h-[23rem] flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition @[28rem]:h-[26rem]",
+            "relative flex flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition",
+            bucketColumnHeightClass,
             isOver && "ring-2 ring-primary/25",
           )}
         >
@@ -331,7 +376,7 @@ function CapacityBucket({
             )}
           </div>
         </div>
-        <div className="flex h-[23rem] flex-col items-center p-2 @[28rem]:h-[26rem]">
+        <div className={cn("flex flex-col items-center p-2", bucketColumnHeightClass)}>
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">
@@ -488,6 +533,11 @@ export function SprintCapacityBoard({
     return members.filter((m) => selectedAssigneeFilter.includes(capacityBucketToFilterLabel(m)));
   }, [members, selectedAssigneeFilter]);
 
+  const [expandedMemberKey, setExpandedMemberKey] = useState<string | null>(null);
+  useEffect(() => {
+    setExpandedMemberKey(null);
+  }, [month, yearSprint, selectedTeamId, selectedAssigneeFilter.join(",")]);
+
   const teamKey = selectedTeamId ?? "all";
   const teamLabel =
     selectedTeamId && isKnownEpicTeamId(selectedTeamId)
@@ -579,13 +629,19 @@ export function SprintCapacityBoard({
       {/* flex-wrap + min width so columns drop to the next row when the panel is narrow (not only by viewport breakpoint). */}
       <div className="flex min-w-0 flex-wrap gap-6">
         {visibleMembers.map((member) => {
+          if (expandedMemberKey != null && expandedMemberKey !== member) {
+            return null;
+          }
           const assignedIds = capacityBoard.assignments[member] ?? [];
           const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
           const assignedTotal = cards.reduce((sum, card) => sum + card.estimatedDays, 0);
           return (
             <div
               key={member}
-              className="box-border w-full max-w-full min-w-[min(100%,22rem)] grow basis-[22rem]"
+              className={cn(
+                "box-border w-full max-w-full min-w-[min(100%,22rem)] grow basis-[22rem]",
+                expandedMemberKey === member && "min-w-0 basis-full max-w-none",
+              )}
             >
               <CapacityBucket
                 yearSprint={yearSprint}
@@ -598,6 +654,10 @@ export function SprintCapacityBoard({
                 onEstimateChange={onEstimateChange}
                 onUnscheduleStory={onUnscheduleStory}
                 onOpenStory={onOpenStory}
+                panelExpandable={visibleMembers.length > 1}
+                isPanelExpanded={expandedMemberKey === member}
+                onExpandPanel={() => setExpandedMemberKey(member)}
+                onCollapsePanel={() => setExpandedMemberKey(null)}
               />
             </div>
           );

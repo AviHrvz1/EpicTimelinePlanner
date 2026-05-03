@@ -318,7 +318,7 @@ export function TeamCapacityBucket({
   return (
     <section
       className={cn(
-        "@container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        "group @container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
         isPanelExpanded && "min-h-0",
       )}
     >
@@ -344,7 +344,7 @@ export function TeamCapacityBucket({
             </span>
           </p>
           {panelExpandable && onExpandPanel && onCollapsePanel ? (
-            <div className="absolute right-0 top-1/2 z-10 -translate-y-1/2">
+            <div className="absolute right-0 top-1/2 z-10 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
               {isPanelExpanded ? (
                 <button
                   type="button"
@@ -353,7 +353,7 @@ export function TeamCapacityBucket({
                   aria-label="Show all team buckets"
                   title="Show all teams"
                 >
-                  <Minimize2 className="size-4" aria-hidden />
+                  <Minimize2 className="size-3" aria-hidden />
                 </button>
               ) : (
                 <button
@@ -363,7 +363,7 @@ export function TeamCapacityBucket({
                   aria-label="Expand this team bucket to full width"
                   title="Expand bucket"
                 >
-                  <Maximize2 className="size-4" aria-hidden />
+                  <Maximize2 className="size-3" aria-hidden />
                 </button>
               )}
             </div>
