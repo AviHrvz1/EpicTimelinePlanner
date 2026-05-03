@@ -15,6 +15,7 @@ import {
   Filter,
   Folder,
   Layers3,
+  LayoutGrid,
   ListTodo,
   Plus,
   Search,
@@ -109,6 +110,7 @@ type WorkItemKindFilter = "initiative" | "epic" | "story";
 
 type BacklogSortBy = "titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status";
 
+/** Filters, group-by, and work-item scope only (no table layout or sort). */
 type BacklogFilterSnapshot = {
   query: string;
   statusFilter: string[];
@@ -120,13 +122,28 @@ type BacklogFilterSnapshot = {
   labelFilter: string[];
   workItemFilter: WorkItemKindFilter[];
   groupLevels: GroupLevel[];
+};
+
+/** Table sort, column order, visibility, header row, and column widths. */
+type BacklogViewSnapshot = {
   sortBy: BacklogSortBy;
+  columnOrder: BacklogColumnKey[];
+  columnVisibility: Record<BacklogColumnKey, boolean>;
+  showTableHeaderRow: boolean;
+  columnWidths: Record<BacklogColumnKey, number>;
 };
 
 type SavedBacklogFilterPreset = {
   id: string;
   name: string;
   snapshot: BacklogFilterSnapshot;
+  updatedAt: number;
+};
+
+type SavedBacklogViewPreset = {
+  id: string;
+  name: string;
+  snapshot: BacklogViewSnapshot;
   updatedAt: number;
 };
 
@@ -255,24 +272,30 @@ const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
 const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
+const BACKLOG_SAVED_VIEWS_STORAGE_KEY = "epic-planner.backlog.saved-views.v1";
 
 const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   workItem: true,
-  year: true,
-  quarter: true,
-  month: true,
+  /** Calendar facets duplicate Group by / filters for most views; enable from Table → columns when needed. */
+  year: false,
+  quarter: false,
+  month: false,
   /** Shown via Table → columns when needed — dates add a lot of horizontal noise. */
   startDate: false,
   endDate: false,
-  status: true,
-  sprint: true,
-  assignee: true,
-  labels: true,
+  /** Turn on from Table → columns when you want status in the grid (filters still apply). */
+  status: false,
+  sprint: false,
+  assignee: false,
+  /** Wide; turn on for label-heavy workflows. */
+  labels: false,
+  /** Core planning columns — on by default. */
   estDays: true,
   /** Often redundant with story estimates; toggle on when useful. */
   epicOriginalEst: false,
-  daysLeft: false,
-  progress: true,
+  daysLeft: true,
+  /** Wide vs Est days; enable when you want the bar. */
+  progress: false,
 };
 
 const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
@@ -440,6 +463,34 @@ function isBacklogSortByValue(v: unknown): v is BacklogSortBy {
   );
 }
 
+function backlogViewSnapshotFromUnknown(raw: unknown): BacklogViewSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const s = raw as Record<string, unknown>;
+  const sortBy = isBacklogSortByValue(s.sortBy) ? s.sortBy : "titleAsc";
+  if (!Array.isArray(s.columnOrder) || s.columnOrder.length === 0) return null;
+  const columnOrder = normalizeColumnOrder(s.columnOrder);
+  const vis = s.columnVisibility;
+  if (!vis || typeof vis !== "object") return null;
+  const columnVisibility = { ...DEFAULT_BACKLOG_COLUMN_VISIBILITY };
+  for (const key of BACKLOG_COLUMN_ORDER) {
+    const v = (vis as Record<string, unknown>)[key];
+    if (typeof v === "boolean") columnVisibility[key] = v;
+  }
+  columnVisibility.workItem = true;
+  const showTableHeaderRow = typeof s.showTableHeaderRow === "boolean" ? s.showTableHeaderRow : true;
+  const widthsRaw = s.columnWidths;
+  const columnWidths = { ...BACKLOG_COLUMN_DEFAULT_WIDTHS };
+  if (widthsRaw && typeof widthsRaw === "object") {
+    for (const key of BACKLOG_COLUMN_ORDER) {
+      const w = (widthsRaw as Record<string, unknown>)[key];
+      if (typeof w === "number" && Number.isFinite(w)) {
+        columnWidths[key] = Math.max(BACKLOG_COLUMN_MIN_WIDTHS[key], Math.round(w));
+      }
+    }
+  }
+  return { sortBy, columnOrder, columnVisibility, showTableHeaderRow, columnWidths };
+}
+
 function backlogFilterSnapshotFromUnknown(raw: unknown): BacklogFilterSnapshot | null {
   if (!raw || typeof raw !== "object") return null;
   const s = raw as Record<string, unknown>;
@@ -458,7 +509,6 @@ function backlogFilterSnapshotFromUnknown(raw: unknown): BacklogFilterSnapshot |
     labelFilter: Array.isArray(s.labelFilter) ? s.labelFilter.filter((x): x is string => typeof x === "string") : [],
     workItemFilter,
     groupLevels,
-    sortBy: isBacklogSortByValue(s.sortBy) ? s.sortBy : "titleAsc",
   };
 }
 
@@ -481,6 +531,27 @@ function parseSavedBacklogFilterPresetsJson(raw: unknown): SavedBacklogFilterPre
 function newSavedFilterPresetId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `bf-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function parseSavedBacklogViewPresetsJson(raw: unknown): SavedBacklogViewPreset[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SavedBacklogViewPreset[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    if (typeof r.id !== "string" || typeof r.name !== "string" || typeof r.updatedAt !== "number") continue;
+    const snapshot = backlogViewSnapshotFromUnknown(r.snapshot);
+    if (!snapshot) continue;
+    const name = r.name.trim();
+    if (!name) continue;
+    out.push({ id: r.id, name, snapshot, updatedAt: r.updatedAt });
+  }
+  return out.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+function newSavedViewPresetId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `bw-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 const BACKLOG_SORT_LABELS: Record<BacklogSortBy, string> = {
@@ -516,7 +587,7 @@ function sprintFilterIdToSummaryLabel(id: string): string {
   return id;
 }
 
-/** Human-readable lines describing what a saved backlog filter preset will store. */
+/** Human-readable lines describing what a saved filter preset will store. */
 function backlogFilterSnapshotSummaryLines(snapshot: BacklogFilterSnapshot): string[] {
   const lines: string[] = [];
   const q = snapshot.query.trim();
@@ -527,8 +598,6 @@ function backlogFilterSnapshotSummaryLines(snapshot: BacklogFilterSnapshot): str
   } else {
     lines.push(`Group by: ${snapshot.groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ")}`);
   }
-
-  lines.push(`Sort: ${BACKLOG_SORT_LABELS[snapshot.sortBy]}`);
 
   if (snapshot.workItemFilter.length > 0) {
     lines.push(`Work item types: ${snapshot.workItemFilter.map((k) => WORK_ITEM_KIND_SUMMARY_LABELS[k]).join(", ")}`);
@@ -555,6 +624,18 @@ function backlogFilterSnapshotSummaryLines(snapshot: BacklogFilterSnapshot): str
     lines.push(`Labels: ${snapshot.labelFilter.join(", ")}`);
   }
 
+  return lines;
+}
+
+/** Human-readable lines for a saved table view preset. */
+function backlogViewSnapshotSummaryLines(snapshot: BacklogViewSnapshot): string[] {
+  const lines: string[] = [];
+  lines.push(`Sort: ${BACKLOG_SORT_LABELS[snapshot.sortBy]}`);
+  lines.push(`Table header row: ${snapshot.showTableHeaderRow ? "shown" : "hidden"}`);
+  const visible = snapshot.columnOrder.filter((k) => snapshot.columnVisibility[k]);
+  lines.push(`Visible columns (${visible.length}): ${visible.map((k) => BACKLOG_COLUMN_LABELS[k]).join(", ")}`);
+  lines.push(`Column order: ${snapshot.columnOrder.map((k) => BACKLOG_COLUMN_LABELS[k]).join(" → ")}`);
+  lines.push("Column widths: saved for each visible column");
   return lines;
 }
 
@@ -672,9 +753,11 @@ function backlogTeamLabelFromId(id: string): string {
 function BacklogTeamFilterControl({
   selectedIds,
   onChange,
+  buttonClassName,
 }: {
   selectedIds: string[];
   onChange: (next: string[]) => void;
+  buttonClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -730,14 +813,17 @@ function BacklogTeamFilterControl({
   }
 
   return (
-    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+    <div className="group relative min-w-0 w-full" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+        className={cn(
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          buttonClassName,
+        )}
       >
-        <span className="font-semibold text-slate-700">Team: </span>
-        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-semibold text-slate-700">Team: </span>
+        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -795,10 +881,12 @@ function BacklogAssigneeFilterControl({
   selected,
   onChange,
   suggestions,
+  buttonClassName,
 }: {
   selected: string[];
   onChange: (next: string[]) => void;
   suggestions: readonly string[];
+  buttonClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -834,14 +922,17 @@ function BacklogAssigneeFilterControl({
   }
 
   return (
-    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+    <div className="group relative min-w-0 w-full" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+        className={cn(
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          buttonClassName,
+        )}
       >
-        <span className="font-semibold text-slate-700">Assignee: </span>
-        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-semibold text-slate-700">Assignee: </span>
+        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -896,10 +987,12 @@ function BacklogLabelsFilterControl({
   selected,
   onChange,
   suggestions,
+  buttonClassName,
 }: {
   selected: string[];
   onChange: (next: string[]) => void;
   suggestions: readonly string[];
+  buttonClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -935,14 +1028,17 @@ function BacklogLabelsFilterControl({
   }
 
   return (
-    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+    <div className="group relative min-w-0 w-full" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+        className={cn(
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          buttonClassName,
+        )}
       >
-        <span className="font-semibold text-slate-700">Labels: </span>
-        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-semibold text-slate-700">Labels: </span>
+        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -998,11 +1094,13 @@ function MultiCheckboxFilter({
   options,
   selected,
   onChange,
+  buttonClassName,
 }: {
   label: string;
   options: OptionItem[];
   selected: string[];
   onChange: (next: string[]) => void;
+  buttonClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1032,14 +1130,17 @@ function MultiCheckboxFilter({
   }
 
   return (
-    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+    <div className="group relative min-w-0 w-full" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+        className={cn(
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          buttonClassName,
+        )}
       >
-        <span className="font-semibold text-slate-700">{label}: </span>
-        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-semibold text-slate-700">{label}: </span>
+        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-56 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -1123,6 +1224,7 @@ export function BacklogPlanningPanel({
   const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const savedFilterMenuRef = useRef<HTMLDivElement | null>(null);
+  const savedViewMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const backlogRowsRootRef = useRef<HTMLDivElement | null>(null);
@@ -1143,6 +1245,13 @@ export function BacklogPlanningPanel({
   const [saveAsFilterDialogOpen, setSaveAsFilterDialogOpen] = useState(false);
   const [saveAsFilterName, setSaveAsFilterName] = useState("");
   const saveAsFilterNameInputRef = useRef<HTMLInputElement | null>(null);
+  const [savedViewPresets, setSavedViewPresets] = useState<SavedBacklogViewPreset[]>([]);
+  const [savedViewPresetsLoaded, setSavedViewPresetsLoaded] = useState(false);
+  const [viewPresetSearch, setViewPresetSearch] = useState("");
+  const [viewPresetMenuOpen, setViewPresetMenuOpen] = useState(false);
+  const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
+  const saveViewNameInputRef = useRef<HTMLInputElement | null>(null);
   const [savingStoryId, setSavingStoryId] = useState<string | null>(null);
   const [editingStoryCell, setEditingStoryCell] = useState<{
     storyId: string;
@@ -1767,7 +1876,6 @@ export function BacklogPlanningPanel({
       labelFilter,
       workItemFilter,
       groupLevels,
-      sortBy,
     };
   }, [
     query,
@@ -1780,8 +1888,17 @@ export function BacklogPlanningPanel({
     labelFilter,
     workItemFilter,
     groupLevels,
-    sortBy,
   ]);
+
+  const buildBacklogViewSnapshot = useCallback((): BacklogViewSnapshot => {
+    return {
+      sortBy,
+      columnOrder: [...columnOrder],
+      columnVisibility: { ...columnVisibility },
+      showTableHeaderRow,
+      columnWidths: { ...columnWidths },
+    };
+  }, [sortBy, columnOrder, columnVisibility, showTableHeaderRow, columnWidths]);
 
   const applyBacklogFilterSnapshot = useCallback((snapshot: BacklogFilterSnapshot) => {
     setQuery(snapshot.query);
@@ -1794,8 +1911,34 @@ export function BacklogPlanningPanel({
     setLabelFilter([...snapshot.labelFilter]);
     setWorkItemFilter([...snapshot.workItemFilter]);
     setGroupLevels([...snapshot.groupLevels]);
-    setSortBy(snapshot.sortBy);
     setGroupMenuOpen(false);
+  }, []);
+
+  const applyBacklogViewSnapshot = useCallback((snapshot: BacklogViewSnapshot) => {
+    setSortBy(snapshot.sortBy);
+    setColumnOrder(normalizeColumnOrder(snapshot.columnOrder));
+    setColumnVisibility(() => {
+      const next = { ...DEFAULT_BACKLOG_COLUMN_VISIBILITY };
+      for (const key of BACKLOG_COLUMN_ORDER) {
+        const v = snapshot.columnVisibility[key];
+        if (typeof v === "boolean") next[key] = v;
+      }
+      next.workItem = true;
+      return next;
+    });
+    setShowTableHeaderRow(snapshot.showTableHeaderRow);
+    setColumnWidths(() => {
+      const next = { ...BACKLOG_COLUMN_DEFAULT_WIDTHS };
+      for (const key of BACKLOG_COLUMN_ORDER) {
+        const w = snapshot.columnWidths[key];
+        if (typeof w === "number" && Number.isFinite(w)) {
+          next[key] = Math.max(BACKLOG_COLUMN_MIN_WIDTHS[key], Math.round(w));
+        }
+      }
+      return next;
+    });
+    setColumnsMenuOpen(false);
+    setViewPresetMenuOpen(false);
   }, []);
 
   const filteredSavedFilterPresets = useMemo(() => {
@@ -1804,15 +1947,34 @@ export function BacklogPlanningPanel({
     return savedFilterPresets.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 20);
   }, [savedFilterPresets, presetSearch]);
 
+  const filteredSavedViewPresets = useMemo(() => {
+    const q = viewPresetSearch.trim().toLowerCase();
+    if (!q) return savedViewPresets.slice(0, 12);
+    return savedViewPresets.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 20);
+  }, [savedViewPresets, viewPresetSearch]);
+
   const saveAsFilterSummaryLines = useMemo(() => {
     if (!saveAsFilterDialogOpen) return [];
     return backlogFilterSnapshotSummaryLines(buildBacklogFilterSnapshot());
   }, [saveAsFilterDialogOpen, buildBacklogFilterSnapshot]);
 
+  const saveViewSummaryLines = useMemo(() => {
+    if (!saveViewDialogOpen) return [];
+    return backlogViewSnapshotSummaryLines(buildBacklogViewSnapshot());
+  }, [saveViewDialogOpen, buildBacklogViewSnapshot]);
+
   function openSaveAsFilterDialog() {
     setPresetMenuOpen(false);
+    setViewPresetMenuOpen(false);
     setSaveAsFilterName("");
     setSaveAsFilterDialogOpen(true);
+  }
+
+  function openSaveViewDialog() {
+    setViewPresetMenuOpen(false);
+    setPresetMenuOpen(false);
+    setSaveViewName("");
+    setSaveViewDialogOpen(true);
   }
 
   function confirmSaveAsFilterPreset() {
@@ -1832,9 +1994,31 @@ export function BacklogPlanningPanel({
     toast.success(`Saved filter "${name}"`);
   }
 
+  function confirmSaveViewPreset() {
+    const name = saveViewName.trim();
+    if (!name) {
+      toast.error("Enter a name for this saved view");
+      return;
+    }
+    const snapshot = buildBacklogViewSnapshot();
+    const now = Date.now();
+    setSavedViewPresets((prev) => {
+      const rest = prev.filter((p) => p.name.trim().toLowerCase() !== name.toLowerCase());
+      return [{ id: newSavedViewPresetId(), name, snapshot, updatedAt: now }, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
+    });
+    setSaveViewDialogOpen(false);
+    setSaveViewName("");
+    toast.success(`Saved view "${name}"`);
+  }
+
   function deleteSavedFilterPreset(id: string) {
     setSavedFilterPresets((prev) => prev.filter((p) => p.id !== id));
     toast.success("Saved filter removed");
+  }
+
+  function deleteSavedViewPreset(id: string) {
+    setSavedViewPresets((prev) => prev.filter((p) => p.id !== id));
+    toast.success("Saved view removed");
   }
 
   function toggleWorkItemBadgeFilter(kind: WorkItemKindFilter) {
@@ -3241,10 +3425,30 @@ export function BacklogPlanningPanel({
   }, [savedFilterPresetsLoaded, savedFilterPresets]);
 
   useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(BACKLOG_SAVED_VIEWS_STORAGE_KEY);
+      if (raw) setSavedViewPresets(parseSavedBacklogViewPresetsJson(JSON.parse(raw)));
+    } catch {
+      // Ignore corrupt localStorage entries.
+    }
+    setSavedViewPresetsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!savedViewPresetsLoaded) return;
+    try {
+      window.localStorage.setItem(BACKLOG_SAVED_VIEWS_STORAGE_KEY, JSON.stringify(savedViewPresets));
+    } catch {
+      // Ignore write failures (private mode, quotas, etc.)
+    }
+  }, [savedViewPresetsLoaded, savedViewPresets]);
+
+  useEffect(() => {
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
       if (!groupMenuRef.current?.contains(target)) setGroupMenuOpen(false);
       if (!savedFilterMenuRef.current?.contains(target)) setPresetMenuOpen(false);
+      if (!savedViewMenuRef.current?.contains(target)) setViewPresetMenuOpen(false);
       if (!columnsMenuRef.current?.contains(target) && !columnsMenuPanelRef.current?.contains(target)) {
         setColumnsMenuOpen(false);
       }
@@ -3307,6 +3511,27 @@ export function BacklogPlanningPanel({
     });
     return () => window.cancelAnimationFrame(id);
   }, [saveAsFilterDialogOpen]);
+
+  useEffect(() => {
+    if (!saveViewDialogOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSaveViewDialogOpen(false);
+        setSaveViewName("");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [saveViewDialogOpen]);
+
+  useEffect(() => {
+    if (!saveViewDialogOpen) return;
+    const id = window.requestAnimationFrame(() => {
+      saveViewNameInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [saveViewDialogOpen]);
 
   function scheduleCreateMenuClose() {
     if (createMenuCloseTimerRef.current) clearTimeout(createMenuCloseTimerRef.current);
@@ -3496,10 +3721,12 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative z-30 mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
-        <div className="flex w-full min-w-0 flex-col gap-4">
-          <div className="flex w-full min-w-0 max-w-full items-center gap-2 sm:gap-3">
-          <div className="relative min-w-0 basis-0 grow-[0.97]">
+      <div className="relative z-10 mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
+        <div
+          className="grid w-full min-w-0 max-w-full items-center gap-x-2 gap-y-4 sm:gap-x-2.5"
+          style={{ gridTemplateColumns: "repeat(11, minmax(0, 1fr))" }}
+        >
+          <div className="relative col-span-4 col-start-1 row-start-1 min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
@@ -3531,9 +3758,8 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
-          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
           <div
-            className="relative flex h-9 w-[min(100%,12.5rem)] shrink-0 items-center gap-1 rounded-lg bg-white/90 px-1 ring-1 ring-slate-200/80 sm:w-[14rem]"
+            className="relative col-span-2 col-start-5 row-start-1 flex h-9 w-full min-w-0 items-center gap-1 rounded-lg bg-white/90 px-1 ring-1 ring-slate-200/80"
             ref={savedFilterMenuRef}
           >
             <Bookmark className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
@@ -3556,12 +3782,13 @@ export function BacklogPlanningPanel({
                     applyBacklogFilterSnapshot(pick.snapshot);
                     setPresetSearch(pick.name);
                     setPresetMenuOpen(false);
-                    toast.success(`Loaded "${pick.name}"`);
+                    toast.success(`Loaded filter "${pick.name}"`);
                   }
                 }}
-                placeholder="Select saved filters"
+                placeholder="Search Filters"
                 autoComplete="off"
                 role="combobox"
+                aria-label="Select saved filter preset"
                 aria-expanded={presetMenuOpen}
                 aria-controls="backlog-saved-filter-listbox"
                 className="h-7 w-full min-w-0 bg-transparent text-[13px] text-slate-800 outline-none placeholder:text-slate-400"
@@ -3575,7 +3802,7 @@ export function BacklogPlanningPanel({
                   {filteredSavedFilterPresets.length === 0 ? (
                     <div className="px-2.5 py-2 text-[12px] leading-snug text-slate-500">
                       {savedFilterPresets.length === 0
-                        ? "No saved filters yet. Use “Save as filter” next to the table button to store the current view."
+                        ? "No saved filters yet. Use “Save as filter” to store search, group-by, and facet filters."
                         : "No matches. Try another search or save a new filter."}
                     </div>
                   ) : (
@@ -3589,7 +3816,7 @@ export function BacklogPlanningPanel({
                             applyBacklogFilterSnapshot(preset.snapshot);
                             setPresetSearch(preset.name);
                             setPresetMenuOpen(false);
-                            toast.success(`Loaded "${preset.name}"`);
+                            toast.success(`Loaded filter "${preset.name}"`);
                           }}
                         >
                           {preset.name}
@@ -3614,11 +3841,11 @@ export function BacklogPlanningPanel({
               ) : null}
             </div>
           </div>
-          <span className="group relative inline-flex shrink-0 self-center">
+          <span className="group relative col-start-7 row-start-1 block min-w-0 self-center">
             <button
               type="button"
               onClick={openSaveAsFilterDialog}
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-indigo-200/80 transition hover:from-indigo-100 hover:to-violet-100 hover:text-slate-900 sm:px-2.5 sm:text-[12px]"
+              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-1.5 text-[10px] font-semibold text-slate-700 shadow-sm ring-1 ring-indigo-200/80 transition hover:from-indigo-100 hover:to-violet-100 hover:text-slate-900 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
               aria-haspopup="dialog"
             >
               <BookmarkPlus className="size-3.5 shrink-0 text-indigo-600/90" strokeWidth={2} aria-hidden />
@@ -3628,10 +3855,111 @@ export function BacklogPlanningPanel({
               role="tooltip"
               className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
             >
-              Opens a dialog to name this view and shows exactly which filters, group-by, and sort will be saved.
+              Saves search, group-by, and all facet filters (not sort or table layout). Load from the Search Filters field.
             </span>
           </span>
-          <div className="relative shrink-0 self-center" ref={columnsMenuRef}>
+          <div
+            className="relative col-span-2 col-start-8 row-start-1 flex h-9 w-full min-w-0 items-center gap-1 rounded-lg bg-white/90 px-1 ring-1 ring-slate-200/80"
+            ref={savedViewMenuRef}
+          >
+            <LayoutGrid className="size-3.5 shrink-0 text-sky-600/90" strokeWidth={2} aria-hidden />
+            <div className="relative min-w-0 flex-1">
+              <input
+                value={viewPresetSearch}
+                onChange={(event) => {
+                  setViewPresetSearch(event.target.value);
+                  setViewPresetMenuOpen(true);
+                }}
+                onFocus={() => setViewPresetMenuOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setViewPresetMenuOpen(false);
+                    return;
+                  }
+                  if (event.key === "Enter" && filteredSavedViewPresets.length === 1) {
+                    event.preventDefault();
+                    const pick = filteredSavedViewPresets[0];
+                    applyBacklogViewSnapshot(pick.snapshot);
+                    setViewPresetSearch(pick.name);
+                    setViewPresetMenuOpen(false);
+                    toast.success(`Loaded view "${pick.name}"`);
+                  }
+                }}
+                placeholder="Search Views"
+                autoComplete="off"
+                role="combobox"
+                aria-label="Select saved table view preset"
+                aria-expanded={viewPresetMenuOpen}
+                aria-controls="backlog-saved-view-listbox"
+                className="h-7 w-full min-w-0 bg-transparent text-[13px] text-slate-800 outline-none placeholder:text-slate-400"
+              />
+              {viewPresetMenuOpen ? (
+                <div
+                  id="backlog-saved-view-listbox"
+                  role="listbox"
+                  className="absolute right-0 top-[calc(100%+0.25rem)] z-30 w-[min(calc(100vw-2rem),18rem)] max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg sm:left-0 sm:right-0 sm:w-auto"
+                >
+                  {filteredSavedViewPresets.length === 0 ? (
+                    <div className="px-2.5 py-2 text-[12px] leading-snug text-slate-500">
+                      {savedViewPresets.length === 0
+                        ? "No saved views yet. Use “Save view” for sort, columns, and column widths."
+                        : "No matches. Try another search or save a new view."}
+                    </div>
+                  ) : (
+                    filteredSavedViewPresets.map((preset) => (
+                      <div key={preset.id} role="option" className="flex items-center gap-0.5 pr-1 hover:bg-slate-50">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-[13px] text-slate-800"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            applyBacklogViewSnapshot(preset.snapshot);
+                            setViewPresetSearch(preset.name);
+                            setViewPresetMenuOpen(false);
+                            toast.success(`Loaded view "${preset.name}"`);
+                          }}
+                        >
+                          {preset.name}
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/80 hover:text-slate-800"
+                          aria-label={`Delete saved view ${preset.name}`}
+                          title="Remove saved view"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            deleteSavedViewPreset(preset.id);
+                          }}
+                        >
+                          <Trash2 className="size-3.5" strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <span className="group relative col-start-10 row-start-1 block min-w-0 self-center">
+            <button
+              type="button"
+              onClick={openSaveViewDialog}
+              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-sky-50 to-cyan-50 px-1.5 text-[10px] font-semibold text-slate-700 shadow-sm ring-1 ring-sky-200/80 transition hover:from-sky-100 hover:to-cyan-100 hover:text-slate-900 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
+              aria-haspopup="dialog"
+            >
+              <LayoutGrid className="size-3.5 shrink-0 text-sky-600/90" strokeWidth={2} aria-hidden />
+              Save view
+            </button>
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
+            >
+              Saves sort order, column order (drag headers), visible columns, header row toggle, and column widths. Does
+              not change filters or group-by.
+            </span>
+          </span>
+          <div className="relative col-start-11 row-start-1 flex min-w-0 items-center justify-start" ref={columnsMenuRef}>
             <button
               type="button"
               onClick={() => setColumnsMenuOpen((open) => !open)}
@@ -3644,21 +3972,17 @@ export function BacklogPlanningPanel({
               <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
             </button>
           </div>
-          </div>
-          <div className="min-w-0 basis-0 grow-[0.03] shrink" aria-hidden />
-          </div>
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-4">
-          <div className="relative" ref={groupMenuRef}>
+          <div className="relative col-start-1 row-start-2 min-w-0" ref={groupMenuRef}>
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[30px] min-w-[11.5rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+              className="flex h-[30px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[13px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100 sm:px-2.5 sm:text-[14px]"
             >
-              <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
-                <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
+              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-700">
+                <Layers3 className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
                 Group By
               </span>
-              <span className="ml-1 truncate font-medium text-slate-600">{groupSummaryLabel}</span>
+              <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{groupSummaryLabel}</span>
             </button>
             {groupMenuOpen ? (
               <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg bg-white p-2 shadow-lg">
@@ -3681,37 +4005,87 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
-          <div className="h-7 w-px shrink-0 self-center bg-indigo-200/80" aria-hidden />
-          <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-slate-600">
-            <Filter className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
-            Filters
-          </span>
-          <MultiCheckboxFilter
-            label="Work Item"
-            options={workItemOptions}
-            selected={workItemFilter}
-            onChange={(next) =>
-              setWorkItemFilter(
-                next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
-              )
-            }
-          />
-          <MultiCheckboxFilter label="Year" options={yearOptions} selected={yearFilter} onChange={setYearFilter} />
-          <MultiCheckboxFilter label="Quarter" options={quarterOptions} selected={quarterFilter} onChange={setQuarterFilter} />
-          <MultiCheckboxFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
-          <MultiCheckboxFilter label="Sprint" options={sprintOptions} selected={sprintFilter} onChange={setSprintFilter} />
-          <BacklogTeamFilterControl selectedIds={teamFilter} onChange={setTeamFilter} />
-          <BacklogAssigneeFilterControl
-            selected={assigneeFilter}
-            onChange={setAssigneeFilter}
-            suggestions={assigneeAutocompleteSuggestions}
-          />
-          <BacklogLabelsFilterControl
-            selected={labelFilter}
-            onChange={setLabelFilter}
-            suggestions={storyLabelSuggestions}
-          />
-          <span className="group relative inline-flex h-[30px] w-[30px] shrink-0">
+          <div className="col-start-2 row-start-2 flex min-w-0 w-full items-center justify-center gap-1.5">
+            <div className="h-6 w-px shrink-0 bg-indigo-200/80" aria-hidden />
+            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:text-[12px]">
+              <Filter className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+              <span className="truncate">Filters</span>
+            </span>
+          </div>
+          <div className="col-start-3 row-start-2 min-w-0">
+            <MultiCheckboxFilter
+              label="Work Item"
+              options={workItemOptions}
+              selected={workItemFilter}
+              onChange={(next) =>
+                setWorkItemFilter(
+                  next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
+                )
+              }
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-4 row-start-2 min-w-0">
+            <MultiCheckboxFilter
+              label="Year"
+              options={yearOptions}
+              selected={yearFilter}
+              onChange={setYearFilter}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-5 row-start-2 min-w-0">
+            <MultiCheckboxFilter
+              label="Quarter"
+              options={quarterOptions}
+              selected={quarterFilter}
+              onChange={setQuarterFilter}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-6 row-start-2 min-w-0">
+            <MultiCheckboxFilter
+              label="Status"
+              options={statusOptions}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-7 row-start-2 min-w-0">
+            <MultiCheckboxFilter
+              label="Sprint"
+              options={sprintOptions}
+              selected={sprintFilter}
+              onChange={setSprintFilter}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-8 row-start-2 min-w-0">
+            <BacklogTeamFilterControl
+              selectedIds={teamFilter}
+              onChange={setTeamFilter}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-9 row-start-2 min-w-0">
+            <BacklogAssigneeFilterControl
+              selected={assigneeFilter}
+              onChange={setAssigneeFilter}
+              suggestions={assigneeAutocompleteSuggestions}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-10 row-start-2 min-w-0">
+            <BacklogLabelsFilterControl
+              selected={labelFilter}
+              onChange={setLabelFilter}
+              suggestions={storyLabelSuggestions}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+            />
+          </div>
+          <div className="col-start-11 row-start-2 flex min-w-0 justify-start">
+            <span className="group relative inline-flex h-[30px] w-[30px] shrink-0">
             <button
               type="button"
               onClick={resetAllFilters}
@@ -3730,7 +4104,7 @@ export function BacklogPlanningPanel({
             >
               Erases all filters: search, group-by, and every filter selection.
             </span>
-          </span>
+            </span>
           </div>
         </div>
       </div>
@@ -4914,16 +5288,17 @@ export function BacklogPlanningPanel({
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="backlog-save-as-filter-title"
+            aria-labelledby="backlog-save-filter-title"
             className="max-h-[min(90vh,32rem)] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/80"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="border-b border-slate-100 bg-gradient-to-b from-indigo-50/80 to-white px-5 py-4">
-              <h3 id="backlog-save-as-filter-title" className="text-[17px] font-semibold tracking-tight text-slate-900">
+              <h3 id="backlog-save-filter-title" className="text-[17px] font-semibold tracking-tight text-slate-900">
                 Save as filter
               </h3>
               <p className="mt-1 text-[13px] leading-snug text-slate-600">
-                Name this preset. The list below is everything that will be restored when you load it.
+                Name this preset. The list below is what will be restored — search, group-by, and facet filters only (not
+                sort or table layout).
               </p>
             </div>
             <form
@@ -4934,7 +5309,7 @@ export function BacklogPlanningPanel({
               }}
             >
               <label className="block">
-                <span className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-slate-600">Filter name</span>
+                <span className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-slate-600">Preset name</span>
                 <input
                   ref={saveAsFilterNameInputRef}
                   value={saveAsFilterName}
@@ -4945,7 +5320,7 @@ export function BacklogPlanningPanel({
                 />
               </label>
               <div>
-                <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-600">Included in this preset</div>
+                <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-600">Included in this filter</div>
                 <ul className="max-h-48 list-disc space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 px-5 py-3 text-[13px] leading-snug text-slate-700 marker:text-indigo-500">
                   {saveAsFilterSummaryLines.map((line) => (
                     <li key={line}>{line}</li>
@@ -4967,7 +5342,82 @@ export function BacklogPlanningPanel({
                   type="submit"
                   className="rounded-lg bg-gradient-to-b from-indigo-600 to-violet-600 px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm ring-1 ring-indigo-700/30 transition hover:from-indigo-500 hover:to-violet-500"
                 >
-                  Save preset
+                  Save as filter
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+      {saveViewDialogOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSaveViewDialogOpen(false);
+              setSaveViewName("");
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="backlog-save-view-title"
+            className="max-h-[min(90vh,32rem)] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/80"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 bg-gradient-to-b from-sky-50/80 to-white px-5 py-4">
+              <h3 id="backlog-save-view-title" className="text-[17px] font-semibold tracking-tight text-slate-900">
+                Save view
+              </h3>
+              <p className="mt-1 text-[13px] leading-snug text-slate-600">
+                Saves how the table looks and sorts: column order, visible columns, header row, column widths, and sort.
+                Filters and group-by are not included — use Save as filter for those.
+              </p>
+            </div>
+            <form
+              className="flex flex-col gap-4 px-5 py-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                confirmSaveViewPreset();
+              }}
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-slate-600">View name</span>
+                <input
+                  ref={saveViewNameInputRef}
+                  value={saveViewName}
+                  onChange={(event) => setSaveViewName(event.target.value)}
+                  placeholder="e.g. Compact estimates"
+                  autoComplete="off"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-sky-300 focus:ring-2 focus:ring-sky-200/70"
+                />
+              </label>
+              <div>
+                <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-600">Included in this view</div>
+                <ul className="max-h-48 list-disc space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 px-5 py-3 text-[13px] leading-snug text-slate-700 marker:text-sky-500">
+                  {saveViewSummaryLines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaveViewDialogOpen(false);
+                    setSaveViewName("");
+                  }}
+                  className="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-gradient-to-b from-sky-600 to-cyan-600 px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm ring-1 ring-sky-700/30 transition hover:from-sky-500 hover:to-cyan-500"
+                >
+                  Save view
                 </button>
               </div>
             </form>
@@ -4981,7 +5431,7 @@ export function BacklogPlanningPanel({
               id="backlog-columns-menu-panel"
               role="menu"
               aria-label="Table columns and layout"
-              className="fixed z-[100] max-h-[min(70vh,26rem)] w-64 overflow-y-auto overflow-x-hidden rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/20 ring-1 ring-indigo-200/60 backdrop-blur-sm"
+              className="fixed z-[110] max-h-[min(70vh,26rem)] w-64 overflow-y-auto overflow-x-hidden rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/20 ring-1 ring-indigo-200/60 backdrop-blur-sm"
               style={{ top: columnsMenuFixedPosition.top, left: columnsMenuFixedPosition.left }}
             >
               <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">

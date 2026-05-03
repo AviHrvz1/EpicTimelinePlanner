@@ -3776,7 +3776,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           )}
         >
           <div
-            className="relative z-30 h-full min-h-0 w-[58px] shrink-0 self-stretch overflow-visible"
+            className="relative z-[60] h-full min-h-0 w-[58px] shrink-0 self-stretch overflow-visible"
             onFocusCapture={() => setIsModeRailExpanded(true)}
             onBlurCapture={(e) => {
               const next = e.relatedTarget;
