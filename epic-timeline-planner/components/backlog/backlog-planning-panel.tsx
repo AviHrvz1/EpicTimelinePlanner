@@ -24,7 +24,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -156,6 +156,69 @@ function parseStoryLabels(raw: string | null | undefined): string[] {
 
 function formatStoryLabelsForEditInput(raw: string | null | undefined): string {
   return parseStoryLabels(raw).join(", ");
+}
+
+/** Read-only labels cell: chips inside a light panel; click to edit. */
+function BacklogLabelsChipPanel({
+  labelsSerialized,
+  onMouseDownBeginEdit,
+}: {
+  labelsSerialized: string | null | undefined;
+  onMouseDownBeginEdit: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const tokens = parseStoryLabels(labelsSerialized);
+  const title = formatStoryLabelsForEditInput(labelsSerialized) || undefined;
+  const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80 focus-visible:ring-offset-1";
+  if (tokens.length === 0) {
+    return (
+      <button
+        type="button"
+        title={title}
+        onMouseDown={onMouseDownBeginEdit}
+        className={cn(
+          "w-full min-w-0 rounded-lg border border-dashed border-slate-200/90 bg-slate-50/70 px-2 py-1.5 text-[13px] text-slate-400 transition",
+          "hover:border-slate-300 hover:bg-slate-100/80 hover:text-slate-500",
+          focusRing,
+        )}
+      >
+        —
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={onMouseDownBeginEdit}
+      className={cn(
+        "flex w-full min-w-0 items-center overflow-hidden rounded-lg border border-slate-200/90 bg-gradient-to-b from-white via-slate-50/40 to-slate-100/50 px-2 py-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition",
+        "hover:border-indigo-200/90 hover:from-indigo-50/50 hover:via-white hover:to-slate-50/60",
+        focusRing,
+      )}
+    >
+      <span className="flex min-w-0 flex-1 flex-nowrap items-center justify-start gap-1 overflow-hidden whitespace-nowrap">
+        {tokens.map((lab, i) => (
+          <span
+            key={`${lab}-${i}`}
+            className="inline-flex max-w-[min(100%,11rem)] shrink-0 items-center rounded-md border border-violet-200/75 bg-violet-50/95 px-2 py-0.5 text-[11px] font-medium leading-tight text-violet-950 shadow-[0_1px_0_rgba(255,255,255,0.65)]"
+          >
+            <span className="truncate">{lab}</span>
+          </span>
+        ))}
+      </span>
+    </button>
+  );
+}
+
+function BacklogLabelsEmptyRowSlot() {
+  return (
+    <span
+      className="inline-flex min-h-[2rem] w-full min-w-0 max-w-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50/40 px-2 py-1 text-[14px] text-slate-400"
+      aria-hidden
+    >
+      —
+    </span>
+  );
 }
 
 type StoryCellEditSnapshot = {
@@ -2271,9 +2334,9 @@ export function BacklogPlanningPanel({
             </span>
               ),
               labels: (
-            <div className="w-full min-w-0 overflow-hidden text-[15px] text-slate-700">
+            <div className="w-full min-w-0 overflow-hidden">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "labels" ? (
-                <span className="mx-auto inline-flex w-full min-w-0 max-w-full flex-col items-stretch gap-1">
+                <div className="mx-auto flex w-full min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-indigo-200/55 bg-gradient-to-b from-white to-slate-50/95 p-2 shadow-sm ring-1 ring-slate-200/45">
                   <textarea
                     value={editingStoryCell.value}
                     onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
@@ -2281,7 +2344,7 @@ export function BacklogPlanningPanel({
                       handleStoryCellKeyDown(event, row.storyId, "labels", storyEditSnapshotFromGroupedRow(row))
                     }
                     rows={2}
-                    className="min-h-[2.5rem] w-full min-w-0 rounded-md bg-white px-2 py-1 text-left text-[14px] leading-snug text-slate-800 ring-1 ring-slate-200 outline-none"
+                    className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
                     placeholder="Comma-separated labels"
                   />
                   <span className="flex items-center justify-center gap-0.5">
@@ -2294,19 +2357,15 @@ export function BacklogPlanningPanel({
                       className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                     ><Check className="size-3.5" /></button>
                   </span>
-                </span>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  title={formatStoryLabelsForEditInput(row.storyLabels) || undefined}
-                  onMouseDown={(event) => {
+                <BacklogLabelsChipPanel
+                  labelsSerialized={row.storyLabels}
+                  onMouseDownBeginEdit={(event) => {
                     event.preventDefault();
                     beginStoryCellEdit(row.storyId, "labels", formatStoryLabelsForEditInput(row.storyLabels));
                   }}
-                  className="min-w-0 w-full truncate px-1 py-0.5 text-start hover:bg-slate-100"
-                >
-                  {formatStoryLabelsForEditInput(row.storyLabels) || "—"}
-                </button>
+                />
               )}
             </div>
               ),
@@ -2441,7 +2500,7 @@ export function BacklogPlanningPanel({
             status: <span className="text-center text-[16px] text-slate-400">-</span>,
             sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
             assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
-            labels: <span className="text-center text-[16px] text-slate-400">-</span>,
+            labels: <BacklogLabelsEmptyRowSlot />,
             estDays: <span className="text-center text-[16px] text-slate-400">-</span>,
             epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
             daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -2641,7 +2700,7 @@ export function BacklogPlanningPanel({
                   )}
                 </span>
               ),
-              labels: <span className="text-center text-[16px] text-slate-500">-</span>,
+              labels: <BacklogLabelsEmptyRowSlot />,
               estDays: (
                 <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                   Σ {estimated}d
@@ -2833,7 +2892,7 @@ export function BacklogPlanningPanel({
                   )}
                 </span>
               ),
-              labels: <span className="text-center text-[16px] text-slate-500">-</span>,
+              labels: <BacklogLabelsEmptyRowSlot />,
               estDays: (
                 <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                   Σ {estimated}d
@@ -3080,7 +3139,7 @@ export function BacklogPlanningPanel({
                 ),
                 sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                 assignee: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeAssignee}</span>,
-                labels: <span className="text-center text-[16px] text-slate-500">-</span>,
+                labels: <BacklogLabelsEmptyRowSlot />,
                 estDays: (
                   <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                     Σ 0d
@@ -3220,7 +3279,7 @@ export function BacklogPlanningPanel({
                         status: <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip("todo"))}>To do</span>,
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
-                        labels: <span className="text-center text-[16px] text-slate-500">-</span>,
+                        labels: <BacklogLabelsEmptyRowSlot />,
                         estDays: (
                           <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                             Σ 0d
@@ -4452,7 +4511,7 @@ export function BacklogPlanningPanel({
                           )}
                         </span>
                       ),
-                      labels: <span className="text-center text-[16px] text-slate-500">-</span>,
+                      labels: <BacklogLabelsEmptyRowSlot />,
                       estDays: (
                         <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                           Σ {initiativeDays.estimated}d
@@ -4779,7 +4838,7 @@ export function BacklogPlanningPanel({
                                     )}
                                   </span>
                                 ),
-                                labels: <span className="text-center text-[16px] text-slate-500">-</span>,
+                                labels: <BacklogLabelsEmptyRowSlot />,
                                 estDays: (
                                   <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                                     Σ {epicDays.estimated}d
@@ -5110,9 +5169,9 @@ export function BacklogPlanningPanel({
                                     </span>
                                       ),
                                       labels: (
-                                    <div className="w-full min-w-0 overflow-hidden text-[15px] text-slate-700">
+                                    <div className="w-full min-w-0 overflow-hidden">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "labels" ? (
-                                        <span className="mx-auto inline-flex w-full min-w-0 max-w-full flex-col items-stretch gap-1">
+                                        <div className="mx-auto flex w-full min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-indigo-200/55 bg-gradient-to-b from-white to-slate-50/95 p-2 shadow-sm ring-1 ring-slate-200/45">
                                           <textarea
                                             value={editingStoryCell.value}
                                             onChange={(event) =>
@@ -5122,7 +5181,7 @@ export function BacklogPlanningPanel({
                                               handleStoryCellKeyDown(event, story.id, "labels", storyEditSnapshotFromFlat(story))
                                             }
                                             rows={2}
-                                            className="min-h-[2.5rem] w-full min-w-0 rounded-md bg-white px-2 py-1 text-left text-[14px] leading-snug text-slate-800 ring-1 ring-slate-200 outline-none"
+                                            className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
                                             placeholder="Comma-separated labels"
                                           />
                                           <span className="flex items-center justify-center gap-0.5">
@@ -5135,19 +5194,15 @@ export function BacklogPlanningPanel({
                                               className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                                             ><Check className="size-3.5" /></button>
                                           </span>
-                                        </span>
+                                        </div>
                                       ) : (
-                                        <button
-                                          type="button"
-                                          title={formatStoryLabelsForEditInput(story.labels) || undefined}
-                                          onMouseDown={(event) => {
+                                        <BacklogLabelsChipPanel
+                                          labelsSerialized={story.labels}
+                                          onMouseDownBeginEdit={(event) => {
                                             event.preventDefault();
                                             beginStoryCellEdit(story.id, "labels", formatStoryLabelsForEditInput(story.labels));
                                           }}
-                                          className="min-w-0 w-full truncate px-1 py-0.5 text-start hover:bg-slate-100"
-                                        >
-                                          {formatStoryLabelsForEditInput(story.labels) || "—"}
-                                        </button>
+                                        />
                                       )}
                                     </div>
                                       ),
