@@ -447,29 +447,19 @@ export function SprintRetrospectiveEditor({
   }
 
   return (
-    <section className="font-sans min-w-0 py-5 pr-5 pb-5 pl-2 sm:py-7 sm:pr-7 sm:pb-7 sm:pl-3 md:py-8 md:pr-8 md:pb-8 md:pl-3">
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-4 pb-4">
-        <div className="min-w-0 space-y-3">
-          <h3 className="flex items-center gap-2.5 font-sans text-xl font-normal tracking-tight text-black md:text-[1.3125rem] md:leading-snug">
-            <NotebookPen className="size-7 shrink-0 text-black md:size-8" aria-hidden />
-            <span>Retrospective</span>
-          </h3>
-          <p className="text-sm leading-relaxed text-slate-700">
-            {sprintLabel} - capture wins, improvements, and concrete next actions.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="default"
-          size="default"
-          onClick={handleSave}
-          disabled={!dirty}
-          className="h-9 shrink-0 gap-2 px-4 font-semibold"
-        >
-          <Save className="size-4" data-icon="inline-start" />
-          Save
-        </Button>
-      </header>
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col font-sans">
+      <div className="min-h-0 flex-1 overflow-y-auto py-5 pr-5 pb-5 pl-2 sm:py-7 sm:pr-7 sm:pb-7 sm:pl-3 md:py-8 md:pr-8 md:pb-8 md:pl-3">
+        <header className="mb-5 flex flex-wrap items-start gap-4 border-b border-slate-200/80 pb-4">
+          <div className="min-w-0 space-y-3">
+            <h3 className="flex items-center gap-2.5 font-sans text-xl font-normal tracking-tight text-black md:text-[1.3125rem] md:leading-snug">
+              <NotebookPen className="size-7 shrink-0 text-black md:size-8" aria-hidden />
+              <span>Sprint Retrospective</span>
+            </h3>
+            <p className="text-sm leading-relaxed text-slate-700">
+              {sprintLabel} — capture wins, improvements, and concrete next actions.
+            </p>
+          </div>
+        </header>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <RetroRichSection
@@ -566,17 +556,32 @@ export function SprintRetrospectiveEditor({
             size="sm"
             variant="outline"
             onClick={addActionItem}
-            className="h-8 shrink-0 gap-1.5 border-black/20 bg-white px-3 text-sm font-semibold text-black shadow-none hover:border-black/40 hover:bg-slate-50 active:bg-slate-100"
+            className="h-8 min-w-[100px] shrink-0 gap-1.5 px-4 text-sm font-medium"
           >
             <Plus className="size-4" strokeWidth={2.25} aria-hidden />
             Add
           </Button>
         </div>
       </section>
+      </div>
 
-      <p className="mt-3 text-xs text-black">
-        {savedAtText ? `Last saved: ${savedAtText}` : "Not saved yet for this sprint."}
-      </p>
+      <footer className="shrink-0 border-t border-slate-100 bg-white px-5 py-4 sm:px-7">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-600">
+            {savedAtText ? `Last saved: ${savedAtText}` : "Not saved yet for this sprint."}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSave}
+            disabled={!dirty}
+            className="h-8 min-w-[100px] shrink-0 gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+          >
+            <Save className="size-4" data-icon="inline-start" />
+            Save
+          </Button>
+        </div>
+      </footer>
     </section>
   );
 }

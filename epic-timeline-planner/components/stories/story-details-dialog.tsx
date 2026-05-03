@@ -731,15 +731,33 @@ export function StoryDetailsDialog({
                 >
                   <Trash className="size-4" />
                 </Button>
-                <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium" onClick={onClose}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 min-w-[100px] px-4 text-sm font-medium"
+                  onClick={onClose}
+                >
                   Cancel
                 </Button>
-                <Button size="sm" className="h-8 px-3 text-xs font-medium" onClick={handleSave} disabled={saving}>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
                   {saving ? "Saving..." : "Save"}
                 </Button>
               </>
             ) : (
-              <Button className="px-3 text-xs font-medium" onClick={handleSave} disabled={saving}>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                onClick={handleSave}
+                disabled={saving}
+              >
                 {saving ? "Creating..." : "Create"}
               </Button>
             )}

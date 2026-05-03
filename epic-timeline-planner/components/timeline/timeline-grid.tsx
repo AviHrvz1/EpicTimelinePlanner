@@ -3670,7 +3670,7 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-retrospective" ? (
-              <div className="flex-1 py-3 pr-3 pl-2 sm:py-5 sm:pr-5 sm:pl-3">
+              <div className="flex min-h-0 flex-1 flex-col py-3 pr-3 pl-2 sm:py-5 sm:pr-5 sm:pl-3">
                 <SprintRetrospectiveEditor
                   sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
                   initialDoc={sprintRetrospective}
