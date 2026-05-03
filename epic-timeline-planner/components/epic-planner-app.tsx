@@ -3640,7 +3640,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   const [isModeRailExpanded, setIsModeRailExpanded] = useState(false);
   const modeRailLabelClass =
-    "min-w-0 flex-1 truncate text-left text-[14px] font-semibold leading-snug";
+    "min-w-0 flex-1 truncate text-left text-[15px] font-semibold leading-snug";
 
   const modeSwitchMenu = (
     <aside className="relative z-20 flex h-full min-h-0 w-full flex-col overflow-visible">
@@ -3652,7 +3652,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             aria-label="Roadmap Planning"
             className={cn(
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
-              isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
+              isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
               topMode === "roadmap"
                 ? "bg-slate-100 text-indigo-800 shadow-sm ring-1 ring-slate-200/70"
                 : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3688,7 +3688,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             aria-label="Backlog Workspace"
             className={cn(
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
-              isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
+              isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
               topMode === "backlog"
                 ? "bg-slate-100 text-amber-950 shadow-sm ring-1 ring-slate-200/70"
                 : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3724,7 +3724,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             aria-label="Users"
             className={cn(
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
-              isModeRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
+              isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
               topMode === "users"
                 ? "bg-slate-100 text-sky-900 shadow-sm ring-1 ring-slate-200/70"
                 : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3798,7 +3798,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 className={cn(
                   "shrink-0 overflow-hidden border-slate-200/55 bg-white transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
                   isModeRailExpanded
-                    ? "max-h-[5.5rem] border-b px-3 pb-3 pt-3 opacity-100"
+                    ? "max-h-[6.25rem] border-b px-3 pb-3 pt-3 opacity-100"
                     : "max-h-0 border-0 bg-transparent p-0 opacity-0",
                 )}
                 aria-hidden={!isModeRailExpanded}
@@ -3808,7 +3808,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   alt="Bird Eye Viewer logo"
                   className={cn(
                     "block w-full rounded-md object-contain object-left transition-opacity duration-200",
-                    isModeRailExpanded ? "h-[52px] opacity-100" : "h-0 opacity-0",
+                    isModeRailExpanded ? "h-[62px] opacity-100" : "h-0 opacity-0",
                   )}
                 />
               </div>

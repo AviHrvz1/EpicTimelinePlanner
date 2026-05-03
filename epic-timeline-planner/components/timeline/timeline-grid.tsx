@@ -11,6 +11,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   ClipboardList,
+  FileWarning,
   Flag,
   Map as MapIcon,
   PieChart,
@@ -51,9 +52,10 @@ import {
   MONTH_TEAM_COLUMNS,
   isKnownEpicTeamId,
   monthTeamBoardStorageKey,
+  monthTeamLabelForId,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
-import { EpicItem, InitiativeItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, type UserStoryItem } from "@/lib/types";
 import {
   clampYearSprint,
   firstGlobalSprintForMonth,
@@ -442,6 +444,28 @@ function sprintLabelYearRoadmap(globalSprint: number): string {
 /** Quarter or month drill-in views: full word “Sprint”. */
 function sprintLabelQuarterOrMonth(globalSprint: number): string {
   return `Sprint ${globalSprint}`;
+}
+
+function estimatePanelEpicSprintLabel(epic: EpicItem): string {
+  if (epic.planStartMonth == null || epic.planSprint == null) return "—";
+  const g = globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1);
+  return sprintLabelQuarterOrMonth(g);
+}
+
+function estimatePanelStorySprintLabel(story: UserStoryItem): string {
+  return story.sprint == null ? "—" : sprintLabelQuarterOrMonth(story.sprint);
+}
+
+function estimatePanelTeamLabel(teamId: string | null | undefined): string {
+  const label = monthTeamLabelForId(teamId);
+  if (label) return label;
+  const raw = teamId?.trim();
+  return raw || "—";
+}
+
+function estimatePanelAssigneeLabel(value: string | null | undefined): string {
+  const t = (value ?? "").trim();
+  return t || "—";
 }
 
 type TodayBadgePlacement = "above" | "inside";
@@ -976,6 +1000,8 @@ function SprintPlanDropButton({
   );
 }
 
+type EstimateCoveragePanelTab = "unestimated" | "estimated" | "epicsNoDesc" | "storiesNoDesc";
+
 export function TimelineGrid({
   initiatives,
   zoom,
@@ -1051,9 +1077,10 @@ export function TimelineGrid({
   const [estEpicsPanelEntered, setEstEpicsPanelEntered] = useState(false);
   const skipEstEpicsPanelEnterRef = useRef(false);
   const estEpicsPanelCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(960);
+  const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(1080);
   const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
   const [expandedEstimateEpicIds, setExpandedEstimateEpicIds] = useState<Set<string>>(new Set());
+  const [estimateCoveragePanelTab, setEstimateCoveragePanelTab] = useState<EstimateCoveragePanelTab>("unestimated");
   const prevEstPanelOpenRef = useRef(false);
   const prevEstScopeKeyRef = useRef<string | null>(null);
   const capacityTeamFilterRef = useRef<HTMLDivElement | null>(null);
@@ -1450,6 +1477,21 @@ export function TimelineGrid({
     const unestimated = scopedRows.filter((row) => Number(row.epic.originalEstimateDays ?? 0) <= 0);
     return { all: scopedRows, estimated, unestimated };
   }, [activeMonth, focusedQuarter, initiatives]);
+  const scopedEpicsWithoutDescription = useMemo(
+    () => scopedEpicsForEstimatePanel.all.filter((row) => !String(row.epic.description ?? "").trim()),
+    [scopedEpicsForEstimatePanel.all],
+  );
+  const scopedStoriesWithoutDescription = useMemo(() => {
+    const rows: Array<{ story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem }> = [];
+    for (const row of scopedEpicsForEstimatePanel.all) {
+      for (const story of row.epic.userStories ?? []) {
+        if (!String(story.description ?? "").trim()) {
+          rows.push({ story, epic: row.epic, initiative: row.initiative });
+        }
+      }
+    }
+    return rows;
+  }, [scopedEpicsForEstimatePanel.all]);
   const estimatedEpicsPercentForScope = useMemo(() => {
     if (scopedEpicsForEstimatePanel.all.length === 0) return 0;
     return Math.round((scopedEpicsForEstimatePanel.estimated.length / scopedEpicsForEstimatePanel.all.length) * 100);
@@ -1541,19 +1583,23 @@ export function TimelineGrid({
     const showEstimatedColumns = variant === "estimated";
     const displayRows = rows;
     const emptyRowCount = Math.max(0, 6 - displayRows.length);
+    const colCount = showEstimatedColumns ? 8 : 6;
     return (
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(estimatePanelHeadCellClass, "w-[35%]")}>Epic</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[30%]")}>Initiative</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[7rem] text-center")}>
+            <th className={cn(estimatePanelHeadCellClass, "w-[20%] min-w-0")}>Epic</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[16%] min-w-0")}>Initiative</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[9%]")}>Sprint</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[9%]")}>Team</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[10%]")}>Assignee</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[5.5rem] text-center")}>
               {showEstimatedColumns ? "Est days" : "Target Est"}
             </th>
             {showEstimatedColumns ? (
               <>
-                <th className={cn(estimatePanelHeadCellClass, "w-[7rem] text-center")}>Σ Child Est</th>
-                <th className={cn(estimatePanelHeadCellClass, "w-[7.5rem] text-center")}>Est Mix</th>
+                <th className={cn(estimatePanelHeadCellClass, "w-[5.5rem] text-center")}>Σ Child Est</th>
+                <th className={cn(estimatePanelHeadCellClass, "w-[6.5rem] text-center")}>Est Mix</th>
               </>
             ) : null}
           </tr>
@@ -1563,7 +1609,6 @@ export function TimelineGrid({
             const isExpanded = expandedEstimateEpicIds.has(row.epic.id);
             const stories = row.epic.userStories ?? [];
             const estimatedStories = stories.filter((story) => Number(story.estimatedDays ?? 0) > 0).length;
-            const unestimatedStories = stories.length - estimatedStories;
             const storyEstimatedPct = stories.length > 0 ? (estimatedStories / stories.length) * 100 : 0;
             const storyUnestimatedPct = Math.max(0, 100 - storyEstimatedPct);
             const childEstimateSum = stories.reduce((sum, story) => sum + Math.max(0, Number(story.estimatedDays ?? 0)), 0);
@@ -1581,7 +1626,7 @@ export function TimelineGrid({
                       <button
                         type="button"
                         onClick={() => toggleEstimateEpicExpanded(row.epic.id)}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
                         aria-label={isExpanded ? "Collapse user stories" : "Expand user stories"}
                       >
                         {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
@@ -1592,7 +1637,7 @@ export function TimelineGrid({
                           closeEstEpicsPanel();
                           onOpenEpic(row.epic.id);
                         }}
-                        className="inline-flex max-w-[22rem] items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
+                        className="inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
                       >
                         <span className="truncate">{row.epic.title}</span>
                       </button>
@@ -1605,17 +1650,26 @@ export function TimelineGrid({
                         closeEstEpicsPanel();
                         onOpenInitiative(row.initiative.id);
                       }}
-                      className="inline-flex max-w-[20rem] items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                      className="inline-flex max-w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
                     >
                       <span className="truncate">{row.initiative.title}</span>
                     </button>
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-center font-semibold tabular-nums text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                    {estimatePanelEpicSprintLabel(row.epic)}
+                  </td>
+                  <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                    {estimatePanelTeamLabel(row.epic.team)}
+                  </td>
+                  <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                    {estimatePanelAssigneeLabel(row.epic.assignee)}
+                  </td>
+                  <td className={cn(estimatePanelCellClass, "text-center text-[12px] font-semibold tabular-nums text-slate-700")}>
                     {Math.max(0, Number(row.epic.originalEstimateDays ?? 0))}d
                   </td>
                   {showEstimatedColumns ? (
                     <>
-                      <td className={cn(estimatePanelCellClass, "text-center font-semibold tabular-nums text-slate-700")}>
+                      <td className={cn(estimatePanelCellClass, "text-center text-[12px] font-semibold tabular-nums text-slate-700")}>
                         {childEstimateSum}d
                       </td>
                       <td className={cn(estimatePanelCellClass, "text-center")}>
@@ -1638,7 +1692,7 @@ export function TimelineGrid({
                 </tr>
                 {isExpanded ? (
                   <tr className="bg-white">
-                    <td className="px-3 py-2" colSpan={showEstimatedColumns ? 5 : 3}>
+                    <td className="px-3 py-2" colSpan={colCount}>
                       {stories.length === 0 ? (
                         <p className="text-[12px] text-slate-500">No user stories yet.</p>
                       ) : (
@@ -1685,6 +1739,9 @@ export function TimelineGrid({
             >
               <td className={cn(estimatePanelCellClass, "text-slate-300")}>-</td>
               <td className={cn(estimatePanelCellClass, "text-slate-300")}>-</td>
+              <td className={cn(estimatePanelCellClass, "text-slate-300")}>-</td>
+              <td className={cn(estimatePanelCellClass, "text-slate-300")}>-</td>
+              <td className={cn(estimatePanelCellClass, "text-slate-300")}>-</td>
               <td className={cn(estimatePanelCellClass, "text-center text-slate-300")}>-</td>
               {showEstimatedColumns ? (
                 <>
@@ -1694,6 +1751,154 @@ export function TimelineGrid({
               ) : null}
             </tr>
           ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  function renderEpicsWithoutDescriptionTable(rows: Array<{ epic: EpicItem; initiative: InitiativeItem }>) {
+    const narrowHead = cn(estimatePanelHeadCellClass, "text-[10px]");
+    return (
+      <table className={estimatePanelTableClass}>
+        <thead>
+          <tr>
+            <th className={cn(narrowHead, "w-[28%] min-w-0")}>Epic</th>
+            <th className={cn(narrowHead, "w-[12%]")}>Sprint</th>
+            <th className={cn(narrowHead, "w-[11%]")}>Team</th>
+            <th className={cn(narrowHead, "w-[12%]")}>Assignee</th>
+            <th className={cn(narrowHead, "min-w-0")}>Parent initiative</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-500")} colSpan={5}>
+                All epics in this scope have a description.
+              </td>
+            </tr>
+          ) : (
+            rows.map((row, rowIndex) => (
+              <tr
+                key={row.epic.id}
+                className={cn(
+                  estimatePanelBodyRowClass,
+                  rowIndex % 2 === 0 ? "bg-[#d8f2ff]" : "bg-white",
+                )}
+              >
+                <td className={estimatePanelCellClass}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeEstEpicsPanel();
+                      onOpenEpic(row.epic.id);
+                    }}
+                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
+                  >
+                    <span className="truncate">{row.epic.title}</span>
+                  </button>
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  {estimatePanelEpicSprintLabel(row.epic)}
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  {estimatePanelTeamLabel(row.epic.team)}
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  {estimatePanelAssigneeLabel(row.epic.assignee)}
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-slate-600")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeEstEpicsPanel();
+                      onOpenInitiative(row.initiative.id);
+                    }}
+                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                  >
+                    <span className="truncate">{row.initiative.title}</span>
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    );
+  }
+
+  function renderStoriesWithoutDescriptionTable(
+    rows: Array<{ story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem }>,
+  ) {
+    const narrowHead = cn(estimatePanelHeadCellClass, "text-[10px]");
+    return (
+      <table className={estimatePanelTableClass}>
+        <thead>
+          <tr>
+            <th className={cn(narrowHead, "w-[28%] min-w-0")}>User story</th>
+            <th className={cn(narrowHead, "w-[12%]")}>Sprint</th>
+            <th className={cn(narrowHead, "w-[11%]")}>Team</th>
+            <th className={cn(narrowHead, "w-[12%]")}>Assignee</th>
+            <th className={cn(narrowHead, "min-w-0")}>Parent epic</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-500")} colSpan={5}>
+                No user stories without a description in this scope.
+              </td>
+            </tr>
+          ) : (
+            rows.map((row, rowIndex) => (
+              <tr
+                key={row.story.id}
+                className={cn(
+                  estimatePanelBodyRowClass,
+                  rowIndex % 2 === 0 ? "bg-[#d8f2ff]" : "bg-white",
+                )}
+              >
+                <td className={estimatePanelCellClass}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!onOpenStory) return;
+                      closeEstEpicsPanel();
+                      onOpenStory(row.story.id);
+                    }}
+                    disabled={!onOpenStory}
+                    className={cn(
+                      "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700",
+                      !onOpenStory && "cursor-default opacity-60 hover:bg-transparent hover:text-slate-900",
+                    )}
+                  >
+                    <UserStoryIcon className="size-3.5 shrink-0 text-slate-500" />
+                    <span className="truncate">{row.story.title}</span>
+                  </button>
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  {estimatePanelStorySprintLabel(row.story)}
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  {estimatePanelTeamLabel(row.epic.team)}
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  {estimatePanelAssigneeLabel(row.story.assignee)}
+                </td>
+                <td className={cn(estimatePanelCellClass, "text-slate-600")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeEstEpicsPanel();
+                      onOpenEpic(row.epic.id);
+                    }}
+                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                  >
+                    <span className="truncate">{row.epic.title}</span>
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     );
@@ -4538,7 +4743,7 @@ export function TimelineGrid({
           />
           <aside
             className={cn(
-              "fixed flex flex-col border-l border-indigo-200/70 bg-gradient-to-b from-white via-slate-50 to-indigo-50/50 p-4 pb-6 shadow-lg ring-1 ring-indigo-100/80 transition-transform duration-300 ease-out",
+              "fixed flex min-h-0 flex-col border-l border-slate-200 bg-white p-4 pb-6 shadow-[0_8px_30px_-8px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-out",
               estEpicsPanelEntered ? "pointer-events-auto" : "pointer-events-none",
             )}
             style={{
@@ -4551,19 +4756,19 @@ export function TimelineGrid({
             }}
           >
             <div
-              className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              className="absolute inset-y-0 left-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-slate-200/90"
               onPointerDown={beginEstimateCoverageResize}
               aria-label="Resize epic estimation coverage panel"
               role="separator"
             />
             <div
-              className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
+              className="absolute inset-y-0 right-0 z-20 w-2.5 cursor-col-resize bg-transparent hover:bg-slate-200/90"
               onPointerDown={beginEstimateCoverageResizeRight}
               aria-label="Resize epic estimation coverage panel from right"
               role="separator"
             />
             <div
-              className="mb-5 flex shrink-0 cursor-move items-center justify-between pb-1"
+              className="mb-4 flex shrink-0 cursor-move items-center justify-between pb-1"
               onPointerDown={beginEstimateCoverageDrag}
             >
               <div>
@@ -4586,81 +4791,160 @@ export function TimelineGrid({
                 <X className="size-4" />
               </button>
             </div>
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 xl:grid-cols-2 xl:gap-8">
-              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
-                <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
-                  <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
-                    <ClipboardList className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
-                    <span className="truncate">
-                      Unestimated Epics ({scopedEpicsForEstimatePanel.unestimated.length})
-                    </span>
-                  </p>
-                  <span
-                    className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
-                    role="group"
-                    aria-label="Unestimated epics expand and collapse"
-                  >
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <nav
+                className="mb-3 flex shrink-0 gap-0.5 overflow-x-auto border-b border-slate-200"
+                aria-label="Estimation coverage tables"
+              >
+                {(
+                  [
+                    {
+                      id: "unestimated" as const,
+                      label: "Unestimated epics",
+                      count: scopedEpicsForEstimatePanel.unestimated.length,
+                    },
+                    {
+                      id: "estimated" as const,
+                      label: "Estimated epics",
+                      count: scopedEpicsForEstimatePanel.estimated.length,
+                    },
+                    {
+                      id: "epicsNoDesc" as const,
+                      label: "Epics · no description",
+                      count: scopedEpicsWithoutDescription.length,
+                    },
+                    {
+                      id: "storiesNoDesc" as const,
+                      label: "Stories · no description",
+                      count: scopedStoriesWithoutDescription.length,
+                    },
+                  ] as const
+                ).map((tab) => {
+                  const active = estimateCoveragePanelTab === tab.id;
+                  return (
                     <button
+                      key={tab.id}
                       type="button"
-                      onClick={() => collapseEstimatePanelRows("unestimated")}
-                      title="Collapse all rows"
-                      aria-label="Collapse all unestimated epic rows"
-                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                      onClick={() => setEstimateCoveragePanelTab(tab.id)}
+                      className={cn(
+                        "shrink-0 border-b-2 px-3 py-2.5 text-left text-[13px] font-semibold transition-colors",
+                        active
+                          ? "border-fuchsia-600 text-fuchsia-900"
+                          : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900",
+                      )}
                     >
-                      <ChevronsUp className="size-3.5" strokeWidth={2.2} />
+                      <span className="whitespace-nowrap">{tab.label}</span>
+                      <span
+                        className={cn(
+                          "ml-1.5 tabular-nums",
+                          active ? "text-fuchsia-700/90" : "text-slate-500",
+                        )}
+                      >
+                        ({tab.count})
+                      </span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => expandEstimatePanelRows("unestimated")}
-                      title="Expand all rows"
-                      aria-label="Expand all unestimated epic rows"
-                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                    >
-                      <ChevronsDown className="size-3.5" strokeWidth={2.2} />
-                    </button>
-                  </span>
-                </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-                  {renderEstimatePanelTable(scopedEpicsForEstimatePanel.unestimated, "unestimated")}
-                </div>
-              </section>
-              <section className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
-                <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
-                  <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
-                    <BarChart3 className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
-                    <span className="truncate">
-                      Estimated Epics ({scopedEpicsForEstimatePanel.estimated.length})
-                    </span>
-                  </p>
-                  <span
-                    className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
-                    role="group"
-                    aria-label="Estimated epics expand and collapse"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => collapseEstimatePanelRows("estimated")}
-                      title="Collapse all rows"
-                      aria-label="Collapse all estimated epic rows"
-                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                    >
-                      <ChevronsUp className="size-3.5" strokeWidth={2.2} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => expandEstimatePanelRows("estimated")}
-                      title="Expand all rows"
-                      aria-label="Expand all estimated epic rows"
-                      className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-                    >
-                      <ChevronsDown className="size-3.5" strokeWidth={2.2} />
-                    </button>
-                  </span>
-                </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-                  {renderEstimatePanelTable(scopedEpicsForEstimatePanel.estimated, "estimated")}
-                </div>
-              </section>
+                  );
+                })}
+              </nav>
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+                {estimateCoveragePanelTab === "unestimated" ? (
+                  <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
+                      <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
+                        <ClipboardList className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
+                        <span className="truncate">Unestimated epics</span>
+                      </p>
+                      <span
+                        className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
+                        role="group"
+                        aria-label="Unestimated epics expand and collapse"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => collapseEstimatePanelRows("unestimated")}
+                          title="Collapse all rows"
+                          aria-label="Collapse all unestimated epic rows"
+                          className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                        >
+                          <ChevronsUp className="size-3.5" strokeWidth={2.2} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => expandEstimatePanelRows("unestimated")}
+                          title="Expand all rows"
+                          aria-label="Expand all unestimated epic rows"
+                          className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                        >
+                          <ChevronsDown className="size-3.5" strokeWidth={2.2} />
+                        </button>
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto bg-white">
+                      {renderEstimatePanelTable(scopedEpicsForEstimatePanel.unestimated, "unestimated")}
+                    </div>
+                  </section>
+                ) : estimateCoveragePanelTab === "estimated" ? (
+                  <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
+                      <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
+                        <BarChart3 className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
+                        <span className="truncate">Estimated epics</span>
+                      </p>
+                      <span
+                        className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
+                        role="group"
+                        aria-label="Estimated epics expand and collapse"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => collapseEstimatePanelRows("estimated")}
+                          title="Collapse all rows"
+                          aria-label="Collapse all estimated epic rows"
+                          className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                        >
+                          <ChevronsUp className="size-3.5" strokeWidth={2.2} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => expandEstimatePanelRows("estimated")}
+                          title="Expand all rows"
+                          aria-label="Expand all estimated epic rows"
+                          className="inline-flex h-5 w-5 items-center justify-center text-white/90 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                        >
+                          <ChevronsDown className="size-3.5" strokeWidth={2.2} />
+                        </button>
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto bg-white">
+                      {renderEstimatePanelTable(scopedEpicsForEstimatePanel.estimated, "estimated")}
+                    </div>
+                  </section>
+                ) : estimateCoveragePanelTab === "epicsNoDesc" ? (
+                  <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex shrink-0 items-center gap-2 bg-[#0897d5] px-3 py-2.5">
+                      <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
+                        <FileWarning className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
+                        <span className="truncate">Epics without description</span>
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto bg-white">
+                      {renderEpicsWithoutDescriptionTable(scopedEpicsWithoutDescription)}
+                    </div>
+                  </section>
+                ) : (
+                  <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex shrink-0 items-center gap-2 bg-[#0897d5] px-3 py-2.5">
+                      <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
+                        <FileWarning className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
+                        <span className="truncate">User stories without description</span>
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto bg-white">
+                      {renderStoriesWithoutDescriptionTable(scopedStoriesWithoutDescription)}
+                    </div>
+                  </section>
+                )}
+              </div>
             </div>
           </aside>
         </div>
