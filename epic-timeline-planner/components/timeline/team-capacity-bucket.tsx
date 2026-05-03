@@ -20,6 +20,10 @@ export const CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS =
 export const rollupOverCapacityPill =
   "inline-flex items-center gap-0.5 rounded-sm bg-rose-600 px-1 py-px text-[12px] leading-tight text-white";
 
+/** White chip behind rollups when load is within capacity (pairs with {@link rollupOverCapacityPill}). */
+export const rollupNeutralPill =
+  "inline-flex items-center gap-0.5 rounded-sm border border-slate-200/85 bg-white px-1 py-px text-[12px] leading-tight";
+
 /** Portal + fixed positioning so the tooltip is not clipped by horizontal scroll or overflow parents. */
 export function RollupOverCapWarn({
   tooltipId,
@@ -397,8 +401,7 @@ export function TeamCapacityBucket({
                 <span
                   className={cn(
                     "whitespace-nowrap",
-                    childSumOverCapacity && rollupOverCapacityPill,
-                    childSumOverCapacity && "font-medium",
+                    childSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
                   {childSumOverCapacity ? (
@@ -427,8 +430,7 @@ export function TeamCapacityBucket({
                 <span
                   className={cn(
                     "whitespace-nowrap",
-                    estSumOverCapacity && rollupOverCapacityPill,
-                    estSumOverCapacity && "font-medium",
+                    estSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
                   {estSumOverCapacity ? (

@@ -11,6 +11,7 @@ import {
   CAPACITY_DAYS_INPUT_NO_SPIN,
   CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
   RollupOverCapWarn,
+  rollupNeutralPill,
   rollupOverCapacityPill,
 } from "@/components/timeline/team-capacity-bucket";
 import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
@@ -276,8 +277,7 @@ function CapacityBucket({
                 <span
                   className={cn(
                     "whitespace-nowrap",
-                    storiesOverCapacity && rollupOverCapacityPill,
-                    storiesOverCapacity && "font-medium",
+                    storiesOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
                   {storiesOverCapacity ? (
