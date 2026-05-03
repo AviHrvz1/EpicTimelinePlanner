@@ -10,6 +10,7 @@ import {
   Check,
   Plus,
   Search,
+  Tag,
   UserPen,
   UserPlus,
   Users,
@@ -24,11 +25,12 @@ import { Button } from "@/components/ui/button";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
-import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
+import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
 import {
   WORKSPACE_USER_PERMISSIONS,
   normalizeWorkspaceUserPermission,
+  normalizeWorkspaceUserTeam,
   teamLabelForWorkspaceUser,
 } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
@@ -45,7 +47,6 @@ export type WorkspaceUserRow = {
   updatedAt: string;
 };
 
-type TeamFilter = "all" | "platform" | "experience" | "data" | "__none__";
 type PermissionFilter = "all" | "Admin" | "Editor" | "Viewer";
 type SortKey = "name" | "email" | "team" | "permission" | "status";
 type SortState = { key: SortKey; dir: "asc" | "desc" };
@@ -53,6 +54,8 @@ type UserEditField = "name" | "email" | "team" | "permission";
 
 const USER_DIRECTORY_DEFAULT_COLUMN_ORDER: SortKey[] = ["name", "email", "team", "permission", "status"];
 const USERS_DIRECTORY_COLUMN_ORDER_STORAGE_KEY = "epic-planner.users-directory.column-order.v1";
+/** Custom team slugs registered from “Add team” (no server entity; merged into combobox + filter hints). */
+const USERS_DIRECTORY_EXTRA_TEAMS_STORAGE_KEY = "epic-planner.users-directory.extra-teams.v1";
 
 const USER_DIRECTORY_COLUMN_LABELS: Record<SortKey, string> = {
   name: "User name",
@@ -116,8 +119,6 @@ function parseStoredUserDirectoryColumnOrder(raw: string | null): SortKey[] | nu
   }
 }
 
-const TEAM_FILTER_SUGGESTIONS = [...MONTH_TEAM_COLUMNS.map((c) => c.label), "Unassigned only"] as const;
-
 const PERMISSION_FILTER_SUGGESTIONS = [...WORKSPACE_USER_PERMISSIONS] as const;
 
 const cellInputCn =
@@ -127,28 +128,78 @@ function emptyForm() {
   return { name: "", email: "", team: "" as string, permission: "Viewer" as string };
 }
 
-function teamFilterLabel(f: TeamFilter): string {
+function teamFilterLabel(f: string): string {
   if (f === "all") return "";
   if (f === "__none__") return "Unassigned only";
-  return MONTH_TEAM_COLUMNS.find((t) => t.id === f)?.label ?? f;
+  return teamLabelForWorkspaceUser(f);
 }
 
-function resolveTeamFilterQuery(q: string): TeamFilter {
+function parseStoredExtraTeamSlugs(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const p = JSON.parse(raw) as unknown;
+    if (!Array.isArray(p)) return [];
+    const out = new Set<string>();
+    for (const x of p) {
+      if (typeof x !== "string") continue;
+      const n = normalizeWorkspaceUserTeam(x);
+      if (n) out.add(n);
+    }
+    return [...out];
+  } catch {
+    return [];
+  }
+}
+
+function resolveTeamFilterQuery(
+  q: string,
+  rows: readonly WorkspaceUserRow[],
+  registeredTeamSlugs: readonly string[] = [],
+): string {
   const t = q.trim().toLowerCase();
   if (!t || t === "all teams" || t === "all") return "all";
   if (t === "unassigned only" || t === "unassigned") return "__none__";
   const exact = MONTH_TEAM_COLUMNS.find((c) => c.label.toLowerCase() === t);
-  if (exact) return exact.id as TeamFilter;
+  if (exact) return exact.id;
   const prefix = MONTH_TEAM_COLUMNS.find((c) => c.label.toLowerCase().startsWith(t));
-  if (prefix) return prefix.id as TeamFilter;
+  if (prefix) return prefix.id;
   const byId = MONTH_TEAM_COLUMNS.find((c) => c.id.toLowerCase() === t);
-  if (byId) return byId.id as TeamFilter;
+  if (byId) return byId.id;
+
+  const extras: { teamId: string; label: string }[] = [];
+  const seenTeam = new Set<string>();
+  for (const r of rows) {
+    if (!r.team || seenTeam.has(r.team)) continue;
+    seenTeam.add(r.team);
+    extras.push({ teamId: r.team, label: teamLabelForWorkspaceUser(r.team) });
+  }
+  for (const slug of registeredTeamSlugs) {
+    const n = normalizeWorkspaceUserTeam(slug);
+    if (!n || seenTeam.has(n)) continue;
+    seenTeam.add(n);
+    extras.push({ teamId: n, label: teamLabelForWorkspaceUser(n) });
+  }
+  for (const { teamId, label } of extras) {
+    if (label.toLowerCase() === t) return teamId;
+  }
+  for (const { teamId, label } of [...extras].sort((a, b) => b.label.length - a.label.length)) {
+    if (label.toLowerCase().startsWith(t)) return teamId;
+  }
+  for (const { teamId } of extras) {
+    if (teamId.toLowerCase() === t) return teamId;
+  }
   return "all";
 }
 
 function permissionFilterLabel(f: PermissionFilter): string {
   if (f === "all") return "";
   return f;
+}
+
+/** True when `teamId` is a custom directory team not present on any other loaded user row. */
+function shouldAnnounceNewDirectoryTeam(teamId: string, knownDirectoryTeamIds: readonly string[]): boolean {
+  if (!teamId || MONTH_TEAM_IDS.includes(teamId)) return false;
+  return !knownDirectoryTeamIds.includes(teamId);
 }
 
 function resolvePermissionFilterQuery(q: string): PermissionFilter {
@@ -307,6 +358,7 @@ function UsersTableRow({
   onCancelEdit,
   onRowView,
   patchUser,
+  directoryTeamIds,
 }: {
   row: WorkspaceUserRow;
   idx: number;
@@ -320,6 +372,7 @@ function UsersTableRow({
     id: string,
     body: { name?: string; email?: string; team?: string; permission?: string },
   ) => Promise<boolean>;
+  directoryTeamIds: readonly string[];
 }) {
   const [name, setName] = useState(row.name);
   const [email, setEmail] = useState(row.email);
@@ -376,12 +429,19 @@ function UsersTableRow({
 
   const saveTeam = async () => {
     blurActiveField();
-    if (teamId === row.team) {
+    const normalized = normalizeWorkspaceUserTeam(teamId);
+    if (normalized === row.team) {
       onCancelEdit();
       return;
     }
-    const ok = await patchUser(row.id, { team: teamId });
-    if (ok) onCancelEdit();
+    const announceNewTeam = shouldAnnounceNewDirectoryTeam(normalized, directoryTeamIds);
+    const ok = await patchUser(row.id, { team: normalized });
+    if (ok) {
+      if (announceNewTeam) {
+        toast.success(`New team created: ${teamLabelForWorkspaceUser(normalized)}`);
+      }
+      onCancelEdit();
+    }
   };
 
   const savePermission = async () => {
@@ -479,8 +539,10 @@ function UsersTableRow({
                 teamId={teamId}
                 onTeamIdChange={setTeamId}
                 disabled={saving}
-                placeholder="Team…"
+                placeholder="Pick a team or create new…"
                 className={cellInputCn}
+                allowCustomTeam
+                extraTeamIds={directoryTeamIds}
               />
             </div>
             <EditCommitButtons disabled={saving} onSave={saveTeam} onCancel={onCancelEdit} />
@@ -495,6 +557,10 @@ function UsersTableRow({
                     row.team === "platform" && "bg-sky-50 text-sky-800 ring-sky-200/80",
                     row.team === "experience" && "bg-violet-50 text-violet-800 ring-violet-200/80",
                     row.team === "data" && "bg-amber-50 text-amber-900 ring-amber-200/80",
+                    row.team !== "platform" &&
+                      row.team !== "experience" &&
+                      row.team !== "data" &&
+                      "bg-slate-50 text-slate-800 ring-slate-200/80",
                   )}
                 >
                   {teamLabelForWorkspaceUser(row.team)}
@@ -586,7 +652,7 @@ export function UsersWorkspacePanel() {
   const [searchText, setSearchText] = useState("");
   const [searchSuggestOpen, setSearchSuggestOpen] = useState(false);
   const searchFieldWrapRef = useRef<HTMLDivElement>(null);
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [permissionFilter, setPermissionFilter] = useState<PermissionFilter>("all");
   const [teamFilterInput, setTeamFilterInput] = useState("");
   const [permFilterInput, setPermFilterInput] = useState("");
@@ -600,6 +666,9 @@ export function UsersWorkspacePanel() {
   const [userDrawerEntered, setUserDrawerEntered] = useState(false);
   const userDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextUserDirColumnPersist = useRef(true);
+  const [registeredTeamSlugs, setRegisteredTeamSlugs] = useState<string[]>([]);
+  const [addTeamOpen, setAddTeamOpen] = useState(false);
+  const [newTeamNameInput, setNewTeamNameInput] = useState("");
 
   const cancelDrawerClose = useCallback(() => {
     if (userDrawerCloseTimerRef.current) {
@@ -640,6 +709,44 @@ export function UsersWorkspacePanel() {
     );
     if (stored) setColumnOrder(stored);
   }, []);
+
+  useEffect(() => {
+    setRegisteredTeamSlugs(parseStoredExtraTeamSlugs(localStorage.getItem(USERS_DIRECTORY_EXTRA_TEAMS_STORAGE_KEY)));
+  }, []);
+
+  const persistRegisteredTeamSlugs = useCallback((next: string[]) => {
+    const merged = [...new Set(next.filter(Boolean))];
+    localStorage.setItem(USERS_DIRECTORY_EXTRA_TEAMS_STORAGE_KEY, JSON.stringify(merged));
+    setRegisteredTeamSlugs(merged);
+  }, []);
+
+  const saveRegisteredTeamFromModal = useCallback(() => {
+    const slug = normalizeWorkspaceUserTeam(newTeamNameInput);
+    if (!slug) {
+      toast.error("Enter a valid team name (use letters or numbers).");
+      return;
+    }
+    if (MONTH_TEAM_IDS.includes(slug)) {
+      toast.message(
+        "That name matches a built-in delivery team. Choose Platform, Experience, or Data & analytics when editing users.",
+      );
+      setAddTeamOpen(false);
+      setNewTeamNameInput("");
+      return;
+    }
+    if (registeredTeamSlugs.includes(slug)) {
+      toast.message(`“${teamLabelForWorkspaceUser(slug)}” is already on your team list.`);
+      setAddTeamOpen(false);
+      setNewTeamNameInput("");
+      return;
+    }
+    persistRegisteredTeamSlugs([...registeredTeamSlugs, slug]);
+    toast.success(
+      `Team “${teamLabelForWorkspaceUser(slug)}” added. It appears in team fields—assign users when you add or edit them.`,
+    );
+    setAddTeamOpen(false);
+    setNewTeamNameInput("");
+  }, [newTeamNameInput, persistRegisteredTeamSlugs, registeredTeamSlugs]);
 
   useEffect(() => {
     if (skipNextUserDirColumnPersist.current) {
@@ -755,6 +862,45 @@ export function UsersWorkspacePanel() {
     return list;
   }, [displayed, sort]);
 
+  const directoryTeamIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of rows) {
+      if (r.team) s.add(r.team);
+    }
+    for (const slug of registeredTeamSlugs) {
+      const n = normalizeWorkspaceUserTeam(slug);
+      if (n) s.add(n);
+    }
+    return [...s];
+  }, [rows, registeredTeamSlugs]);
+
+  const teamFilterSuggestions = useMemo(() => {
+    const base = MONTH_TEAM_COLUMNS.map((c) => c.label);
+    const seen = new Set(base.map((l) => l.toLowerCase()));
+    const rest: string[] = [];
+    for (const r of rows) {
+      if (!r.team) continue;
+      const lab = teamLabelForWorkspaceUser(r.team);
+      if (lab === "—") continue;
+      const k = lab.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        rest.push(lab);
+      }
+    }
+    for (const slug of registeredTeamSlugs) {
+      const lab = teamLabelForWorkspaceUser(slug);
+      if (lab === "—") continue;
+      const k = lab.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        rest.push(lab);
+      }
+    }
+    rest.sort((a, b) => a.localeCompare(b));
+    return [...base, ...rest, "Unassigned only"];
+  }, [rows, registeredTeamSlugs]);
+
   const nameSuggestions = useMemo(() => {
     const s = new Set<string>();
     for (const r of displayed.slice(0, 40)) s.add(r.name);
@@ -799,6 +945,10 @@ export function UsersWorkspacePanel() {
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (addTeamOpen) {
+        setAddTeamOpen(false);
+        return;
+      }
       if (editCell) {
         setEditCell(null);
         return;
@@ -810,7 +960,7 @@ export function UsersWorkspacePanel() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editCell, userPanel, saving, closePanel]);
+  }, [addTeamOpen, editCell, userPanel, saving, closePanel]);
 
   const handleSearchKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -835,6 +985,8 @@ export function UsersWorkspacePanel() {
       return;
     }
     const permission = normalizeWorkspaceUserPermission(form.permission);
+    const nextTeam = normalizeWorkspaceUserTeam(form.team || "");
+    const announceNewTeam = shouldAnnounceNewDirectoryTeam(nextTeam, directoryTeamIds);
     setSaving(true);
     try {
       const res = await fetch("/api/workspace-users", {
@@ -843,7 +995,7 @@ export function UsersWorkspacePanel() {
         body: JSON.stringify({
           name,
           email,
-          team: form.team || "",
+          team: nextTeam,
           permission,
         }),
       });
@@ -851,7 +1003,9 @@ export function UsersWorkspacePanel() {
       if (!res.ok) {
         throw new Error((err as { error?: string }).error ?? res.statusText);
       }
-      toast.success("User added");
+      toast.success(
+        announceNewTeam ? `User added · New team: ${teamLabelForWorkspaceUser(nextTeam)}` : "User added",
+      );
       closePanel();
       await load();
     } catch (e) {
@@ -878,8 +1032,13 @@ export function UsersWorkspacePanel() {
     const body: { name?: string; email?: string; team?: string; permission?: string } = {};
     if (name !== viewUser.name) body.name = name;
     if (email !== viewUser.email) body.email = email;
-    if ((form.team || "") !== (viewUser.team || "")) body.team = form.team || "";
+    const nextTeam = normalizeWorkspaceUserTeam(form.team || "");
+    const prevTeamNorm = normalizeWorkspaceUserTeam(viewUser.team || "");
+    const teamChanged = nextTeam !== prevTeamNorm;
+    if (teamChanged) body.team = nextTeam;
     if (permission !== viewUser.permission) body.permission = permission;
+    const announceNewTeam =
+      teamChanged && shouldAnnounceNewDirectoryTeam(nextTeam, directoryTeamIds);
     if (Object.keys(body).length === 0) {
       closePanel();
       return;
@@ -888,7 +1047,11 @@ export function UsersWorkspacePanel() {
     try {
       const ok = await patchUser(viewUser.id, body);
       if (ok) {
-        toast.success("User updated");
+        toast.success(
+          announceNewTeam
+            ? `User updated · New team: ${teamLabelForWorkspaceUser(nextTeam)}`
+            : "User updated",
+        );
         closePanel();
       }
     } finally {
@@ -910,10 +1073,25 @@ export function UsersWorkspacePanel() {
             Users Directory
           </h1>
         </div>
-        <Button type="button" size="sm" onClick={openCreate} className="h-8 shrink-0 px-3 text-[13px] font-bold">
-          <Plus className="size-3.5" aria-hidden />
-          Add User
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setNewTeamNameInput("");
+              setAddTeamOpen(true);
+            }}
+            className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-semibold"
+          >
+            <Tag className="size-3.5" aria-hidden />
+            Add team
+          </Button>
+          <Button type="button" size="sm" onClick={openCreate} className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-bold">
+            <Plus className="size-3.5" aria-hidden />
+            Add User
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-col gap-3 pb-8 lg:flex-row lg:items-center lg:gap-3">
@@ -967,17 +1145,17 @@ export function UsersWorkspacePanel() {
             <AssigneeCombobox
               value={teamFilterInput}
               onChange={setTeamFilterInput}
-              suggestions={TEAM_FILTER_SUGGESTIONS}
+              suggestions={teamFilterSuggestions}
               placeholder="All Teams"
               aria-label="Filter by team"
               className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] shadow-sm outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
               onSuggestionPick={(s) => {
-                const next = resolveTeamFilterQuery(s);
+                const next = resolveTeamFilterQuery(s, rows, registeredTeamSlugs);
                 setTeamFilter(next);
                 setTeamFilterInput(teamFilterLabel(next));
               }}
               onInputBlur={(v) => {
-                const next = resolveTeamFilterQuery(v);
+                const next = resolveTeamFilterQuery(v, rows, registeredTeamSlugs);
                 setTeamFilter(next);
                 setTeamFilterInput(teamFilterLabel(next));
               }}
@@ -1008,35 +1186,34 @@ export function UsersWorkspacePanel() {
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-white">
         <div className="h-full min-h-0 overflow-auto text-[16px]">
-        <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
-          <colgroup>
-            {columnOrder.map((key) => (
-              <col key={key} className={USER_DIRECTORY_COL_WIDTH_CLASS[key]} />
-            ))}
-          </colgroup>
           <DndContext
             sensors={userDirColumnDragSensors}
             collisionDetection={closestCenter}
             onDragEnd={handleUserDirectoryColumnDragEnd}
           >
-            <SortableContext
-              items={columnOrder.filter((k) => k !== "name")}
-              strategy={horizontalListSortingStrategy}
-            >
-              <thead className="sticky top-0 z-10 border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-                <tr>
-                  {columnOrder.map((key) =>
-                    key === "name" ? (
-                      <UserDirectoryNameHeader key={key} sort={sort} onToggle={toggleSort} />
-                    ) : (
-                      <SortableUserDirectoryColumnHeader key={key} id={key} sort={sort} onToggle={toggleSort} />
-                    ),
-                  )}
-                </tr>
-              </thead>
-            </SortableContext>
-          </DndContext>
-          <tbody className="bg-white">
+            <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
+              <colgroup>
+                {columnOrder.map((key) => (
+                  <col key={key} className={USER_DIRECTORY_COL_WIDTH_CLASS[key]} />
+                ))}
+              </colgroup>
+              <SortableContext
+                items={columnOrder.filter((k) => k !== "name")}
+                strategy={horizontalListSortingStrategy}
+              >
+                <thead className="sticky top-0 z-10 border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+                  <tr>
+                    {columnOrder.map((key) =>
+                      key === "name" ? (
+                        <UserDirectoryNameHeader key={key} sort={sort} onToggle={toggleSort} />
+                      ) : (
+                        <SortableUserDirectoryColumnHeader key={key} id={key} sort={sort} onToggle={toggleSort} />
+                      ),
+                    )}
+                  </tr>
+                </thead>
+              </SortableContext>
+              <tbody className="bg-white">
             {loading ? (
               <tr>
                 <td colSpan={columnOrder.length} className="px-4 py-16 text-center text-slate-500">
@@ -1072,11 +1249,13 @@ export function UsersWorkspacePanel() {
                     setUserPanel({ kind: "view", user: r });
                   }}
                   patchUser={patchUser}
+                  directoryTeamIds={directoryTeamIds}
                 />
               ))
             )}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </DndContext>
         </div>
       </div>
 
@@ -1161,8 +1340,10 @@ export function UsersWorkspacePanel() {
                           teamId={form.team}
                           onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
                           disabled={saving}
-                          placeholder="Type or pick a team (optional)"
+                          placeholder="Pick a team or create new (optional)"
                           className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                          allowCustomTeam
+                          extraTeamIds={directoryTeamIds}
                         />
                       </div>
                       <div className="block">
@@ -1267,8 +1448,10 @@ export function UsersWorkspacePanel() {
                           teamId={form.team}
                           onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
                           disabled={saving}
-                          placeholder="Type or pick a team (optional)"
+                          placeholder="Pick a team or create new (optional)"
                           className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                          allowCustomTeam
+                          extraTeamIds={directoryTeamIds}
                         />
                       </div>
                       <div className="block">
@@ -1309,6 +1492,66 @@ export function UsersWorkspacePanel() {
                 </div>
               </>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {addTeamOpen ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" role="presentation">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[0.5px]"
+            aria-label="Close dialog"
+            onClick={() => setAddTeamOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-team-dialog-title"
+            className="relative z-[1] w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl ring-1 ring-black/[0.06]"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2 id="add-team-dialog-title" className="text-lg font-semibold tracking-tight text-slate-900">
+                Add team
+              </h2>
+              <button
+                type="button"
+                onClick={() => setAddTeamOpen(false)}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Close"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <p className="mb-3 text-[13px] leading-snug text-slate-600">
+              Register a team for this browser. It shows up in team pickers and filters; people get the team when you edit
+              them in the table or in Add User.
+            </p>
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] font-semibold text-slate-800">Team name</span>
+              <input
+                value={newTeamNameInput}
+                onChange={(e) => setNewTeamNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    saveRegisteredTeamFromModal();
+                  }
+                }}
+                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                placeholder="e.g. Design Ops"
+                autoComplete="off"
+                autoFocus
+              />
+            </label>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddTeamOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" size="sm" className="font-semibold" onClick={saveRegisteredTeamFromModal}>
+                Save team
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

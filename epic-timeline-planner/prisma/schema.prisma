@@ -166,7 +166,7 @@ model WorkspaceUser {
   id         String   @id @default(uuid())
   name       String
   email      String   @unique
-  /** `platform` | `experience` | `data`, or empty string if unassigned. */
+  /** Delivery trio ids, custom slug (directory-only teams), or empty when unassigned. */
   team       String   @default("")
   /** Display name for role, e.g. Admin, Editor, Viewer. */
   permission String   @default("Viewer")
