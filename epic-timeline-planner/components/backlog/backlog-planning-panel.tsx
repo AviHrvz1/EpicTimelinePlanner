@@ -4,6 +4,8 @@ import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSe
 import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Bookmark,
+  BookmarkPlus,
   Check,
   ChevronDown,
   ChevronRight,
@@ -17,6 +19,7 @@ import {
   Plus,
   Search,
   TableProperties,
+  Trash2,
   X,
   Zap,
 } from "lucide-react";
@@ -53,9 +56,6 @@ import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 /** Softer than shared table zebra — long wide rows read cleaner with lower-contrast bands. */
 const BACKLOG_TABLE_STRIPE_BG = "#f1f5f9";
 const BACKLOG_TABLE_BASE_BG = "#ffffff";
-
-/** Matches header grid — reserves space for the column-menu control so rows extend to the same right edge. */
-const BACKLOG_TABLE_END_PAD = "pe-12";
 
 type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
@@ -104,6 +104,29 @@ type GroupLevel = "year" | "quarter" | "month" | "sprint";
 type WorkflowStatus = "todo" | "inProgress" | "done" | "approved";
 type InlineEditableStoryField = "status" | "sprint" | "assignee" | "labels" | "estimatedDays" | "daysLeft";
 type WorkItemKindFilter = "initiative" | "epic" | "story";
+
+type BacklogSortBy = "titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status";
+
+type BacklogFilterSnapshot = {
+  query: string;
+  statusFilter: string[];
+  sprintFilter: string[];
+  yearFilter: string[];
+  quarterFilter: string[];
+  teamFilter: string[];
+  assigneeFilter: string[];
+  labelFilter: string[];
+  workItemFilter: WorkItemKindFilter[];
+  groupLevels: GroupLevel[];
+  sortBy: BacklogSortBy;
+};
+
+type SavedBacklogFilterPreset = {
+  id: string;
+  name: string;
+  snapshot: BacklogFilterSnapshot;
+  updatedAt: number;
+};
 
 function parseStoryLabels(raw: string | null | undefined): string[] {
   return (raw ?? "")
@@ -229,6 +252,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
 const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1";
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
+const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
 
 const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   workItem: true,
@@ -393,6 +417,143 @@ function quarterRange(quarter: string): { start: number; end: number } | null {
   if (quarter === "Q3") return { start: 7, end: 9 };
   if (quarter === "Q4") return { start: 10, end: 12 };
   return null;
+}
+
+function isWorkItemKindFilterValue(v: unknown): v is WorkItemKindFilter {
+  return v === "initiative" || v === "epic" || v === "story";
+}
+
+function isGroupLevelValue(v: unknown): v is GroupLevel {
+  return v === "year" || v === "quarter" || v === "month" || v === "sprint";
+}
+
+function isBacklogSortByValue(v: unknown): v is BacklogSortBy {
+  return (
+    v === "titleAsc" ||
+    v === "titleDesc" ||
+    v === "assigneeAsc" ||
+    v === "estDesc" ||
+    v === "leftDesc" ||
+    v === "status"
+  );
+}
+
+function backlogFilterSnapshotFromUnknown(raw: unknown): BacklogFilterSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const s = raw as Record<string, unknown>;
+  const teamRaw = Array.isArray(s.teamFilter) ? s.teamFilter.filter((x): x is string => typeof x === "string") : [];
+  const teamFilter = teamRaw.filter((v) => MONTH_TEAM_COLUMNS.some((c) => c.id === v));
+  const workItemFilter = Array.isArray(s.workItemFilter) ? s.workItemFilter.filter(isWorkItemKindFilterValue) : [];
+  const groupLevels = Array.isArray(s.groupLevels) ? s.groupLevels.filter(isGroupLevelValue) : [];
+  return {
+    query: typeof s.query === "string" ? s.query : "",
+    statusFilter: Array.isArray(s.statusFilter) ? s.statusFilter.filter((x): x is string => typeof x === "string") : [],
+    sprintFilter: Array.isArray(s.sprintFilter) ? s.sprintFilter.filter((x): x is string => typeof x === "string") : [],
+    yearFilter: Array.isArray(s.yearFilter) ? s.yearFilter.filter((x): x is string => typeof x === "string") : [],
+    quarterFilter: Array.isArray(s.quarterFilter) ? s.quarterFilter.filter((x): x is string => typeof x === "string") : [],
+    teamFilter,
+    assigneeFilter: Array.isArray(s.assigneeFilter) ? s.assigneeFilter.filter((x): x is string => typeof x === "string") : [],
+    labelFilter: Array.isArray(s.labelFilter) ? s.labelFilter.filter((x): x is string => typeof x === "string") : [],
+    workItemFilter,
+    groupLevels,
+    sortBy: isBacklogSortByValue(s.sortBy) ? s.sortBy : "titleAsc",
+  };
+}
+
+function parseSavedBacklogFilterPresetsJson(raw: unknown): SavedBacklogFilterPreset[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SavedBacklogFilterPreset[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    if (typeof r.id !== "string" || typeof r.name !== "string" || typeof r.updatedAt !== "number") continue;
+    const snapshot = backlogFilterSnapshotFromUnknown(r.snapshot);
+    if (!snapshot) continue;
+    const name = r.name.trim();
+    if (!name) continue;
+    out.push({ id: r.id, name, snapshot, updatedAt: r.updatedAt });
+  }
+  return out.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+function newSavedFilterPresetId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `bf-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+const BACKLOG_SORT_LABELS: Record<BacklogSortBy, string> = {
+  titleAsc: "Title (A–Z)",
+  titleDesc: "Title (Z–A)",
+  assigneeAsc: "Assignee (A–Z)",
+  estDesc: "Estimate (high to low)",
+  leftDesc: "Days left (high to low)",
+  status: "Status",
+};
+
+const WORK_ITEM_KIND_SUMMARY_LABELS: Record<WorkItemKindFilter, string> = {
+  initiative: "Initiative",
+  epic: "Epic",
+  story: "User story",
+};
+
+const STATUS_FILTER_SUMMARY_LABELS: Record<string, string> = {
+  todo: "To do",
+  inProgress: "In progress",
+  done: "Done",
+  approved: "Approved",
+};
+
+function teamIdToSummaryLabel(teamId: string): string {
+  return MONTH_TEAM_COLUMNS.find((c) => c.id === teamId)?.label ?? teamId;
+}
+
+function sprintFilterIdToSummaryLabel(id: string): string {
+  if (id === "unscheduled") return "Unscheduled";
+  const n = Number(id);
+  if (!Number.isNaN(n) && String(n) === id) return `Sprint ${n}`;
+  return id;
+}
+
+/** Human-readable lines describing what a saved backlog filter preset will store. */
+function backlogFilterSnapshotSummaryLines(snapshot: BacklogFilterSnapshot): string[] {
+  const lines: string[] = [];
+  const q = snapshot.query.trim();
+  if (q) lines.push(`Search: "${q}"`);
+
+  if (snapshot.groupLevels.length === 0) {
+    lines.push("Group by: None");
+  } else {
+    lines.push(`Group by: ${snapshot.groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ")}`);
+  }
+
+  lines.push(`Sort: ${BACKLOG_SORT_LABELS[snapshot.sortBy]}`);
+
+  if (snapshot.workItemFilter.length > 0) {
+    lines.push(`Work item types: ${snapshot.workItemFilter.map((k) => WORK_ITEM_KIND_SUMMARY_LABELS[k]).join(", ")}`);
+  }
+  if (snapshot.yearFilter.length > 0) {
+    lines.push(`Year: ${snapshot.yearFilter.join(", ")}`);
+  }
+  if (snapshot.quarterFilter.length > 0) {
+    lines.push(`Quarter: ${snapshot.quarterFilter.join(", ")}`);
+  }
+  if (snapshot.statusFilter.length > 0) {
+    lines.push(`Status: ${snapshot.statusFilter.map((id) => STATUS_FILTER_SUMMARY_LABELS[id] ?? id).join(", ")}`);
+  }
+  if (snapshot.sprintFilter.length > 0) {
+    lines.push(`Sprint: ${snapshot.sprintFilter.map(sprintFilterIdToSummaryLabel).join(", ")}`);
+  }
+  if (snapshot.teamFilter.length > 0) {
+    lines.push(`Team: ${snapshot.teamFilter.map(teamIdToSummaryLabel).join(", ")}`);
+  }
+  if (snapshot.assigneeFilter.length > 0) {
+    lines.push(`Assignee: ${snapshot.assigneeFilter.join(", ")}`);
+  }
+  if (snapshot.labelFilter.length > 0) {
+    lines.push(`Labels: ${snapshot.labelFilter.join(", ")}`);
+  }
+
+  return lines;
 }
 
 function applyWorkItemKindFilter(rows: InitiativeItem[], workItemFilter: WorkItemKindFilter[]): InitiativeItem[] {
@@ -940,9 +1101,7 @@ export function BacklogPlanningPanel({
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
-  const [sortBy, setSortBy] = useState<"titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status">(
-    "titleAsc",
-  );
+  const [sortBy, setSortBy] = useState<BacklogSortBy>("titleAsc");
   const [openCreateMenuKey, setOpenCreateMenuKey] = useState<string | null>(null);
   const [createDraftTitle, setCreateDraftTitle] = useState("");
   const [createSelection, setCreateSelection] = useState<{
@@ -961,6 +1120,7 @@ export function BacklogPlanningPanel({
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
   const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
+  const savedFilterMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
   const backlogRowsRootRef = useRef<HTMLDivElement | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -972,6 +1132,13 @@ export function BacklogPlanningPanel({
   const [hasLoadedTableLayout, setHasLoadedTableLayout] = useState(false);
   const resizeStateRef = useRef<{ key: BacklogColumnKey; startX: number; startWidth: number } | null>(null);
   const [hasLoadedViewState, setHasLoadedViewState] = useState(false);
+  const [savedFilterPresets, setSavedFilterPresets] = useState<SavedBacklogFilterPreset[]>([]);
+  const [savedFilterPresetsLoaded, setSavedFilterPresetsLoaded] = useState(false);
+  const [presetSearch, setPresetSearch] = useState("");
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const [saveAsFilterDialogOpen, setSaveAsFilterDialogOpen] = useState(false);
+  const [saveAsFilterName, setSaveAsFilterName] = useState("");
+  const saveAsFilterNameInputRef = useRef<HTMLInputElement | null>(null);
   const [savingStoryId, setSavingStoryId] = useState<string | null>(null);
   const [editingStoryCell, setEditingStoryCell] = useState<{
     storyId: string;
@@ -1555,7 +1722,8 @@ export function BacklogPlanningPanel({
     labelFilter.length > 0 ||
     workItemFilter.length > 0 ||
     groupLevels.length > 0 ||
-    query.trim().length > 0;
+    query.trim().length > 0 ||
+    presetSearch.trim().length > 0;
 
   function toggleGroupLevel(level: GroupLevel) {
     setGroupLevels((prev) => {
@@ -1579,6 +1747,90 @@ export function BacklogPlanningPanel({
     setWorkItemFilter([]);
     setGroupLevels([]);
     setGroupMenuOpen(false);
+    setPresetSearch("");
+    setPresetMenuOpen(false);
+  }
+
+  const buildBacklogFilterSnapshot = useCallback((): BacklogFilterSnapshot => {
+    return {
+      query,
+      statusFilter,
+      sprintFilter,
+      yearFilter,
+      quarterFilter,
+      teamFilter,
+      assigneeFilter,
+      labelFilter,
+      workItemFilter,
+      groupLevels,
+      sortBy,
+    };
+  }, [
+    query,
+    statusFilter,
+    sprintFilter,
+    yearFilter,
+    quarterFilter,
+    teamFilter,
+    assigneeFilter,
+    labelFilter,
+    workItemFilter,
+    groupLevels,
+    sortBy,
+  ]);
+
+  const applyBacklogFilterSnapshot = useCallback((snapshot: BacklogFilterSnapshot) => {
+    setQuery(snapshot.query);
+    setStatusFilter([...snapshot.statusFilter]);
+    setSprintFilter([...snapshot.sprintFilter]);
+    setYearFilter([...snapshot.yearFilter]);
+    setQuarterFilter([...snapshot.quarterFilter]);
+    setTeamFilter(snapshot.teamFilter.filter((v) => MONTH_TEAM_COLUMNS.some((c) => c.id === v)));
+    setAssigneeFilter([...snapshot.assigneeFilter]);
+    setLabelFilter([...snapshot.labelFilter]);
+    setWorkItemFilter([...snapshot.workItemFilter]);
+    setGroupLevels([...snapshot.groupLevels]);
+    setSortBy(snapshot.sortBy);
+    setGroupMenuOpen(false);
+  }, []);
+
+  const filteredSavedFilterPresets = useMemo(() => {
+    const q = presetSearch.trim().toLowerCase();
+    if (!q) return savedFilterPresets.slice(0, 12);
+    return savedFilterPresets.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 20);
+  }, [savedFilterPresets, presetSearch]);
+
+  const saveAsFilterSummaryLines = useMemo(() => {
+    if (!saveAsFilterDialogOpen) return [];
+    return backlogFilterSnapshotSummaryLines(buildBacklogFilterSnapshot());
+  }, [saveAsFilterDialogOpen, buildBacklogFilterSnapshot]);
+
+  function openSaveAsFilterDialog() {
+    setPresetMenuOpen(false);
+    setSaveAsFilterName("");
+    setSaveAsFilterDialogOpen(true);
+  }
+
+  function confirmSaveAsFilterPreset() {
+    const name = saveAsFilterName.trim();
+    if (!name) {
+      toast.error("Enter a name for this saved filter");
+      return;
+    }
+    const snapshot = buildBacklogFilterSnapshot();
+    const now = Date.now();
+    setSavedFilterPresets((prev) => {
+      const rest = prev.filter((p) => p.name.trim().toLowerCase() !== name.toLowerCase());
+      return [{ id: newSavedFilterPresetId(), name, snapshot, updatedAt: now }, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
+    });
+    setSaveAsFilterDialogOpen(false);
+    setSaveAsFilterName("");
+    toast.success(`Saved filter "${name}"`);
+  }
+
+  function deleteSavedFilterPreset(id: string) {
+    setSavedFilterPresets((prev) => prev.filter((p) => p.id !== id));
+    toast.success("Saved filter removed");
   }
 
   function toggleWorkItemBadgeFilter(kind: WorkItemKindFilter) {
@@ -1636,7 +1888,7 @@ export function BacklogPlanningPanel({
         return (
           <div
             key={`${keyPrefix}-story-${row.storyId}`}
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
             data-backlog-zebra-row="true"
             data-backlog-zebra-kind="story"
             data-backlog-zebra-label={row.storyTitle}
@@ -1958,7 +2210,7 @@ export function BacklogPlanningPanel({
     return (
       <div key={folderId}>
         <div
-          className={cn("grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+          className={cn("grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
           style={{ gridTemplateColumns: tableGridTemplate }}
           data-backlog-zebra-row="true"
           data-backlog-zebra-kind="folder"
@@ -2051,7 +2303,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -2205,7 +2457,7 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-epic:${epicId}` ? (
-            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
+            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
               <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx + 18 }}>
                 <input
                   value={createDraftTitle}
@@ -2239,7 +2491,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -2393,7 +2645,7 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
-            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
+            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
               <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx + 18 }}>
                 <input
                   value={createDraftTitle}
@@ -2521,7 +2773,7 @@ export function BacklogPlanningPanel({
         return (
               <div key={initFolderId}>
                 <div
-                  className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+                  className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
                   style={{
                     gridTemplateColumns: tableGridTemplate,
                   }}
@@ -2648,7 +2900,7 @@ export function BacklogPlanningPanel({
               })}
             </div>
             {createSelection?.anchorKey === `group-standalone-initiative:${initiative.initiativeId}` ? (
-              <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
+              <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
                 <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 18 }}>
                   <input
                     value={createDraftTitle}
@@ -2676,7 +2928,7 @@ export function BacklogPlanningPanel({
                   return (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div
-                      className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+                      className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
                       style={{
                         gridTemplateColumns: tableGridTemplate,
                       }}
@@ -2792,7 +3044,7 @@ export function BacklogPlanningPanel({
                       })}
                     </div>
                     {createSelection?.anchorKey === `group-standalone-epic:${epic.epicId}` ? (
-                      <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
+                      <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
                         <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 52 }}>
                           <input
                             value={createDraftTitle}
@@ -2966,14 +3218,55 @@ export function BacklogPlanningPanel({
   }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, labelFilter, groupLevels]);
 
   useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(BACKLOG_SAVED_FILTERS_STORAGE_KEY);
+      if (raw) setSavedFilterPresets(parseSavedBacklogFilterPresetsJson(JSON.parse(raw)));
+    } catch {
+      // Ignore corrupt localStorage entries.
+    }
+    setSavedFilterPresetsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!savedFilterPresetsLoaded) return;
+    try {
+      window.localStorage.setItem(BACKLOG_SAVED_FILTERS_STORAGE_KEY, JSON.stringify(savedFilterPresets));
+    } catch {
+      // Ignore write failures (private mode, quotas, etc.)
+    }
+  }, [savedFilterPresetsLoaded, savedFilterPresets]);
+
+  useEffect(() => {
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
       if (!groupMenuRef.current?.contains(target)) setGroupMenuOpen(false);
+      if (!savedFilterMenuRef.current?.contains(target)) setPresetMenuOpen(false);
       if (!columnsMenuRef.current?.contains(target)) setColumnsMenuOpen(false);
     }
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!saveAsFilterDialogOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSaveAsFilterDialogOpen(false);
+        setSaveAsFilterName("");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [saveAsFilterDialogOpen]);
+
+  useEffect(() => {
+    if (!saveAsFilterDialogOpen) return;
+    const id = window.requestAnimationFrame(() => {
+      saveAsFilterNameInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [saveAsFilterDialogOpen]);
 
   function scheduleCreateMenuClose() {
     if (createMenuCloseTimerRef.current) clearTimeout(createMenuCloseTimerRef.current);
@@ -3164,39 +3457,197 @@ export function BacklogPlanningPanel({
       </div>
 
       <div className="mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
-        <div className="relative flex items-center">
-          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search work items..."
-            autoComplete="off"
-            onFocus={() => setShowSearchSuggestions(true)}
-            onBlur={() => {
-              window.setTimeout(() => setShowSearchSuggestions(false), 120);
-            }}
-            className="h-9 w-full rounded-lg bg-white/95 pl-9 pr-3 text-[14px] text-slate-700 outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
-          />
-          {showSearchSuggestions && searchSuggestions.length > 0 ? (
-            <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
-              {searchSuggestions.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onMouseDown={(event) => {
+        <div className="flex w-full min-w-0 flex-col gap-4">
+          <div className="flex w-full min-w-0 max-w-full items-center gap-2 sm:gap-3">
+          <div className="relative min-w-0 basis-0 grow-[0.97]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search work items..."
+              autoComplete="off"
+              onFocus={() => setShowSearchSuggestions(true)}
+              onBlur={() => {
+                window.setTimeout(() => setShowSearchSuggestions(false), 120);
+              }}
+              className="h-9 w-full min-w-0 rounded-lg bg-white/95 pl-9 pr-3 text-[14px] text-slate-700 outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
+            />
+            {showSearchSuggestions && searchSuggestions.length > 0 ? (
+              <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
+                {searchSuggestions.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      setQuery(item);
+                      setShowSearchSuggestions(false);
+                    }}
+                    className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+          <div
+            className="relative flex h-9 w-[min(100%,12.5rem)] shrink-0 items-center gap-1 rounded-lg bg-white/90 px-1 ring-1 ring-slate-200/80 sm:w-[14rem]"
+            ref={savedFilterMenuRef}
+          >
+            <Bookmark className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+            <div className="relative min-w-0 flex-1">
+              <input
+                value={presetSearch}
+                onChange={(event) => {
+                  setPresetSearch(event.target.value);
+                  setPresetMenuOpen(true);
+                }}
+                onFocus={() => setPresetMenuOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setPresetMenuOpen(false);
+                    return;
+                  }
+                  if (event.key === "Enter" && filteredSavedFilterPresets.length === 1) {
                     event.preventDefault();
-                    setQuery(item);
-                    setShowSearchSuggestions(false);
-                  }}
-                  className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
+                    const pick = filteredSavedFilterPresets[0];
+                    applyBacklogFilterSnapshot(pick.snapshot);
+                    setPresetSearch(pick.name);
+                    setPresetMenuOpen(false);
+                    toast.success(`Loaded "${pick.name}"`);
+                  }
+                }}
+                placeholder="Select saved filters"
+                autoComplete="off"
+                role="combobox"
+                aria-expanded={presetMenuOpen}
+                aria-controls="backlog-saved-filter-listbox"
+                className="h-7 w-full min-w-0 bg-transparent text-[13px] text-slate-800 outline-none placeholder:text-slate-400"
+              />
+              {presetMenuOpen ? (
+                <div
+                  id="backlog-saved-filter-listbox"
+                  role="listbox"
+                  className="absolute right-0 top-[calc(100%+0.25rem)] z-30 w-[min(calc(100vw-2rem),18rem)] max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg sm:left-0 sm:right-0 sm:w-auto"
                 >
-                  {item}
-                </button>
-              ))}
+                  {filteredSavedFilterPresets.length === 0 ? (
+                    <div className="px-2.5 py-2 text-[12px] leading-snug text-slate-500">
+                      {savedFilterPresets.length === 0
+                        ? "No saved filters yet. Use “Save as filter” next to the table button to store the current view."
+                        : "No matches. Try another search or save a new filter."}
+                    </div>
+                  ) : (
+                    filteredSavedFilterPresets.map((preset) => (
+                      <div key={preset.id} role="option" className="flex items-center gap-0.5 pr-1 hover:bg-slate-50">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-[13px] text-slate-800"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            applyBacklogFilterSnapshot(preset.snapshot);
+                            setPresetSearch(preset.name);
+                            setPresetMenuOpen(false);
+                            toast.success(`Loaded "${preset.name}"`);
+                          }}
+                        >
+                          {preset.name}
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/80 hover:text-slate-800"
+                          aria-label={`Delete saved filter ${preset.name}`}
+                          title="Remove saved filter"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            deleteSavedFilterPreset(preset.id);
+                          }}
+                        >
+                          <Trash2 className="size-3.5" strokeWidth={2} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-4">
+          </div>
+          <span className="group relative inline-flex shrink-0 self-center">
+            <button
+              type="button"
+              onClick={openSaveAsFilterDialog}
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-indigo-200/80 transition hover:from-indigo-100 hover:to-violet-100 hover:text-slate-900 sm:px-2.5 sm:text-[12px]"
+              aria-haspopup="dialog"
+            >
+              <BookmarkPlus className="size-3.5 shrink-0 text-indigo-600/90" strokeWidth={2} aria-hidden />
+              Save as filter
+            </button>
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
+            >
+              Opens a dialog to name this view and shows exactly which filters, group-by, and sort will be saved.
+            </span>
+          </span>
+          <div className="relative shrink-0 self-center" ref={columnsMenuRef}>
+            <button
+              type="button"
+              onClick={() => setColumnsMenuOpen((open) => !open)}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
+              aria-label="Table columns and layout"
+              title="Table columns and layout"
+            >
+              <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+            </button>
+            {columnsMenuOpen ? (
+              <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
+                <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">
+                  <input
+                    type="checkbox"
+                    checked={showTableHeaderRow}
+                    onChange={() => setShowTableHeaderRow((v) => !v)}
+                    className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+                  />
+                  Show column titles
+                </label>
+                <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  Visible columns
+                </div>
+                <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the dotted handle in a blue column header to reorder columns.</p>
+                {columnOrder.map((colKey) => {
+                  const locked = colKey === "workItem";
+                  return (
+                    <label
+                      key={colKey}
+                      className={cn(
+                        "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
+                        locked ? "cursor-not-allowed opacity-70" : "hover:bg-indigo-100/40",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={columnVisibility[colKey]}
+                        disabled={locked}
+                        onChange={() => {
+                          if (locked) return;
+                          setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
+                        }}
+                        className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+                      />
+                      {BACKLOG_COLUMN_LABELS[colKey]}
+                      {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+          </div>
+          <div className="min-w-0 basis-0 grow-[0.03] shrink" aria-hidden />
+          </div>
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-4">
           <div className="relative" ref={groupMenuRef}>
             <button
               type="button"
@@ -3280,12 +3731,13 @@ export function BacklogPlanningPanel({
               Erases all filters: search, group-by, and every filter selection.
             </span>
           </span>
+          </div>
         </div>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
         <form
           onSubmit={handleCreateSubmit}
-          className={cn("mb-3 grid min-w-full w-max items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3", BACKLOG_TABLE_END_PAD)}
+          className={cn("mb-3 grid min-w-full w-max items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3")}
           style={{ gridTemplateColumns: tableGridTemplate }}
         >
           <div className="flex min-w-0 items-center gap-2">
@@ -3308,17 +3760,14 @@ export function BacklogPlanningPanel({
         <div className="h-full overflow-auto text-[15px] leading-snug text-slate-800">
         <>
         {showTableHeaderRow ? (
-          <div className="sticky top-0 z-10 relative min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+          <div className="sticky top-0 z-10 min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
             <DndContext sensors={columnDragSensors} collisionDetection={closestCenter} onDragEnd={handleBacklogColumnDragEnd}>
               <SortableContext
                 items={visibleColumnKeys.filter((k) => k !== "workItem")}
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className={cn(
-                    "grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[12px] font-semibold tracking-[0.04em] text-white uppercase",
-                    BACKLOG_TABLE_END_PAD,
-                  )}
+                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[12px] font-semibold tracking-[0.04em] text-white uppercase"
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {
@@ -3386,119 +3835,8 @@ export function BacklogPlanningPanel({
                 </div>
               </SortableContext>
             </DndContext>
-            <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-              <div className="pointer-events-auto relative" ref={columnsMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setColumnsMenuOpen((open) => !open)}
-                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
-                  aria-label="Table columns and layout"
-                  title="Table columns and layout"
-                >
-                  <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
-                </button>
-                {columnsMenuOpen ? (
-                  <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
-                    <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">
-                      <input
-                        type="checkbox"
-                        checked={showTableHeaderRow}
-                        onChange={() => setShowTableHeaderRow((v) => !v)}
-                        className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
-                      />
-                      Show column titles
-                    </label>
-                    <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                      Visible columns
-                    </div>
-                    <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the dotted handle in a blue column header to reorder columns.</p>
-                    {columnOrder.map((colKey) => {
-                      const locked = colKey === "workItem";
-                      return (
-                        <label
-                          key={colKey}
-                          className={cn(
-                            "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
-                            locked ? "cursor-not-allowed opacity-70" : "hover:bg-indigo-100/40",
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={columnVisibility[colKey]}
-                            disabled={locked}
-                            onChange={() => {
-                              if (locked) return;
-                              setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
-                            }}
-                            className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
-                          />
-                          {BACKLOG_COLUMN_LABELS[colKey]}
-                          {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            </div>
           </div>
-        ) : (
-          <div className="sticky top-0 z-10 flex min-w-full w-max justify-end border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 py-2">
-            <div className="relative" ref={columnsMenuRef}>
-              <button
-                type="button"
-                onClick={() => setColumnsMenuOpen((open) => !open)}
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
-                aria-label="Table columns and layout"
-                title="Table columns and layout"
-              >
-                <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
-              </button>
-              {columnsMenuOpen ? (
-                <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
-                  <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">
-                    <input
-                      type="checkbox"
-                      checked={showTableHeaderRow}
-                      onChange={() => setShowTableHeaderRow((v) => !v)}
-                      className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
-                    />
-                    Show column titles
-                  </label>
-                  <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                    Visible columns
-                  </div>
-                  <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the dotted handle in a blue column header to reorder columns.</p>
-                  {columnOrder.map((colKey) => {
-                    const locked = colKey === "workItem";
-                    return (
-                      <label
-                        key={colKey}
-                        className={cn(
-                          "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
-                          locked ? "cursor-not-allowed opacity-70" : "hover:bg-indigo-100/40",
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={columnVisibility[colKey]}
-                          disabled={locked}
-                          onChange={() => {
-                            if (locked) return;
-                            setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
-                          }}
-                          className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
-                        />
-                        {BACKLOG_COLUMN_LABELS[colKey]}
-                        {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
-                      </label>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        )}
+        ) : null}
 
         {fullyFiltered.length === 0 ? (
           <div className="px-4 py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
@@ -3521,7 +3859,7 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div
-                    className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+                    className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
                     style={{
                       gridTemplateColumns: tableGridTemplate,
                     }}
@@ -3742,7 +4080,7 @@ export function BacklogPlanningPanel({
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
                     <form
                       onSubmit={handleCreateSubmit}
-                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)}
+                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")}
                       style={{ gridTemplateColumns: tableGridTemplate }}
                     >
                       <div className="flex min-w-0 items-center gap-2">
@@ -3787,7 +4125,7 @@ export function BacklogPlanningPanel({
                       {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
                         <form
                           onSubmit={handleCreateSubmit}
-                          className={cn("grid min-w-full w-max items-center gap-3 py-2", BACKLOG_TABLE_END_PAD)}
+                          className={cn("grid min-w-full w-max items-center gap-3 py-2")}
                           style={{ gridTemplateColumns: tableGridTemplate }}
                         >
                           <div className="flex min-w-0 items-center gap-2 pl-6">
@@ -3857,7 +4195,7 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div
-                            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+                            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             data-backlog-zebra-row="true"
                             data-backlog-zebra-kind="epic"
@@ -4073,7 +4411,7 @@ export function BacklogPlanningPanel({
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
                               <form
                                 onSubmit={handleCreateSubmit}
-                                className={cn("grid min-w-full w-max items-center gap-3 py-2", BACKLOG_TABLE_END_PAD)}
+                                className={cn("grid min-w-full w-max items-center gap-3 py-2")}
                                 style={{ gridTemplateColumns: tableGridTemplate }}
                               >
                                 <div className="flex min-w-0 items-center gap-2 pl-12">
@@ -4122,7 +4460,7 @@ export function BacklogPlanningPanel({
                                 {(epic.userStories ?? []).map((story) => (
                                   <div
                                     key={story.id}
-                                    className={cn("min-w-full w-max border-b border-slate-200/80 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
+                                    className={cn("min-w-full w-max border-b border-slate-200/80 hover:bg-slate-50")}
                                     data-backlog-zebra-row="true"
                                     data-backlog-zebra-kind="story"
                                     data-backlog-zebra-label={story.title}
@@ -4132,7 +4470,7 @@ export function BacklogPlanningPanel({
                                       const flatStoryWork = storyWorkPlanRangeFromProgress(story);
                                                                             return (
                                     <div
-                                      className={cn("group grid min-w-full w-max items-center gap-2 py-1.5 text-left", BACKLOG_TABLE_END_PAD)}
+                                      className={cn("group grid min-w-full w-max items-center gap-2 py-1.5 text-left")}
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                     {renderBacklogCells({
@@ -4504,7 +4842,7 @@ export function BacklogPlanningPanel({
                                   {createSelection?.anchorKey === `story:${story.id}` ? (
                                     <form
                                       onSubmit={handleCreateSubmit}
-                                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)}
+                                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")}
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                       <div className="flex min-w-0 items-center gap-2 pl-16">
@@ -4562,6 +4900,80 @@ export function BacklogPlanningPanel({
         </>
         </div>
       </div>
+      {saveAsFilterDialogOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSaveAsFilterDialogOpen(false);
+              setSaveAsFilterName("");
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="backlog-save-as-filter-title"
+            className="max-h-[min(90vh,32rem)] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/80"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 bg-gradient-to-b from-indigo-50/80 to-white px-5 py-4">
+              <h3 id="backlog-save-as-filter-title" className="text-[17px] font-semibold tracking-tight text-slate-900">
+                Save as filter
+              </h3>
+              <p className="mt-1 text-[13px] leading-snug text-slate-600">
+                Name this preset. The list below is everything that will be restored when you load it.
+              </p>
+            </div>
+            <form
+              className="flex flex-col gap-4 px-5 py-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                confirmSaveAsFilterPreset();
+              }}
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-slate-600">Filter name</span>
+                <input
+                  ref={saveAsFilterNameInputRef}
+                  value={saveAsFilterName}
+                  onChange={(event) => setSaveAsFilterName(event.target.value)}
+                  placeholder="e.g. Q2 Platform backlog"
+                  autoComplete="off"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200/70"
+                />
+              </label>
+              <div>
+                <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-600">Included in this preset</div>
+                <ul className="max-h-48 list-disc space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 px-5 py-3 text-[13px] leading-snug text-slate-700 marker:text-indigo-500">
+                  {saveAsFilterSummaryLines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaveAsFilterDialogOpen(false);
+                    setSaveAsFilterName("");
+                  }}
+                  className="rounded-lg px-3.5 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-gradient-to-b from-indigo-600 to-violet-600 px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm ring-1 ring-indigo-700/30 transition hover:from-indigo-500 hover:to-violet-500"
+                >
+                  Save preset
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
