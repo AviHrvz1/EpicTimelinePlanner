@@ -30,10 +30,12 @@ import {
   MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -1122,6 +1124,7 @@ export function BacklogPlanningPanel({
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const savedFilterMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
+  const columnsMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const backlogRowsRootRef = useRef<HTMLDivElement | null>(null);
   const createMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<BacklogColumnKey, number>>(BACKLOG_COLUMN_DEFAULT_WIDTHS);
@@ -1129,6 +1132,7 @@ export function BacklogPlanningPanel({
   const [columnOrder, setColumnOrder] = useState<BacklogColumnKey[]>(() => [...BACKLOG_COLUMN_ORDER]);
   const [showTableHeaderRow, setShowTableHeaderRow] = useState(true);
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const [columnsMenuFixedPosition, setColumnsMenuFixedPosition] = useState<{ top: number; left: number } | null>(null);
   const [hasLoadedTableLayout, setHasLoadedTableLayout] = useState(false);
   const resizeStateRef = useRef<{ key: BacklogColumnKey; startX: number; startWidth: number } | null>(null);
   const [hasLoadedViewState, setHasLoadedViewState] = useState(false);
@@ -3241,11 +3245,47 @@ export function BacklogPlanningPanel({
       const target = event.target as Node;
       if (!groupMenuRef.current?.contains(target)) setGroupMenuOpen(false);
       if (!savedFilterMenuRef.current?.contains(target)) setPresetMenuOpen(false);
-      if (!columnsMenuRef.current?.contains(target)) setColumnsMenuOpen(false);
+      if (!columnsMenuRef.current?.contains(target) && !columnsMenuPanelRef.current?.contains(target)) {
+        setColumnsMenuOpen(false);
+      }
     }
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, []);
+
+  const COLUMNS_MENU_PANEL_WIDTH_PX = 256;
+
+  useLayoutEffect(() => {
+    if (!columnsMenuOpen) {
+      setColumnsMenuFixedPosition(null);
+      return;
+    }
+
+    function updatePosition() {
+      const anchor = columnsMenuRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const margin = 8;
+      const panelMaxPx = Math.min(window.innerHeight * 0.7, 26 * 16);
+      let left = rect.right - COLUMNS_MENU_PANEL_WIDTH_PX;
+      left = Math.max(margin, Math.min(left, window.innerWidth - COLUMNS_MENU_PANEL_WIDTH_PX - margin));
+      let top = rect.bottom + 4;
+      const spaceBelow = window.innerHeight - rect.bottom - margin;
+      const spaceAbove = rect.top - margin;
+      if (spaceBelow < Math.min(160, panelMaxPx * 0.4) && spaceAbove > spaceBelow) {
+        top = Math.max(margin, rect.top - panelMaxPx - 4);
+      }
+      setColumnsMenuFixedPosition({ top, left });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [columnsMenuOpen]);
 
   useEffect(() => {
     if (!saveAsFilterDialogOpen) return;
@@ -3456,7 +3496,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
+      <div className="relative z-30 mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
         <div className="flex w-full min-w-0 flex-col gap-4">
           <div className="flex w-full min-w-0 max-w-full items-center gap-2 sm:gap-3">
           <div className="relative min-w-0 basis-0 grow-[0.97]">
@@ -3598,51 +3638,11 @@ export function BacklogPlanningPanel({
               className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
               aria-label="Table columns and layout"
               title="Table columns and layout"
+              aria-expanded={columnsMenuOpen}
+              aria-haspopup="menu"
             >
               <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
             </button>
-            {columnsMenuOpen ? (
-              <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
-                <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">
-                  <input
-                    type="checkbox"
-                    checked={showTableHeaderRow}
-                    onChange={() => setShowTableHeaderRow((v) => !v)}
-                    className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
-                  />
-                  Show column titles
-                </label>
-                <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  Visible columns
-                </div>
-                <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the dotted handle in a blue column header to reorder columns.</p>
-                {columnOrder.map((colKey) => {
-                  const locked = colKey === "workItem";
-                  return (
-                    <label
-                      key={colKey}
-                      className={cn(
-                        "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
-                        locked ? "cursor-not-allowed opacity-70" : "hover:bg-indigo-100/40",
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={columnVisibility[colKey]}
-                        disabled={locked}
-                        onChange={() => {
-                          if (locked) return;
-                          setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
-                        }}
-                        className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
-                      />
-                      {BACKLOG_COLUMN_LABELS[colKey]}
-                      {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
-                    </label>
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
           </div>
           <div className="min-w-0 basis-0 grow-[0.03] shrink" aria-hidden />
@@ -3756,7 +3756,7 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="h-[calc(100%-6.95rem)] min-h-0 overflow-hidden rounded-md bg-white">
+      <div className="relative z-10 h-[calc(100%-6.95rem)] min-h-0 overflow-hidden rounded-md bg-white">
         <div className="h-full overflow-auto text-[15px] leading-snug text-slate-800">
         <>
         {showTableHeaderRow ? (
@@ -4974,6 +4974,58 @@ export function BacklogPlanningPanel({
           </div>
         </div>
       ) : null}
+      {columnsMenuOpen && columnsMenuFixedPosition != null && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={columnsMenuPanelRef}
+              id="backlog-columns-menu-panel"
+              role="menu"
+              aria-label="Table columns and layout"
+              className="fixed z-[100] max-h-[min(70vh,26rem)] w-64 overflow-y-auto overflow-x-hidden rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/20 ring-1 ring-indigo-200/60 backdrop-blur-sm"
+              style={{ top: columnsMenuFixedPosition.top, left: columnsMenuFixedPosition.left }}
+            >
+              <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-indigo-100/50">
+                <input
+                  type="checkbox"
+                  checked={showTableHeaderRow}
+                  onChange={() => setShowTableHeaderRow((v) => !v)}
+                  className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+                />
+                Show column titles
+              </label>
+              <div className="mb-1 border-t border-indigo-200/70 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                Visible columns
+              </div>
+              <p className="mb-2 text-[11px] leading-snug text-slate-600">Drag the dotted handle in a blue column header to reorder columns.</p>
+              {columnOrder.map((colKey) => {
+                const locked = colKey === "workItem";
+                return (
+                  <label
+                    key={colKey}
+                    className={cn(
+                      "mb-0.5 flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700",
+                      locked ? "cursor-not-allowed opacity-70" : "hover:bg-indigo-100/40",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={columnVisibility[colKey]}
+                      disabled={locked}
+                      onChange={() => {
+                        if (locked) return;
+                        setColumnVisibility((prev) => ({ ...prev, [colKey]: !prev[colKey] }));
+                      }}
+                      className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+                    />
+                    {BACKLOG_COLUMN_LABELS[colKey]}
+                    {locked ? <span className="text-[11px] font-normal text-slate-500">(required)</span> : null}
+                  </label>
+                );
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   );
 }
