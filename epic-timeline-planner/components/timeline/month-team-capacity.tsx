@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
 import { type MonthTeamCapacityBoard } from "@/lib/month-team-capacity";
+import { cn } from "@/lib/utils";
 
 function quarterFromMonth(month: number): string {
   if (month <= 3) return "Q1";
@@ -87,6 +88,11 @@ export function MonthTeamCapacityBoard({
       ? MONTH_TEAM_COLUMNS.filter((team) => teamFilterIds.includes(team.id))
       : MONTH_TEAM_COLUMNS;
 
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  useEffect(() => {
+    setExpandedTeamId(null);
+  }, [year, month, teamFilterIds.join(",")]);
+
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
   for (const team of visibleTeams) {
@@ -119,6 +125,9 @@ export function MonthTeamCapacityBoard({
       />
       <div className="flex flex-wrap gap-6">
         {visibleTeams.map((team) => {
+          if (expandedTeamId != null && expandedTeamId !== team.id) {
+            return null;
+          }
           const cardRows =
             mergedColumns != null
               ? (mergedColumns.find((c) => c.team.id === team.id)?.cards ?? [])
@@ -141,7 +150,10 @@ export function MonthTeamCapacityBoard({
           return (
             <div
               key={team.id}
-              className="box-border w-full max-w-full min-w-[min(100%,23rem)] grow basis-[23rem]"
+              className={cn(
+                "box-border w-full max-w-full min-w-[min(100%,23rem)] grow basis-[23rem]",
+                expandedTeamId === team.id && "min-w-0 basis-full max-w-none",
+              )}
             >
               <TeamCapacityBucket
                 team={team}
@@ -155,6 +167,10 @@ export function MonthTeamCapacityBoard({
                 dropId={monthTeamCapacityBucketDropId(year, month, team.id)}
                 gaugeScaleMax={60}
                 capacityInputMax={200}
+                panelExpandable={visibleTeams.length > 1}
+                isPanelExpanded={expandedTeamId === team.id}
+                onExpandPanel={() => setExpandedTeamId(team.id)}
+                onCollapsePanel={() => setExpandedTeamId(null)}
               />
             </div>
           );
