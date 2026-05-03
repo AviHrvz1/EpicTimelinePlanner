@@ -50,20 +50,20 @@ export function TeamLoadSummary({
   const fillW = (thermometerPct / 100) * innerW;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/40 to-slate-50/90 px-3 py-2 ring-1 ring-slate-100/80">
+    <section className="rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/30 to-sky-50/45 px-4 py-3 shadow-sm shadow-slate-900/5 ring-1 ring-indigo-100/45">
       <div className="flex flex-nowrap items-center gap-2.5 sm:gap-3.5">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
-            <Thermometer className="size-3.5 text-slate-700" aria-hidden />
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/60 bg-white/90 shadow-sm shadow-indigo-900/5">
+            <Thermometer className="size-3.5 text-indigo-600/90" aria-hidden />
           </span>
-          <h3 className="shrink-0 text-[14px] font-bold leading-tight text-slate-900 sm:text-[15px]">
+          <h3 className="shrink-0 text-[14px] font-bold leading-tight text-slate-800 sm:text-[15px]">
             Team load
             <span className="font-semibold text-slate-400"> · </span>
           </h3>
           {teamLabelSlot ? (
             <div className="min-w-0">{teamLabelSlot}</div>
           ) : (
-            <span className="min-w-0 truncate font-semibold text-slate-500">{teamLabel}</span>
+            <span className="min-w-0 truncate font-semibold text-slate-600">{teamLabel}</span>
           )}
         </div>
 
@@ -71,7 +71,7 @@ export function TeamLoadSummary({
           className="flex w-[6.5rem] shrink-0 flex-col gap-0.5 sm:w-[11rem] md:w-[12.5rem]"
           aria-label="Team capacity gauge"
         >
-          <p className="text-right text-[18px] font-bold leading-none tabular-nums text-slate-900 sm:text-[20px]">
+          <p className="text-right text-[18px] font-bold leading-none tabular-nums text-slate-800 sm:text-[20px]">
             {Math.round(utilization)}%
           </p>
           <svg
@@ -117,20 +117,20 @@ export function TeamLoadSummary({
               opacity="0.95"
             />
           </svg>
-          <p className="text-right text-[11px] font-semibold tabular-nums leading-none text-slate-500 sm:text-[12px]">
+          <p className="text-right text-[11px] font-semibold tabular-nums leading-none text-slate-600 sm:text-[12px]">
             {totalAssigned.toFixed(1)}d / {totalCapacity.toFixed(1)}d
           </p>
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-200/80 pt-2.5 text-[13px] font-semibold sm:text-[14px]">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-indigo-100/50 pt-3 text-[13px] font-semibold sm:text-[14px]">
         <span className="tabular-nums text-slate-800">{totalAssigned.toFixed(1)}d planned</span>
-        <span className="text-slate-300">/</span>
+        <span className="text-slate-300/90">/</span>
         <span className="tabular-nums text-slate-600">{totalCapacity.toFixed(1)}d available</span>
-        <span className="rounded-md bg-white px-2.5 py-0.5 text-[12px] font-bold tabular-nums text-slate-800 ring-1 ring-slate-200/90 sm:text-[13px]">
+        <span className="rounded-lg border border-slate-200/70 bg-white/80 px-2.5 py-0.5 text-[12px] font-bold tabular-nums text-slate-800 shadow-sm sm:text-[13px]">
           {Math.round(utilization)}% utilized
         </span>
-        <span className={cn("rounded-md px-2.5 py-0.5 text-[12px] font-bold ring-1 sm:text-[13px]", statusClass)}>{statusLabel}</span>
+        <span className={cn("rounded-lg px-2.5 py-0.5 text-[12px] font-bold shadow-sm ring-1 sm:text-[13px]", statusClass)}>{statusLabel}</span>
         {overCapacity ? (
           <span className="inline-flex items-center gap-1 text-rose-600">
             <AlertTriangle className="size-4 shrink-0" aria-hidden />
