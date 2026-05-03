@@ -3761,18 +3761,21 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     <DragContext onDragEnd={onDragEnd}>
       <main
         className={cn(
-          "h-screen min-h-0 overflow-x-hidden p-8",
-          topMode === "users"
-            ? "overflow-y-auto bg-white"
-            : "bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
-          topMode === "roadmap" && "overflow-y-visible",
-          topMode === "backlog" && "overflow-y-hidden",
+          "h-screen min-h-0 p-8",
+          topMode === "users" && "overflow-x-hidden overflow-y-auto bg-white",
+          topMode === "roadmap" &&
+            "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
+          topMode === "backlog" &&
+            "flex min-h-0 flex-col overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
         )}
       >
         <div
           className={cn(
-            "mx-auto flex h-full min-h-0 w-full max-w-[2550px] flex-row gap-2.5 overflow-y-visible",
-            isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden",
+            "mx-auto flex w-full max-w-[2550px] flex-row gap-2.5",
+            topMode === "backlog"
+              ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-hidden overflow-y-hidden"
+              : "h-full min-h-0 overflow-y-visible",
+            topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden"),
           )}
         >
           <div
@@ -3815,7 +3818,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto py-2">{modeSwitchMenu}</div>
             </div>
           </div>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-visible">
+          <div
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col gap-5",
+              topMode === "backlog"
+                ? "h-full min-h-0 overflow-x-hidden overflow-y-hidden"
+                : "overflow-x-hidden overflow-y-visible",
+            )}
+          >
             {topMode === "roadmap" ? (
             <div
               ref={layoutRef}
@@ -4254,10 +4264,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
             </div>
           ) : (
-            <div className="min-h-0 flex-1">
+            <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
               <div
                 ref={planningRightSurfaceRef}
-                className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"
+                className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden"
               >
                 <BacklogPlanningPanel
                 initiatives={initiatives}

@@ -1928,6 +1928,7 @@ export function BacklogPlanningPanel({
         })),
       }));
   }, [fullyFiltered]);
+
   const groupSummaryLabel = groupLevels.length === 0 ? "None" : groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ");
   const hasAnyActiveFilter =
     yearFilter.length > 0 ||
@@ -3846,8 +3847,8 @@ export function BacklogPlanningPanel({
   }, []);
 
   return (
-    <section className="h-full min-h-0 overflow-hidden rounded-2xl bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-xl ring-1 ring-slate-200/80">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-xl ring-1 ring-slate-200/80">
+      <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="inline-flex size-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 ring-1 ring-slate-200">
             <ListTodo className="size-4" strokeWidth={2} aria-hidden />
@@ -3900,7 +3901,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative z-20 mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
+      <div className="relative z-20 mb-6 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6 [contain:inline-size]">
         <div
           className="grid w-full min-w-0 max-w-full items-center gap-x-3 gap-y-7 sm:gap-x-3.5 sm:gap-y-8"
           style={{ gridTemplateColumns: "repeat(11, minmax(0, 1fr))" }}
@@ -4288,9 +4289,10 @@ export function BacklogPlanningPanel({
         </div>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
+        <div className="mb-3 w-full min-w-0 max-w-full shrink-0 overflow-x-auto">
         <form
           onSubmit={handleCreateSubmit}
-          className={cn("mb-3 grid min-w-full w-max items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3")}
+          className={cn("grid w-max min-w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3")}
           style={{ gridTemplateColumns: tableGridTemplate }}
         >
           <div className="flex min-w-0 items-center gap-2">
@@ -4307,10 +4309,12 @@ export function BacklogPlanningPanel({
             <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
           </div>
         </form>
+        </div>
       ) : null}
 
-      <div className="relative z-0 h-[calc(100%-6.95rem)] min-h-0 overflow-hidden rounded-md bg-white">
-        <div className="h-full overflow-auto text-[15px] leading-snug text-slate-800">
+      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md bg-white">
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]">
+        <div className="w-max min-w-full text-[15px] leading-snug text-slate-800">
         <>
         {showTableHeaderRow ? (
           <div className="sticky top-0 z-10 min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
@@ -5483,6 +5487,7 @@ export function BacklogPlanningPanel({
           </div>
         )}
         </>
+        </div>
         </div>
       </div>
       {saveAsFilterDialogOpen ? (
