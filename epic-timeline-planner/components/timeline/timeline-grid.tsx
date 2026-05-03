@@ -143,19 +143,41 @@ function StripedGanttLaneScrollArea({
 }
 
 /**
- * All-quarters year Gantt: horizontal scroll activates when sprint columns would shrink below
- * {@link YEAR_ROADMAP_MIN_SPRINT_PX}px (readability). Uses hysteresis so narrow resize does not flicker.
- * `gap-2` between sprint tracks matches {@link YEAR_ROADMAP_GANTT_GAP_PX}.
+ * Portfolio roadmap Gantt (all-quarters year + drilled-in quarter): horizontal scroll when sprint columns
+ * would shrink below a readability sprint width. Full year uses {@link YEAR_ROADMAP_MIN_SPRINT_PX}px; short
+ * horizons (≤ {@link ROADMAP_SHORT_HORIZON_MAX_COLUMNS} sprints) use a derived sprint width so the minimum
+ * timeline width is {@link ROADMAP_SHORT_HORIZON_MIN_CONTAINER_PX}px before scroll engages.
+ * Hysteresis avoids flicker on resize. Sprint track `gap-2` matches {@link YEAR_ROADMAP_GANTT_GAP_PX}.
  */
 const YEAR_ROADMAP_GANTT_GAP_PX = 8;
 const YEAR_ROADMAP_MIN_SPRINT_PX = 36;
+const ROADMAP_SHORT_HORIZON_MAX_COLUMNS = 8;
+/** Minimum total width (sprints + gaps) for quarter-scale views before horizontal scroll turns on. */
+const ROADMAP_SHORT_HORIZON_MIN_CONTAINER_PX = 1400;
+/**
+ * Quarter lane stack uses `px-3` / `sm:px-4`; sprint grids are narrower than the measure ref — subtract so
+ * scroll engages when lanes actually get tight, not only when the outer box is tiny.
+ */
+const ROADMAP_QUARTER_LANE_HORIZONTAL_INSET_PX = 64;
 const YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX = 48;
 
-function yearRoadmapGanttMinWidthPx(columnCount: number): number {
+/**
+ * Minimum width for the timeline “right panel” (breadcrumbs, chips, rails, sprint/kanban/insights/capacity/etc.)
+ * before horizontal scroll engages. Applies on all surfaces, not only portfolio Gantt.
+ */
+const RIGHT_PANEL_MIN_CONTENT_PX = 1100;
+
+function getRoadmapHScrollMinSprintPx(columnCount: number): number {
+  if (columnCount <= 0) return YEAR_ROADMAP_MIN_SPRINT_PX;
+  if (columnCount > ROADMAP_SHORT_HORIZON_MAX_COLUMNS) return YEAR_ROADMAP_MIN_SPRINT_PX;
+  const gaps = Math.max(0, columnCount - 1) * YEAR_ROADMAP_GANTT_GAP_PX;
+  const raw = (ROADMAP_SHORT_HORIZON_MIN_CONTAINER_PX - gaps) / columnCount;
+  return Math.max(YEAR_ROADMAP_MIN_SPRINT_PX, raw);
+}
+
+function yearRoadmapGanttMinWidthPx(columnCount: number, minSprintPx: number = YEAR_ROADMAP_MIN_SPRINT_PX): number {
   if (columnCount <= 0) return 0;
-  return (
-    columnCount * YEAR_ROADMAP_MIN_SPRINT_PX + Math.max(0, columnCount - 1) * YEAR_ROADMAP_GANTT_GAP_PX
-  );
+  return columnCount * minSprintPx + Math.max(0, columnCount - 1) * YEAR_ROADMAP_GANTT_GAP_PX;
 }
 
 /** Full-year / all-quarters Gantt: vertical “today” line with a down-pointing triangle at the top. */
@@ -1102,8 +1124,11 @@ export function TimelineGrid({
   const [capacityTeamSearch, setCapacityTeamSearch] = useState("");
   const [capacityTeamMenuOpen, setCapacityTeamMenuOpen] = useState(false);
   const [showYearSprintChips, setShowYearSprintChips] = useState(false);
-  /** When true, year (all-quarters) Gantt uses fixed sprint column width + horizontal scroll (see ResizeObserver). */
+  /** When true, year or quarter roadmap Gantt uses fixed sprint column width (column threshold via ResizeObserver). */
   const [yearRoadmapHScroll, setYearRoadmapHScroll] = useState(false);
+  /** When true, right panel is narrower than {@link RIGHT_PANEL_MIN_CONTENT_PX} — outer horizontal scroll for full chrome + body. */
+  const [rightPanelHScroll, setRightPanelHScroll] = useState(false);
+  /** Measures available width under the timeline card; drives right-panel + roadmap horizontal scroll. */
   const yearRoadmapMeasureRef = useRef<HTMLDivElement | null>(null);
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
   /** Drives slide-in/out (mirror of epic insights panel: translate + duration-300). */
@@ -1485,6 +1510,9 @@ export function TimelineGrid({
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
   const isFullYearGanttLayout =
     activeMonth == null && focusedQuarter == null && quarterViewTab === "gantt";
+  const isQuarterGanttLayout =
+    activeMonth == null && focusedQuarter != null && quarterViewTab === "gantt";
+  const portfolioRoadmapGanttHScrollMeasure = isFullYearGanttLayout || isQuarterGanttLayout;
   const scopedEpicsForEstimatePanel = useMemo(() => {
     let scopedRows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     if (activeMonth) {
@@ -2286,14 +2314,19 @@ export function TimelineGrid({
   };
   /** Initiative rows + quarter headers: 2 sprint columns per month; full-year = 24 sprints. */
   const ganttLaneColumnCount = focusedQuarter ? visibleMonths.length * 2 : 24;
+  const portfolioRoadmapHScrollContentMinWidthPx = useMemo(
+    () => yearRoadmapGanttMinWidthPx(ganttLaneColumnCount, getRoadmapHScrollMinSprintPx(ganttLaneColumnCount)),
+    [ganttLaneColumnCount],
+  );
   const ganttLaneGridStyle: CSSProperties = useMemo(() => {
-    if (focusedQuarter || !yearRoadmapHScroll) {
+    if (!yearRoadmapHScroll) {
       return { gridTemplateColumns: `repeat(${ganttLaneColumnCount}, minmax(0, 1fr))` };
     }
+    const sp = getRoadmapHScrollMinSprintPx(ganttLaneColumnCount);
     return {
-      gridTemplateColumns: `repeat(${ganttLaneColumnCount}, minmax(${YEAR_ROADMAP_MIN_SPRINT_PX}px, ${YEAR_ROADMAP_MIN_SPRINT_PX}px))`,
+      gridTemplateColumns: `repeat(${ganttLaneColumnCount}, minmax(${sp}px, ${sp}px))`,
     };
-  }, [focusedQuarter, ganttLaneColumnCount, yearRoadmapHScroll]);
+  }, [ganttLaneColumnCount, yearRoadmapHScroll]);
 
   /** Quarter title row uses 12 month-width columns (each quarter spans 3). */
   const yearQuarterHeaderGridStyle: CSSProperties = useMemo(() => {
@@ -2305,28 +2338,40 @@ export function TimelineGrid({
   }, [yearRoadmapHScroll]);
 
   useLayoutEffect(() => {
-    if (!isFullYearGanttLayout) {
-      setYearRoadmapHScroll(false);
-      return;
-    }
     const el = yearRoadmapMeasureRef.current;
     if (!el) return;
-    const minW = yearRoadmapGanttMinWidthPx(ganttLaneColumnCount);
     const hyst = YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX;
+    const laneHorizontalInsetPx =
+      focusedQuarterLabel != null ? ROADMAP_QUARTER_LANE_HORIZONTAL_INSET_PX : 0;
+    const ganttMinW = yearRoadmapGanttMinWidthPx(
+      ganttLaneColumnCount,
+      getRoadmapHScrollMinSprintPx(ganttLaneColumnCount),
+    );
     const apply = () => {
-      const w = el.clientWidth;
+      const raw = el.clientWidth;
+      setRightPanelHScroll((prev) => {
+        if (raw <= 0) return false;
+        if (!prev && raw < RIGHT_PANEL_MIN_CONTENT_PX) return true;
+        if (prev && raw >= RIGHT_PANEL_MIN_CONTENT_PX + hyst) return false;
+        return prev;
+      });
+      if (!portfolioRoadmapGanttHScrollMeasure) {
+        setYearRoadmapHScroll(false);
+        return;
+      }
+      const w = Math.max(0, raw - laneHorizontalInsetPx);
       setYearRoadmapHScroll((prev) => {
         if (w <= 0) return false;
-        if (!prev && w < minW) return true;
-        if (prev && w >= minW + hyst) return false;
+        if (!prev && w < ganttMinW) return true;
+        if (prev && w >= ganttMinW + hyst) return false;
         return prev;
       });
     };
     apply();
-    const ro = new ResizeObserver(apply);
+    const ro = new ResizeObserver(() => apply());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isFullYearGanttLayout, ganttLaneColumnCount]);
+  }, [portfolioRoadmapGanttHScrollMeasure, ganttLaneColumnCount, focusedQuarterLabel]);
 
   /** Today line over initiative lanes (sprint resolution). */
   const roadmapLaneTodayLeft = useMemo(() => {
@@ -2947,11 +2992,20 @@ export function TimelineGrid({
         )
   );
 
-  return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
+  const ganttNeedsFixedColumns = portfolioRoadmapGanttHScrollMeasure && yearRoadmapHScroll;
+  const panelHScroll = rightPanelHScroll || ganttNeedsFixedColumns;
+  const panelScrollMinWidthPx = panelHScroll
+    ? Math.max(
+        rightPanelHScroll ? RIGHT_PANEL_MIN_CONTENT_PX : 0,
+        ganttNeedsFixedColumns ? portfolioRoadmapHScrollContentMinWidthPx : 0,
+      )
+    : undefined;
+
+  const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] py-2.5 shadow-none ring-0",
+          "relative z-30 mb-4 flex w-full shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] py-2.5 shadow-none ring-0",
+          panelHScroll ? "min-w-max" : "min-w-0",
         )}
       >
         {hasBreadcrumbs ? (
@@ -3036,7 +3090,8 @@ export function TimelineGrid({
         {!activeMonth ? (
           <div
             className={cn(
-              "flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2",
+              "flex items-center justify-end gap-1 sm:gap-1.5 md:gap-2",
+              panelHScroll ? "min-w-max shrink-0 flex-nowrap" : "min-w-0 flex-wrap",
               hasBreadcrumbs ? "flex-1" : "w-full",
             )}
           >
@@ -3142,7 +3197,8 @@ export function TimelineGrid({
         ) : activeMonth ? (
           <div
             className={cn(
-              "flex min-w-0 flex-wrap items-center justify-end gap-1 pr-2 sm:gap-3 md:gap-2",
+              "flex items-center justify-end gap-1 pr-2 sm:gap-3 md:gap-2",
+              panelHScroll ? "min-w-max shrink-0 flex-nowrap" : "min-w-0 flex-wrap",
               hasBreadcrumbs ? "flex-1" : "w-full",
             )}
           >
@@ -3301,6 +3357,9 @@ export function TimelineGrid({
           <div className="flex items-center gap-2" />
         )}
       </div>
+  );
+
+  const planningSurface = (
       <div
         key={isInsightsSurfaceRender ? `insights-${activeMonth ?? "year"}-${focusedQuarterLabel ?? "all"}` : "planning-surface"}
         ref={timelineContentScrollRef}
@@ -4174,13 +4233,36 @@ export function TimelineGrid({
           {focusedQuarter && quarterViewTab === "gantt" ? (
             <div
               className={cn(
-                "mb-4 flex min-h-0 flex-1 w-full flex-col gap-4",
+                "mb-4 flex min-h-0 min-w-0 flex-1 w-full flex-col",
                 hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
               )}
             >
-              <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
-                <div className="relative shrink-0 overflow-hidden rounded-t-xl bg-slate-50/30 ring-1 ring-slate-200/40">
-                  <div className="relative grid min-w-0 gap-1.5 p-0.5 sm:gap-2" style={ganttLaneGridStyle}>
+              <div
+                className={cn(
+                  "min-h-0 min-w-0 flex-1",
+                  !panelHScroll &&
+                    yearRoadmapHScroll &&
+                    "overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex min-h-0 min-w-0 flex-1 flex-col gap-4",
+                    !panelHScroll && yearRoadmapHScroll && "w-max min-w-full",
+                  )}
+                  style={
+                    !panelHScroll && yearRoadmapHScroll
+                      ? { minWidth: portfolioRoadmapHScrollContentMinWidthPx }
+                      : undefined
+                  }
+                >
+                  <div
+                    className={cn(
+                      "relative shrink-0 rounded-t-xl bg-slate-50/30 ring-1 ring-slate-200/40",
+                      !yearRoadmapHScroll && "overflow-hidden",
+                    )}
+                  >
+                    <div className="relative grid min-w-0 gap-2 p-0.5" style={ganttLaneGridStyle}>
                     {visibleMonths.map((month) => (
                       <div
                         key={month}
@@ -4258,7 +4340,12 @@ export function TimelineGrid({
                     showBadge={false}
                     badgePlacement="above"
                   />
-                  <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
+                  <div
+                    className={cn(
+                      "relative flex min-h-0 w-full basis-0 flex-1 flex-col",
+                      !yearRoadmapHScroll && "overflow-hidden",
+                    )}
+                  >
                   {roadmapBarMode === "initiatives" ? (
                     quarterRoadmapInitiativeRows.length === 0 ? (
                       <>
@@ -4463,6 +4550,7 @@ export function TimelineGrid({
                   )}
                   </div>
                 </div>
+                </div>
               </div>
             </div>
           ) : null}
@@ -4472,7 +4560,10 @@ export function TimelineGrid({
       <div
         className={cn(
           "space-y-2",
-          activeMonth == null && quarterViewTab === "gantt" && "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden",
+          activeMonth == null &&
+            quarterViewTab === "gantt" &&
+            isFullYearGanttLayout &&
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden",
           hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
         )}
       >
@@ -4693,18 +4784,23 @@ export function TimelineGrid({
             }
           />
         ) : isFullYearGanttLayout ? (
-          <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div
               className={cn(
-                yearRoadmapHScroll &&
-                  "min-h-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
+                "min-h-0 min-w-0 flex-1",
+                !panelHScroll &&
+                  yearRoadmapHScroll &&
+                  "overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
               )}
             >
               <div
-                className={cn("flex min-h-0 flex-col gap-2", yearRoadmapHScroll && "w-max min-w-full")}
+                className={cn(
+                  "flex min-h-0 min-w-0 flex-col gap-2",
+                  !panelHScroll && yearRoadmapHScroll && "w-max min-w-full",
+                )}
                 style={
-                  yearRoadmapHScroll
-                    ? { minWidth: yearRoadmapGanttMinWidthPx(ganttLaneColumnCount) }
+                  !panelHScroll && yearRoadmapHScroll
+                    ? { minWidth: portfolioRoadmapHScrollContentMinWidthPx }
                     : undefined
                 }
               >
@@ -4821,6 +4917,29 @@ export function TimelineGrid({
         ) : (
           fullYearRoadmapGanttTracks
         )}
+      </div>
+      </div>
+  );
+
+  return (
+    <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
+      <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div
+          className={cn(
+            "min-h-0 min-w-0 flex-1",
+            panelHScroll && "overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
+          )}
+        >
+          <div
+            className={cn("flex min-h-0 min-w-0 flex-1 flex-col", panelHScroll && "w-max min-w-full")}
+            style={panelScrollMinWidthPx != null ? { minWidth: panelScrollMinWidthPx } : undefined}
+          >
+            <div className={cn("shrink-0", hasContextSideMenu && panelHScroll && "pl-[4rem]")}>
+              {timelineHeaderRow}
+            </div>
+            {planningSurface}
+          </div>
+        </div>
       </div>
       {estEpicsPanelOpen ? (
         <div className="pointer-events-none fixed inset-0 z-[140]">
@@ -5036,7 +5155,6 @@ export function TimelineGrid({
           </aside>
         </div>
       ) : null}
-      </div>
     </div>
   );
 }
