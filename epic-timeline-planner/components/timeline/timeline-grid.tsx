@@ -142,6 +142,26 @@ function StripedGanttLaneScrollArea({
   );
 }
 
+/** Full-year / all-quarters Gantt: vertical “today” line with a down-pointing triangle at the top. */
+function YearRoadmapTodayLine({ leftPercent }: { leftPercent: number | null }) {
+  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
+  const x = Math.min(100, Math.max(0, leftPercent));
+  return (
+    <>
+      <div
+        className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
+        style={{ left: `${x}%` }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute top-0 z-[6] h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500"
+        style={{ left: `${x}%` }}
+        aria-hidden
+      />
+    </>
+  );
+}
+
 /** All-quarters roadmap with no rows: striped lane plus a centered empty message. */
 function YearRoadmapEmptyStripedLane({
   currentYear,
@@ -166,13 +186,7 @@ function YearRoadmapEmptyStripedLane({
         roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
       )}
     >
-      {roadmapLaneTodayLeft != null ? (
-        <div
-          className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
-          style={{ left: `${roadmapLaneTodayLeft}%` }}
-          aria-hidden
-        />
-      ) : null}
+      <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
       <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
         <p className="sr-only">{srText}</p>
         <StripedGanttLaneScrollArea
@@ -3587,12 +3601,7 @@ export function TimelineGrid({
                     )}
                   >
                     <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
-                      <GanttTodayMarker
-                        leftPercent={monthEpicGanttTodayLeft}
-                        showBadge={false}
-                        badgePlacement="above"
-                        bleedToPaddedPanel
-                      />
+                      <YearRoadmapTodayLine leftPercent={monthEpicGanttTodayLeft} />
                       {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
                         <p className="sr-only">
                           No initiatives are planned in {MONTHS[activeMonth - 1]} yet. Plan epics from the initiative list
@@ -4557,13 +4566,7 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
-            {roadmapLaneTodayLeft != null ? (
-              <div
-                className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
-                style={{ left: `${roadmapLaneTodayLeft}%` }}
-                aria-hidden
-              />
-            ) : null}
+            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
@@ -4620,13 +4623,7 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
-            {roadmapLaneTodayLeft != null ? (
-              <div
-                className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
-                style={{ left: `${roadmapLaneTodayLeft}%` }}
-                aria-hidden
-              />
-            ) : null}
+            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
