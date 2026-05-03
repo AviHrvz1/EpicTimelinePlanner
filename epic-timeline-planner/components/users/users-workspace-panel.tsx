@@ -10,10 +10,11 @@ import {
   Check,
   Plus,
   Search,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -73,6 +74,9 @@ const USER_DIR_TH_CLASS =
   "relative w-full min-w-0 whitespace-nowrap px-3 py-2.5 text-left align-middle";
 
 const USER_DIR_TD_BASE = "min-w-0 px-2 py-2 align-middle";
+
+/** Drawer field captions — larger than inputs (`cellInputCn` keeps control heights unchanged). */
+const USER_DRAWER_FIELD_LABEL_CLASS = "mb-1.5 block text-[15px] font-semibold text-slate-800";
 
 function isSortKey(v: string): v is SortKey {
   return v === "name" || v === "email" || v === "team" || v === "permission" || v === "status";
@@ -579,6 +583,8 @@ export function UsersWorkspacePanel() {
   const [rows, setRows] = useState<WorkspaceUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
+  const [searchSuggestOpen, setSearchSuggestOpen] = useState(false);
+  const searchFieldWrapRef = useRef<HTMLDivElement>(null);
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const [permissionFilter, setPermissionFilter] = useState<PermissionFilter>("all");
   const [teamFilterInput, setTeamFilterInput] = useState("");
@@ -754,6 +760,20 @@ export function UsersWorkspacePanel() {
     return [...s].sort();
   }, [displayed]);
 
+  const closeSearchSuggestions = useCallback(() => {
+    setSearchSuggestOpen(false);
+  }, []);
+
+  const handleDirectorySearchBlur = useCallback((event: FocusEvent<HTMLInputElement>) => {
+    const next = event.relatedTarget as Node | null;
+    if (next && searchFieldWrapRef.current?.contains(next)) return;
+    window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (searchFieldWrapRef.current?.contains(active)) return;
+      setSearchSuggestOpen(false);
+    });
+  }, []);
+
   const closePanel = useCallback(() => {
     if (!userPanel) {
       cancelDrawerClose();
@@ -790,6 +810,16 @@ export function UsersWorkspacePanel() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [editCell, userPanel, saving, closePanel]);
+
+  const handleSearchKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Escape" && searchSuggestOpen) {
+        event.preventDefault();
+        setSearchSuggestOpen(false);
+      }
+    },
+    [searchSuggestOpen],
+  );
 
   const saveNewUser = async () => {
     blurActiveField();
@@ -879,35 +909,57 @@ export function UsersWorkspacePanel() {
             Users Directory
           </h1>
         </div>
-        <Button
-          type="button"
-          onClick={openCreate}
-          className="h-10 shrink-0 gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 font-semibold shadow-md shadow-violet-500/20 hover:from-violet-500 hover:to-indigo-500"
-        >
-          <Plus className="size-4" aria-hidden />
+        <Button type="button" size="sm" onClick={openCreate} className="h-8 shrink-0 px-3 text-[13px] font-bold">
+          <Plus className="size-3.5" aria-hidden />
           Add User
         </Button>
       </header>
 
       <div className="flex flex-col gap-3 pb-8 lg:flex-row lg:items-center lg:gap-3">
-        <div className="relative min-w-0 w-full flex-1 lg:max-w-md">
+        <div ref={searchFieldWrapRef} className="relative min-w-0 w-full flex-1 lg:max-w-md">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+            className="pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-slate-400"
             aria-hidden
           />
           <input
-            list="users-name-suggestions"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
+            onFocus={() => setSearchSuggestOpen(true)}
+            onBlur={handleDirectorySearchBlur}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Search name, email, team, or permission…"
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-[14px] text-slate-900 shadow-sm outline-none ring-slate-200/80 transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+            className="relative z-[1] h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-[14px] text-slate-900 shadow-sm outline-none ring-slate-200/80 transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
             aria-label="Search users"
+            aria-controls="users-directory-name-suggestions"
+            aria-expanded={searchSuggestOpen && nameSuggestions.length > 0}
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            role="combobox"
+            autoComplete="off"
           />
-          <datalist id="users-name-suggestions">
-            {nameSuggestions.map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
+          {searchSuggestOpen && nameSuggestions.length > 0 ? (
+            <div
+              id="users-directory-name-suggestions"
+              role="listbox"
+              className="absolute left-0 right-0 top-full z-[70] mt-1 max-h-60 overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-200/90"
+            >
+              {nameSuggestions.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  role="option"
+                  className="flex w-full items-center px-3 py-2 text-left text-[14px] text-slate-800 hover:bg-slate-50"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setSearchText(n);
+                    closeSearchSuggestions();
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="w-full min-w-[160px] max-w-[220px] shrink-0 sm:w-[200px]">
@@ -1038,13 +1090,13 @@ export function UsersWorkspacePanel() {
         <div className="fixed inset-0 z-[100] flex justify-end">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+            className="absolute inset-0 bg-slate-900/30 backdrop-blur-[1px]"
             aria-label="Close panel"
             onClick={closePanel}
           />
           <div
             className={cn(
-              "relative flex h-full w-full max-w-lg flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out",
+              "relative flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06] transition-transform duration-300 ease-out rounded-l-xl",
               userDrawerEntered ? "translate-x-0" : "translate-x-full",
             )}
             role="dialog"
@@ -1053,82 +1105,148 @@ export function UsersWorkspacePanel() {
           >
             {userPanel.kind === "add" ? (
               <>
-                <div className="border-b border-slate-100 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-4 text-white">
-                  <h2 id="users-drawer-title" className="text-lg font-semibold">
-                    Add User
-                  </h2>
-                  <p className="mt-0.5 text-[13px] text-violet-100">
-                    New entries appear in the table; click a row to view details or edit fields from the grid.
-                  </p>
-                </div>
-                <div className="flex-1 space-y-4 overflow-y-auto p-5">
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Name</span>
-                    <input
-                      value={form.name}
-                      onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                      className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                      autoComplete="name"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Email</span>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                      autoComplete="email"
-                    />
-                  </label>
-                  <div className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Team</span>
-                    <TeamIdCombobox
-                      teamId={form.team}
-                      onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
+                <div className="flex shrink-0 flex-col border-b border-slate-200 bg-slate-50">
+                  <div className="flex items-start justify-between gap-3 px-5 py-4">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span
+                        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 ring-1 ring-violet-200/80"
+                        aria-hidden
+                      >
+                        <UserPlus className="size-5" strokeWidth={2} />
+                      </span>
+                      <div className="min-w-0">
+                        <h2 id="users-drawer-title" className="text-xl font-semibold tracking-tight text-slate-900">
+                          Add User
+                        </h2>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={closePanel}
+                      aria-label="Close panel"
                       disabled={saving}
-                      placeholder="Type or pick a team (optional)"
-                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                    />
-                  </div>
-                  <div className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Permission</span>
-                    <AssigneeCombobox
-                      value={form.permission}
-                      onChange={(permission) => setForm((f) => ({ ...f, permission }))}
-                      suggestions={WORKSPACE_USER_PERMISSIONS}
-                      disabled={saving}
-                      placeholder="Type or pick a permission"
-                      aria-label="Permission"
-                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                    />
+                    >
+                      <X className="size-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2 border-t border-slate-100 p-4">
-                  <Button type="button" variant="outline" className="flex-1" onClick={closePanel} disabled={saving}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    className="flex-1 bg-violet-600 font-semibold hover:bg-violet-500"
-                    onClick={() => void saveNewUser()}
-                    disabled={saving}
-                  >
-                    {saving ? "Saving…" : "Add User"}
-                  </Button>
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-5">
+                    <div className="w-full max-w-[400px] space-y-4">
+                      <label className="block">
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Name</span>
+                        <input
+                          value={form.name}
+                          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                          autoComplete="name"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Email</span>
+                        <input
+                          type="email"
+                          value={form.email}
+                          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                          autoComplete="email"
+                        />
+                      </label>
+                      <div className="block">
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team</span>
+                        <TeamIdCombobox
+                          teamId={form.team}
+                          onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
+                          disabled={saving}
+                          placeholder="Type or pick a team (optional)"
+                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                        />
+                      </div>
+                      <div className="block">
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission</span>
+                        <AssigneeCombobox
+                          value={form.permission}
+                          onChange={(permission) => setForm((f) => ({ ...f, permission }))}
+                          suggestions={WORKSPACE_USER_PERMISSIONS}
+                          disabled={saving}
+                          placeholder="Type or pick a permission"
+                          aria-label="Permission"
+                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-white px-5 py-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 min-w-[100px] px-4 text-xs font-medium"
+                      onClick={closePanel}
+                      disabled={saving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-xs font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                      onClick={() => void saveNewUser()}
+                      disabled={saving}
+                    >
+                      {saving ? "Saving…" : "Add User"}
+                    </Button>
+                  </div>
                 </div>
               </>
             ) : viewUser ? (
               <>
-                <div className="border-b border-slate-100 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-4 text-white">
-                  <h2 id="users-drawer-title" className="text-lg font-semibold">
-                    Edit user
-                  </h2>
-                  <p className="mt-0.5 text-[13px] text-violet-100">Update fields and save, or cancel to discard.</p>
+                <div className="flex shrink-0 flex-col border-b border-slate-200 bg-slate-50">
+                  <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+                    <div className="min-w-0 flex-1">
+                      <h2 id="users-drawer-title" className="text-xl font-semibold tracking-tight text-slate-900">
+                        Edit user
+                      </h2>
+                      <p className="mt-1 text-[14px] text-slate-500">Update fields and save, or cancel to discard.</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs font-medium"
+                        onClick={closePanel}
+                        disabled={saving}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-3 text-xs font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                        onClick={() => void saveEditedUser()}
+                        disabled={saving}
+                      >
+                        {saving ? "Saving…" : "Save changes"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={closePanel}
+                        aria-label="Close panel"
+                        disabled={saving}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex-1 space-y-4 overflow-y-auto p-5">
                   <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Name</span>
+                    <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Name</span>
                     <input
                       value={form.name}
                       onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -1137,7 +1255,7 @@ export function UsersWorkspacePanel() {
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Email</span>
+                    <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Email</span>
                     <input
                       type="email"
                       value={form.email}
@@ -1147,7 +1265,7 @@ export function UsersWorkspacePanel() {
                     />
                   </label>
                   <div className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Team</span>
+                    <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team</span>
                     <TeamIdCombobox
                       teamId={form.team}
                       onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
@@ -1157,7 +1275,7 @@ export function UsersWorkspacePanel() {
                     />
                   </div>
                   <div className="block">
-                    <span className="mb-1.5 block text-[12px] font-semibold text-slate-700">Permission</span>
+                    <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission</span>
                     <AssigneeCombobox
                       value={form.permission}
                       onChange={(permission) => setForm((f) => ({ ...f, permission }))}
@@ -1169,25 +1287,12 @@ export function UsersWorkspacePanel() {
                     />
                   </div>
                   <div>
-                    <div className="mb-1.5 text-[12px] font-semibold text-slate-700">Status</div>
+                    <div className={USER_DRAWER_FIELD_LABEL_CLASS}>Status</div>
                     <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[13px] font-semibold text-emerald-900 ring-1 ring-emerald-200/90">
                       {formatUserStatusLabel(viewUser.status ?? "active")}
                     </span>
                     <p className="mt-1.5 text-[12px] text-slate-500">Status is managed by the system.</p>
                   </div>
-                </div>
-                <div className="flex gap-2 border-t border-slate-100 p-4">
-                  <Button type="button" variant="outline" className="flex-1" onClick={closePanel} disabled={saving}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    className="flex-1 bg-violet-600 font-semibold hover:bg-violet-500"
-                    onClick={() => void saveEditedUser()}
-                    disabled={saving}
-                  >
-                    {saving ? "Saving…" : "Save changes"}
-                  </Button>
                 </div>
               </>
             ) : null}

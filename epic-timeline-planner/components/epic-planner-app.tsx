@@ -3760,9 +3760,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   return (
     <DragContext onDragEnd={onDragEnd}>
       <main
-          className={cn(
-          "h-screen min-h-0 overflow-x-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200 p-8",
-          topMode === "roadmap" ? "overflow-y-visible" : topMode === "users" ? "overflow-y-auto" : "overflow-y-hidden",
+        className={cn(
+          "h-screen min-h-0 overflow-x-hidden p-8",
+          topMode === "users"
+            ? "overflow-y-auto bg-white"
+            : "bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
+          topMode === "roadmap" && "overflow-y-visible",
+          topMode === "backlog" && "overflow-y-hidden",
         )}
       >
         <div
@@ -4245,7 +4249,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             </div>
           ) : topMode === "users" ? (
             <div className="min-h-0 flex-1">
-              <div className="h-full min-h-0 overflow-hidden rounded-2xl bg-white/60 shadow-md ring-1 ring-slate-200/80">
+              <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
                 <UsersWorkspacePanel />
               </div>
             </div>
