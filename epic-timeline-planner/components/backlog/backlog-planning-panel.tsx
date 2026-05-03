@@ -46,10 +46,16 @@ import {
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { defaultMembersForTeam } from "@/lib/sprint-capacity";
-import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
-import { InitiativeItem } from "@/lib/types";
+import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
+
+/** Softer than shared table zebra — long wide rows read cleaner with lower-contrast bands. */
+const BACKLOG_TABLE_STRIPE_BG = "#f1f5f9";
+const BACKLOG_TABLE_BASE_BG = "#ffffff";
+
+/** Matches header grid — reserves space for the column-menu control so rows extend to the same right edge. */
+const BACKLOG_TABLE_END_PAD = "pe-12";
 
 type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
@@ -69,6 +75,7 @@ type BacklogPlanningPanelProps = {
       assignee: string | null;
       estimatedDays: number | null;
       daysLeft: number | null;
+      labels: string | null;
     }>,
   ) => Promise<void>;
   onPatchInitiativeQuick: (initiativeId: string, patch: { assignee?: string | null; title?: string }) => Promise<void>;
@@ -88,14 +95,68 @@ type BacklogColumnKey =
   | "status"
   | "sprint"
   | "assignee"
+  | "labels"
   | "estDays"
   | "epicOriginalEst"
   | "daysLeft"
   | "progress";
 type GroupLevel = "year" | "quarter" | "month" | "sprint";
 type WorkflowStatus = "todo" | "inProgress" | "done" | "approved";
-type InlineEditableStoryField = "status" | "sprint" | "assignee" | "estimatedDays" | "daysLeft";
+type InlineEditableStoryField = "status" | "sprint" | "assignee" | "labels" | "estimatedDays" | "daysLeft";
 type WorkItemKindFilter = "initiative" | "epic" | "story";
+
+function parseStoryLabels(raw: string | null | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatStoryLabelsForEditInput(raw: string | null | undefined): string {
+  return parseStoryLabels(raw).join(", ");
+}
+
+type StoryCellEditSnapshot = {
+  status: string;
+  sprint: number | null;
+  assignee: string | null;
+  estimatedDays: number | null;
+  daysLeft: number | null;
+  labels: string | null;
+};
+
+function storyEditSnapshotFromFlat(
+  story: Pick<UserStoryItem, "status" | "sprint" | "assignee" | "estimatedDays" | "daysLeft" | "labels">,
+): StoryCellEditSnapshot {
+  return {
+    status: story.status,
+    sprint: story.sprint,
+    assignee: story.assignee?.trim() || null,
+    estimatedDays: story.estimatedDays,
+    daysLeft: story.daysLeft,
+    labels: story.labels,
+  };
+}
+
+type BacklogGroupedStoryRowForSnapshot = {
+  storyStatus: string;
+  storySprintNum: number | null;
+  storyAssignee: string;
+  storyEstimatedDays: number;
+  storyDaysLeft: number;
+  storyLabels: string | null;
+};
+
+function storyEditSnapshotFromGroupedRow(row: BacklogGroupedStoryRowForSnapshot): StoryCellEditSnapshot {
+  return {
+    status: row.storyStatus,
+    sprint: row.storySprintNum,
+    assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+    estimatedDays: row.storyEstimatedDays,
+    daysLeft: row.storyDaysLeft,
+    labels: row.storyLabels,
+  };
+}
 
 const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "workItem",
@@ -107,6 +168,7 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "status",
   "sprint",
   "assignee",
+  "labels",
   "estDays",
   "epicOriginalEst",
   "daysLeft",
@@ -123,6 +185,7 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   status: "Status",
   sprint: "Sprint",
   assignee: "Assignee",
+  labels: "Labels",
   estDays: "Est Days",
   epicOriginalEst: "Epic Est",
   daysLeft: "Days Left",
@@ -139,6 +202,7 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   status: 100,
   sprint: 90,
   assignee: 120,
+  labels: 140,
   estDays: 90,
   epicOriginalEst: 110,
   daysLeft: 90,
@@ -155,6 +219,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   status: 168,
   sprint: 148,
   assignee: 190,
+  labels: 200,
   estDays: 128,
   epicOriginalEst: 150,
   daysLeft: 128,
@@ -170,14 +235,17 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   year: true,
   quarter: true,
   month: true,
-  startDate: true,
-  endDate: true,
+  /** Shown via Table → columns when needed — dates add a lot of horizontal noise. */
+  startDate: false,
+  endDate: false,
   status: true,
   sprint: true,
   assignee: true,
+  labels: true,
   estDays: true,
-  epicOriginalEst: true,
-  daysLeft: true,
+  /** Often redundant with story estimates; toggle on when useful. */
+  epicOriginalEst: false,
+  daysLeft: false,
   progress: true,
 };
 
@@ -190,6 +258,7 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "status",
   "sprint",
   "assignee",
+  "labels",
   "estDays",
   "epicOriginalEst",
   "daysLeft",
@@ -199,6 +268,8 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
 function backlogCellClassName(key: BacklogColumnKey): string {
   if (key === "workItem") return "relative min-w-0 pl-4";
   if (key === "progress") return "min-w-0";
+  /** `justify-self-center` would size the item to max-content and let long text spill out of the column. */
+  if (key === "labels") return "flex min-w-0 w-full max-w-full justify-center overflow-hidden text-center";
   return cn("min-w-0", CENTER_ALIGNED_BACKLOG_COLUMNS.has(key) && "justify-self-center text-center");
 }
 
@@ -658,6 +729,107 @@ function BacklogAssigneeFilterControl({
   );
 }
 
+function BacklogLabelsFilterControl({
+  selected,
+  onChange,
+  suggestions,
+}: {
+  selected: string[];
+  onChange: (next: string[]) => void;
+  suggestions: readonly string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const allSelected = selected.length === 0;
+  const selectedLabel =
+    allSelected ? "All" : selected.length === 1 ? selected[0]! : `${selected.length} selected`;
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  function scheduleClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setIsOpen(false), 180);
+  }
+
+  function cancelScheduledClose() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
+  function pickLabel(name: string) {
+    const t = name.trim();
+    if (!t) return;
+    if (allSelected) onChange([t]);
+    else if (!selected.includes(t)) onChange([...selected, t]);
+    setDraft("");
+  }
+
+  return (
+    <div className="group relative" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+      >
+        <span className="font-semibold text-slate-700">Labels: </span>
+        <span className="ml-1 truncate font-medium text-slate-600">{selectedLabel}</span>
+      </button>
+      {isOpen ? (
+        <div className="absolute z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
+          <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => {
+                onChange([]);
+                setDraft("");
+              }}
+              className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+            />
+            All labels
+          </label>
+          <AssigneeCombobox
+            value={draft}
+            onChange={setDraft}
+            suggestions={suggestions}
+            placeholder="Type to add a label…"
+            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
+            aria-label="Add label to filter"
+            onSuggestionPick={pickLabel}
+          />
+          {!allSelected && selected.length > 0 ? (
+            <ul className="mt-2 max-h-36 space-y-1 overflow-auto pr-0.5">
+              {selected.map((name) => (
+                <li
+                  key={name}
+                  className="flex items-center justify-between gap-2 rounded-md bg-white/85 px-2 py-1 text-[13px] text-slate-800 ring-1 ring-indigo-200/60"
+                >
+                  <span className="min-w-0 truncate font-medium">{name}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                    aria-label={`Remove ${name} from label filter`}
+                    onClick={() => onChange(selected.filter((x) => x !== name))}
+                  >
+                    <X className="size-3.5" strokeWidth={2} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MultiCheckboxFilter({
   label,
   options,
@@ -766,6 +938,7 @@ export function BacklogPlanningPanel({
   /** Epic `team` lane ids (`platform` / `experience` / `data`). Empty = all teams. */
   const [teamFilter, setTeamFilter] = useState<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
   const [sortBy, setSortBy] = useState<"titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status">(
     "titleAsc",
@@ -825,6 +998,7 @@ export function BacklogPlanningPanel({
       assignee: string | null;
       estimatedDays: number | null;
       daysLeft: number | null;
+      labels: string | null;
       title: string;
     }>,
   ) {
@@ -845,11 +1019,7 @@ export function BacklogPlanningPanel({
     setEditingStoryCell(null);
   }
 
-  async function confirmStoryCellEdit(
-    storyId: string,
-    field: InlineEditableStoryField,
-    current: { status: string; sprint: number | null; assignee: string | null; estimatedDays: number | null; daysLeft: number | null },
-  ) {
+  async function confirmStoryCellEdit(storyId: string, field: InlineEditableStoryField, current: StoryCellEditSnapshot) {
     if (!editingStoryCell || editingStoryCell.storyId !== storyId || editingStoryCell.field !== field) return;
     const nextRaw = editingStoryCell.value.trim();
     if (field === "status") {
@@ -862,6 +1032,12 @@ export function BacklogPlanningPanel({
       const next = nextRaw === "" ? null : nextRaw;
       const currentValue = current.assignee?.trim() || null;
       if (next !== currentValue) await patchStoryInline(storyId, { assignee: next });
+    } else if (field === "labels") {
+      const nextLabs = parseStoryLabels(nextRaw.replace(/\r?\n/g, ","));
+      const nextSerialized = nextLabs.length > 0 ? nextLabs.join(", ") : null;
+      const curLabs = parseStoryLabels(current.labels);
+      const curSerialized = curLabs.length > 0 ? curLabs.join(", ") : null;
+      if (nextSerialized !== curSerialized) await patchStoryInline(storyId, { labels: nextSerialized });
     } else if (field === "estimatedDays") {
       const next = nextRaw === "" ? 0 : Math.max(0, Number(nextRaw) || 0);
       if (next !== (current.estimatedDays ?? 0)) await patchStoryInline(storyId, { estimatedDays: next });
@@ -877,8 +1053,20 @@ export function BacklogPlanningPanel({
     event: ReactKeyboardEvent<HTMLElement>,
     storyId: string,
     field: InlineEditableStoryField,
-    current: { status: string; sprint: number | null; assignee: string | null; estimatedDays: number | null; daysLeft: number | null },
+    current: StoryCellEditSnapshot,
   ) {
+    if (field === "labels") {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelStoryCellEdit();
+        return;
+      }
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        void confirmStoryCellEdit(storyId, field, current);
+      }
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       cancelStoryCellEdit();
@@ -939,12 +1127,14 @@ export function BacklogPlanningPanel({
               epic.title.toLowerCase().includes(q) || (epic.assignee ?? "").toLowerCase().includes(q);
             const stories = (epic.userStories ?? []).filter((story) => {
               const ref = storyRefById[story.id] ?? "";
+              const labelMatch = parseStoryLabels(story.labels).some((lab) => lab.toLowerCase().includes(q));
               return (
                 story.title.toLowerCase().includes(q) ||
                 (story.assignee ?? "").toLowerCase().includes(q) ||
                 story.status.toLowerCase().includes(q) ||
                 sprintLabel(story.sprint).toLowerCase().includes(q) ||
-                ref.includes(q)
+                ref.includes(q) ||
+                labelMatch
               );
             });
             if (epicMatch) return { ...epic, userStories: epic.userStories ?? [] };
@@ -970,6 +1160,10 @@ export function BacklogPlanningPanel({
                 if (statusFilter.length > 0 && !statusFilter.includes(story.status)) return false;
                 const sprintKey = story.sprint == null ? "unscheduled" : String(story.sprint);
                 if (sprintFilter.length > 0 && !sprintFilter.includes(sprintKey)) return false;
+                if (labelFilter.length > 0) {
+                  const labs = parseStoryLabels(story.labels);
+                  if (!labelFilter.some((lf) => labs.includes(lf))) return false;
+                }
                 return true;
               })
               .sort((a, b) => {
@@ -982,10 +1176,18 @@ export function BacklogPlanningPanel({
               });
             return { ...epic, userStories: stories };
           })
-          .filter((epic) => (epic.userStories ?? []).length > 0 || (statusFilter.length === 0 && sprintFilter.length === 0)),
+          .filter(
+            (epic) =>
+              (epic.userStories ?? []).length > 0 ||
+              (statusFilter.length === 0 && sprintFilter.length === 0 && labelFilter.length === 0),
+          ),
       }))
-      .filter((initiative) => (initiative.epics ?? []).length > 0 || (statusFilter.length === 0 && sprintFilter.length === 0));
-  }, [filtered, statusFilter, sprintFilter, sortBy]);
+      .filter(
+        (initiative) =>
+          (initiative.epics ?? []).length > 0 ||
+          (statusFilter.length === 0 && sprintFilter.length === 0 && labelFilter.length === 0),
+      );
+  }, [filtered, statusFilter, sprintFilter, labelFilter, sortBy]);
 
   const suggestions = useMemo(() => {
     const list: string[] = [];
@@ -1016,6 +1218,18 @@ export function BacklogPlanningPanel({
   }, [initiatives]);
 
   const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
+
+  const storyLabelSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        for (const story of epic.userStories ?? []) {
+          for (const lab of parseStoryLabels(story.labels)) set.add(lab);
+        }
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [initiatives]);
 
   const assigneeAutocompleteSuggestions = useMemo(() => {
     const data = assigneeNameSuggestions.filter((n) => n !== "Unassigned");
@@ -1155,6 +1369,7 @@ export function BacklogPlanningPanel({
       sprintFilter,
       teamFilter,
       assigneeFilter,
+      labelFilter,
       workItemFilter,
       groupLevels,
     });
@@ -1183,6 +1398,7 @@ export function BacklogPlanningPanel({
     sprintFilter,
     teamFilter,
     assigneeFilter,
+    labelFilter,
     workItemFilter,
     groupLevels,
     openGroupFolders,
@@ -1196,7 +1412,7 @@ export function BacklogPlanningPanel({
 
     const rowEls = Array.from(root.querySelectorAll<HTMLElement>('[data-backlog-zebra-row="true"]'));
     rowEls.forEach((el, idx) => {
-      const bg = idx % 2 === 0 ? TABLE_ZEBRA_STRIPE_BG : TABLE_ZEBRA_BASE_BG;
+      const bg = idx % 2 === 0 ? BACKLOG_TABLE_STRIPE_BG : BACKLOG_TABLE_BASE_BG;
       el.style.backgroundColor = bg;
     });
   }, [
@@ -1209,6 +1425,7 @@ export function BacklogPlanningPanel({
     sprintFilter,
     teamFilter,
     assigneeFilter,
+    labelFilter,
     workItemFilter,
     openGroupFolders,
     openInitiatives,
@@ -1281,6 +1498,7 @@ export function BacklogPlanningPanel({
             storySprintNum: story.sprint,
             storyEstimatedDays: story.estimatedDays ?? 0,
             storyDaysLeft: story.daysLeft ?? 0,
+            storyLabels: story.labels ?? null,
             initiativeId: initiative.id,
             initiativeTitle: initiative.title,
             initiativeYear: String(initiative.year),
@@ -1334,6 +1552,7 @@ export function BacklogPlanningPanel({
     sprintFilter.length > 0 ||
     teamFilter.length > 0 ||
     assigneeFilter.length > 0 ||
+    labelFilter.length > 0 ||
     workItemFilter.length > 0 ||
     groupLevels.length > 0 ||
     query.trim().length > 0;
@@ -1356,6 +1575,7 @@ export function BacklogPlanningPanel({
     setQuarterFilter([]);
     setTeamFilter([]);
     setAssigneeFilter([]);
+    setLabelFilter([]);
     setWorkItemFilter([]);
     setGroupLevels([]);
     setGroupMenuOpen(false);
@@ -1416,10 +1636,7 @@ export function BacklogPlanningPanel({
         return (
           <div
             key={`${keyPrefix}-story-${row.storyId}`}
-            className={cn(
-              "group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2",
-              "hover:bg-[#c5ebff]",
-            )}
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
             data-backlog-zebra-row="true"
             data-backlog-zebra-kind="story"
             data-backlog-zebra-label={row.storyTitle}
@@ -1476,13 +1693,7 @@ export function BacklogPlanningPanel({
                     value={editingStoryCell.value}
                     onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                     onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "status", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      handleStoryCellKeyDown(event, row.storyId, "status", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="w-full cursor-pointer bg-transparent text-[16px] font-medium outline-none"
                   >
@@ -1497,13 +1708,7 @@ export function BacklogPlanningPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "status", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"
                   >
@@ -1532,13 +1737,7 @@ export function BacklogPlanningPanel({
                     value={editingStoryCell.value}
                     onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                     onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "sprint", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      handleStoryCellKeyDown(event, row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="h-7 min-w-[94px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   >
@@ -1555,13 +1754,7 @@ export function BacklogPlanningPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "sprint", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      confirmStoryCellEdit(row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                   ><Check className="size-3.5" /></button>
@@ -1592,13 +1785,7 @@ export function BacklogPlanningPanel({
                     value={editingStoryCell.value}
                     onChange={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
                     onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "assignee", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      handleStoryCellKeyDown(event, row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
                     }
                     suggestions={assigneeNameSuggestions}
                     placeholder="Unassigned"
@@ -1608,13 +1795,7 @@ export function BacklogPlanningPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "assignee", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      confirmStoryCellEdit(row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                   ><Check className="size-3.5" /></button>
@@ -1633,6 +1814,46 @@ export function BacklogPlanningPanel({
               )}
             </span>
               ),
+              labels: (
+            <div className="w-full min-w-0 overflow-hidden text-[15px] text-slate-700">
+              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "labels" ? (
+                <span className="mx-auto inline-flex w-full min-w-0 max-w-full flex-col items-stretch gap-1">
+                  <textarea
+                    value={editingStoryCell.value}
+                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                    onKeyDown={(event) =>
+                      handleStoryCellKeyDown(event, row.storyId, "labels", storyEditSnapshotFromGroupedRow(row))
+                    }
+                    rows={2}
+                    className="min-h-[2.5rem] w-full min-w-0 rounded-md bg-white px-2 py-1 text-left text-[14px] leading-snug text-slate-800 ring-1 ring-slate-200 outline-none"
+                    placeholder="Comma-separated labels"
+                  />
+                  <span className="flex items-center justify-center gap-0.5">
+                    <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        confirmStoryCellEdit(row.storyId, "labels", storyEditSnapshotFromGroupedRow(row))
+                      }
+                      className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                    ><Check className="size-3.5" /></button>
+                  </span>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  title={formatStoryLabelsForEditInput(row.storyLabels) || undefined}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    beginStoryCellEdit(row.storyId, "labels", formatStoryLabelsForEditInput(row.storyLabels));
+                  }}
+                  className="min-w-0 w-full truncate px-1 py-0.5 text-start hover:bg-slate-100"
+                >
+                  {formatStoryLabelsForEditInput(row.storyLabels) || "—"}
+                </button>
+              )}
+            </div>
+              ),
               estDays: (
             <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "estimatedDays" ? (
@@ -1643,13 +1864,7 @@ export function BacklogPlanningPanel({
                     value={editingStoryCell.value}
                     onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                     onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "estimatedDays", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      handleStoryCellKeyDown(event, row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
@@ -1657,13 +1872,7 @@ export function BacklogPlanningPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "estimatedDays", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      confirmStoryCellEdit(row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                   ><Check className="size-3.5" /></button>
@@ -1693,13 +1902,7 @@ export function BacklogPlanningPanel({
                     value={editingStoryCell.value}
                     onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                     onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "daysLeft", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      handleStoryCellKeyDown(event, row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
@@ -1707,13 +1910,7 @@ export function BacklogPlanningPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "daysLeft", {
-                        status: row.storyStatus,
-                        sprint: row.storySprintNum,
-                        assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
-                        estimatedDays: row.storyEstimatedDays,
-                        daysLeft: row.storyDaysLeft,
-                      })
+                      confirmStoryCellEdit(row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row))
                     }
                     className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                   ><Check className="size-3.5" /></button>
@@ -1733,8 +1930,8 @@ export function BacklogPlanningPanel({
             </span>
               ),
               progress: (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+            <div className="space-y-0.5">
+              <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                 <span>{progress.label}</span>
                 <span>{progress.percent}%</span>
               </div>
@@ -1761,7 +1958,7 @@ export function BacklogPlanningPanel({
     return (
       <div key={folderId}>
         <div
-          className="grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-1.5 hover:bg-[#c5ebff]"
+          className={cn("grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
           style={{ gridTemplateColumns: tableGridTemplate }}
           data-backlog-zebra-row="true"
           data-backlog-zebra-kind="folder"
@@ -1788,6 +1985,7 @@ export function BacklogPlanningPanel({
             status: <span className="text-center text-[16px] text-slate-400">-</span>,
             sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
             assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
+            labels: <span className="text-center text-[16px] text-slate-400">-</span>,
             estDays: <span className="text-center text-[16px] text-slate-400">-</span>,
             epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
             daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -1814,14 +2012,14 @@ export function BacklogPlanningPanel({
     function renderCompletionCell(storyRows: typeof groupedStoryRows) {
       const { total, finished, percent } = completionForRows(storyRows);
       return (
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
             <span>{total === 0 ? "No stories" : null}</span>
             <span>
               {finished}/{total} · {percent}%
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
             <div
               className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
               style={{ width: `${percent}%` }}
@@ -1853,7 +2051,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -1987,6 +2185,7 @@ export function BacklogPlanningPanel({
                   )}
                 </span>
               ),
+              labels: <span className="text-center text-[16px] text-slate-500">-</span>,
               estDays: (
                 <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                   Σ {estimated}d
@@ -2006,7 +2205,7 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-epic:${epicId}` ? (
-            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
               <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx + 18 }}>
                 <input
                   value={createDraftTitle}
@@ -2040,7 +2239,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -2178,6 +2377,7 @@ export function BacklogPlanningPanel({
                   )}
                 </span>
               ),
+              labels: <span className="text-center text-[16px] text-slate-500">-</span>,
               estDays: (
                 <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                   Σ {estimated}d
@@ -2193,7 +2393,7 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
-            <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
               <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx + 18 }}>
                 <input
                   value={createDraftTitle}
@@ -2321,7 +2521,7 @@ export function BacklogPlanningPanel({
         return (
               <div key={initFolderId}>
                 <div
-                  className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
+                  className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
                   style={{
                     gridTemplateColumns: tableGridTemplate,
                   }}
@@ -2424,6 +2624,7 @@ export function BacklogPlanningPanel({
                 ),
                 sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                 assignee: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeAssignee}</span>,
+                labels: <span className="text-center text-[16px] text-slate-500">-</span>,
                 estDays: (
                   <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                     Σ 0d
@@ -2436,18 +2637,18 @@ export function BacklogPlanningPanel({
                   </span>
                 ),
                 progress: (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                       <span>No stories</span>
                       <span>0/0 · 0%</span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-200" />
                   </div>
                 ),
               })}
             </div>
             {createSelection?.anchorKey === `group-standalone-initiative:${initiative.initiativeId}` ? (
-              <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+              <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
                 <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 18 }}>
                   <input
                     value={createDraftTitle}
@@ -2475,7 +2676,7 @@ export function BacklogPlanningPanel({
                   return (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div
-                      className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2 hover:bg-[#c5ebff]"
+                      className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
                       style={{
                         gridTemplateColumns: tableGridTemplate,
                       }}
@@ -2563,6 +2764,7 @@ export function BacklogPlanningPanel({
                         status: <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip("todo"))}>To do</span>,
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
+                        labels: <span className="text-center text-[16px] text-slate-500">-</span>,
                         estDays: (
                           <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                             Σ 0d
@@ -2579,18 +2781,18 @@ export function BacklogPlanningPanel({
                           </span>
                         ),
                         progress: (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                               <span>No stories</span>
                               <span>0/0 · 0%</span>
                             </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-slate-200" />
+                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200" />
                           </div>
                         ),
                       })}
                     </div>
                     {createSelection?.anchorKey === `group-standalone-epic:${epic.epicId}` ? (
-                      <form onSubmit={handleCreateSubmit} className="grid items-center gap-3 bg-slate-50 py-2" style={{ gridTemplateColumns: tableGridTemplate }}>
+                      <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)} style={{ gridTemplateColumns: tableGridTemplate }}>
                         <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 52 }}>
                           <input
                             value={createDraftTitle}
@@ -2711,6 +2913,7 @@ export function BacklogPlanningPanel({
         quarterFilter?: unknown;
         teamFilter?: unknown;
         assigneeFilter?: unknown;
+        labelFilter?: unknown;
         groupLevels?: unknown;
       };
       if (Array.isArray(parsed.statusFilter)) setStatusFilter(parsed.statusFilter.filter((v): v is string => typeof v === "string"));
@@ -2726,6 +2929,8 @@ export function BacklogPlanningPanel({
         );
       if (Array.isArray(parsed.assigneeFilter))
         setAssigneeFilter(parsed.assigneeFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.labelFilter))
+        setLabelFilter(parsed.labelFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.groupLevels)) {
         const validLevels = parsed.groupLevels.filter(
           (v): v is GroupLevel => v === "year" || v === "quarter" || v === "month" || v === "sprint",
@@ -2751,13 +2956,14 @@ export function BacklogPlanningPanel({
           quarterFilter,
           teamFilter,
           assigneeFilter,
+          labelFilter,
           groupLevels,
         }),
       );
     } catch {
       // Ignore write failures (private mode, quotas, etc.)
     }
-  }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, groupLevels]);
+  }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, labelFilter, groupLevels]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -2834,8 +3040,7 @@ export function BacklogPlanningPanel({
         };
         if (parsed.columnVisibility && typeof parsed.columnVisibility === "object") {
           setColumnVisibility(() => {
-            // Start from defaults so new columns (e.g. epic original est) stay visible unless
-            // the user explicitly saved them off — old saved layouts omit unknown keys.
+            // Start from defaults; merge saved booleans so new columns get default visibility until saved.
             const next = { ...DEFAULT_BACKLOG_COLUMN_VISIBILITY };
             for (const key of BACKLOG_COLUMN_ORDER) {
               const v = parsed.columnVisibility![key];
@@ -3050,6 +3255,11 @@ export function BacklogPlanningPanel({
             onChange={setAssigneeFilter}
             suggestions={assigneeAutocompleteSuggestions}
           />
+          <BacklogLabelsFilterControl
+            selected={labelFilter}
+            onChange={setLabelFilter}
+            suggestions={storyLabelSuggestions}
+          />
           <span className="group relative inline-flex h-[30px] w-[30px] shrink-0">
             <button
               type="button"
@@ -3075,7 +3285,7 @@ export function BacklogPlanningPanel({
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
         <form
           onSubmit={handleCreateSubmit}
-          className="mb-3 grid items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+          className={cn("mb-3 grid min-w-full w-max items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3", BACKLOG_TABLE_END_PAD)}
           style={{ gridTemplateColumns: tableGridTemplate }}
         >
           <div className="flex min-w-0 items-center gap-2">
@@ -3095,17 +3305,20 @@ export function BacklogPlanningPanel({
       ) : null}
 
       <div className="h-[calc(100%-6.95rem)] min-h-0 overflow-hidden rounded-md bg-white">
-        <div className="h-full overflow-auto text-[16px]">
+        <div className="h-full overflow-auto text-[15px] leading-snug text-slate-800">
         <>
         {showTableHeaderRow ? (
-          <div className="sticky top-0 z-10 relative border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+          <div className="sticky top-0 z-10 relative min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
             <DndContext sensors={columnDragSensors} collisionDetection={closestCenter} onDragEnd={handleBacklogColumnDragEnd}>
               <SortableContext
                 items={visibleColumnKeys.filter((k) => k !== "workItem")}
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className="grid items-center gap-3 py-2.5 pr-28 pl-0 text-[13px] font-semibold tracking-[0.04em] text-white uppercase"
+                  className={cn(
+                    "grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[12px] font-semibold tracking-[0.04em] text-white uppercase",
+                    BACKLOG_TABLE_END_PAD,
+                  )}
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {
@@ -3178,10 +3391,11 @@ export function BacklogPlanningPanel({
                 <button
                   type="button"
                   onClick={() => setColumnsMenuOpen((open) => !open)}
-                  className="inline-flex h-[26px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold normal-case tracking-normal text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
+                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
+                  aria-label="Table columns and layout"
+                  title="Table columns and layout"
                 >
                   <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
-                  Table
                 </button>
                 {columnsMenuOpen ? (
                   <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
@@ -3229,15 +3443,16 @@ export function BacklogPlanningPanel({
             </div>
           </div>
         ) : (
-          <div className="sticky top-0 z-10 flex justify-end border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 py-2">
+          <div className="sticky top-0 z-10 flex min-w-full w-max justify-end border-b border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 py-2">
             <div className="relative" ref={columnsMenuRef}>
               <button
                 type="button"
                 onClick={() => setColumnsMenuOpen((open) => !open)}
-                className="inline-flex h-[26px] items-center gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] font-semibold text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
+                aria-label="Table columns and layout"
+                title="Table columns and layout"
               >
                 <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
-                Table
               </button>
               {columnsMenuOpen ? (
                 <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-indigo-200/80 bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-xl shadow-indigo-900/10 ring-1 ring-indigo-200/60 backdrop-blur-sm">
@@ -3288,7 +3503,7 @@ export function BacklogPlanningPanel({
         {fullyFiltered.length === 0 ? (
           <div className="px-4 py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
-          <div className="divide-y divide-slate-100 bg-white" ref={backlogRowsRootRef}>
+          <div className="min-w-max bg-white" ref={backlogRowsRootRef}>
             {groupLevels.length > 0 ? (
               <>
                 {renderGroupedTree(groupedStoryRows)}
@@ -3306,7 +3521,7 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div
-                    className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2"
+                    className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
                     style={{
                       gridTemplateColumns: tableGridTemplate,
                     }}
@@ -3494,6 +3709,7 @@ export function BacklogPlanningPanel({
                           )}
                         </span>
                       ),
+                      labels: <span className="text-center text-[16px] text-slate-500">-</span>,
                       estDays: (
                         <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                           Σ {initiativeDays.estimated}d
@@ -3506,14 +3722,14 @@ export function BacklogPlanningPanel({
                         </span>
                       ),
                       progress: (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                             <span>{initiativeProgress.total === 0 ? "No stories" : null}</span>
                             <span>
                               {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
                             </span>
                           </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                             <div
                               className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
                               style={{ width: `${initiativeProgress.percent}%` }}
@@ -3526,7 +3742,7 @@ export function BacklogPlanningPanel({
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
                     <form
                       onSubmit={handleCreateSubmit}
-                      className="grid items-center gap-3 bg-slate-50 py-2"
+                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)}
                       style={{ gridTemplateColumns: tableGridTemplate }}
                     >
                       <div className="flex min-w-0 items-center gap-2">
@@ -3571,7 +3787,7 @@ export function BacklogPlanningPanel({
                       {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
                         <form
                           onSubmit={handleCreateSubmit}
-                          className="grid items-center gap-3 py-2"
+                          className={cn("grid min-w-full w-max items-center gap-3 py-2", BACKLOG_TABLE_END_PAD)}
                           style={{ gridTemplateColumns: tableGridTemplate }}
                         >
                           <div className="flex min-w-0 items-center gap-2 pl-6">
@@ -3641,7 +3857,7 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div
-                            className="group grid w-full items-center gap-3 border-t border-[#7cd3f7]/95 py-2"
+                            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             data-backlog-zebra-row="true"
                             data-backlog-zebra-kind="epic"
@@ -3820,6 +4036,7 @@ export function BacklogPlanningPanel({
                                     )}
                                   </span>
                                 ),
+                                labels: <span className="text-center text-[16px] text-slate-500">-</span>,
                                 estDays: (
                                   <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
                                     Σ {epicDays.estimated}d
@@ -3836,14 +4053,14 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 progress: (
-                                  <div className="space-y-1">
-                                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                                       <span>{epicProgress.total === 0 ? "No stories" : null}</span>
                                       <span>
                                         {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
                                       </span>
                                     </div>
-                                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                                       <div
                                         className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
                                         style={{ width: `${epicProgress.percent}%` }}
@@ -3856,7 +4073,7 @@ export function BacklogPlanningPanel({
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
                               <form
                                 onSubmit={handleCreateSubmit}
-                                className="grid items-center gap-3 py-2"
+                                className={cn("grid min-w-full w-max items-center gap-3 py-2", BACKLOG_TABLE_END_PAD)}
                                 style={{ gridTemplateColumns: tableGridTemplate }}
                               >
                                 <div className="flex min-w-0 items-center gap-2 pl-12">
@@ -3905,7 +4122,7 @@ export function BacklogPlanningPanel({
                                 {(epic.userStories ?? []).map((story) => (
                                   <div
                                     key={story.id}
-                                    className={cn("hover:bg-[#c5ebff]", "border-t border-[#7cd3f7]/95")}
+                                    className={cn("min-w-full w-max border-b border-slate-200/80 hover:bg-slate-50", BACKLOG_TABLE_END_PAD)}
                                     data-backlog-zebra-row="true"
                                     data-backlog-zebra-kind="story"
                                     data-backlog-zebra-label={story.title}
@@ -3915,7 +4132,7 @@ export function BacklogPlanningPanel({
                                       const flatStoryWork = storyWorkPlanRangeFromProgress(story);
                                                                             return (
                                     <div
-                                      className="group grid w-full items-center gap-3 py-2 text-left"
+                                      className={cn("group grid min-w-full w-max items-center gap-2 py-1.5 text-left", BACKLOG_TABLE_END_PAD)}
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                     {renderBacklogCells({
@@ -4036,13 +4253,7 @@ export function BacklogPlanningPanel({
                                             value={editingStoryCell.value}
                                             onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                                             onKeyDown={(event) =>
-                                              handleStoryCellKeyDown(event, story.id, "status", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              handleStoryCellKeyDown(event, story.id, "status", storyEditSnapshotFromFlat(story))
                                             }
                                             className="w-full cursor-pointer bg-transparent text-[16px] font-medium outline-none"
                                           >
@@ -4055,13 +4266,7 @@ export function BacklogPlanningPanel({
                                           <button
                                             type="button"
                                             onClick={() =>
-                                              confirmStoryCellEdit(story.id, "status", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              confirmStoryCellEdit(story.id, "status", storyEditSnapshotFromFlat(story))
                                             }
                                             className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"
                                           ><Check className="size-3" /></button>
@@ -4088,13 +4293,7 @@ export function BacklogPlanningPanel({
                                             value={editingStoryCell.value}
                                             onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                                             onKeyDown={(event) =>
-                                              handleStoryCellKeyDown(event, story.id, "sprint", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              handleStoryCellKeyDown(event, story.id, "sprint", storyEditSnapshotFromFlat(story))
                                             }
                                             className="h-7 min-w-[96px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           >
@@ -4111,13 +4310,7 @@ export function BacklogPlanningPanel({
                                           <button
                                             type="button"
                                             onClick={() =>
-                                              confirmStoryCellEdit(story.id, "sprint", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              confirmStoryCellEdit(story.id, "sprint", storyEditSnapshotFromFlat(story))
                                             }
                                             className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                                           ><Check className="size-3.5" /></button>
@@ -4144,13 +4337,7 @@ export function BacklogPlanningPanel({
                                             value={editingStoryCell.value}
                                             onChange={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
                                             onKeyDown={(event) =>
-                                              handleStoryCellKeyDown(event, story.id, "assignee", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              handleStoryCellKeyDown(event, story.id, "assignee", storyEditSnapshotFromFlat(story))
                                             }
                                             suggestions={assigneeNameSuggestions}
                                             placeholder="Unassigned"
@@ -4160,13 +4347,7 @@ export function BacklogPlanningPanel({
                                           <button
                                             type="button"
                                             onClick={() =>
-                                              confirmStoryCellEdit(story.id, "assignee", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              confirmStoryCellEdit(story.id, "assignee", storyEditSnapshotFromFlat(story))
                                             }
                                             className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                                           ><Check className="size-3.5" /></button>
@@ -4185,6 +4366,48 @@ export function BacklogPlanningPanel({
                                       )}
                                     </span>
                                       ),
+                                      labels: (
+                                    <div className="w-full min-w-0 overflow-hidden text-[15px] text-slate-700">
+                                      {editingStoryCell?.storyId === story.id && editingStoryCell.field === "labels" ? (
+                                        <span className="mx-auto inline-flex w-full min-w-0 max-w-full flex-col items-stretch gap-1">
+                                          <textarea
+                                            value={editingStoryCell.value}
+                                            onChange={(event) =>
+                                              setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))
+                                            }
+                                            onKeyDown={(event) =>
+                                              handleStoryCellKeyDown(event, story.id, "labels", storyEditSnapshotFromFlat(story))
+                                            }
+                                            rows={2}
+                                            className="min-h-[2.5rem] w-full min-w-0 rounded-md bg-white px-2 py-1 text-left text-[14px] leading-snug text-slate-800 ring-1 ring-slate-200 outline-none"
+                                            placeholder="Comma-separated labels"
+                                          />
+                                          <span className="flex items-center justify-center gap-0.5">
+                                            <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                confirmStoryCellEdit(story.id, "labels", storyEditSnapshotFromFlat(story))
+                                              }
+                                              className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                                            ><Check className="size-3.5" /></button>
+                                          </span>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          title={formatStoryLabelsForEditInput(story.labels) || undefined}
+                                          onMouseDown={(event) => {
+                                            event.preventDefault();
+                                            beginStoryCellEdit(story.id, "labels", formatStoryLabelsForEditInput(story.labels));
+                                          }}
+                                          className="min-w-0 w-full truncate px-1 py-0.5 text-start hover:bg-slate-100"
+                                        >
+                                          {formatStoryLabelsForEditInput(story.labels) || "—"}
+                                        </button>
+                                      )}
+                                    </div>
+                                      ),
                                       estDays: (
                                     <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "estimatedDays" ? (
@@ -4195,13 +4418,7 @@ export function BacklogPlanningPanel({
                                             value={editingStoryCell.value}
                                             onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                                             onKeyDown={(event) =>
-                                              handleStoryCellKeyDown(event, story.id, "estimatedDays", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              handleStoryCellKeyDown(event, story.id, "estimatedDays", storyEditSnapshotFromFlat(story))
                                             }
                                             className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           />
@@ -4209,13 +4426,7 @@ export function BacklogPlanningPanel({
                                           <button
                                             type="button"
                                             onClick={() =>
-                                              confirmStoryCellEdit(story.id, "estimatedDays", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              confirmStoryCellEdit(story.id, "estimatedDays", storyEditSnapshotFromFlat(story))
                                             }
                                             className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                                           ><Check className="size-3.5" /></button>
@@ -4245,13 +4456,7 @@ export function BacklogPlanningPanel({
                                             value={editingStoryCell.value}
                                             onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
                                             onKeyDown={(event) =>
-                                              handleStoryCellKeyDown(event, story.id, "daysLeft", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              handleStoryCellKeyDown(event, story.id, "daysLeft", storyEditSnapshotFromFlat(story))
                                             }
                                             className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           />
@@ -4259,13 +4464,7 @@ export function BacklogPlanningPanel({
                                           <button
                                             type="button"
                                             onClick={() =>
-                                              confirmStoryCellEdit(story.id, "daysLeft", {
-                                                status: story.status,
-                                                sprint: story.sprint,
-                                                assignee: story.assignee,
-                                                estimatedDays: story.estimatedDays,
-                                                daysLeft: story.daysLeft,
-                                              })
+                                              confirmStoryCellEdit(story.id, "daysLeft", storyEditSnapshotFromFlat(story))
                                             }
                                             className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
                                           ><Check className="size-3.5" /></button>
@@ -4285,12 +4484,12 @@ export function BacklogPlanningPanel({
                                     </span>
                                       ),
                                       progress: (
-                                    <div className="space-y-1">
-                                      <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                                         <span>{progress.label}</span>
                                         <span>{progress.percent}%</span>
                                       </div>
-                                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                                         <div
                                           className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
                                           style={{ width: `${progress.percent}%` }}
@@ -4305,7 +4504,7 @@ export function BacklogPlanningPanel({
                                   {createSelection?.anchorKey === `story:${story.id}` ? (
                                     <form
                                       onSubmit={handleCreateSubmit}
-                                      className="grid items-center gap-3 bg-slate-50 py-2"
+                                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2", BACKLOG_TABLE_END_PAD)}
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                       <div className="flex min-w-0 items-center gap-2 pl-16">
