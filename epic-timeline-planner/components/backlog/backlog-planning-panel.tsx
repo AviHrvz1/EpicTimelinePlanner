@@ -221,6 +221,30 @@ function BacklogLabelsEmptyRowSlot() {
   );
 }
 
+const BACKLOG_READONLY_AUTO_SUM_DAYS = {
+  title: "Totals are automatic",
+  body: "Estimated days and days left on initiative and epic rows are the sum of their child user stories. They cannot be edited here — change the values on the user stories instead.",
+} as const;
+
+const BACKLOG_READONLY_INITIATIVE_DATES = {
+  title: "Initiative dates are set by epics",
+  body: "Start and end dates come from child epics: the earliest epic start and the latest epic end. Initiative timelines are defined by those epics — edit epic and story plans to change these dates.",
+} as const;
+
+const BACKLOG_READONLY_PROGRESS = {
+  title: "Progress is read-only",
+  body: "Progress is calculated from story status and completion. It cannot be edited directly in the table.",
+} as const;
+
+const backlogReadonlyAutoSumButtonClass =
+  "w-full min-w-0 rounded-md px-1 py-0.5 text-center text-[16px] font-medium text-slate-600 transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
+
+const backlogReadonlyInitiativeDateButtonClass =
+  "w-full min-w-0 rounded-md px-1 py-0.5 text-center text-[14px] tabular-nums text-slate-700 transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
+
+const backlogReadonlyProgressButtonClass =
+  "w-full min-w-0 space-y-0.5 rounded-md px-0.5 py-0.5 text-left transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
+
 type StoryCellEditSnapshot = {
   status: string;
   sprint: number | null;
@@ -1348,6 +1372,7 @@ export function BacklogPlanningPanel({
     value: string;
   } | null>(null);
   const [editingStoryTitle, setEditingStoryTitle] = useState<{ id: string; value: string } | null>(null);
+  const [backlogReadonlyNotice, setBacklogReadonlyNotice] = useState<{ title: string; body: string } | null>(null);
 
   async function patchStoryInline(
     storyId: string,
@@ -2445,7 +2470,11 @@ export function BacklogPlanningPanel({
             </span>
               ),
               progress: (
-            <div className="space-y-0.5">
+            <button
+              type="button"
+              onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+              className={backlogReadonlyProgressButtonClass}
+            >
               <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                 <span>{progress.label}</span>
                 <span>{progress.percent}%</span>
@@ -2453,7 +2482,7 @@ export function BacklogPlanningPanel({
               <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                 <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500" style={{ width: `${progress.percent}%` }} />
               </div>
-            </div>
+            </button>
               ),
             })}
           </div>
@@ -2527,7 +2556,11 @@ export function BacklogPlanningPanel({
     function renderCompletionCell(storyRows: typeof groupedStoryRows) {
       const { total, finished, percent } = completionForRows(storyRows);
       return (
-        <div className="space-y-0.5">
+        <button
+          type="button"
+          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+          className={backlogReadonlyProgressButtonClass}
+        >
           <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
             <span>{total === 0 ? "No stories" : null}</span>
             <span>
@@ -2540,7 +2573,7 @@ export function BacklogPlanningPanel({
               style={{ width: `${percent}%` }}
             />
           </div>
-        </div>
+        </button>
       );
     }
 
@@ -2702,9 +2735,13 @@ export function BacklogPlanningPanel({
               ),
               labels: <BacklogLabelsEmptyRowSlot />,
               estDays: (
-                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                <button
+                  type="button"
+                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  className={backlogReadonlyAutoSumButtonClass}
+                >
                   Σ {estimated}d
-                </span>
+                </button>
               ),
               epicOriginalEst: (
                 <span className="text-center text-[16px] font-medium text-slate-600">
@@ -2712,11 +2749,15 @@ export function BacklogPlanningPanel({
                 </span>
               ),
               daysLeft: (
-                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                <button
+                  type="button"
+                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  className={backlogReadonlyAutoSumButtonClass}
+                >
                   Σ {left}d
-                </span>
+                </button>
               ),
-              progress: <div>{renderCompletionCell(epicRows)}</div>,
+              progress: renderCompletionCell(epicRows),
             })}
           </div>
           {createSelection?.anchorKey === `group-epic:${epicId}` ? (
@@ -2831,14 +2872,22 @@ export function BacklogPlanningPanel({
               quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>,
               month: <span className="text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>,
               startDate: (
-                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                  className={backlogReadonlyInitiativeDateButtonClass}
+                >
                   {formatBacklogPlanDate(initGanttRange.start)}
-                </span>
+                </button>
               ),
               endDate: (
-                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                  className={backlogReadonlyInitiativeDateButtonClass}
+                >
                   {formatBacklogPlanDate(initGanttRange.end)}
-                </span>
+                </button>
               ),
               status: (
                 <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeStatus))}>
@@ -2894,17 +2943,25 @@ export function BacklogPlanningPanel({
               ),
               labels: <BacklogLabelsEmptyRowSlot />,
               estDays: (
-                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                <button
+                  type="button"
+                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  className={backlogReadonlyAutoSumButtonClass}
+                >
                   Σ {estimated}d
-                </span>
+                </button>
               ),
               epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
               daysLeft: (
-                <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                <button
+                  type="button"
+                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  className={backlogReadonlyAutoSumButtonClass}
+                >
                   Σ {left}d
-                </span>
+                </button>
               ),
-              progress: <div>{renderCompletionCell(initiativeRows)}</div>,
+              progress: renderCompletionCell(initiativeRows),
             })}
           </div>
           {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
@@ -3123,14 +3180,22 @@ export function BacklogPlanningPanel({
                 quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>,
                 month: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
                 startDate: (
-                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                    className={backlogReadonlyInitiativeDateButtonClass}
+                  >
                     {formatBacklogPlanDate(standInitGantt.start)}
-                  </span>
+                  </button>
                 ),
                 endDate: (
-                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                    className={backlogReadonlyInitiativeDateButtonClass}
+                  >
                     {formatBacklogPlanDate(standInitGantt.end)}
-                  </span>
+                  </button>
                 ),
                 status: (
                   <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiative.initiativeStatus))}>
@@ -3141,24 +3206,36 @@ export function BacklogPlanningPanel({
                 assignee: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeAssignee}</span>,
                 labels: <BacklogLabelsEmptyRowSlot />,
                 estDays: (
-                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                  <button
+                    type="button"
+                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                    className={backlogReadonlyAutoSumButtonClass}
+                  >
                     Σ 0d
-                  </span>
+                  </button>
                 ),
                 epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
                 daysLeft: (
-                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                  <button
+                    type="button"
+                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                    className={backlogReadonlyAutoSumButtonClass}
+                  >
                     Σ 0d
-                  </span>
+                  </button>
                 ),
                 progress: (
-                  <div className="space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                    className={backlogReadonlyProgressButtonClass}
+                  >
                     <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                       <span>No stories</span>
                       <span>0/0 · 0%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-slate-200" />
-                  </div>
+                  </button>
                 ),
               })}
             </div>
@@ -3281,9 +3358,13 @@ export function BacklogPlanningPanel({
                         assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
                         labels: <BacklogLabelsEmptyRowSlot />,
                         estDays: (
-                          <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                          <button
+                            type="button"
+                            onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                            className={backlogReadonlyAutoSumButtonClass}
+                          >
                             Σ 0d
-                          </span>
+                          </button>
                         ),
                         epicOriginalEst: (
                           <span className="text-center text-[16px] font-medium text-slate-600">
@@ -3291,18 +3372,26 @@ export function BacklogPlanningPanel({
                           </span>
                         ),
                         daysLeft: (
-                          <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                          <button
+                            type="button"
+                            onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                            className={backlogReadonlyAutoSumButtonClass}
+                          >
                             Σ 0d
-                          </span>
+                          </button>
                         ),
                         progress: (
-                          <div className="space-y-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                            className={backlogReadonlyProgressButtonClass}
+                          >
                             <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                               <span>No stories</span>
                               <span>0/0 · 0%</span>
                             </div>
                             <div className="h-1.5 overflow-hidden rounded-full bg-slate-200" />
-                          </div>
+                          </button>
                         ),
                       })}
                     </div>
@@ -3811,9 +3900,9 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative z-10 mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
+      <div className="relative z-20 mb-6 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6">
         <div
-          className="grid w-full min-w-0 max-w-full items-center gap-x-2 gap-y-4 sm:gap-x-2.5"
+          className="grid w-full min-w-0 max-w-full items-center gap-x-3 gap-y-7 sm:gap-x-3.5 sm:gap-y-8"
           style={{ gridTemplateColumns: "repeat(11, minmax(0, 1fr))" }}
         >
           <div className="relative col-span-4 col-start-1 row-start-1 min-w-0">
@@ -4220,7 +4309,7 @@ export function BacklogPlanningPanel({
         </form>
       ) : null}
 
-      <div className="relative z-10 h-[calc(100%-6.95rem)] min-h-0 overflow-hidden rounded-md bg-white">
+      <div className="relative z-0 h-[calc(100%-6.95rem)] min-h-0 overflow-hidden rounded-md bg-white">
         <div className="h-full overflow-auto text-[15px] leading-snug text-slate-800">
         <>
         {showTableHeaderRow ? (
@@ -4458,14 +4547,22 @@ export function BacklogPlanningPanel({
                       quarter: <span className="text-center text-[16px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>,
                       month: <span className="text-center text-[16px] text-slate-700">{monthLabel(initiative.startMonth)}</span>,
                       startDate: (
-                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                          className={backlogReadonlyInitiativeDateButtonClass}
+                        >
                           {formatBacklogPlanDate(flatInitGantt.start)}
-                        </span>
+                        </button>
                       ),
                       endDate: (
-                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                          className={backlogReadonlyInitiativeDateButtonClass}
+                        >
                           {formatBacklogPlanDate(flatInitGantt.end)}
-                        </span>
+                        </button>
                       ),
                       status: (
                         <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeWorkflowStatus))}>
@@ -4513,18 +4610,30 @@ export function BacklogPlanningPanel({
                       ),
                       labels: <BacklogLabelsEmptyRowSlot />,
                       estDays: (
-                        <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                        <button
+                          type="button"
+                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                          className={backlogReadonlyAutoSumButtonClass}
+                        >
                           Σ {initiativeDays.estimated}d
-                        </span>
+                        </button>
                       ),
                       epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
                       daysLeft: (
-                        <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                        <button
+                          type="button"
+                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                          className={backlogReadonlyAutoSumButtonClass}
+                        >
                           Σ {initiativeDays.left}d
-                        </span>
+                        </button>
                       ),
                       progress: (
-                        <div className="space-y-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                          className={backlogReadonlyProgressButtonClass}
+                        >
                           <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                             <span>{initiativeProgress.total === 0 ? "No stories" : null}</span>
                             <span>
@@ -4537,7 +4646,7 @@ export function BacklogPlanningPanel({
                               style={{ width: `${initiativeProgress.percent}%` }}
                             />
                           </div>
-                        </div>
+                        </button>
                       ),
                     })}
                   </div>
@@ -4840,9 +4949,13 @@ export function BacklogPlanningPanel({
                                 ),
                                 labels: <BacklogLabelsEmptyRowSlot />,
                                 estDays: (
-                                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                                  <button
+                                    type="button"
+                                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                                    className={backlogReadonlyAutoSumButtonClass}
+                                  >
                                     Σ {epicDays.estimated}d
-                                  </span>
+                                  </button>
                                 ),
                                 epicOriginalEst: (
                                   <span className="text-center text-[16px] font-medium text-slate-600">
@@ -4850,12 +4963,20 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 daysLeft: (
-                                  <span className="text-center text-[16px] font-medium text-slate-600" title="Auto-summed from child user stories">
+                                  <button
+                                    type="button"
+                                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                                    className={backlogReadonlyAutoSumButtonClass}
+                                  >
                                     Σ {epicDays.left}d
-                                  </span>
+                                  </button>
                                 ),
                                 progress: (
-                                  <div className="space-y-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                                    className={backlogReadonlyProgressButtonClass}
+                                  >
                                     <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                                       <span>{epicProgress.total === 0 ? "No stories" : null}</span>
                                       <span>
@@ -4868,7 +4989,7 @@ export function BacklogPlanningPanel({
                                         style={{ width: `${epicProgress.percent}%` }}
                                       />
                                     </div>
-                                  </div>
+                                  </button>
                                 ),
                               })}
                             </div>
@@ -5282,7 +5403,11 @@ export function BacklogPlanningPanel({
                                     </span>
                                       ),
                                       progress: (
-                                    <div className="space-y-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                                      className={backlogReadonlyProgressButtonClass}
+                                    >
                                       <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
                                         <span>{progress.label}</span>
                                         <span>{progress.percent}%</span>
@@ -5293,7 +5418,7 @@ export function BacklogPlanningPanel({
                                           style={{ width: `${progress.percent}%` }}
                                         />
                                       </div>
-                                    </div>
+                                    </button>
                                       ),
                                     })}
                                     </div>
@@ -5509,6 +5634,41 @@ export function BacklogPlanningPanel({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+      {backlogReadonlyNotice ? (
+        <div
+          className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setBacklogReadonlyNotice(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="backlog-readonly-notice-title"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/80"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="border-b border-indigo-100/80 bg-gradient-to-b from-indigo-50/90 to-white px-5 py-4">
+              <h3 id="backlog-readonly-notice-title" className="text-[17px] font-semibold tracking-tight text-slate-900">
+                {backlogReadonlyNotice.title}
+              </h3>
+              <p className="mt-2 text-[13px] leading-snug text-slate-600">{backlogReadonlyNotice.body}</p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setBacklogReadonlyNotice(null)}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-slate-800"
+              >
+                OK
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
