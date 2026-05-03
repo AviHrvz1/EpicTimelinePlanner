@@ -8,6 +8,10 @@ import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { cn } from "@/lib/utils";
 
+/** Compact number fields: hide spinners so read-only and editable cells share identical text alignment. */
+const CAPACITY_DAYS_INPUT_NO_SPIN =
+  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
 export function TeamEpicCard({
   epicId,
   icon,
@@ -105,18 +109,24 @@ export function TeamEpicCard({
           </div>
         </div>
         <div className="flex w-full min-w-0 shrink-0 flex-col items-start gap-1.5 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:w-auto @min-[22rem]:pt-8">
-          <div className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1.5 @min-[22rem]:max-w-none">
-            <span className="text-[11px] font-semibold text-slate-600">Σ Child</span>
-            <span
-              className="flex h-6 w-[3.5rem] shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums"
+          <div className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1 @min-[22rem]:max-w-none">
+            <span className="pr-0.5 text-right text-[11px] font-semibold text-slate-600">Σ Child</span>
+            <input
+              type="number"
+              readOnly
+              tabIndex={-1}
+              value={Math.round(childStoryEstimateDays)}
               title="Sum of child user story estimates — edit estimates on each story"
               aria-label="Sum of child story estimate days (read-only)"
-            >
-              {Math.round(childStoryEstimateDays)}
-            </span>
+              aria-readonly="true"
+              className={cn(
+                "h-6 w-[3.5rem] shrink-0 cursor-default rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums focus:outline-none",
+                CAPACITY_DAYS_INPUT_NO_SPIN,
+              )}
+            />
           </div>
-          <label className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1.5 text-[11px] font-semibold text-slate-600 @min-[22rem]:max-w-none">
-            <span>Est days</span>
+          <label className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1 text-[11px] font-semibold text-slate-600 @min-[22rem]:max-w-none">
+            <span className="pr-0.5 text-right">Est days</span>
             <input
               type="number"
               min={0}
@@ -124,7 +134,10 @@ export function TeamEpicCard({
               step={1}
               value={originalEstimateDays}
               onChange={(event) => onOriginalEstimateChange(epicId, Math.max(0, Number(event.target.value || 0)))}
-              className="h-6 w-[3.5rem] rounded-md border border-slate-200 bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className={cn(
+                "h-6 w-[3.5rem] shrink-0 rounded-md border border-slate-200 bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
+                CAPACITY_DAYS_INPUT_NO_SPIN,
+              )}
               aria-label="Original estimate days"
             />
           </label>
@@ -173,6 +186,9 @@ export function TeamCapacityBucket({
   capacityInputMax: number;
 }) {
   const assignedTotal = cards.reduce((sum, c) => sum + c.loadDays, 0);
+  const sumChildStoryEstimates = cards.reduce((sum, c) => sum + c.childStoryEstimateDays, 0);
+  const sumOriginalEstimates = cards.reduce((sum, c) => sum + c.originalEstimateDays, 0);
+  const availableCapacityDays = Math.max(0, capacity - assignedTotal);
   const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
   const overCapacity = assignedTotal > capacity;
   const fillPct = Math.max(0, Math.min(100, capacity > 0 ? (assignedTotal / capacity) * 100 : 0));
@@ -196,13 +212,10 @@ export function TeamCapacityBucket({
         "@container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
       )}
     >
-      <div className="relative mb-2 flex min-h-8 items-center justify-end pr-0.5">
-        <p
-          className="pointer-events-none absolute left-1/2 top-1/2 flex max-w-[calc(100%-9rem)] items-center justify-center gap-1.5 pr-[84px] text-center text-[15px] font-bold text-slate-800"
-          style={{ transform: "translate(-50%, -50%)" }}
-        >
+      <div className="mb-2 flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-2 pr-0.5">
+        <p className="order-1 flex min-w-0 max-w-full flex-1 basis-[min(100%,14rem)] items-center gap-1.5 text-left text-[15px] font-bold text-slate-800">
           <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
-          <span className="truncate">
+          <span className="min-w-0 truncate">
             {teamLabelPrefix ? (
               <>
                 <span className="font-semibold text-slate-600">{teamLabelPrefix}</span> {team.label}
@@ -212,19 +225,44 @@ export function TeamCapacityBucket({
             )}
           </span>
         </p>
-        <label className="relative z-10 inline-flex translate-x-[3px] items-center gap-1 text-[12px] font-semibold text-slate-600">
-          Capacity
-          <input
-            type="number"
-            min={0}
-            max={capacityInputMax}
-            step={1}
-            value={capacity}
-            onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
-            className="h-7 w-11 shrink-0 rounded-md border border-slate-200/90 bg-white/90 px-1 text-[11px] font-medium text-slate-800 shadow-sm"
-          />
-          d
-        </label>
+        <div className="order-2 flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:gap-x-3">
+          <div
+            className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-semibold text-slate-600"
+            title="Rollups for epics in this bucket: Σ Child = sum of child story estimates; Σ Est = sum of epic original estimates; Avail = capacity minus assigned load."
+          >
+            <span className="whitespace-nowrap">
+              Σ Child{" "}
+              <span className="tabular-nums text-slate-800">{Math.round(sumChildStoryEstimates)}</span>
+            </span>
+            <span className="text-slate-300" aria-hidden>
+              ·
+            </span>
+            <span className="whitespace-nowrap">
+              Σ Est{" "}
+              <span className="tabular-nums text-slate-800">{Math.round(sumOriginalEstimates)}</span>
+            </span>
+            <span className="text-slate-300" aria-hidden>
+              ·
+            </span>
+            <span className="whitespace-nowrap">
+              Avail{" "}
+              <span className="tabular-nums text-slate-800">{availableCapacityDays.toFixed(1)}</span>d
+            </span>
+          </div>
+          <label className="inline-flex shrink-0 translate-x-[2px] items-center gap-1 text-[12px] font-semibold text-slate-600">
+            Capacity
+            <input
+              type="number"
+              min={0}
+              max={capacityInputMax}
+              step={1}
+              value={capacity}
+              onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
+              className="h-7 w-11 shrink-0 rounded-md border border-slate-200/90 bg-white/90 px-1 text-[11px] font-medium text-slate-800 shadow-sm"
+            />
+            d
+          </label>
+        </div>
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_56px] gap-2">
