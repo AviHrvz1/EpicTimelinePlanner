@@ -8,6 +8,9 @@ import {
   ArrowUp,
   ArrowUpDown,
   Check,
+  ChevronDown,
+  ChevronRight,
+  Layers3,
   Plus,
   Search,
   Tag,
@@ -17,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -56,6 +59,18 @@ const USER_DIRECTORY_DEFAULT_COLUMN_ORDER: SortKey[] = ["name", "email", "team",
 const USERS_DIRECTORY_COLUMN_ORDER_STORAGE_KEY = "epic-planner.users-directory.column-order.v1";
 /** Custom team slugs registered from “Add team” (no server entity; merged into combobox + filter hints). */
 const USERS_DIRECTORY_EXTRA_TEAMS_STORAGE_KEY = "epic-planner.users-directory.extra-teams.v1";
+const USERS_DIRECTORY_GROUP_LEVELS_STORAGE_KEY = "epic-planner.users-directory.group-levels.v1";
+
+type UserDirectoryGroupLevel = "team" | "permission" | "status";
+const USER_DIRECTORY_GROUP_LEVEL_ORDER: UserDirectoryGroupLevel[] = ["team", "permission", "status"];
+const USER_DIRECTORY_GROUP_LEVEL_LABELS: Record<UserDirectoryGroupLevel, string> = {
+  team: "Team",
+  permission: "Permission",
+  status: "Status",
+};
+
+/** Extra left inset per nested group level for the name column (px), on top of default cell padding. */
+const USER_DIRECTORY_NAME_TREE_INDENT_PX = 22;
 
 const USER_DIRECTORY_COLUMN_LABELS: Record<SortKey, string> = {
   name: "User name",
@@ -234,6 +249,40 @@ function formatUserStatusLabel(status: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+function parseStoredUserDirGroupLevels(raw: string | null): UserDirectoryGroupLevel[] {
+  if (!raw) return [];
+  try {
+    const p = JSON.parse(raw) as unknown;
+    if (!Array.isArray(p)) return [];
+    const picked = new Set<UserDirectoryGroupLevel>();
+    for (const x of p) {
+      if (x === "team" || x === "permission" || x === "status") picked.add(x);
+    }
+    return USER_DIRECTORY_GROUP_LEVEL_ORDER.filter((l) => picked.has(l));
+  } catch {
+    return [];
+  }
+}
+
+function userDirectoryRowGroupKey(
+  row: WorkspaceUserRow,
+  level: UserDirectoryGroupLevel,
+): { key: string; label: string; sort: string } {
+  if (level === "team") {
+    const key = row.team || "__unassigned__";
+    const label = row.team ? teamLabelForWorkspaceUser(row.team) : "Unassigned";
+    return { key, label, sort: label.toLowerCase() };
+  }
+  if (level === "permission") {
+    const perm = row.permission || "Viewer";
+    return { key: perm.toLowerCase(), label: perm, sort: perm.toLowerCase() };
+  }
+  const raw = (row.status ?? "active").trim() || "active";
+  const key = raw.toLowerCase();
+  const label = formatUserStatusLabel(row.status ?? "active");
+  return { key, label, sort: key };
+}
+
 function UserDirectorySortTrigger({
   label,
   col,
@@ -359,6 +408,7 @@ function UsersTableRow({
   onRowView,
   patchUser,
   directoryTeamIds,
+  nameTreeDepth = 0,
 }: {
   row: WorkspaceUserRow;
   idx: number;
@@ -373,7 +423,17 @@ function UsersTableRow({
     body: { name?: string; email?: string; team?: string; permission?: string },
   ) => Promise<boolean>;
   directoryTeamIds: readonly string[];
+  /** Nesting depth when directory is grouped (each active group level adds one step). */
+  nameTreeDepth?: number;
 }) {
+  const treeDepth = Math.max(0, Math.floor(Number(nameTreeDepth) || 0));
+  /** Table cells need inset on the `<td>`; padding on inner flex was unreliable with table-fixed + nested groups. */
+  const nameTdStyle =
+    treeDepth > 0
+      ? ({
+          paddingLeft: `${8 + treeDepth * USER_DIRECTORY_NAME_TREE_INDENT_PX}px`,
+        } as const)
+      : undefined;
   const [name, setName] = useState(row.name);
   const [email, setEmail] = useState(row.email);
   const [teamId, setTeamId] = useState(row.team);
@@ -459,7 +519,7 @@ function UsersTableRow({
 
   const cells: Record<SortKey, ReactNode> = {
     name: (
-      <td key="name" className={USER_DIR_TD_BASE}>
+      <td key="name" className={USER_DIR_TD_BASE} style={nameTdStyle}>
         {editing("name") ? (
           <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <input
@@ -669,6 +729,12 @@ export function UsersWorkspacePanel() {
   const [registeredTeamSlugs, setRegisteredTeamSlugs] = useState<string[]>([]);
   const [addTeamOpen, setAddTeamOpen] = useState(false);
   const [newTeamNameInput, setNewTeamNameInput] = useState("");
+  const [userDirGroupLevels, setUserDirGroupLevels] = useState<UserDirectoryGroupLevel[]>([]);
+  const [userDirOpenGroups, setUserDirOpenGroups] = useState<Record<string, boolean>>({});
+  const [userDirGroupMenuOpen, setUserDirGroupMenuOpen] = useState(false);
+  const userDirGroupMenuRef = useRef<HTMLDivElement>(null);
+  const skipNextUserDirGroupPersist = useRef(true);
+  const defaultUserDirGroupExpanded = true;
 
   const cancelDrawerClose = useCallback(() => {
     if (userDrawerCloseTimerRef.current) {
@@ -713,6 +779,29 @@ export function UsersWorkspacePanel() {
   useEffect(() => {
     setRegisteredTeamSlugs(parseStoredExtraTeamSlugs(localStorage.getItem(USERS_DIRECTORY_EXTRA_TEAMS_STORAGE_KEY)));
   }, []);
+
+  useEffect(() => {
+    const stored = parseStoredUserDirGroupLevels(localStorage.getItem(USERS_DIRECTORY_GROUP_LEVELS_STORAGE_KEY));
+    if (stored.length > 0) setUserDirGroupLevels(stored);
+  }, []);
+
+  useEffect(() => {
+    if (skipNextUserDirGroupPersist.current) {
+      skipNextUserDirGroupPersist.current = false;
+      return;
+    }
+    localStorage.setItem(USERS_DIRECTORY_GROUP_LEVELS_STORAGE_KEY, JSON.stringify(userDirGroupLevels));
+  }, [userDirGroupLevels]);
+
+  useEffect(() => {
+    if (!userDirGroupMenuOpen) return;
+    const fn = (e: MouseEvent) => {
+      if (userDirGroupMenuRef.current?.contains(e.target as Node)) return;
+      setUserDirGroupMenuOpen(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [userDirGroupMenuOpen]);
 
   const persistRegisteredTeamSlugs = useCallback((next: string[]) => {
     const merged = [...new Set(next.filter(Boolean))];
@@ -791,6 +880,23 @@ export function UsersWorkspacePanel() {
   const toggleSort = useCallback((key: SortKey) => {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   }, []);
+
+  const toggleUserDirGroupLevel = useCallback((level: UserDirectoryGroupLevel) => {
+    setUserDirGroupLevels((prev) => {
+      const next = new Set(prev);
+      if (next.has(level)) next.delete(level);
+      else next.add(level);
+      return USER_DIRECTORY_GROUP_LEVEL_ORDER.filter((l) => next.has(l));
+    });
+  }, []);
+
+  const userDirGroupSummaryLabel = useMemo(
+    () =>
+      userDirGroupLevels.length === 0
+        ? "None"
+        : userDirGroupLevels.map((l) => USER_DIRECTORY_GROUP_LEVEL_LABELS[l]).join(" · "),
+    [userDirGroupLevels],
+  );
 
   const userDirColumnDragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -873,6 +979,110 @@ export function UsersWorkspacePanel() {
     }
     return [...s];
   }, [rows, registeredTeamSlugs]);
+
+  const userDirectoryTableRows = useMemo(() => {
+    let zebra = 0;
+    const renderLeaf = (list: WorkspaceUserRow[], nameTreeDepth: number) =>
+      list.map((row) => (
+        <UsersTableRow
+          key={row.id}
+          row={row}
+          idx={zebra++}
+          columnOrder={columnOrder}
+          saving={savingRowIds.has(row.id)}
+          editField={editCell?.rowId === row.id ? editCell.field : null}
+          onEditField={(field) => setEditCell({ rowId: row.id, field })}
+          onCancelEdit={() => setEditCell(null)}
+          onRowView={(r) => {
+            setEditCell(null);
+            cancelDrawerClose();
+            setForm({
+              name: r.name,
+              email: r.email,
+              team: r.team,
+              permission: r.permission,
+            });
+            setUserPanel({ kind: "view", user: r });
+          }}
+          patchUser={patchUser}
+          directoryTeamIds={directoryTeamIds}
+          nameTreeDepth={nameTreeDepth}
+        />
+      ));
+
+    const renderTree = (list: WorkspaceUserRow[], levelIndex: number, path: string): ReactNode => {
+      if (userDirGroupLevels.length === 0) return renderLeaf(list, 0);
+      if (levelIndex >= userDirGroupLevels.length) {
+        return renderLeaf(list, userDirGroupLevels.length);
+      }
+      const level = userDirGroupLevels[levelIndex];
+      const groups = new Map<string, { label: string; sort: string; rows: WorkspaceUserRow[] }>();
+      for (const row of list) {
+        const { key, label, sort: sortKey } = userDirectoryRowGroupKey(row, level);
+        if (!groups.has(key)) groups.set(key, { label, sort: sortKey, rows: [] });
+        groups.get(key)!.rows.push(row);
+      }
+      return (
+        <>
+          {Array.from(groups.entries())
+            .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
+            .map(([key, g]) => {
+              const folderId = `${path}/${level}:${encodeURIComponent(key)}`;
+              const isOpen = userDirOpenGroups[folderId] ?? defaultUserDirGroupExpanded;
+              const indent = 8 + levelIndex * 18;
+              return (
+                <Fragment key={folderId}>
+                  <tr className="border-t border-[#7cd3f7]/95 bg-slate-100/95 text-[15px]">
+                    <td colSpan={columnOrder.length} className="px-2 py-1.5">
+                      <button
+                        type="button"
+                        className="flex min-w-0 max-w-full items-center gap-1.5 text-left font-semibold text-slate-800"
+                        style={{ paddingLeft: indent }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUserDirOpenGroups((prev) => ({
+                            ...prev,
+                            [folderId]: !(prev[folderId] ?? defaultUserDirGroupExpanded),
+                          }));
+                        }}
+                      >
+                        {isOpen ? (
+                          <ChevronDown className="size-4 shrink-0 text-slate-600" aria-hidden />
+                        ) : (
+                          <ChevronRight className="size-4 shrink-0 text-slate-600" aria-hidden />
+                        )}
+                        <span className="shrink-0 text-slate-600">{USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}:</span>
+                        <span className="min-w-0 truncate">{g.label}</span>
+                        <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">
+                          ({g.rows.length})
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                  {isOpen ? renderTree(g.rows, levelIndex + 1, folderId) : null}
+                </Fragment>
+              );
+            })}
+        </>
+      );
+    };
+
+    return userDirGroupLevels.length === 0 ? (
+      <>{renderLeaf(sortedRows, 0)}</>
+    ) : (
+      <>{renderTree(sortedRows, 0, "root")}</>
+    );
+  }, [
+    sortedRows,
+    userDirGroupLevels,
+    userDirOpenGroups,
+    columnOrder,
+    savingRowIds,
+    editCell,
+    patchUser,
+    directoryTeamIds,
+    cancelDrawerClose,
+  ]);
 
   const teamFilterSuggestions = useMemo(() => {
     const base = MONTH_TEAM_COLUMNS.map((c) => c.label);
@@ -1181,6 +1391,43 @@ export function UsersWorkspacePanel() {
               }}
             />
           </div>
+          <div className="relative h-10 shrink-0" ref={userDirGroupMenuRef}>
+            <button
+              type="button"
+              onClick={() => setUserDirGroupMenuOpen((prev) => !prev)}
+              className="flex h-10 min-w-[11rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+            >
+              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
+                Group by
+              </span>
+              <span className="ml-1 max-w-[7rem] truncate font-medium text-slate-600">{userDirGroupSummaryLabel}</span>
+            </button>
+            {userDirGroupMenuOpen ? (
+              <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-100 bg-white p-2 shadow-lg">
+                <p className="mb-1.5 px-1.5 text-[11px] leading-snug text-slate-500">
+                  Combine any dimensions. Nested order is always Team → Permission → Status.
+                </p>
+                {USER_DIRECTORY_GROUP_LEVEL_ORDER.map((level) => {
+                  const checked = userDirGroupLevels.includes(level);
+                  return (
+                    <label
+                      key={level}
+                      className="mb-1 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700 last:mb-0"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleUserDirGroupLevel(level)}
+                        className="h-3.5 w-3.5 rounded border-slate-300 accent-violet-600"
+                      />
+                      {USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -1227,31 +1474,7 @@ export function UsersWorkspacePanel() {
                 </td>
               </tr>
             ) : (
-              sortedRows.map((row, idx) => (
-                <UsersTableRow
-                  key={row.id}
-                  row={row}
-                  idx={idx}
-                  columnOrder={columnOrder}
-                  saving={savingRowIds.has(row.id)}
-                  editField={editCell?.rowId === row.id ? editCell.field : null}
-                  onEditField={(field) => setEditCell({ rowId: row.id, field })}
-                  onCancelEdit={() => setEditCell(null)}
-                  onRowView={(r) => {
-                    setEditCell(null);
-                    cancelDrawerClose();
-                    setForm({
-                      name: r.name,
-                      email: r.email,
-                      team: r.team,
-                      permission: r.permission,
-                    });
-                    setUserPanel({ kind: "view", user: r });
-                  }}
-                  patchUser={patchUser}
-                  directoryTeamIds={directoryTeamIds}
-                />
-              ))
+              userDirectoryTableRows
             )}
               </tbody>
             </table>
@@ -1264,6 +1487,7 @@ export function UsersWorkspacePanel() {
         {teamFilter !== "all" || permissionFilter !== "all" ? " (server-filtered)" : ""}
         {q ? " · search narrows further in the browser" : ""}
         {` · sorted by ${sort.key} (${sort.dir})`}
+        {userDirGroupLevels.length > 0 ? ` · grouped by ${userDirGroupSummaryLabel}` : ""}
       </p>
 
       {userPanel ? (
