@@ -82,6 +82,8 @@ const CFD_FLOW_SEGMENTS = [
 const SPRINT_CHART_BOX =
   "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] w-full";
 const INSIGHTS_CONTENT_HEIGHT = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem]";
+/** Same height as {@link INSIGHTS_CONTENT_HEIGHT} but won’t flex-grow (pairs Workload + Cumulative Flow). */
+const INSIGHTS_CHART_BAND = cn(INSIGHTS_CONTENT_HEIGHT, "shrink-0");
 const INSIGHTS_HEADER_ROW = "min-h-9";
 const PIE_LEGEND_CAP = "max-h-[clamp(12.5rem,27vh,20rem)] overflow-y-auto pr-1";
 const WORKLOAD_LIST_MAX = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] overflow-y-auto overflow-x-hidden overscroll-contain";
@@ -2072,8 +2074,8 @@ export function MonthAnalytics({
       </article>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
         <div className={cn("flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW, isMultiPeriodInsights ? "mb-3" : "mb-2")}>
           <h3
             className={cn(
@@ -2225,7 +2227,7 @@ export function MonthAnalytics({
           </div>
         ) : null}
         {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
-          <div className={`relative min-h-0 flex-1 ${INSIGHTS_CONTENT_HEIGHT}`}>
+          <div className={cn("relative min-h-0 overflow-hidden", INSIGHTS_CHART_BAND)}>
             <div className="grid h-full min-h-0 gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
             <div
               ref={workloadStoriesScrollRef}
@@ -2356,11 +2358,11 @@ export function MonthAnalytics({
             </button>
           </div>
         ) : (
-          <div className="relative min-h-0 flex-1">
+          <div className={cn("relative overflow-hidden", INSIGHTS_CHART_BAND)}>
             <div
               ref={monthLoadScrollRef}
               onScroll={updateMonthLoadArrowState}
-              className={`min-h-0 space-y-1 pr-5 [&::-webkit-scrollbar]:hidden ${WORKLOAD_LIST_MAX}`}
+              className="h-full min-h-0 space-y-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-5 [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {analytics.workloadCapacityByAssignee.length > 0 ? (
@@ -2436,7 +2438,7 @@ export function MonthAnalytics({
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:pl-4">
         <h3
           className={cn(
             "ml-[48px] inline-flex min-h-9 shrink-0 items-center gap-1.5 font-semibold text-slate-800",
@@ -2446,7 +2448,12 @@ export function MonthAnalytics({
           <Activity className="size-4 text-slate-600" />
           Cumulative Flow
         </h3>
-        <div className={`grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
+        <div
+          className={cn(
+            "grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch",
+            INSIGHTS_CHART_BAND,
+          )}
+        >
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {flowResolved.length > 0 ? (
               <div className="absolute inset-0">
