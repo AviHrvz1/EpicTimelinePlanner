@@ -85,8 +85,17 @@ const INSIGHTS_CONTENT_HEIGHT = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem]";
 /** Same height as {@link INSIGHTS_CONTENT_HEIGHT} but won’t flex-grow (pairs Workload + Cumulative Flow). */
 const INSIGHTS_CHART_BAND = cn(INSIGHTS_CONTENT_HEIGHT, "shrink-0");
 const INSIGHTS_HEADER_ROW = "min-h-9";
-const PIE_LEGEND_CAP = "max-h-[clamp(12.5rem,27vh,20rem)] overflow-y-auto pr-1";
-const WORKLOAD_LIST_MAX = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] overflow-y-auto overflow-x-hidden overscroll-contain";
+/** Card frame for drilldown tables only (charts are unframed). */
+const INSIGHTS_CHART_FRAME =
+  "rounded-lg border border-slate-200/80 bg-white/90 p-2 ring-1 ring-slate-200/50";
+/** Primary + legend columns inside a framed chart (no extra pl-*; frame supplies inset). */
+const INSIGHTS_CHART_GRID_GAP = "gap-3";
+/** Scrollable main column (plot list / burndown legend body). */
+const INSIGHTS_SCROLL_MAIN =
+  "h-full min-h-0 space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden";
+/** Scrollable side column (legends, workload filters); same cap and edge as other columns. */
+const INSIGHTS_SCROLL_SIDE =
+  "max-h-[clamp(12.5rem,27vh,20rem)] min-h-0 space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden";
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
 
@@ -1426,7 +1435,6 @@ export function MonthAnalytics({
     updateWorkloadDrilldownArrowState();
   }, [workloadDrilldownAssignee, workloadDrilldownStories.length]);
 
-  const chartLegendColumnClass = "max-h-[clamp(12.5rem,27vh,20rem)] space-y-1.5 overflow-y-auto pr-0";
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
   const sharedDrilldownScrollAreaClass =
@@ -1586,7 +1594,7 @@ export function MonthAnalytics({
           ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className={cn("mt-0 w-full min-w-0 overflow-hidden rounded-md bg-white", INSIGHTS_CONTENT_HEIGHT)}>
+          <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
             <div className="relative h-full min-h-0 min-w-0">
               <div
                 ref={statusDrilldownScrollRef}
@@ -1729,7 +1737,13 @@ export function MonthAnalytics({
             </div>
           </div>
         ) : (
-          <div className={`grid flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_10.5rem] lg:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
+          <div
+            className={cn(
+              "grid flex-1 lg:grid-cols-[minmax(0,1fr)_10.5rem] lg:items-stretch",
+              INSIGHTS_CHART_GRID_GAP,
+              INSIGHTS_CONTENT_HEIGHT,
+            )}
+          >
             <div
               className={`relative rounded-lg ${SPRINT_CHART_BOX}`}
             >
@@ -1784,7 +1798,7 @@ export function MonthAnalytics({
                 </div>
               </div>
             </div>
-            <div className={`space-y-0.5 lg:pt-1 ${PIE_LEGEND_CAP}`}>
+            <div className={INSIGHTS_SCROLL_SIDE}>
               <button
                 type="button"
                 onClick={() => openStatusDrilldown("All")}
@@ -1828,11 +1842,11 @@ export function MonthAnalytics({
         )}
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
-              "ml-[48px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
+              "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
               isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
             )}
           >
@@ -1888,12 +1902,18 @@ export function MonthAnalytics({
             </div>
           </div>
         </div>
-        <div className={`grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch ${INSIGHTS_CONTENT_HEIGHT}`}>
+        <div
+          className={cn(
+            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch",
+            INSIGHTS_CHART_GRID_GAP,
+            INSIGHTS_CONTENT_HEIGHT,
+          )}
+        >
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 2, right: 26, left: 18, bottom: 34 }}>
+                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="axisLabel"
@@ -1999,7 +2019,7 @@ export function MonthAnalytics({
             <div
               ref={burndownLegendScrollRef}
               onScroll={updateBurndownArrowState}
-              className="h-full min-h-0 space-y-1 overflow-y-auto pr-5 [&::-webkit-scrollbar]:hidden"
+              className={INSIGHTS_SCROLL_MAIN}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <button
@@ -2122,7 +2142,7 @@ export function MonthAnalytics({
           )}
         </div>
         {workloadDrilldownAssignee ? (
-          <div className={cn("mt-0 w-full min-w-0 overflow-hidden rounded-md bg-white", INSIGHTS_CONTENT_HEIGHT)}>
+          <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
             <div className="relative h-full min-h-0 min-w-0">
             <div
               ref={workloadDrilldownScrollRef}
@@ -2228,11 +2248,11 @@ export function MonthAnalytics({
         ) : null}
         {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
           <div className={cn("relative min-h-0 overflow-hidden", INSIGHTS_CHART_BAND)}>
-            <div className="grid h-full min-h-0 gap-2 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch">
+            <div className={cn("grid h-full min-h-0 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch", INSIGHTS_CHART_GRID_GAP)}>
             <div
               ref={workloadStoriesScrollRef}
               onScroll={updateWorkloadArrowState}
-              className="h-full min-h-0 space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
+              className={INSIGHTS_SCROLL_MAIN}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {analytics.workloadByAssignee.length > 0 ? (
@@ -2279,7 +2299,7 @@ export function MonthAnalytics({
                 <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
               )}
             </div>
-            <div className="space-y-1.5 pr-0.5">
+            <div className={INSIGHTS_SCROLL_SIDE}>
               <button
                 type="button"
                 onClick={() => toggleWorkloadStatusFilter("all")}
@@ -2362,7 +2382,7 @@ export function MonthAnalytics({
             <div
               ref={monthLoadScrollRef}
               onScroll={updateMonthLoadArrowState}
-              className="h-full min-h-0 space-y-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-5 [&::-webkit-scrollbar]:hidden"
+              className={cn(INSIGHTS_SCROLL_MAIN, "overscroll-contain")}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {analytics.workloadCapacityByAssignee.length > 0 ? (
@@ -2438,10 +2458,10 @@ export function MonthAnalytics({
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:pl-4">
+      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
         <h3
           className={cn(
-            "ml-[48px] inline-flex min-h-9 shrink-0 items-center gap-1.5 font-semibold text-slate-800",
+            "ml-[35px] inline-flex min-h-9 shrink-0 items-center gap-1.5 font-semibold text-slate-800",
             isMultiPeriodInsights ? "mb-3 text-[16px]" : "mb-2 text-[15px]",
           )}
         >
@@ -2450,7 +2470,8 @@ export function MonthAnalytics({
         </h3>
         <div
           className={cn(
-            "grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch",
+            "grid md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch",
+            INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CHART_BAND,
           )}
         >
@@ -2458,7 +2479,7 @@ export function MonthAnalytics({
             {flowResolved.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={flowResolved} margin={{ top: 4, right: 4, left: 18, bottom: 28 }}>
+                  <AreaChart data={flowResolved} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="labelShort"
@@ -2467,12 +2488,12 @@ export function MonthAnalytics({
                       angle={-28}
                       textAnchor="end"
                       tickMargin={2}
-                      height={36}
+                      height={44}
                     />
                     <YAxis
                       allowDecimals={false}
                       tick={{ fontSize: 10, fill: "#64748b" }}
-                      width={40}
+                      width={44}
                       label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
                     />
                     <Tooltip
@@ -2508,7 +2529,7 @@ export function MonthAnalytics({
               <div className="flex h-full items-center justify-center text-[12px] text-slate-500">No month days to chart.</div>
             )}
           </div>
-          <div className={chartLegendColumnClass}>
+          <div className={INSIGHTS_SCROLL_SIDE}>
             <button
               type="button"
               onClick={showAllCfdKeys}
