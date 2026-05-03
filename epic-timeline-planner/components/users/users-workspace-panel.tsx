@@ -87,6 +87,9 @@ function userDirectoryGroupLevelIcon(level: UserDirectoryGroupLevel, size: "tree
 /** Horizontal shift per tree depth for group folder rows and grouped user name cells (px). */
 const USER_DIRECTORY_TREE_LEVEL_STEP_PX = 40;
 
+/** When the viewport is narrower than this, the directory keeps this layout width and scrolls horizontally (aligned with roadmap right-panel floor). */
+const USER_DIRECTORY_MIN_LAYOUT_WIDTH_PX = 1100;
+
 const USER_DIRECTORY_COLUMN_LABELS: Record<SortKey, string> = {
   name: "User name",
   email: "Email",
@@ -1297,8 +1300,13 @@ export function UsersWorkspacePanel() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 p-6 sm:p-8">
-      <header className="flex flex-col gap-4 border-b border-slate-200/90 pb-6 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-auto [scrollbar-gutter:stable]">
+        <div
+          className="box-border flex h-full min-h-0 w-full min-w-full flex-col gap-5 p-6 sm:p-8"
+          style={{ minWidth: `max(100%, ${USER_DIRECTORY_MIN_LAYOUT_WIDTH_PX}px)` }}
+        >
+      <header className="flex shrink-0 flex-col gap-4 border-b border-slate-200/90 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight text-slate-900">
             <span
@@ -1331,7 +1339,7 @@ export function UsersWorkspacePanel() {
         </div>
       </header>
 
-      <div className="flex flex-col gap-3 pb-8 lg:flex-row lg:items-center lg:gap-3">
+      <div className="flex shrink-0 flex-col gap-3 pb-8 lg:flex-row lg:items-center lg:gap-3">
         <div ref={searchFieldWrapRef} className="relative min-w-0 w-full flex-1 lg:max-w-md">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-slate-400"
@@ -1507,13 +1515,15 @@ export function UsersWorkspacePanel() {
         </div>
       </div>
 
-      <p className="text-center text-[12px] text-slate-500">
+      <p className="shrink-0 text-center text-[12px] text-slate-500">
         Showing {sortedRows.length} of {rows.length} loaded
         {teamFilter !== "all" || permissionFilter !== "all" ? " (server-filtered)" : ""}
         {q ? " · search narrows further in the browser" : ""}
         {` · sorted by ${sort.key} (${sort.dir})`}
         {userDirGroupLevels.length > 0 ? ` · grouped by ${userDirGroupSummaryLabel}` : ""}
       </p>
+        </div>
+      </div>
 
       {userPanel ? (
         <div className="fixed inset-0 z-[100] flex justify-end">

@@ -1529,21 +1529,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   }, []);
 
   useEffect(() => {
-    // Insights surfaces default to a focused analytics layout.
-    const monthOrSprintInsightsSurface =
-      activeTimelineMonth != null &&
-      (activeMonthPlanTab === "month-status" || activeMonthPlanTab === "sprint-status");
-    const quarterInsightsSurface = activeTimelineMonth == null && activeQuarterViewTab === "insights";
-    const insightsSurface = monthOrSprintInsightsSurface || quarterInsightsSurface;
-    if (insightsSurface) {
-      setIsLeftPanelHidden(true);
-      return;
-    }
-    // Non-insight surfaces restore the standard split layout.
-    setIsLeftPanelHidden(false);
-  }, [activeMonthPlanTab, activeTimelineMonth, activeQuarterViewTab]);
-
-  useEffect(() => {
     const isInsightsSurface =
       (activeTimelineMonth != null &&
         (activeMonthPlanTab === "month-status" || activeMonthPlanTab === "sprint-status")) ||
@@ -4258,8 +4243,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
             </div>
           ) : topMode === "users" ? (
-            <div className="min-h-0 flex-1">
-              <div className="h-full min-h-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
+            <div className="min-h-0 min-w-0 flex-1">
+              <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
                 <UsersWorkspacePanel />
               </div>
             </div>
