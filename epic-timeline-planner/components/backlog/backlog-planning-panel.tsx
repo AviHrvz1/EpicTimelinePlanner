@@ -5,7 +5,6 @@ import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyb
 import { CSS } from "@dnd-kit/utilities";
 import {
   Bookmark,
-  BookmarkPlus,
   Check,
   ChevronDown,
   ChevronRight,
@@ -18,6 +17,7 @@ import {
   LayoutGrid,
   ListTodo,
   Plus,
+  Save,
   Search,
   TableProperties,
   Trash2,
@@ -209,12 +209,12 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "endDate",
   "status",
   "sprint",
+  "progress",
   "assignee",
   "labels",
   "estDays",
   "epicOriginalEst",
   "daysLeft",
-  "progress",
 ];
 
 const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
@@ -271,6 +271,8 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
 const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1";
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
+/** Bump when default visibility for columns changes so stored layout can migrate once. */
+const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 2;
 const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
 const BACKLOG_SAVED_VIEWS_STORAGE_KEY = "epic-planner.backlog.saved-views.v1";
 
@@ -343,6 +345,20 @@ function normalizeColumnOrder(input: unknown): BacklogColumnKey[] {
   if (wi > 0) {
     out.splice(wi, 1);
     out.unshift("workItem");
+  }
+  const statusIdx = out.indexOf("status");
+  const sprintIdx = out.indexOf("sprint");
+  if (statusIdx !== -1 && sprintIdx !== -1 && sprintIdx !== statusIdx + 1) {
+    out.splice(sprintIdx, 1);
+    const anchor = out.indexOf("status");
+    out.splice(anchor + 1, 0, "sprint");
+  }
+  const sprintAnchor = out.indexOf("sprint");
+  const progressIdx = out.indexOf("progress");
+  if (sprintAnchor !== -1 && progressIdx !== -1 && progressIdx !== sprintAnchor + 1) {
+    out.splice(progressIdx, 1);
+    const sprintAfter = out.indexOf("sprint");
+    out.splice(sprintAfter + 1, 0, "progress");
   }
   return out;
 }
@@ -1727,15 +1743,15 @@ export function BacklogPlanningPanel({
       const oldIndex = prev.indexOf(aid);
       const newIndex = prev.indexOf(oid);
       if (oldIndex < 0 || newIndex < 0) return prev;
-      const next = arrayMove(prev, oldIndex, newIndex);
+      let next = arrayMove(prev, oldIndex, newIndex);
       if (next[0] !== "workItem") {
         const wi = next.indexOf("workItem");
         if (wi >= 0) {
           const rest = next.filter((k) => k !== "workItem");
-          return ["workItem", ...rest];
+          next = ["workItem", ...rest];
         }
       }
-      return next;
+      return normalizeColumnOrder(next);
     });
   }, []);
 
@@ -3595,7 +3611,12 @@ export function BacklogPlanningPanel({
           columnVisibility?: Partial<Record<BacklogColumnKey, boolean>>;
           columnOrder?: unknown;
           showTableHeaderRow?: unknown;
+          defaultsVersion?: unknown;
         };
+        const storedDefaultsVersion =
+          typeof parsed.defaultsVersion === "number" && Number.isFinite(parsed.defaultsVersion)
+            ? parsed.defaultsVersion
+            : 0;
         if (parsed.columnVisibility && typeof parsed.columnVisibility === "object") {
           setColumnVisibility(() => {
             // Start from defaults; merge saved booleans so new columns get default visibility until saved.
@@ -3605,6 +3626,11 @@ export function BacklogPlanningPanel({
               if (typeof v === "boolean") next[key] = v;
             }
             next.workItem = true;
+            if (storedDefaultsVersion < BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION) {
+              next.year = DEFAULT_BACKLOG_COLUMN_VISIBILITY.year;
+              next.quarter = DEFAULT_BACKLOG_COLUMN_VISIBILITY.quarter;
+              next.month = DEFAULT_BACKLOG_COLUMN_VISIBILITY.month;
+            }
             return next;
           });
         }
@@ -3623,7 +3649,12 @@ export function BacklogPlanningPanel({
     try {
       window.localStorage.setItem(
         BACKLOG_TABLE_LAYOUT_STORAGE_KEY,
-        JSON.stringify({ columnVisibility, columnOrder, showTableHeaderRow }),
+        JSON.stringify({
+          columnVisibility,
+          columnOrder,
+          showTableHeaderRow,
+          defaultsVersion: BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION,
+        }),
       );
     } catch {
       // Ignore write failures (private mode, quotas, etc.)
@@ -3845,10 +3876,10 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={openSaveAsFilterDialog}
-              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-1.5 text-[10px] font-semibold text-slate-700 shadow-sm ring-1 ring-indigo-200/80 transition hover:from-indigo-100 hover:to-violet-100 hover:text-slate-900 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
+              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-emerald-50 to-teal-50 px-1.5 text-[10px] font-semibold text-emerald-950 shadow-sm ring-1 ring-emerald-300/75 transition hover:from-emerald-100 hover:to-teal-100 hover:text-emerald-950 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
               aria-haspopup="dialog"
             >
-              <BookmarkPlus className="size-3.5 shrink-0 text-indigo-600/90" strokeWidth={2} aria-hidden />
+              <Save className="size-3.5 shrink-0 text-emerald-700" strokeWidth={2} aria-hidden />
               Save as filter
             </button>
             <span
@@ -3945,10 +3976,10 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={openSaveViewDialog}
-              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-sky-50 to-cyan-50 px-1.5 text-[10px] font-semibold text-slate-700 shadow-sm ring-1 ring-sky-200/80 transition hover:from-sky-100 hover:to-cyan-100 hover:text-slate-900 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
+              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-violet-50 to-fuchsia-50 px-1.5 text-[10px] font-semibold text-violet-950 shadow-sm ring-1 ring-violet-300/75 transition hover:from-violet-100 hover:to-fuchsia-100 hover:text-violet-950 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
               aria-haspopup="dialog"
             >
-              <LayoutGrid className="size-3.5 shrink-0 text-sky-600/90" strokeWidth={2} aria-hidden />
+              <Save className="size-3.5 shrink-0 text-violet-700" strokeWidth={2} aria-hidden />
               Save view
             </button>
             <span
@@ -5292,7 +5323,7 @@ export function BacklogPlanningPanel({
             className="max-h-[min(90vh,32rem)] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/80"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-slate-100 bg-gradient-to-b from-indigo-50/80 to-white px-5 py-4">
+            <div className="border-b border-emerald-100/80 bg-gradient-to-b from-emerald-50/90 to-white px-5 py-4">
               <h3 id="backlog-save-filter-title" className="text-[17px] font-semibold tracking-tight text-slate-900">
                 Save as filter
               </h3>
@@ -5316,12 +5347,12 @@ export function BacklogPlanningPanel({
                   onChange={(event) => setSaveAsFilterName(event.target.value)}
                   placeholder="e.g. Q2 Platform backlog"
                   autoComplete="off"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200/70"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/70"
                 />
               </label>
               <div>
                 <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-600">Included in this filter</div>
-                <ul className="max-h-48 list-disc space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 px-5 py-3 text-[13px] leading-snug text-slate-700 marker:text-indigo-500">
+                <ul className="max-h-48 list-disc space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 px-5 py-3 text-[13px] leading-snug text-slate-700 marker:text-emerald-600">
                   {saveAsFilterSummaryLines.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
@@ -5340,8 +5371,9 @@ export function BacklogPlanningPanel({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-gradient-to-b from-indigo-600 to-violet-600 px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm ring-1 ring-indigo-700/30 transition hover:from-indigo-500 hover:to-violet-500"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-emerald-600 to-teal-600 px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm ring-1 ring-emerald-800/25 transition hover:from-emerald-500 hover:to-teal-500"
                 >
+                  <Save className="size-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
                   Save as filter
                 </button>
               </div>
@@ -5367,7 +5399,7 @@ export function BacklogPlanningPanel({
             className="max-h-[min(90vh,32rem)] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/80"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-slate-100 bg-gradient-to-b from-sky-50/80 to-white px-5 py-4">
+            <div className="border-b border-violet-100/80 bg-gradient-to-b from-violet-50/90 to-white px-5 py-4">
               <h3 id="backlog-save-view-title" className="text-[17px] font-semibold tracking-tight text-slate-900">
                 Save view
               </h3>
@@ -5391,12 +5423,12 @@ export function BacklogPlanningPanel({
                   onChange={(event) => setSaveViewName(event.target.value)}
                   placeholder="e.g. Compact estimates"
                   autoComplete="off"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-sky-300 focus:ring-2 focus:ring-sky-200/70"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
                 />
               </label>
               <div>
                 <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-600">Included in this view</div>
-                <ul className="max-h-48 list-disc space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 px-5 py-3 text-[13px] leading-snug text-slate-700 marker:text-sky-500">
+                <ul className="max-h-48 list-disc space-y-1.5 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/80 px-5 py-3 text-[13px] leading-snug text-slate-700 marker:text-violet-600">
                   {saveViewSummaryLines.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
@@ -5415,8 +5447,9 @@ export function BacklogPlanningPanel({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-gradient-to-b from-sky-600 to-cyan-600 px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm ring-1 ring-sky-700/30 transition hover:from-sky-500 hover:to-cyan-500"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-violet-600 to-fuchsia-600 px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm ring-1 ring-violet-800/25 transition hover:from-violet-500 hover:to-fuchsia-500"
                 >
+                  <Save className="size-4 shrink-0 opacity-95" strokeWidth={2} aria-hidden />
                   Save view
                 </button>
               </div>
