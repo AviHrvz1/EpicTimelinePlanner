@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Users, X } from "lucide-react";
+import { Info, Users, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
@@ -11,6 +11,11 @@ import { cn } from "@/lib/utils";
 /** Compact number fields: hide spinners so read-only and editable cells share identical text alignment. */
 const CAPACITY_DAYS_INPUT_NO_SPIN =
   "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+const CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS =
+  "pointer-events-none absolute left-1/2 top-0 z-[320] w-56 max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-white px-2.5 py-2 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-slate-200/80 transition-opacity duration-150";
+
+const rollupOverCapacityPill = "rounded-md bg-rose-600 px-1.5 py-0.5 text-white shadow-sm";
 
 export function TeamEpicCard({
   epicId,
@@ -47,7 +52,7 @@ export function TeamEpicCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "group relative min-h-[5.6rem] shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-2 shadow-sm transition hover:border-slate-300 hover:shadow-md",
+        "group relative min-h-[5rem] shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm transition hover:border-slate-300 hover:shadow-md",
         isDragging && "opacity-60 shadow-lg",
       )}
       style={{
@@ -58,13 +63,13 @@ export function TeamEpicCard({
       <button
         type="button"
         onClick={() => onRemoveEpicFromCapacity(epicId)}
-        className="absolute right-2 top-2 z-20 inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+        className="absolute right-2 top-2 z-30 inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
         aria-label="Remove epic from team capacity bucket"
         title="Clear team assignment"
       >
         <X className="size-3.5" aria-hidden />
       </button>
-      <div className="flex flex-col gap-3 @min-[22rem]:grid @min-[22rem]:grid-cols-[auto_minmax(0,1fr)_9.25rem] @min-[22rem]:items-start @min-[22rem]:gap-x-2 @min-[22rem]:gap-y-0">
+      <div className="flex flex-col gap-2 @min-[22rem]:grid @min-[22rem]:grid-cols-[auto_minmax(0,1fr)_minmax(9.5rem,auto)] @min-[22rem]:items-start @min-[22rem]:gap-x-2 @min-[22rem]:gap-y-0">
         <div className="flex min-w-0 items-start gap-2 @min-[22rem]:contents">
           <button
             type="button"
@@ -88,7 +93,7 @@ export function TeamEpicCard({
             </button>
             <p className="mt-0.5 text-[11px] leading-snug text-slate-500 @min-[22rem]:truncate">{initiativeTitle}</p>
             {(planningLabel || executionStatusLabel) && (
-              <div className="mt-1.5 flex w-full flex-wrap justify-start gap-1.5">
+              <div className="mt-1 flex w-full flex-wrap justify-start gap-1.5">
                 {planningLabel ? (
                   <span className="inline-flex items-center rounded-md border border-violet-200/90 bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-800">
                     {planningLabel}
@@ -108,9 +113,9 @@ export function TeamEpicCard({
             )}
           </div>
         </div>
-        <div className="flex w-full min-w-0 shrink-0 flex-col items-start gap-1.5 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:w-auto @min-[22rem]:pt-8">
-          <div className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1 @min-[22rem]:max-w-none">
-            <span className="pr-0.5 text-right text-[11px] font-semibold text-slate-600">Σ Child</span>
+        <div className="relative z-10 flex w-full min-w-0 shrink-0 flex-col items-start gap-1 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:ml-auto @min-[22rem]:w-auto @min-[22rem]:justify-self-end @min-[22rem]:pt-6">
+          <div className="grid w-full max-w-[9.5rem] grid-cols-[3.5rem_3.5rem] items-center gap-x-1.5 @min-[22rem]:max-w-none">
+            <span className="text-right text-[11px] font-semibold text-slate-600">Σ Child</span>
             <input
               type="number"
               readOnly
@@ -120,13 +125,13 @@ export function TeamEpicCard({
               aria-label="Sum of child story estimate days (read-only)"
               aria-readonly="true"
               className={cn(
-                "h-6 w-[3.5rem] shrink-0 cursor-default rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums focus:outline-none",
+                "h-[1.375rem] w-[3.5rem] shrink-0 cursor-default rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums focus:outline-none",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />
           </div>
-          <label className="grid w-full max-w-[10rem] grid-cols-[4.5rem_3.5rem] items-center gap-1 text-[11px] font-semibold text-slate-600 @min-[22rem]:max-w-none">
-            <span className="pr-0.5 text-right">Est days</span>
+          <label className="grid w-full max-w-[9.5rem] grid-cols-[3.5rem_3.5rem] items-center gap-x-1.5 text-[11px] font-semibold text-slate-600 @min-[22rem]:max-w-none">
+            <span className="text-right">Est days</span>
             <input
               type="number"
               min={0}
@@ -135,7 +140,7 @@ export function TeamEpicCard({
               value={originalEstimateDays}
               onChange={(event) => onOriginalEstimateChange(epicId, Math.max(0, Number(event.target.value || 0)))}
               className={cn(
-                "h-6 w-[3.5rem] shrink-0 rounded-md border border-slate-200 bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
+                "h-[1.375rem] w-[3.5rem] shrink-0 rounded-md border border-slate-200 bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
               aria-label="Original estimate days"
@@ -188,15 +193,23 @@ export function TeamCapacityBucket({
   const assignedTotal = cards.reduce((sum, c) => sum + c.loadDays, 0);
   const sumChildStoryEstimates = cards.reduce((sum, c) => sum + c.childStoryEstimateDays, 0);
   const sumOriginalEstimates = cards.reduce((sum, c) => sum + c.originalEstimateDays, 0);
-  const availableCapacityDays = Math.max(0, capacity - assignedTotal);
+  const childSumOverCapacity = sumChildStoryEstimates > capacity;
+  const estSumOverCapacity = sumOriginalEstimates > capacity;
   const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
-  const overCapacity = assignedTotal > capacity;
   const fillPct = Math.max(0, Math.min(100, capacity > 0 ? (assignedTotal / capacity) * 100 : 0));
-  const gaugePct = Math.max(0, Math.min(100, utilization));
+  /**
+   * Fluid height = worst case of Σ Est or Σ Child vs team Capacity (not vs period max days).
+   * Capped at 100% so e.g. 11d vs 1d capacity reads as a full bar, not 11/60 of the tube.
+   */
+  const childUtilizationPct =
+    capacity > 0 ? (sumChildStoryEstimates / capacity) * 100 : sumChildStoryEstimates > 0 ? 200 : 0;
+  const gaugeFillPct = Math.max(0, Math.min(100, Math.max(utilization, childUtilizationPct)));
+  /** Dashed line: where this team’s Capacity sits on the period scale (days). */
   const markerPct = Math.max(0, Math.min(100, gaugeScaleMax > 0 ? (capacity / gaugeScaleMax) * 100 : 0));
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
   const gradientKey = team.id.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const fluidStops = overCapacity
+  const thermometerOverCapacity = estSumOverCapacity || childSumOverCapacity;
+  const fluidStops = thermometerOverCapacity
     ? { top: "#fb7185", mid: "#ef4444", bot: "#b91c1c" }
     : utilization >= 85
       ? { top: "#fbbf24", mid: "#f59e0b", bot: "#b45309" }
@@ -205,6 +218,7 @@ export function TeamCapacityBucket({
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
   const trackGradId = `tcap-track-${gradientKey}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
   const fluidGradId = `tcap-fluid-${gradientKey}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
+  const rollupInfoTooltipId = `capacity-rollup-info-${dropId.replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
 
   return (
     <section
@@ -212,8 +226,8 @@ export function TeamCapacityBucket({
         "@container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
       )}
     >
-      <div className="mb-2 flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-2 pr-0.5">
-        <p className="order-1 flex min-w-0 max-w-full flex-1 basis-[min(100%,14rem)] items-center gap-1.5 text-left text-[15px] font-bold text-slate-800">
+      <div className="mb-2 flex flex-col gap-2 pr-0.5">
+        <p className="flex min-h-8 min-w-0 items-center gap-1.5 text-left text-[15px] font-bold text-slate-800">
           <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
           <span className="min-w-0 truncate">
             {teamLabelPrefix ? (
@@ -225,31 +239,8 @@ export function TeamCapacityBucket({
             )}
           </span>
         </p>
-        <div className="order-2 flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:gap-x-3">
-          <div
-            className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-semibold text-slate-600"
-            title="Rollups for epics in this bucket: Σ Child = sum of child story estimates; Σ Est = sum of epic original estimates; Avail = capacity minus assigned load."
-          >
-            <span className="whitespace-nowrap">
-              Σ Child{" "}
-              <span className="tabular-nums text-slate-800">{Math.round(sumChildStoryEstimates)}</span>
-            </span>
-            <span className="text-slate-300" aria-hidden>
-              ·
-            </span>
-            <span className="whitespace-nowrap">
-              Σ Est{" "}
-              <span className="tabular-nums text-slate-800">{Math.round(sumOriginalEstimates)}</span>
-            </span>
-            <span className="text-slate-300" aria-hidden>
-              ·
-            </span>
-            <span className="whitespace-nowrap">
-              Avail{" "}
-              <span className="tabular-nums text-slate-800">{availableCapacityDays.toFixed(1)}</span>d
-            </span>
-          </div>
-          <label className="inline-flex shrink-0 translate-x-[2px] items-center gap-1 text-[12px] font-semibold text-slate-600">
+        <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
+          <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
             Capacity
             <input
               type="number"
@@ -258,10 +249,86 @@ export function TeamCapacityBucket({
               step={1}
               value={capacity}
               onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
-              className="h-7 w-11 shrink-0 rounded-md border border-slate-200/90 bg-white/90 px-1 text-[11px] font-medium text-slate-800 shadow-sm"
+              className={cn(
+                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 shadow-sm",
+                CAPACITY_DAYS_INPUT_NO_SPIN,
+              )}
             />
             d
           </label>
+          <div className="flex min-w-0 shrink items-center justify-end gap-1.5">
+            {/* Rollups alone scroll horizontally so overflow does not clip the info tooltip (above the button). */}
+            <div className="min-w-0 max-w-full overflow-x-auto overflow-y-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div
+                className="flex w-max min-w-0 flex-nowrap items-center justify-end gap-x-2 text-[13px] font-semibold leading-snug text-slate-600"
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className={cn(
+                    "whitespace-nowrap",
+                    childSumOverCapacity && rollupOverCapacityPill,
+                    childSumOverCapacity && "font-medium",
+                  )}
+                >
+                  Σ Child{" "}
+                  <span
+                    className={cn("tabular-nums", childSumOverCapacity ? "text-white" : "text-slate-800")}
+                  >
+                    {Math.round(sumChildStoryEstimates)}
+                  </span>
+                  <span className={cn("ml-0.5", childSumOverCapacity && "text-white")}>d</span>
+                </span>
+                <span className="shrink-0 text-slate-300" aria-hidden>
+                  ·
+                </span>
+                <span
+                  className={cn(
+                    "whitespace-nowrap",
+                    estSumOverCapacity && rollupOverCapacityPill,
+                    estSumOverCapacity && "font-medium",
+                  )}
+                >
+                  Σ Est{" "}
+                  <span className={cn("tabular-nums", estSumOverCapacity ? "text-white" : "text-slate-800")}>
+                    {Math.round(sumOriginalEstimates)}
+                  </span>
+                  <span className={cn("ml-0.5", estSumOverCapacity && "text-white")}>d</span>
+                </span>
+              </div>
+            </div>
+            <span className="group/rollupinfo relative inline-flex shrink-0">
+              <button
+                type="button"
+                className="rounded p-0.5 text-slate-400 outline-none transition hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                aria-label="About Σ Child and Σ Est rollups"
+                aria-describedby={rollupInfoTooltipId}
+              >
+                <Info className="size-4" aria-hidden />
+              </button>
+              <span
+                id={rollupInfoTooltipId}
+                role="tooltip"
+                className={cn(
+                  CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
+                  "group-hover/rollupinfo:opacity-100 group-focus-within/rollupinfo:opacity-100",
+                )}
+              >
+                <span className="block font-semibold text-slate-800">Σ Child and Σ Est</span>
+                <span className="mt-1.5 block">
+                  <strong className="text-slate-800">Σ Child</strong> — sum of all user-story estimate days for epics in
+                  this team bucket (same as adding each epic&apos;s Σ Child on the cards).
+                </span>
+                <span className="mt-1 block">
+                  <strong className="text-slate-800">Σ Est</strong> — sum of each epic&apos;s <em>Est days</em> in this
+                  bucket (planned load used for the gauge and capacity math).
+                </span>
+                <span className="mt-1 block text-slate-600">
+                  Either figure turns red when it is greater than Capacity (days).
+                </span>
+              </span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -337,14 +404,13 @@ export function TeamCapacityBucket({
               />
               <rect
                 x="36"
-                y={258 - (gaugePct / 100) * 242}
+                y={258 - (gaugeFillPct / 100) * 242}
                 width="12"
-                height={(gaugePct / 100) * 242}
+                height={(gaugeFillPct / 100) * 242}
                 rx="6"
                 fill={`url(#${fluidGradId})`}
                 opacity="0.95"
               />
-              {overCapacity ? <AlertTriangle x={30} y={-25} className="size-4 text-rose-600" /> : null}
             </svg>
           </div>
           <div className="text-center text-[11px] font-semibold text-slate-600">
@@ -352,14 +418,6 @@ export function TeamCapacityBucket({
             <p>/ {capacity.toFixed(1)}d</p>
           </div>
         </div>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-[12px] font-semibold">
-        <span className="inline-flex items-center gap-1 text-slate-600">{assignedTotal.toFixed(1)}d planned</span>
-        <span className={cn("text-slate-500", overCapacity && "inline-flex items-center gap-1 text-rose-600")}>
-          {overCapacity ? <AlertTriangle className="size-3.5" aria-hidden /> : null}
-          {capacity.toFixed(1)}d available ({Math.round(utilization)}%)
-        </span>
       </div>
     </section>
   );
