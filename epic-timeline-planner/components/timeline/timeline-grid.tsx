@@ -165,7 +165,9 @@ const YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX = 48;
  * Minimum width for the timeline “right panel” (breadcrumbs, chips, rails, sprint/kanban/insights/capacity/etc.)
  * before horizontal scroll engages. Applies on all surfaces, not only portfolio Gantt.
  */
-const RIGHT_PANEL_MIN_CONTENT_PX = 1100;
+const RIGHT_PANEL_MIN_CONTENT_PX = 1400;
+/** Matches `pl-[4rem]` / `ml-[4rem]` when the context rail is shown so scroll width fits the sprint grid. */
+const ROADMAP_PORTFOLIO_CONTEXT_RAIL_INSET_PX = 64;
 
 function getRoadmapHScrollMinSprintPx(columnCount: number): number {
   if (columnCount <= 0) return YEAR_ROADMAP_MIN_SPRINT_PX;
@@ -2333,9 +2335,29 @@ export function TimelineGrid({
     if (!yearRoadmapHScroll) {
       return { gridTemplateColumns: `repeat(12, minmax(0, 1fr))` };
     }
-    const monthPx = 2 * YEAR_ROADMAP_MIN_SPRINT_PX + YEAR_ROADMAP_GANTT_GAP_PX;
+    const sp = getRoadmapHScrollMinSprintPx(ganttLaneColumnCount);
+    const monthPx = 2 * sp + YEAR_ROADMAP_GANTT_GAP_PX;
     return { gridTemplateColumns: `repeat(12, minmax(${monthPx}px, ${monthPx}px))` };
-  }, [yearRoadmapHScroll]);
+  }, [yearRoadmapHScroll, ganttLaneColumnCount]);
+
+  /**
+   * Full-year month tiles must share the same per-month width and 8px gutters as {@link yearQuarterHeaderGridStyle}
+   * and the sprint lanes; the old `grid-cols-4` + `gap-1.5` layout drifted (especially after horizontal scroll).
+   */
+  const yearFullYearMonthStripGridStyle: CSSProperties | undefined = useMemo(() => {
+    if (!yearRoadmapHScroll) return undefined;
+    const sp = getRoadmapHScrollMinSprintPx(ganttLaneColumnCount);
+    const monthPx = 2 * sp + YEAR_ROADMAP_GANTT_GAP_PX;
+    const quarterBandPx = 3 * monthPx + 2 * YEAR_ROADMAP_GANTT_GAP_PX;
+    return { gridTemplateColumns: `repeat(4, ${quarterBandPx}px)` };
+  }, [yearRoadmapHScroll, ganttLaneColumnCount]);
+
+  const yearFullYearMonthInnerGridStyle: CSSProperties | undefined = useMemo(() => {
+    if (!yearRoadmapHScroll) return undefined;
+    const sp = getRoadmapHScrollMinSprintPx(ganttLaneColumnCount);
+    const monthPx = 2 * sp + YEAR_ROADMAP_GANTT_GAP_PX;
+    return { gridTemplateColumns: `repeat(3, minmax(${monthPx}px, ${monthPx}px))` };
+  }, [yearRoadmapHScroll, ganttLaneColumnCount]);
 
   useLayoutEffect(() => {
     const el = yearRoadmapMeasureRef.current;
@@ -2994,22 +3016,35 @@ export function TimelineGrid({
 
   const ganttNeedsFixedColumns = portfolioRoadmapGanttHScrollMeasure && yearRoadmapHScroll;
   const panelHScroll = rightPanelHScroll || ganttNeedsFixedColumns;
+  /** Avoid `max(1400, grid)` dead space: when the roadmap uses fixed sprint px, size scroll to the grid + rail inset. */
   const panelScrollMinWidthPx = panelHScroll
-    ? Math.max(
-        rightPanelHScroll ? RIGHT_PANEL_MIN_CONTENT_PX : 0,
-        ganttNeedsFixedColumns ? portfolioRoadmapHScrollContentMinWidthPx : 0,
-      )
+    ? ganttNeedsFixedColumns
+      ? portfolioRoadmapHScrollContentMinWidthPx +
+        (hasContextSideMenu ? ROADMAP_PORTFOLIO_CONTEXT_RAIL_INSET_PX : 0)
+      : rightPanelHScroll
+        ? RIGHT_PANEL_MIN_CONTENT_PX
+        : undefined
     : undefined;
+
+  /** Chips share the same sprint column grid as Gantt lanes so they shrink and scroll with the timeline. */
+  const useRoadmapGanttChipTrack =
+    !activeMonth && quarterViewTab === "gantt" && (isFullYearGanttLayout || isQuarterGanttLayout);
 
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mb-4 flex w-full shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] py-2.5 shadow-none ring-0",
-          panelHScroll ? "min-w-max" : "min-w-0",
+          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] py-2.5 shadow-none ring-0",
+          useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
         {hasBreadcrumbs ? (
-          <div className="relative z-30 inline-flex shrink-0 items-center gap-1 rounded-lg border-0 bg-white/85 py-0.5 pl-1.5 pr-1 shadow-none ring-0 backdrop-blur-sm outline-none">
+          <div
+            className={cn(
+              "relative z-30 inline-flex shrink-0 items-center gap-1 rounded-lg border-0 bg-white/85 py-0.5 pl-1.5 pr-1 shadow-none ring-0 backdrop-blur-sm outline-none",
+              useRoadmapGanttChipTrack &&
+                "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 pr-1",
+            )}
+          >
             {breadcrumbItems.map((item, index) => (
               <div key={`${item.label}-${index}`} className="flex shrink-0 items-center gap-1">
                 {item.onClick ? (
@@ -3088,117 +3123,214 @@ export function TimelineGrid({
           </div>
         ) : null}
         {!activeMonth ? (
-          <div
-            className={cn(
-              "flex items-center justify-end gap-1 sm:gap-1.5 md:gap-2",
-              panelHScroll ? "min-w-max shrink-0 flex-nowrap" : "min-w-0 flex-wrap",
-              hasBreadcrumbs ? "flex-1" : "w-full",
-            )}
-          >
+          useRoadmapGanttChipTrack ? (
+            <div
+              className="grid min-w-0 w-full max-w-full gap-2"
+              style={ganttLaneGridStyle}
+            >
+              <div
+                className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2"
+                style={{ gridColumn: "1 / -1" }}
+              >
+                {summaryBadgesForScope ? (
+                  <>
+                    {onYearChange ? (
+                      <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setShowRoadmapProgress((v) => !v)}
+                      className={cn(
+                        summaryChipBaseClass,
+                        showRoadmapProgress
+                          ? summaryChipProgressOnClass
+                          : summaryChipProgressIdleClass,
+                      )}
+                    >
+                      Progress
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRoadmapBarMode("initiatives");
+                        onSummaryStatusQuickFilterChange?.(null);
+                      }}
+                      className={cn(
+                        summaryChipBaseClass,
+                        roadmapBarMode === "initiatives"
+                          ? summaryChipInitiativesOnClass
+                          : summaryChipInitiativesIdleClass,
+                      )}
+                    >
+                      <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
+                      <span className="hidden xl:inline">Initiatives</span>
+                      <span className="xl:hidden">Inits</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRoadmapBarMode("epics");
+                        onSummaryStatusQuickFilterChange?.(null);
+                      }}
+                      className={cn(
+                        summaryChipBaseClass,
+                        roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                          ? summaryChipEpicsOnClass
+                          : summaryChipEpicsIdleClass,
+                      )}
+                    >
+                      {("totalEpics" in summaryBadgesForScope
+                        ? summaryBadgesForScope.totalEpics
+                        : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
+                      Epics
+                    </button>
+                    <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
+                      <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
+                        <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                        <circle
+                          cx="8"
+                          cy="8"
+                          r="6"
+                          fill="none"
+                          stroke="#c026d3"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          transform="rotate(-90 8 8)"
+                          strokeDasharray={`${2 * Math.PI * 6}`}
+                          strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
+                        />
+                      </svg>
+                      <span className="truncate">{estimatedEpicsPercentForScope}%</span>
+                      <span className="hidden xl:inline">Epic Estimated</span>
+                      <span className="xl:hidden">Estimated</span>
+                    </button>
+                    <div className={summaryChipStoriesStaticClass}>
+                      <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+                      <span className="hidden xl:inline">User Stories</span>
+                      <span className="xl:hidden">Stories</span>
+                    </div>
+                    {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowYearSprintChips((prev) => !prev)}
+                        className={cn(
+                          summaryChipBaseClass,
+                          showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass,
+                        )}
+                      >
+                        <span className="hidden xl:inline">Sprints</span>
+                        <span className="xl:hidden">Spr</span>
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2",
+                hasBreadcrumbs ? "flex-1" : "w-full",
+              )}
+            >
               {summaryBadgesForScope ? (
                 <>
                   {onYearChange ? (
                     <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
                   ) : null}
                   <button
-                  type="button"
-                  onClick={() => setShowRoadmapProgress((v) => !v)}
-                  className={cn(
-                    summaryChipBaseClass,
-                    showRoadmapProgress
-                      ? summaryChipProgressOnClass
-                      : summaryChipProgressIdleClass,
-                  )}
-                >
-                  Progress
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoadmapBarMode("initiatives");
-                    onSummaryStatusQuickFilterChange?.(null);
-                  }}
-                  className={cn(
-                    summaryChipBaseClass,
-                    roadmapBarMode === "initiatives"
-                      ? summaryChipInitiativesOnClass
-                      : summaryChipInitiativesIdleClass,
-                  )}
-                >
-                  <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
-                  <span className="hidden xl:inline">Initiatives</span>
-                  <span className="xl:hidden">Inits</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoadmapBarMode("epics");
-                    onSummaryStatusQuickFilterChange?.(null);
-                  }}
-                  className={cn(
-                    summaryChipBaseClass,
-                    roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                      ? summaryChipEpicsOnClass
-                      : summaryChipEpicsIdleClass,
-                  )}
-                >
-                  {("totalEpics" in summaryBadgesForScope
-                    ? summaryBadgesForScope.totalEpics
-                    : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
-                  Epics
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openEstEpicsPanel()}
-                  className={summaryChipEstimatedClass}
-                >
-                  <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                    <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
-                    <circle
-                      cx="8"
-                      cy="8"
-                      r="6"
-                      fill="none"
-                      stroke="#c026d3"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      transform="rotate(-90 8 8)"
-                      strokeDasharray={`${2 * Math.PI * 6}`}
-                      strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
-                    />
-                  </svg>
-                  <span className="truncate">{estimatedEpicsPercentForScope}%</span>
-                  <span className="hidden xl:inline">Epic Estimated</span>
-                  <span className="xl:hidden">Estimated</span>
-                </button>
-                <div className={summaryChipStoriesStaticClass}>
-                  <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-                  <span className="hidden xl:inline">User Stories</span>
-                  <span className="xl:hidden">Stories</span>
-                </div>
-                  {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-                    <button
                     type="button"
-                    onClick={() => setShowYearSprintChips((prev) => !prev)}
+                    onClick={() => setShowRoadmapProgress((v) => !v)}
                     className={cn(
                       summaryChipBaseClass,
-                      showYearSprintChips
-                        ? summaryChipSprintsOnClass
-                        : summaryChipSprintsIdleClass,
+                      showRoadmapProgress
+                        ? summaryChipProgressOnClass
+                        : summaryChipProgressIdleClass,
                     )}
                   >
-                    <span className="hidden xl:inline">Sprints</span>
-                    <span className="xl:hidden">Spr</span>
+                    Progress
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoadmapBarMode("initiatives");
+                      onSummaryStatusQuickFilterChange?.(null);
+                    }}
+                    className={cn(
+                      summaryChipBaseClass,
+                      roadmapBarMode === "initiatives"
+                        ? summaryChipInitiativesOnClass
+                        : summaryChipInitiativesIdleClass,
+                    )}
+                  >
+                    <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
+                    <span className="hidden xl:inline">Initiatives</span>
+                    <span className="xl:hidden">Inits</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoadmapBarMode("epics");
+                      onSummaryStatusQuickFilterChange?.(null);
+                    }}
+                    className={cn(
+                      summaryChipBaseClass,
+                      roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                        ? summaryChipEpicsOnClass
+                        : summaryChipEpicsIdleClass,
+                    )}
+                  >
+                    {("totalEpics" in summaryBadgesForScope
+                      ? summaryBadgesForScope.totalEpics
+                      : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
+                    Epics
+                  </button>
+                  <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
+                    <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="6"
+                        fill="none"
+                        stroke="#c026d3"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        transform="rotate(-90 8 8)"
+                        strokeDasharray={`${2 * Math.PI * 6}`}
+                        strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
+                      />
+                    </svg>
+                    <span className="truncate">{estimatedEpicsPercentForScope}%</span>
+                    <span className="hidden xl:inline">Epic Estimated</span>
+                    <span className="xl:hidden">Estimated</span>
+                  </button>
+                  <div className={summaryChipStoriesStaticClass}>
+                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+                    <span className="hidden xl:inline">User Stories</span>
+                    <span className="xl:hidden">Stories</span>
+                  </div>
+                  {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowYearSprintChips((prev) => !prev)}
+                      className={cn(
+                        summaryChipBaseClass,
+                        showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass,
+                      )}
+                    >
+                      <span className="hidden xl:inline">Sprints</span>
+                      <span className="xl:hidden">Spr</span>
                     </button>
                   ) : null}
                 </>
               ) : null}
-          </div>
+            </div>
+          )
         ) : activeMonth ? (
           <div
             className={cn(
-              "flex items-center justify-end gap-1 pr-2 sm:gap-3 md:gap-2",
-              panelHScroll ? "min-w-max shrink-0 flex-nowrap" : "min-w-0 flex-wrap",
+              "flex min-w-0 flex-wrap items-center justify-end gap-1 pr-2 sm:gap-3 md:gap-2",
               hasBreadcrumbs ? "flex-1" : "w-full",
             )}
           >
@@ -4248,10 +4380,10 @@ export function TimelineGrid({
                 <div
                   className={cn(
                     "flex min-h-0 min-w-0 flex-1 flex-col gap-4",
-                    !panelHScroll && yearRoadmapHScroll && "w-max min-w-full",
+                    yearRoadmapHScroll && "w-max min-w-full",
                   )}
                   style={
-                    !panelHScroll && yearRoadmapHScroll
+                    yearRoadmapHScroll
                       ? { minWidth: portfolioRoadmapHScrollContentMinWidthPx }
                       : undefined
                   }
@@ -4794,17 +4926,20 @@ export function TimelineGrid({
               )}
             >
               <div
-                className={cn(
-                  "flex min-h-0 min-w-0 flex-col gap-2",
-                  !panelHScroll && yearRoadmapHScroll && "w-max min-w-full",
-                )}
+                className={cn("flex min-h-0 min-w-0 flex-col gap-2", yearRoadmapHScroll && "w-max")}
                 style={
-                  !panelHScroll && yearRoadmapHScroll
+                  yearRoadmapHScroll
                     ? { minWidth: portfolioRoadmapHScrollContentMinWidthPx }
                     : undefined
                 }
               >
-                <div className={cn("relative w-full", !yearRoadmapHScroll && "overflow-hidden")}>
+                <div
+                  className={cn(
+                    "relative",
+                    yearRoadmapHScroll ? "w-max max-w-full" : "w-full",
+                    !yearRoadmapHScroll && "overflow-hidden",
+                  )}
+                >
                   <div className="relative z-[1] grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
                     {visibleQuarterHeaders.map((quarter) => (
                       <button
@@ -4828,7 +4963,13 @@ export function TimelineGrid({
                     ))}
                   </div>
                 </div>
-                <div className={cn("relative mb-0 w-full", !yearRoadmapHScroll && "overflow-hidden")}>
+                <div
+                  className={cn(
+                    "relative mb-0",
+                    yearRoadmapHScroll ? "w-max max-w-full" : "w-full",
+                    !yearRoadmapHScroll && "overflow-hidden",
+                  )}
+                >
                   <GanttTodayMarker
                     leftPercent={roadmapLaneTodayLeft}
                     showBadge={false}
@@ -4836,16 +4977,23 @@ export function TimelineGrid({
                     prioritizeLabel
                     showLine={false}
                   />
-                  <div className="grid min-w-0 grid-cols-4 gap-2">
+                  <div
+                    className={cn("grid min-w-0 gap-2", !yearRoadmapHScroll && "grid-cols-4")}
+                    style={yearFullYearMonthStripGridStyle}
+                  >
                     {QUARTERS.map((quarter) => (
                       <section
                         key={quarter.label}
                         className={cn(
-                          "space-y-1 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-1.5 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
+                          "space-y-1 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 pt-1.5 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
+                          yearRoadmapHScroll ? "px-0" : "px-2.5",
                           quarterPanelTone[quarter.label] ?? "bg-slate-50/60 ring-slate-200",
                         )}
                       >
-                        <div className="grid grid-cols-3 gap-1.5">
+                        <div
+                          className={cn("grid", !yearRoadmapHScroll && "grid-cols-3 gap-1.5", yearRoadmapHScroll && "gap-2")}
+                          style={yearFullYearMonthInnerGridStyle}
+                        >
                           {quarter.months.map((month) => (
                             <div key={month} className="space-y-1.5">
                               <button
@@ -4924,22 +5072,26 @@ export function TimelineGrid({
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
       <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div
-          className={cn(
-            "min-h-0 min-w-0 flex-1",
-            panelHScroll && "overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
-          )}
-        >
-          <div
-            className={cn("flex min-h-0 min-w-0 flex-1 flex-col", panelHScroll && "w-max min-w-full")}
-            style={panelScrollMinWidthPx != null ? { minWidth: panelScrollMinWidthPx } : undefined}
-          >
-            <div className={cn("shrink-0", hasContextSideMenu && panelHScroll && "pl-[4rem]")}>
-              {timelineHeaderRow}
+        {panelHScroll ? (
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]">
+            <div
+              className="flex min-h-0 min-w-0 w-max min-w-full flex-1 flex-col"
+              style={panelScrollMinWidthPx != null ? { minWidth: panelScrollMinWidthPx } : undefined}
+            >
+              <div className={cn("shrink-0 min-w-0", hasContextSideMenu && "pl-[4rem]")}>
+                {timelineHeaderRow}
+              </div>
+              {planningSurface}
             </div>
-            {planningSurface}
           </div>
-        </div>
+        ) : (
+          <div className="min-h-0 min-w-0 flex-1">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="shrink-0">{timelineHeaderRow}</div>
+              {planningSurface}
+            </div>
+          </div>
+        )}
       </div>
       {estEpicsPanelOpen ? (
         <div className="pointer-events-none fixed inset-0 z-[140]">
