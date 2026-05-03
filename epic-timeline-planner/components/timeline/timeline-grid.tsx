@@ -142,6 +142,22 @@ function StripedGanttLaneScrollArea({
   );
 }
 
+/**
+ * All-quarters year Gantt: horizontal scroll activates when sprint columns would shrink below
+ * {@link YEAR_ROADMAP_MIN_SPRINT_PX}px (readability). Uses hysteresis so narrow resize does not flicker.
+ * `gap-2` between sprint tracks matches {@link YEAR_ROADMAP_GANTT_GAP_PX}.
+ */
+const YEAR_ROADMAP_GANTT_GAP_PX = 8;
+const YEAR_ROADMAP_MIN_SPRINT_PX = 36;
+const YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX = 48;
+
+function yearRoadmapGanttMinWidthPx(columnCount: number): number {
+  if (columnCount <= 0) return 0;
+  return (
+    columnCount * YEAR_ROADMAP_MIN_SPRINT_PX + Math.max(0, columnCount - 1) * YEAR_ROADMAP_GANTT_GAP_PX
+  );
+}
+
 /** Full-year / all-quarters Gantt: vertical “today” line with a down-pointing triangle at the top. */
 function YearRoadmapTodayLine({ leftPercent }: { leftPercent: number | null }) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
@@ -1086,6 +1102,9 @@ export function TimelineGrid({
   const [capacityTeamSearch, setCapacityTeamSearch] = useState("");
   const [capacityTeamMenuOpen, setCapacityTeamMenuOpen] = useState(false);
   const [showYearSprintChips, setShowYearSprintChips] = useState(false);
+  /** When true, year (all-quarters) Gantt uses fixed sprint column width + horizontal scroll (see ResizeObserver). */
+  const [yearRoadmapHScroll, setYearRoadmapHScroll] = useState(false);
+  const yearRoadmapMeasureRef = useRef<HTMLDivElement | null>(null);
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
   /** Drives slide-in/out (mirror of epic insights panel: translate + duration-300). */
   const [estEpicsPanelEntered, setEstEpicsPanelEntered] = useState(false);
@@ -1464,6 +1483,8 @@ export function TimelineGrid({
   const visibleQuarterHeaders = focusedQuarter ? [focusedQuarter] : QUARTERS;
   const focusedMonthIsVisible = focusedMonth ? visibleMonths.includes(focusedMonth) : false;
   const activeMonth = focusedMonthIsVisible ? focusedMonth : null;
+  const isFullYearGanttLayout =
+    activeMonth == null && focusedQuarter == null && quarterViewTab === "gantt";
   const scopedEpicsForEstimatePanel = useMemo(() => {
     let scopedRows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     if (activeMonth) {
@@ -2265,14 +2286,47 @@ export function TimelineGrid({
   };
   /** Initiative rows + quarter headers: 2 sprint columns per month; full-year = 24 sprints. */
   const ganttLaneColumnCount = focusedQuarter ? visibleMonths.length * 2 : 24;
-  const ganttLaneGridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(${ganttLaneColumnCount}, minmax(0, 1fr))`,
-  };
+  const ganttLaneGridStyle: CSSProperties = useMemo(() => {
+    if (focusedQuarter || !yearRoadmapHScroll) {
+      return { gridTemplateColumns: `repeat(${ganttLaneColumnCount}, minmax(0, 1fr))` };
+    }
+    return {
+      gridTemplateColumns: `repeat(${ganttLaneColumnCount}, minmax(${YEAR_ROADMAP_MIN_SPRINT_PX}px, ${YEAR_ROADMAP_MIN_SPRINT_PX}px))`,
+    };
+  }, [focusedQuarter, ganttLaneColumnCount, yearRoadmapHScroll]);
 
   /** Quarter title row uses 12 month-width columns (each quarter spans 3). */
-  const yearQuarterHeaderGridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
-  };
+  const yearQuarterHeaderGridStyle: CSSProperties = useMemo(() => {
+    if (!yearRoadmapHScroll) {
+      return { gridTemplateColumns: `repeat(12, minmax(0, 1fr))` };
+    }
+    const monthPx = 2 * YEAR_ROADMAP_MIN_SPRINT_PX + YEAR_ROADMAP_GANTT_GAP_PX;
+    return { gridTemplateColumns: `repeat(12, minmax(${monthPx}px, ${monthPx}px))` };
+  }, [yearRoadmapHScroll]);
+
+  useLayoutEffect(() => {
+    if (!isFullYearGanttLayout) {
+      setYearRoadmapHScroll(false);
+      return;
+    }
+    const el = yearRoadmapMeasureRef.current;
+    if (!el) return;
+    const minW = yearRoadmapGanttMinWidthPx(ganttLaneColumnCount);
+    const hyst = YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX;
+    const apply = () => {
+      const w = el.clientWidth;
+      setYearRoadmapHScroll((prev) => {
+        if (w <= 0) return false;
+        if (!prev && w < minW) return true;
+        if (prev && w >= minW + hyst) return false;
+        return prev;
+      });
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isFullYearGanttLayout, ganttLaneColumnCount]);
 
   /** Today line over initiative lanes (sprint resolution). */
   const roadmapLaneTodayLeft = useMemo(() => {
@@ -2672,6 +2726,226 @@ export function TimelineGrid({
   useEffect(() => {
     if (!showSprintTeamPicker) setIsSprintTeamMenuOpen(false);
   }, [showSprintTeamPicker]);
+
+  const fullYearRoadmapGanttTracks = (
+        roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
+          focusedQuarter && quarterViewTab === "gantt" ? null : !focusedQuarter ? (
+            <YearRoadmapEmptyStripedLane
+              currentYear={currentYear}
+              roadmapLaneTodayLeft={roadmapLaneTodayLeft}
+              columnCount={ganttLaneColumnCount}
+              variant="initiatives"
+            />
+          ) : (
+            <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
+              No initiatives with planned epics to display on the roadmap.
+            </p>
+          )
+        ) : yearRoadmapEpics.length === 0 && roadmapBarMode === "epics" ? (
+          focusedQuarter && quarterViewTab === "gantt" ? null : !focusedQuarter ? (
+            <YearRoadmapEmptyStripedLane
+              currentYear={currentYear}
+              roadmapLaneTodayLeft={roadmapLaneTodayLeft}
+              columnCount={ganttLaneColumnCount}
+              variant="epics"
+            />
+          ) : (
+            <p className="bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
+              Create an initiative, then drag its epics onto the timeline. You can also stretch or shorten a scheduled bar
+              by dragging its ends to match your start and due dates.
+            </p>
+          )
+        ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (
+          <div
+            className={cn(
+              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
+              !yearRoadmapHScroll && "overflow-x-hidden",
+              roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
+            )}
+          >
+            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
+            <div
+              className={cn(
+                "relative flex min-h-0 w-full flex-1 flex-col",
+                !yearRoadmapHScroll && "overflow-x-hidden",
+              )}
+            >
+              <div
+                id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                className={cn(
+                  "relative z-10 min-h-0 flex-1 space-y-1.5 overflow-y-auto [&::-webkit-scrollbar]:hidden",
+                  !yearRoadmapHScroll && "overflow-x-hidden",
+                )}
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+              {yearRoadmapInitiativeRows.map((group, idx) => (
+                <div
+                  key={`year-init-row-${group.timelineRow}`}
+                  className={cn(
+                    "relative min-w-0 z-10 py-0.5",
+                    idx < yearRoadmapInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                  )}
+                  data-gantt-lane-index={idx}
+                  data-gantt-timeline-row={group.timelineRow}
+                >
+                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                    {group.items.map((row) => {
+                      const columnStart = Math.max(1, row.startS);
+                      const span = Math.max(row.endS - row.startS + 1, 1);
+                      const stories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+                      const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+                      const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                      return (
+                        <div
+                          key={`year-init-${row.initiative.id}`}
+                          className="relative min-w-0 rounded-lg pt-0.5 pb-2 z-20"
+                          style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
+                        >
+                          <InitiativeTimelineBar
+                            id={row.initiative.id}
+                            title={row.initiative.title}
+                            icon={row.initiative.icon}
+                            color={row.initiative.color}
+                            progressPercent={completionPercent}
+                            progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                            showProgress={showRoadmapProgress}
+                            onClick={() => onOpenInitiative(row.initiative.id)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={cn(
+              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
+              !yearRoadmapHScroll && "overflow-x-hidden",
+              roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
+            )}
+          >
+            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
+            <div
+              className={cn(
+                "relative flex min-h-0 w-full flex-1 flex-col",
+                !yearRoadmapHScroll && "overflow-x-hidden",
+              )}
+            >
+              <div
+                id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
+                className={cn(
+                  "relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden",
+                  !yearRoadmapHScroll && "overflow-x-hidden",
+                )}
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+              {yearRoadmapEpicRows.map((group, idx) => (
+                <div
+                  key={`year-epic-row-${group.timelineRow}`}
+                  className={cn(
+                    "relative min-w-0 z-10 py-0.5",
+                    idx < yearRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
+                  )}
+                  data-gantt-lane-index={idx}
+                  data-gantt-timeline-row={group.timelineRow}
+                >
+                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
+                    {group.items.map((row) => {
+                      const rz = epicResizePreview?.epicId === row.epic.id ? epicResizePreview : null;
+                      let previewStart = row.startS;
+                      let previewEnd = row.endS;
+                      if (rz) {
+                        if (rz.side === "right") previewEnd = Math.min(24, Math.max(row.startS, row.endS + rz.deltaSteps));
+                        else previewStart = Math.max(1, Math.min(row.endS, row.startS + rz.deltaSteps));
+                      }
+                      const columnStart = Math.max(1, previewStart);
+                      const span = Math.max(previewEnd - previewStart + 1, 1);
+                      const stories = row.epic.userStories ?? [];
+                      const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+                      const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                      const isInitiativeEmphasis =
+                        ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
+                      const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
+                      const isScheduledFilterEmphasis =
+                        ganttScheduledFilterEmphasis != null && epicIsScheduledOnGantt(row.epic);
+                      const emphasizeFlash =
+                        isInitiativeEmphasis || isEpicEmphasis || isScheduledFilterEmphasis;
+                      const emphasizeTick = isEpicEmphasis
+                        ? ganttEpicEmphasis!.tick
+                        : isInitiativeEmphasis
+                          ? ganttEmphasis!.tick
+                          : isScheduledFilterEmphasis
+                            ? ganttScheduledFilterEmphasis!.tick
+                            : 0;
+                      const resizeEdgeClass =
+                        "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                      return (
+                        <div
+                          key={`year-epic-${row.epic.id}`}
+                          ref={(node) => {
+                            if (node) barElsRef.current.set(row.epic.id, node);
+                            else barElsRef.current.delete(row.epic.id);
+                          }}
+                          className={cn("relative min-w-0 rounded-lg pt-0.5 pb-1", rz ? "z-0 opacity-70" : "z-20")}
+                          style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
+                        >
+                          <EpicPlanTimelineBar
+                            id={row.epic.id}
+                            title={row.epic.title}
+                            icon={row.epic.icon}
+                            hideIcon
+                            compact
+                            color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
+                            progressPercent={completionPercent}
+                            progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                            isResizing={Boolean(rz)}
+                            emphasizeFlash={emphasizeFlash}
+                            emphasizeTick={emphasizeTick}
+                            showProgress={showRoadmapProgress}
+                            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
+                            onClick={() => onOpenEpic(row.epic.id)}
+                          />
+                          {onResizeEpicPlanRange ? (
+                            <>
+                              <div
+                                role="slider"
+                                aria-label="Resize epic start (sprint step)"
+                                title="Drag to change epic start sprint"
+                                className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                                onPointerDown={(e) => {
+                                  e.stopPropagation();
+                                  handleEpicResizePointerDown(row.epic.id, "left", e);
+                                }}
+                              />
+                              <div
+                                role="slider"
+                                aria-label="Resize epic end (sprint step)"
+                                title="Drag to change epic end sprint"
+                                className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                                onPointerDown={(e) => {
+                                  e.stopPropagation();
+                                  handleEpicResizePointerDown(row.epic.id, "right", e);
+                                }}
+                              />
+                            </>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              </div>
+            </div>
+          </div>
+        )
+  );
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
@@ -3416,32 +3690,6 @@ export function TimelineGrid({
                 Portfolio Capacity
               </span>
             </button>
-          </div>
-        </div>
-      ) : null}
-      {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-        <div className={cn("relative mb-2 w-full overflow-hidden", hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]")}>
-          <div className="relative z-[1] grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
-          {visibleQuarterHeaders.map((quarter) => (
-            <button
-              key={quarter.label}
-              type="button"
-              onClick={() => {
-                setFocusedMonth(null);
-                onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
-              }}
-              className={cn(
-                "flex w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-white/80 px-3 py-2.5 text-center text-[15px] font-semibold tracking-[0.02em] shadow-sm ring-1 ring-slate-200/30 transition duration-200",
-                focusedQuarterLabel === quarter.label
-                  ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
-                  : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
-              )}
-              style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
-            >
-              <QuarterYearProgressIcon quarterLabel={quarter.label} />
-              <span>{focusedQuarter ? quarter.label : `Quarter ${quarter.label.replace("Q", "")}`}</span>
-            </button>
-          ))}
           </div>
         </div>
       ) : null}
@@ -4217,94 +4465,6 @@ export function TimelineGrid({
                 </div>
               </div>
             </div>
-          ) : !focusedQuarter && quarterViewTab === "gantt" ? (
-            <div
-              className={cn(
-                "relative mb-4 w-full overflow-hidden",
-                hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
-              )}
-            >
-              <GanttTodayMarker
-                leftPercent={roadmapLaneTodayLeft}
-                showBadge={false}
-                badgePlacement="above"
-                prioritizeLabel
-                showLine={false}
-              />
-              <div className="grid min-w-0 grid-cols-4 gap-2">
-              {QUARTERS.map((quarter) => (
-                <section
-                  key={quarter.label}
-                  className={cn(
-                    "space-y-1 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-1.5 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
-                    quarterPanelTone[quarter.label] ?? "bg-slate-50/60 ring-slate-200",
-                  )}
-                >
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {quarter.months.map((month) => (
-                      <div key={month} className="space-y-1.5">
-                        <button
-                          type="button"
-                          className={cn(
-                            "flex w-full items-center justify-center gap-1.5 rounded-xl border py-1.5 text-center text-[15px] font-bold tracking-tight ring-1 ring-black/[0.04] transition hover:-translate-y-px",
-                            monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
-                          )}
-                          onClick={() => {
-                            if (isPostDragClickSuppressed()) return;
-                            setFocusedMonth(month);
-                            onMonthPlanTabChange?.("epic-gantt");
-                          }}
-                        >
-                          {MONTHS[month - 1]}
-                        </button>
-                        {showYearSprintChips ? (
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <SprintPlanDropButton
-                              month={month}
-                              lane={1}
-                              title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 1))}
-                              onClick={() => {
-                                if (isPostDragClickSuppressed()) return;
-                                setFocusedMonth(month);
-                                onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
-                              }}
-                              className="flex h-5 items-center justify-center rounded-lg border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
-                            >
-                              <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
-                                <span className="text-[11px] font-medium">S</span>
-                                <span className="text-[10px] font-medium tabular-nums">
-                                  {globalSprintFromMonthLane(month, 1)}
-                                </span>
-                              </span>
-                            </SprintPlanDropButton>
-                            <SprintPlanDropButton
-                              month={month}
-                              lane={2}
-                              title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
-                              onClick={() => {
-                                if (isPostDragClickSuppressed()) return;
-                                setFocusedMonth(month);
-                                onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
-                              }}
-                              className="flex h-5 items-center justify-center rounded-lg border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
-                            >
-                              <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
-                                <span className="text-[11px] font-medium">S</span>
-                                <span className="text-[10px] font-medium tabular-nums">
-                                  {globalSprintFromMonthLane(month, 2)}
-                                </span>
-                              </span>
-                            </SprintPlanDropButton>
-                          </div>
-                        ) : null}
-                        <MonthDropCell month={month} />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
-              </div>
-            </div>
           ) : null}
         </>
       )}
@@ -4333,7 +4493,7 @@ export function TimelineGrid({
           <MonthAnalytics
             initiatives={initiatives}
             month={focusedQuarter.months[0]}
-            periodMonths={focusedQuarter.months}
+            periodMonths={[...focusedQuarter.months]}
             periodLabel={focusedQuarter.label}
             planYear={currentYear}
             onOpenEpic={onOpenEpic}
@@ -4532,204 +4692,134 @@ export function TimelineGrid({
               </div>
             }
           />
-        ) : roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
-          focusedQuarter && quarterViewTab === "gantt" ? null : !focusedQuarter ? (
-            <YearRoadmapEmptyStripedLane
-              currentYear={currentYear}
-              roadmapLaneTodayLeft={roadmapLaneTodayLeft}
-              columnCount={ganttLaneColumnCount}
-              variant="initiatives"
-            />
-          ) : (
-            <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
-              No initiatives with planned epics to display on the roadmap.
-            </p>
-          )
-        ) : yearRoadmapEpics.length === 0 && roadmapBarMode === "epics" ? (
-          focusedQuarter && quarterViewTab === "gantt" ? null : !focusedQuarter ? (
-            <YearRoadmapEmptyStripedLane
-              currentYear={currentYear}
-              roadmapLaneTodayLeft={roadmapLaneTodayLeft}
-              columnCount={ganttLaneColumnCount}
-              variant="epics"
-            />
-          ) : (
-            <p className="bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
-              Create an initiative, then drag its epics onto the timeline. You can also stretch or shorten a scheduled bar
-              by dragging its ends to match your start and due dates.
-            </p>
-          )
-        ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (
-          <div
-            className={cn(
-              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
-              roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
-            )}
-          >
-            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
-            <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
+        ) : isFullYearGanttLayout ? (
+          <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div
+              className={cn(
+                yearRoadmapHScroll &&
+                  "min-h-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
+              )}
+            >
               <div
-                id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
-                className="relative z-10 min-h-0 flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                className={cn("flex min-h-0 flex-col gap-2", yearRoadmapHScroll && "w-max min-w-full")}
+                style={
+                  yearRoadmapHScroll
+                    ? { minWidth: yearRoadmapGanttMinWidthPx(ganttLaneColumnCount) }
+                    : undefined
+                }
               >
-              {yearRoadmapInitiativeRows.map((group, idx) => (
-                <div
-                  key={`year-init-row-${group.timelineRow}`}
-                  className={cn(
-                    "relative min-w-0 z-10 py-0.5",
-                    idx < yearRoadmapInitiativeRows.length - 1 && "border-b border-slate-200/50",
-                  )}
-                  data-gantt-lane-index={idx}
-                  data-gantt-timeline-row={group.timelineRow}
-                >
-                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
-                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
-                    {group.items.map((row) => {
-                      const columnStart = Math.max(1, row.startS);
-                      const span = Math.max(row.endS - row.startS + 1, 1);
-                      const stories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
-                      const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
-                      const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
-                      return (
-                        <div
-                          key={`year-init-${row.initiative.id}`}
-                          className="relative min-w-0 rounded-lg pt-0.5 pb-2 z-20"
-                          style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
-                        >
-                          <InitiativeTimelineBar
-                            id={row.initiative.id}
-                            title={row.initiative.title}
-                            icon={row.initiative.icon}
-                            color={row.initiative.color}
-                            progressPercent={completionPercent}
-                            progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
-                            showProgress={showRoadmapProgress}
-                            onClick={() => onOpenInitiative(row.initiative.id)}
-                          />
-                        </div>
-                      );
-                    })}
+                <div className={cn("relative w-full", !yearRoadmapHScroll && "overflow-hidden")}>
+                  <div className="relative z-[1] grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
+                    {visibleQuarterHeaders.map((quarter) => (
+                      <button
+                        key={quarter.label}
+                        type="button"
+                        onClick={() => {
+                          setFocusedMonth(null);
+                          onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
+                        }}
+                        className={cn(
+                          "flex w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-white/80 px-3 py-2.5 text-center text-[15px] font-semibold tracking-[0.02em] shadow-sm ring-1 ring-slate-200/30 transition duration-200",
+                          focusedQuarterLabel === quarter.label
+                            ? quarterTone[quarter.label]?.active ?? "border-primary/30 bg-primary/10 text-primary"
+                            : quarterTone[quarter.label]?.idle ?? "border-border/40 bg-muted text-muted-foreground",
+                        )}
+                        style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
+                      >
+                        <QuarterYearProgressIcon quarterLabel={quarter.label} />
+                        <span>{focusedQuarter ? quarter.label : `Quarter ${quarter.label.replace("Q", "")}`}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
+                <div className={cn("relative mb-0 w-full", !yearRoadmapHScroll && "overflow-hidden")}>
+                  <GanttTodayMarker
+                    leftPercent={roadmapLaneTodayLeft}
+                    showBadge={false}
+                    badgePlacement="above"
+                    prioritizeLabel
+                    showLine={false}
+                  />
+                  <div className="grid min-w-0 grid-cols-4 gap-2">
+                    {QUARTERS.map((quarter) => (
+                      <section
+                        key={quarter.label}
+                        className={cn(
+                          "space-y-1 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2.5 pt-1.5 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
+                          quarterPanelTone[quarter.label] ?? "bg-slate-50/60 ring-slate-200",
+                        )}
+                      >
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {quarter.months.map((month) => (
+                            <div key={month} className="space-y-1.5">
+                              <button
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-center justify-center gap-1.5 rounded-xl border py-1.5 text-center text-[15px] font-bold tracking-tight ring-1 ring-black/[0.04] transition hover:-translate-y-px",
+                                  monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                                )}
+                                onClick={() => {
+                                  if (isPostDragClickSuppressed()) return;
+                                  setFocusedMonth(month);
+                                  onMonthPlanTabChange?.("epic-gantt");
+                                }}
+                              >
+                                {MONTHS[month - 1]}
+                              </button>
+                              {showYearSprintChips ? (
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <SprintPlanDropButton
+                                    month={month}
+                                    lane={1}
+                                    title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 1))}
+                                    onClick={() => {
+                                      if (isPostDragClickSuppressed()) return;
+                                      setFocusedMonth(month);
+                                      onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 1), null);
+                                    }}
+                                    className="flex h-5 items-center justify-center rounded-lg border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
+                                  >
+                                    <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
+                                      <span className="text-[11px] font-medium">S</span>
+                                      <span className="text-[10px] font-medium tabular-nums">
+                                        {globalSprintFromMonthLane(month, 1)}
+                                      </span>
+                                    </span>
+                                  </SprintPlanDropButton>
+                                  <SprintPlanDropButton
+                                    month={month}
+                                    lane={2}
+                                    title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, 2))}
+                                    onClick={() => {
+                                      if (isPostDragClickSuppressed()) return;
+                                      setFocusedMonth(month);
+                                      onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, 2), null);
+                                    }}
+                                    className="flex h-5 items-center justify-center rounded-lg border border-white/70 bg-white/65 px-0.5 py-0 text-center ring-1 ring-slate-200/55 backdrop-blur-[1.5px] transition hover:-translate-y-px hover:bg-white/85 active:scale-[0.99]"
+                                  >
+                                    <span className="inline-flex items-baseline gap-[1px] leading-none text-slate-800">
+                                      <span className="text-[11px] font-medium">S</span>
+                                      <span className="text-[10px] font-medium tabular-nums">
+                                        {globalSprintFromMonthLane(month, 2)}
+                                      </span>
+                                    </span>
+                                  </SprintPlanDropButton>
+                                </div>
+                              ) : null}
+                              <MonthDropCell month={month} />
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </div>
+                {fullYearRoadmapGanttTracks}
               </div>
             </div>
           </div>
         ) : (
-          <div
-            className={cn(
-              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
-              roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
-            )}
-          >
-            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
-            <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-x-hidden">
-              <div
-                id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
-                className="relative z-10 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-              {yearRoadmapEpicRows.map((group, idx) => (
-                <div
-                  key={`year-epic-row-${group.timelineRow}`}
-                  className={cn(
-                    "relative min-w-0 z-10 py-0.5",
-                    idx < yearRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
-                  )}
-                  data-gantt-lane-index={idx}
-                  data-gantt-timeline-row={group.timelineRow}
-                >
-                  <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
-                  <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
-                    {group.items.map((row) => {
-                      const rz = epicResizePreview?.epicId === row.epic.id ? epicResizePreview : null;
-                      let previewStart = row.startS;
-                      let previewEnd = row.endS;
-                      if (rz) {
-                        if (rz.side === "right") previewEnd = Math.min(24, Math.max(row.startS, row.endS + rz.deltaSteps));
-                        else previewStart = Math.max(1, Math.min(row.endS, row.startS + rz.deltaSteps));
-                      }
-                      const columnStart = Math.max(1, previewStart);
-                      const span = Math.max(previewEnd - previewStart + 1, 1);
-                      const stories = row.epic.userStories ?? [];
-                      const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
-                      const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
-                      const isInitiativeEmphasis =
-                        ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
-                      const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
-                      const isScheduledFilterEmphasis =
-                        ganttScheduledFilterEmphasis != null && epicIsScheduledOnGantt(row.epic);
-                      const emphasizeFlash =
-                        isInitiativeEmphasis || isEpicEmphasis || isScheduledFilterEmphasis;
-                      const emphasizeTick = isEpicEmphasis
-                        ? ganttEpicEmphasis!.tick
-                        : isInitiativeEmphasis
-                          ? ganttEmphasis!.tick
-                          : isScheduledFilterEmphasis
-                            ? ganttScheduledFilterEmphasis!.tick
-                            : 0;
-                      const resizeEdgeClass =
-                        "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
-                      return (
-                        <div
-                          key={`year-epic-${row.epic.id}`}
-                          ref={(node) => {
-                            if (node) barElsRef.current.set(row.epic.id, node);
-                            else barElsRef.current.delete(row.epic.id);
-                          }}
-                          className={cn("relative min-w-0 rounded-lg pt-0.5 pb-1", rz ? "z-0 opacity-70" : "z-20")}
-                          style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
-                        >
-                          <EpicPlanTimelineBar
-                            id={row.epic.id}
-                            title={row.epic.title}
-                            icon={row.epic.icon}
-                            hideIcon
-                            compact
-                            color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
-                            progressPercent={completionPercent}
-                            progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
-                            isResizing={Boolean(rz)}
-                            emphasizeFlash={emphasizeFlash}
-                            emphasizeTick={emphasizeTick}
-                            showProgress={showRoadmapProgress}
-                            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
-                            onClick={() => onOpenEpic(row.epic.id)}
-                          />
-                          {onResizeEpicPlanRange ? (
-                            <>
-                              <div
-                                role="slider"
-                                aria-label="Resize epic start (sprint step)"
-                                title="Drag to change epic start sprint"
-                                className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  handleEpicResizePointerDown(row.epic.id, "left", e);
-                                }}
-                              />
-                              <div
-                                role="slider"
-                                aria-label="Resize epic end (sprint step)"
-                                title="Drag to change epic end sprint"
-                                className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  handleEpicResizePointerDown(row.epic.id, "right", e);
-                                }}
-                              />
-                            </>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-              </div>
-            </div>
-          </div>
+          fullYearRoadmapGanttTracks
         )}
       </div>
       {estEpicsPanelOpen ? (
