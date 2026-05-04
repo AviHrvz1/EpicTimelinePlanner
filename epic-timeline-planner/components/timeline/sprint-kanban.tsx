@@ -460,6 +460,9 @@ export function SprintKanbanBoard({
   const allAssigneesSelected =
     assigneeOptions.length > 0 && selectedAssignees.length === assigneeOptions.length;
 
+  /** Assignee avatar circles only when a single delivery team is selected (not “all teams”). */
+  const showAssigneePeopleFilter = filterEpicTeamId != null;
+
   const selectAllAssignees = useCallback(() => {
     setSelectedAssignees((prev) => {
       if (assigneeOptions.length === 0) return prev;
@@ -469,7 +472,7 @@ export function SprintKanbanBoard({
   }, [assigneeOptions]);
 
   const rows =
-    selectedAssignees.length === 0
+    !showAssigneePeopleFilter || selectedAssignees.length === 0
       ? allRows
       : allRows.filter((row) => selectedAssignees.includes(storyAssigneeLabel(row.story)));
 
@@ -507,7 +510,8 @@ export function SprintKanbanBoard({
     return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
   }, []);
 
-  const showToolbarRow = assigneeOptions.length > 0 || sprintToolbarEnd != null;
+  const showToolbarRow =
+    (showAssigneePeopleFilter && assigneeOptions.length > 0) || sprintToolbarEnd != null;
 
   return (
     <div className="relative flex w-full min-h-min flex-col gap-2">
@@ -554,11 +558,18 @@ export function SprintKanbanBoard({
         <div className="shrink-0 px-2.5 py-1">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
             <div
-              className={cn("flex min-w-0 flex-1 items-center py-0.5", assigneeOptions.length === 0 && "min-h-[2.25rem]")}
-              onMouseEnter={() => assigneeOptions.length > 0 && setAssigneeFilterExpanded(true)}
-              onMouseLeave={() => assigneeOptions.length > 0 && setAssigneeFilterExpanded(false)}
+              className={cn(
+                "flex min-w-0 flex-1 items-center py-0.5",
+                !(showAssigneePeopleFilter && assigneeOptions.length > 0) && "min-h-[2.25rem]",
+              )}
+              onMouseEnter={() =>
+                showAssigneePeopleFilter && assigneeOptions.length > 0 && setAssigneeFilterExpanded(true)
+              }
+              onMouseLeave={() =>
+                showAssigneePeopleFilter && assigneeOptions.length > 0 && setAssigneeFilterExpanded(false)
+              }
             >
-              {assigneeOptions.length > 0 ? (
+              {showAssigneePeopleFilter && assigneeOptions.length > 0 ? (
                 <>
                   <button
                     type="button"

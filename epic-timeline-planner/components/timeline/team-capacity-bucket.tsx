@@ -7,6 +7,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
+import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { cn } from "@/lib/utils";
 
@@ -17,8 +18,11 @@ export const CAPACITY_DAYS_INPUT_NO_SPIN =
 export const CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS =
   "pointer-events-none absolute left-1/2 top-0 z-[320] w-56 max-w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-white px-2.5 py-2 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-slate-200/80 transition-opacity duration-150";
 
+const TEAM_CAP_HEADER_ICON_BTN_CLASS =
+  "inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300";
+
 export const rollupOverCapacityPill =
-  "inline-flex items-center gap-0.5 rounded-sm bg-rose-600 px-1 py-px text-[12px] leading-tight text-white";
+  "inline-flex items-center gap-0.5 rounded-sm border border-rose-400/80 bg-rose-200/95 px-1 py-px text-[12px] leading-tight text-rose-950 shadow-sm";
 
 /** White chip behind rollups when load is within capacity (pairs with {@link rollupOverCapacityPill}). */
 export const rollupNeutralPill =
@@ -71,7 +75,7 @@ export function RollupOverCapWarn({
       <button
         ref={btnRef}
         type="button"
-        className="-m-px rounded p-0.5 text-white outline-none hover:text-white/90 focus-visible:ring-1 focus-visible:ring-white/90"
+        className="-m-px rounded p-0.5 text-rose-800 outline-none hover:text-rose-950 focus-visible:ring-1 focus-visible:ring-rose-500/70"
         aria-label={ariaLabel}
         aria-describedby={open ? tooltipId : undefined}
         onPointerEnter={show}
@@ -253,6 +257,7 @@ export function TeamCapacityBucket({
   isPanelExpanded = false,
   onExpandPanel,
   onCollapsePanel,
+  reorderGrip = null,
 }: {
   team: (typeof MONTH_TEAM_COLUMNS)[number];
   /** e.g. "Team:" — shown before `team.label` (quarter capacity). */
@@ -283,6 +288,8 @@ export function TeamCapacityBucket({
   isPanelExpanded?: boolean;
   onExpandPanel?: () => void;
   onCollapsePanel?: () => void;
+  /** Column reorder handle (month / quarter capacity boards). */
+  reorderGrip?: ReactNode;
 }) {
   const assignedTotal = cards.reduce((sum, c) => sum + c.loadDays, 0);
   const sumChildStoryEstimates = cards.reduce((sum, c) => sum + c.childStoryEstimateDays, 0);
@@ -302,12 +309,9 @@ export function TeamCapacityBucket({
   const markerPct = Math.max(0, Math.min(100, gaugeScaleMax > 0 ? (capacity / gaugeScaleMax) * 100 : 0));
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
   const gradientKey = team.id.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const thermometerOverCapacity = estSumOverCapacity || childSumOverCapacity;
-  const fluidStops = thermometerOverCapacity
-    ? { top: "#fb7185", mid: "#ef4444", bot: "#b91c1c" }
-    : utilization >= 85
-      ? { top: "#fbbf24", mid: "#f59e0b", bot: "#b45309" }
-      : { top: "#22d3ee", mid: "#14b8a6", bot: "#0f766e" };
+  const estUtilPct = capacity > 0 ? (sumOriginalEstimates / capacity) * 100 : 0;
+  const stressPct = Math.max(utilization, childUtilizationPct, estUtilPct);
+  const fluidStops = capacityGaugeFluidStops(capacity > 0 ? stressPct / 100 : 0);
   const bucketFill =
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
   const trackGradId = `tcap-track-${gradientKey}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
@@ -321,6 +325,9 @@ export function TeamCapacityBucket({
     ? "max-h-[min(72vh,66rem)]"
     : "max-h-[36rem]";
 
+  const hasHeaderToolbar =
+    Boolean(reorderGrip) || Boolean(panelExpandable && onExpandPanel && onCollapsePanel);
+
   return (
     <section
       className={cn(
@@ -328,15 +335,9 @@ export function TeamCapacityBucket({
       )}
     >
       <div className="mb-2 flex flex-col gap-2 pr-0.5">
-        <div className="relative flex min-h-8 min-w-0 items-center justify-center">
-          <p
-            className={cn(
-              "flex min-h-8 min-w-0 items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800",
-              panelExpandable && onExpandPanel && onCollapsePanel
-                ? "max-w-[calc(100%-2.75rem)]"
-                : "max-w-full",
-            )}
-          >
+        <div className="relative grid min-h-8 w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-x-1">
+          <div className="min-w-0 justify-self-start" aria-hidden />
+          <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800">
             <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
             <span className="min-w-0 truncate">
               {teamLabelPrefix ? (
@@ -348,31 +349,36 @@ export function TeamCapacityBucket({
               )}
             </span>
           </p>
-          {panelExpandable && onExpandPanel && onCollapsePanel ? (
-            <div className="absolute right-0 top-1/2 z-10 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
-              {isPanelExpanded ? (
-                <button
-                  type="button"
-                  onClick={onCollapsePanel}
-                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
-                  aria-label="Show all team buckets"
-                  title="Show all teams"
-                >
-                  <Minimize2 className="size-3" aria-hidden />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onExpandPanel}
-                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
-                  aria-label="Expand this team bucket to full width"
-                  title="Expand bucket"
-                >
-                  <Maximize2 className="size-3" aria-hidden />
-                </button>
-              )}
-            </div>
-          ) : null}
+          <div className="relative min-h-8 min-w-0 justify-self-stretch self-center">
+            {hasHeaderToolbar ? (
+              <div className="absolute right-0 top-1/2 z-10 flex items-center gap-1 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                {reorderGrip}
+                {panelExpandable && onExpandPanel && onCollapsePanel ? (
+                  isPanelExpanded ? (
+                    <button
+                      type="button"
+                      onClick={onCollapsePanel}
+                      className={TEAM_CAP_HEADER_ICON_BTN_CLASS}
+                      aria-label="Show all team buckets"
+                      title="Show all teams"
+                    >
+                      <Minimize2 className="size-3" aria-hidden />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onExpandPanel}
+                      className={TEAM_CAP_HEADER_ICON_BTN_CLASS}
+                      aria-label="Expand this team bucket to full width"
+                      title="Expand bucket"
+                    >
+                      <Maximize2 className="size-3" aria-hidden />
+                    </button>
+                  )
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
           <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
@@ -401,7 +407,7 @@ export function TeamCapacityBucket({
               >
                 <span
                   className={cn(
-                    "whitespace-nowrap",
+                    "whitespace-nowrap px-1.5 py-0.5",
                     childSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
@@ -419,18 +425,18 @@ export function TeamCapacityBucket({
                   ) : null}
                   Σ Child{" "}
                   <span
-                    className={cn("tabular-nums", childSumOverCapacity ? "text-white" : "text-slate-800")}
+                    className={cn("tabular-nums", childSumOverCapacity ? "text-rose-950" : "text-slate-800")}
                   >
                     {Math.round(sumChildStoryEstimates)}
                   </span>
-                  <span className={cn("ml-1", childSumOverCapacity && "text-white")}>Days</span>
+                  <span className={cn("ml-1", childSumOverCapacity && "text-rose-950")}>Days</span>
                 </span>
                 <span className="shrink-0 text-slate-300" aria-hidden>
                   ·
                 </span>
                 <span
                   className={cn(
-                    "whitespace-nowrap",
+                    "whitespace-nowrap px-1.5 py-0.5",
                     estSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
@@ -447,10 +453,10 @@ export function TeamCapacityBucket({
                     </RollupOverCapWarn>
                   ) : null}
                   Σ Est{" "}
-                  <span className={cn("tabular-nums", estSumOverCapacity ? "text-white" : "text-slate-800")}>
+                  <span className={cn("tabular-nums", estSumOverCapacity ? "text-rose-950" : "text-slate-800")}>
                     {Math.round(sumOriginalEstimates)}
                   </span>
-                  <span className={cn("ml-1", estSumOverCapacity && "text-white")}>Days</span>
+                  <span className={cn("ml-1", estSumOverCapacity && "text-rose-950")}>Days</span>
                 </span>
               </div>
             </div>
@@ -546,9 +552,14 @@ export function TeamCapacityBucket({
                   <stop offset="100%" stopColor="#eef2f7" />
                 </linearGradient>
                 <linearGradient id={fluidGradId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={fluidStops.top} />
-                  <stop offset="52%" stopColor={fluidStops.mid} />
-                  <stop offset="100%" stopColor={fluidStops.bot} />
+                  <stop offset="0%" stopColor={fluidStops.top} stopOpacity="1" />
+                  <stop offset="42%" stopColor={fluidStops.mid} stopOpacity="0.98" />
+                  <stop offset="100%" stopColor={fluidStops.bot} stopOpacity="1" />
+                </linearGradient>
+                <linearGradient id={`${fluidGradId}-sheen`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
+                  <stop offset="38%" stopColor="#ffffff" stopOpacity="0" />
+                  <stop offset="100%" stopColor="#0f172a" stopOpacity="0.07" />
                 </linearGradient>
               </defs>
               <rect x="28" y="8" width="28" height="274" rx="14" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
@@ -574,7 +585,16 @@ export function TeamCapacityBucket({
                 height={(gaugeFillPct / 100) * 242}
                 rx="6"
                 fill={`url(#${fluidGradId})`}
-                opacity="0.95"
+                opacity="0.97"
+              />
+              <rect
+                x="36"
+                y={258 - (gaugeFillPct / 100) * 242}
+                width="12"
+                height={(gaugeFillPct / 100) * 242}
+                rx="6"
+                fill={`url(#${fluidGradId}-sheen)`}
+                pointerEvents="none"
               />
             </svg>
           </div>

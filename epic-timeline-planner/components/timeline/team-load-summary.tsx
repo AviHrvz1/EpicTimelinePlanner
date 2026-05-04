@@ -3,6 +3,7 @@
 import { AlertTriangle, Thermometer } from "lucide-react";
 import { type ReactNode } from "react";
 
+import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { cn } from "@/lib/utils";
 
 export function TeamLoadSummary({
@@ -21,11 +22,8 @@ export function TeamLoadSummary({
   const overCapacity = totalAssigned > totalCapacity;
   const utilization = totalCapacity > 0 ? (totalAssigned / totalCapacity) * 100 : totalAssigned > 0 ? 200 : 0;
   const thermometerPct = Math.max(0, Math.min(100, utilization));
-  const fluidStops = overCapacity
-    ? { top: "#fb7185", mid: "#ef4444", bot: "#b91c1c" }
-    : utilization >= 85
-      ? { top: "#fbbf24", mid: "#f59e0b", bot: "#b45309" }
-      : { top: "#22d3ee", mid: "#14b8a6", bot: "#0f766e" };
+  const stressRatio = totalCapacity > 0 ? totalAssigned / totalCapacity : 0;
+  const fluidStops = capacityGaugeFluidStops(stressRatio);
   const statusLabel = overCapacity
     ? "Over capacity"
     : utilization >= 100
@@ -86,9 +84,14 @@ export function TeamLoadSummary({
                 <stop offset="100%" stopColor="#eef2f7" />
               </linearGradient>
               <linearGradient id={fluidId} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor={fluidStops.top} />
-                <stop offset="52%" stopColor={fluidStops.mid} />
-                <stop offset="100%" stopColor={fluidStops.bot} />
+                <stop offset="0%" stopColor={fluidStops.top} stopOpacity="1" />
+                <stop offset="45%" stopColor={fluidStops.mid} stopOpacity="0.98" />
+                <stop offset="100%" stopColor={fluidStops.bot} stopOpacity="1" />
+              </linearGradient>
+              <linearGradient id={`${fluidId}-sheen`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
+                <stop offset="40%" stopColor="#ffffff" stopOpacity="0" />
+                <stop offset="100%" stopColor="#0f172a" stopOpacity="0.06" />
               </linearGradient>
             </defs>
             <rect x="4" y="8" width="312" height="20" rx="10" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.25" />
@@ -114,7 +117,15 @@ export function TeamLoadSummary({
               height="10"
               rx="5"
               fill={`url(#${fluidId})`}
-              opacity="0.95"
+              opacity="0.97"
+            />
+            <rect
+              x={innerLeft}
+              y="13"
+              width={Math.max(0, fillW)}
+              height="10"
+              rx="5"
+              fill={`url(#${fluidId}-sheen)`}
             />
           </svg>
           <p className="text-right text-[11px] font-semibold tabular-nums leading-none text-slate-600 sm:text-[12px]">

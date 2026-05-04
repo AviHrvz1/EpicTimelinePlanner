@@ -1,19 +1,104 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { GripVertical } from "lucide-react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
-import { quarterTeamCapacityBucketDropId } from "@/lib/epic-dnd-ids";
-import { monthTeamCapacityBoardKey, type MonthTeamCapacityBoard } from "@/lib/month-team-capacity";
+import {
+  quarterTeamCapacityBucketDropId,
+  quarterTeamCapacityColumnDragId,
+  quarterTeamCapacityColumnDropId,
+} from "@/lib/epic-dnd-ids";
+import {
+  monthTeamCapacityBoardKey,
+  orderedMonthTeamCapacityTeams,
+  type MonthTeamCapacityBoard,
+} from "@/lib/month-team-capacity";
 import {
   MONTH_TEAM_COLUMNS,
+  MONTH_TEAM_IDS,
   orderedEpicsForTeamInQuarterCapacity,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
 import { type InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const Q_CAP_COL_GRIP_CLASS =
+  "inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300";
+
+function QuarterTeamCapacityColumnChrome({
+  year,
+  quarterLabel,
+  teamId,
+  reorderEnabled,
+  children,
+}: {
+  year: number;
+  quarterLabel: string;
+  teamId: string;
+  reorderEnabled: boolean;
+  children: (reorderGrip: ReactNode) => ReactNode;
+}) {
+  const dropId = quarterTeamCapacityColumnDropId(year, quarterLabel, teamId);
+  const dragId = quarterTeamCapacityColumnDragId(year, quarterLabel, teamId);
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dropId, disabled: !reorderEnabled });
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
+    id: dragId,
+    disabled: !reorderEnabled,
+  });
+
+  const setColumnRef = (el: HTMLDivElement | null) => {
+    setDropRef(el);
+    setDragRef(el);
+  };
+
+  const columnStyle =
+    reorderEnabled && (transform != null || isDragging)
+      ? {
+          transform: transform
+            ? `${CSS.Transform.toString(transform)}${isDragging ? " scale(1.015)" : ""}`
+            : isDragging
+              ? "scale(1.015)"
+              : undefined,
+          zIndex: isDragging ? 80 : undefined,
+          boxShadow: isDragging
+            ? "0 20px 40px -14px rgb(15 23 42 / 0.28), 0 0 0 1px rgb(15 23 42 / 0.06)"
+            : undefined,
+          transition: isDragging ? undefined : "box-shadow 180ms ease",
+        }
+      : undefined;
+
+  const reorderGrip = reorderEnabled ? (
+    <button
+      type="button"
+      className={cn(Q_CAP_COL_GRIP_CLASS, "cursor-grab active:cursor-grabbing", isDragging && "cursor-grabbing")}
+      aria-label="Reorder team column"
+      title="Drag to reorder column"
+      {...listeners}
+      {...attributes}
+    >
+      <GripVertical className="size-3" strokeWidth={2} aria-hidden />
+    </button>
+  ) : null;
+
+  return (
+    <div
+      ref={setColumnRef}
+      className={cn(
+        "relative w-full min-w-0 rounded-xl",
+        reorderEnabled && isOver && !isDragging && "ring-2 ring-dashed ring-indigo-400/45",
+        isDragging && "rounded-xl ring-1 ring-slate-300/80",
+      )}
+      style={columnStyle}
+    >
+      {children(reorderGrip)}
+    </div>
+  );
+}
 
 function quarterFromMonth(month: number): string {
   if (month <= 3) return "Q1";
@@ -84,10 +169,23 @@ export function QuarterTeamCapacityBoard({
   const gaugeScaleMax = 60 * quarterMonths.length;
   const capacityInputMax = 200 * quarterMonths.length;
 
-  const visibleTeams =
-    teamFilterIds.length > 0
-      ? MONTH_TEAM_COLUMNS.filter((team) => teamFilterIds.includes(team.id))
-      : MONTH_TEAM_COLUMNS;
+  const scopeColumnOrder = useMemo(() => {
+    for (const m of quarterMonths) {
+      const ord = monthTeamCapacityByKey[monthTeamCapacityBoardKey(year, m)]?.columnOrder;
+      if (ord?.length) return ord;
+    }
+    return undefined;
+  }, [year, quarterMonths, monthTeamCapacityByKey]);
+
+  const visibleTeamIds =
+    teamFilterIds.length > 0 ? MONTH_TEAM_IDS.filter((id) => teamFilterIds.includes(id)) : [...MONTH_TEAM_IDS];
+  const orderedTeamIds = orderedMonthTeamCapacityTeams({
+    columnOrder: scopeColumnOrder,
+    visibleTeamIds,
+  });
+  const visibleTeams = orderedTeamIds
+    .map((id) => MONTH_TEAM_COLUMNS.find((t) => t.id === id))
+    .filter((t): t is (typeof MONTH_TEAM_COLUMNS)[number] => Boolean(t));
 
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   useEffect(() => {
@@ -157,6 +255,7 @@ export function QuarterTeamCapacityBoard({
               };
           });
           const capacity = Number(teamQuarterCapacity.get(team.id) ?? 0);
+          const reorderAllowed = expandedTeamId == null && visibleTeams.length >= 2;
           return (
             <div
               key={team.id}
@@ -165,23 +264,33 @@ export function QuarterTeamCapacityBoard({
                 expandedTeamId === team.id && "min-w-0 basis-full max-w-none",
               )}
             >
-              <TeamCapacityBucket
-                team={team}
-                teamLabelPrefix="Team:"
-                cards={cards}
-                capacity={capacity}
-                onCapacityChange={(days) => onCapacityChange(team.id, days)}
-                onOpenEpic={onOpenEpic}
-                onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
-                onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
-                dropId={quarterTeamCapacityBucketDropId(year, quarterLabel, team.id)}
-                gaugeScaleMax={gaugeScaleMax}
-                capacityInputMax={capacityInputMax}
-                panelExpandable={visibleTeams.length > 1}
-                isPanelExpanded={expandedTeamId === team.id}
-                onExpandPanel={() => setExpandedTeamId(team.id)}
-                onCollapsePanel={() => setExpandedTeamId(null)}
-              />
+              <QuarterTeamCapacityColumnChrome
+                year={year}
+                quarterLabel={quarterLabel}
+                teamId={team.id}
+                reorderEnabled={reorderAllowed}
+              >
+                {(reorderGrip) => (
+                  <TeamCapacityBucket
+                    team={team}
+                    teamLabelPrefix="Team:"
+                    cards={cards}
+                    capacity={capacity}
+                    onCapacityChange={(days) => onCapacityChange(team.id, days)}
+                    onOpenEpic={onOpenEpic}
+                    onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+                    onEpicOriginalEstimateChange={onEpicOriginalEstimateChange}
+                    dropId={quarterTeamCapacityBucketDropId(year, quarterLabel, team.id)}
+                    gaugeScaleMax={gaugeScaleMax}
+                    capacityInputMax={capacityInputMax}
+                    panelExpandable={visibleTeams.length > 1}
+                    isPanelExpanded={expandedTeamId === team.id}
+                    onExpandPanel={() => setExpandedTeamId(team.id)}
+                    onCollapsePanel={() => setExpandedTeamId(null)}
+                    reorderGrip={reorderGrip}
+                  />
+                )}
+              </QuarterTeamCapacityColumnChrome>
             </div>
           );
         })}

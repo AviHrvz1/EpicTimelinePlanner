@@ -34,7 +34,11 @@ import {
   parseMonthEpicKanbanDropId,
   parseMonthTeamSlotDropId,
   parseMonthTeamCapacityBucketDropId,
+  parseMonthTeamCapacityColumnDragId,
+  parseMonthTeamCapacityColumnDropId,
   parseQuarterTeamCapacityBucketDropId,
+  parseQuarterTeamCapacityColumnDragId,
+  parseQuarterTeamCapacityColumnDropId,
   parseSprintCapacityBucketDropId,
   parseSprintCapacityColumnDragId,
   parseSprintCapacityColumnDropId,
@@ -86,7 +90,9 @@ import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import {
   MONTH_TEAM_CAPACITY_STORAGE_KEY,
   emptyMonthTeamCapacityBoard,
+  fullMonthTeamCapacityColumnOrder,
   monthTeamCapacityBoardKey,
+  reorderMonthTeamCapacityColumnOrder,
   sanitizeMonthTeamCapacityBoard,
   type MonthTeamCapacityBoard,
 } from "@/lib/month-team-capacity";
@@ -153,6 +159,8 @@ const DND_DROP_INSPECTOR_SUPPRESS_BRANCHES = new Set<string>([
   "story:kanban-reorder-noop",
   "story:capacity",
   "capcol:reorder",
+  "m-cap-col:reorder",
+  "q-cap-col:reorder",
 ]);
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -2679,6 +2687,78 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           return { ...prev, [boardKey]: { ...cur, columnOrder: nextPeople } };
         });
         record("capcol:reorder", { boardKey, from: capColDrag.member, to: capColDrop.member });
+        return;
+      }
+
+      const mCapColDrag = parseMonthTeamCapacityColumnDragId(activeId);
+      const mCapColDrop = parseMonthTeamCapacityColumnDropId(overId);
+      if (mCapColDrag && mCapColDrop) {
+        step("month-capacity-column-reorder");
+        if (mCapColDrag.year !== selectedYear || mCapColDrop.year !== selectedYear) {
+          record("m-cap-col:wrong-year", { mCapColDrag, mCapColDrop, selectedYear });
+          return;
+        }
+        if (mCapColDrag.month !== mCapColDrop.month || mCapColDrag.year !== mCapColDrop.year) {
+          record("m-cap-col:cross-target", { mCapColDrag, mCapColDrop });
+          return;
+        }
+        const boardKey = monthTeamCapacityBoardKey(mCapColDrag.year, mCapColDrag.month);
+        setMonthTeamCapacityByKey((prev) => {
+          const cur = prev[boardKey] ?? emptyMonthTeamCapacityBoard();
+          const fullOrder = fullMonthTeamCapacityColumnOrder(cur.columnOrder);
+          const nextOrder = reorderMonthTeamCapacityColumnOrder(fullOrder, mCapColDrag.teamId, mCapColDrop.teamId);
+          if (!nextOrder) return prev;
+          return { ...prev, [boardKey]: { ...cur, columnOrder: nextOrder } };
+        });
+        record("m-cap-col:reorder", { boardKey, from: mCapColDrag.teamId, to: mCapColDrop.teamId });
+        return;
+      }
+
+      const qCapColDrag = parseQuarterTeamCapacityColumnDragId(activeId);
+      const qCapColDrop = parseQuarterTeamCapacityColumnDropId(overId);
+      if (qCapColDrag && qCapColDrop) {
+        step("quarter-capacity-column-reorder");
+        if (qCapColDrag.year !== selectedYear || qCapColDrop.year !== selectedYear) {
+          record("q-cap-col:wrong-year", { qCapColDrag, qCapColDrop, selectedYear });
+          return;
+        }
+        if (qCapColDrag.quarterLabel !== qCapColDrop.quarterLabel) {
+          record("q-cap-col:cross-quarter", { qCapColDrag, qCapColDrop });
+          return;
+        }
+        const quarterMonths: readonly number[] | undefined =
+          qCapColDrag.quarterLabel === ALL_QUARTERS_TEAM_CAPACITY_LABEL
+            ? ALL_YEAR_PLAN_MONTHS
+            : QUARTERS.find((item) => item.label === qCapColDrag.quarterLabel)?.months;
+        if (!quarterMonths?.length) {
+          record("q-cap-col:bad-label", { quarterLabel: qCapColDrag.quarterLabel });
+          return;
+        }
+        setMonthTeamCapacityByKey((prev) => {
+          let scopeColumnOrder: string[] | undefined;
+          for (const m of quarterMonths) {
+            const ord = prev[monthTeamCapacityBoardKey(qCapColDrag.year, m)]?.columnOrder;
+            if (ord?.length) {
+              scopeColumnOrder = ord;
+              break;
+            }
+          }
+          const fullOrder = fullMonthTeamCapacityColumnOrder(scopeColumnOrder);
+          const nextOrder = reorderMonthTeamCapacityColumnOrder(fullOrder, qCapColDrag.teamId, qCapColDrop.teamId);
+          if (!nextOrder) return prev;
+          let next = { ...prev };
+          for (const m of quarterMonths) {
+            const bk = monthTeamCapacityBoardKey(qCapColDrag.year, m);
+            const cur = next[bk] ?? emptyMonthTeamCapacityBoard();
+            next = { ...next, [bk]: { ...cur, columnOrder: nextOrder } };
+          }
+          return next;
+        });
+        record("q-cap-col:reorder", {
+          quarterLabel: qCapColDrag.quarterLabel,
+          from: qCapColDrag.teamId,
+          to: qCapColDrop.teamId,
+        });
         return;
       }
 

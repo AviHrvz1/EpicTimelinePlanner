@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { GripVertical, Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -307,11 +308,8 @@ function CapacityBucket({
     0,
     Math.min(100, sprintGaugeMaxDays > 0 ? (capacity / sprintGaugeMaxDays) * 100 : 0),
   );
-  const fluidStops = overCapacity
-    ? { top: "#fb7185", mid: "#ef4444", bot: "#b91c1c" }
-    : utilization >= 85
-      ? { top: "#fbbf24", mid: "#f59e0b", bot: "#b45309" }
-      : { top: "#22d3ee", mid: "#14b8a6", bot: "#0f766e" };
+  const stressRatio = capacity > 0 ? sumStoryEstimates / capacity : 0;
+  const fluidStops = capacityGaugeFluidStops(stressRatio);
   const bucketFill =
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
   const sprintRollupInfoId = `sprint-cap-rollup-info-${svgKey}`;
@@ -430,11 +428,11 @@ function CapacityBucket({
                   ) : null}
                   Σ Stories{" "}
                   <span
-                    className={cn("tabular-nums", storiesOverCapacity ? "text-white" : "text-slate-800")}
+                    className={cn("tabular-nums", storiesOverCapacity ? "text-rose-950" : "text-slate-800")}
                   >
                     {assignedTotal.toFixed(1)}
                   </span>
-                  <span className={cn("ml-1", storiesOverCapacity && "text-white")}>Days</span>
+                  <span className={cn("ml-1", storiesOverCapacity && "text-rose-950")}>Days</span>
                 </span>
               </div>
             </div>
@@ -537,9 +535,14 @@ function CapacityBucket({
                   <stop offset="100%" stopColor="#eef2f7" />
                 </linearGradient>
                 <linearGradient id={`fluid-${svgKey}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={fluidStops.top} />
-                  <stop offset="52%" stopColor={fluidStops.mid} />
-                  <stop offset="100%" stopColor={fluidStops.bot} />
+                  <stop offset="0%" stopColor={fluidStops.top} stopOpacity="1" />
+                  <stop offset="42%" stopColor={fluidStops.mid} stopOpacity="0.98" />
+                  <stop offset="100%" stopColor={fluidStops.bot} stopOpacity="1" />
+                </linearGradient>
+                <linearGradient id={`fluid-sheen-${svgKey}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
+                  <stop offset="38%" stopColor="#ffffff" stopOpacity="0" />
+                  <stop offset="100%" stopColor="#0f172a" stopOpacity="0.07" />
                 </linearGradient>
               </defs>
               <rect x="28" y="8" width="28" height="274" rx="14" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
@@ -565,7 +568,16 @@ function CapacityBucket({
                 height={(thermometerPct / 100) * 242}
                 rx="6"
                 fill={`url(#fluid-${svgKey})`}
-                opacity="0.95"
+                opacity="0.97"
+              />
+              <rect
+                x="36"
+                y={258 - (thermometerPct / 100) * 242}
+                width="12"
+                height={(thermometerPct / 100) * 242}
+                rx="6"
+                fill={`url(#fluid-sheen-${svgKey})`}
+                pointerEvents="none"
               />
             </svg>
           </div>

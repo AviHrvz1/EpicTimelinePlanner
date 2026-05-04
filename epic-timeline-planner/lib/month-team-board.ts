@@ -55,6 +55,36 @@ export function monthTeamLabelForId(teamId: string | null | undefined): string |
   return MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? null;
 }
 
+/** Pill for Gantt epic bars: delivery team assignment (or unassigned / custom slug). */
+export function epicDeliveryTeamAssignmentChip(teamId: string | null | undefined): {
+  label: string;
+  className: string;
+} {
+  const known = monthTeamLabelForId(teamId);
+  if (known) {
+    const team = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId);
+    const pill =
+      team?.priorityBadgeClass ?? "border-slate-200 bg-slate-100 text-slate-800 ring-slate-300/55";
+    return {
+      label: known,
+      className: `inline-flex max-w-[7rem] shrink-0 truncate rounded px-1.5 py-px text-[10px] font-semibold leading-tight ring-1 ${pill}`,
+    };
+  }
+  const raw = teamId?.trim();
+  if (raw) {
+    return {
+      label: raw,
+      className:
+        "inline-flex max-w-[7rem] shrink-0 truncate rounded border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-semibold leading-tight text-slate-700 ring-1 ring-slate-200/80",
+    };
+  }
+  return {
+    label: "Unassigned",
+    className:
+      "inline-flex max-w-[6rem] shrink-0 truncate rounded border border-slate-200 bg-slate-100 px-1.5 py-px text-[10px] font-semibold leading-tight text-slate-500 ring-1 ring-slate-200/80",
+  };
+}
+
 export type MonthTeamBoardPersisted = {
   /** Per team: epic ids in pull order (index 0 = highest priority). */
   queues: Record<string, string[]>;

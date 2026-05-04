@@ -34,6 +34,7 @@ import {
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
+import { CapacityPlanTeamCombobox } from "@/components/timeline/capacity-plan-team-combobox";
 import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
 import { QuarterTeamCapacityBoard } from "@/components/timeline/quarter-team-capacity";
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
@@ -51,13 +52,18 @@ import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTER
 import {
   MONTH_TEAM_COLUMNS,
   MONTH_TEAM_IDS,
+  epicDeliveryTeamAssignmentChip,
   isKnownEpicTeamId,
   monthTeamBoardStorageKey,
   monthTeamLabelForId,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem, type UserStoryItem } from "@/lib/types";
-import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
+import {
+  capacityPlanTeamCatalogFromDirectory,
+  normalizeWorkspaceUserTeam,
+  teamLabelForWorkspaceUser,
+} from "@/lib/workspace-users";
 import {
   clampYearSprint,
   firstGlobalSprintForMonth,
@@ -693,6 +699,7 @@ function EpicGanttLaneRow({
           emphasizeFlash={emphasize}
           emphasizeTick={emphasizeTick}
           showProgress={showProgress}
+          teamAssignmentChip={epicDeliveryTeamAssignmentChip(epic.team)}
           onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
           onClick={() => onOpenEpic(epic.id)}
         />
@@ -1178,13 +1185,13 @@ export function TimelineGrid({
     () => QUARTERS.find((quarter) => quarter.label === capacityQuarterFilterLabel) ?? null,
     [capacityQuarterFilterLabel],
   );
-  const capacityTeamOptions = useMemo(
-    () =>
-      MONTH_TEAM_COLUMNS.filter((team) =>
-        team.label.toLowerCase().includes(capacityTeamSearch.trim().toLowerCase()),
-      ),
-    [capacityTeamSearch],
-  );
+  useEffect(() => {
+    const allowed = new Set(capacityPlanTeamCatalogFromDirectory(workspaceDirectoryUsers).map((t) => t.id));
+    setCapacityTeamFilterIds((prev) => {
+      const next = prev.filter((id) => allowed.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [workspaceDirectoryUsers]);
 
   useEffect(() => {
     function onDocMouseDown(event: MouseEvent) {
@@ -2994,6 +3001,7 @@ export function TimelineGrid({
                             emphasizeFlash={emphasizeFlash}
                             emphasizeTick={emphasizeTick}
                             showProgress={showRoadmapProgress}
+                            teamAssignmentChip={epicDeliveryTeamAssignmentChip(row.epic.team)}
                             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                             onClick={() => onOpenEpic(row.epic.id)}
                           />
@@ -4197,79 +4205,17 @@ export function TimelineGrid({
                   }
                   teamFilterIds={capacityTeamFilterIds}
                   teamSelectorSlot={
-                    <div ref={capacityTeamFilterRef} className="relative inline-flex min-w-[13rem] max-w-[22rem] align-middle">
-                      <div
-                        className="flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800"
-                        onClick={() => setCapacityTeamMenuOpen(true)}
-                      >
-                        {capacityTeamFilterIds.map((id) => {
-                          const label = MONTH_TEAM_COLUMNS.find((team) => team.id === id)?.label ?? id;
-                          return (
-                            <button
-                              key={id}
-                              type="button"
-                              className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setCapacityTeamFilterIds((prev) => prev.filter((teamId) => teamId !== id));
-                              }}
-                            >
-                              {label}
-                              <X className="size-3" />
-                            </button>
-                          );
-                        })}
-                        <input
-                          value={capacityTeamSearch}
-                          onChange={(event) => {
-                            setCapacityTeamSearch(event.target.value);
-                            setCapacityTeamMenuOpen(true);
-                          }}
-                          onFocus={() => setCapacityTeamMenuOpen(true)}
-                          placeholder={capacityTeamFilterIds.length === 0 ? "All teams" : "Search teams..."}
-                          className="h-6 min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-[12px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                          aria-label="Filter month capacity by team"
-                        />
-                      </div>
-                      {capacityTeamMenuOpen ? (
-                        <div className="absolute left-0 top-[calc(100%+0.25rem)] z-40 max-h-52 w-full overflow-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg">
-                          <button
-                            type="button"
-                            className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
-                            onClick={() => {
-                              setCapacityTeamFilterIds([]);
-                              setCapacityTeamSearch("");
-                              setCapacityTeamMenuOpen(false);
-                            }}
-                          >
-                            <span>All teams</span>
-                            {capacityTeamFilterIds.length === 0 ? <Check className="size-3.5" /> : null}
-                          </button>
-                          {capacityTeamOptions.map((team) => {
-                            const selected = capacityTeamFilterIds.includes(team.id);
-                            return (
-                              <button
-                                key={team.id}
-                                type="button"
-                                className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
-                                onClick={() => {
-                                  setCapacityTeamFilterIds((prev) =>
-                                    prev.includes(team.id) ? prev.filter((id) => id !== team.id) : [...prev, team.id],
-                                  );
-                                  setCapacityTeamSearch("");
-                                }}
-                              >
-                                <span>{team.label}</span>
-                                {selected ? <Check className="size-3.5 text-sky-700" /> : null}
-                              </button>
-                            );
-                          })}
-                          {capacityTeamOptions.length === 0 ? (
-                            <p className="px-2 py-1.5 text-[12px] text-slate-500">No matching teams</p>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
+                    <CapacityPlanTeamCombobox
+                      directoryUsers={workspaceDirectoryUsers}
+                      selectedIds={capacityTeamFilterIds}
+                      onSelectedIdsChange={setCapacityTeamFilterIds}
+                      search={capacityTeamSearch}
+                      onSearchChange={setCapacityTeamSearch}
+                      menuOpen={capacityTeamMenuOpen}
+                      onMenuOpenChange={setCapacityTeamMenuOpen}
+                      comboboxRef={capacityTeamFilterRef}
+                      ariaLabel="Filter month capacity by team (teams from user directory)"
+                    />
                   }
                 />
               </div>
@@ -4682,6 +4628,7 @@ export function TimelineGrid({
                                     emphasizeFlash={emphasizeFlash}
                                     emphasizeTick={emphasizeTick}
                                     showProgress={showRoadmapProgress}
+                                    teamAssignmentChip={epicDeliveryTeamAssignmentChip(row.epic.team)}
                                     onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                     onClick={() => onOpenEpic(row.epic.id)}
                                   />
@@ -4784,79 +4731,17 @@ export function TimelineGrid({
             }
             teamFilterIds={capacityTeamFilterIds}
             teamSelectorSlot={
-              <div ref={capacityTeamFilterRef} className="relative inline-flex min-w-[13rem] max-w-[22rem] align-middle">
-                <div
-                  className="flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800"
-                  onClick={() => setCapacityTeamMenuOpen(true)}
-                >
-                  {capacityTeamFilterIds.map((id) => {
-                    const label = MONTH_TEAM_COLUMNS.find((team) => team.id === id)?.label ?? id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setCapacityTeamFilterIds((prev) => prev.filter((teamId) => teamId !== id));
-                        }}
-                      >
-                        {label}
-                        <X className="size-3" />
-                      </button>
-                    );
-                  })}
-                  <input
-                    value={capacityTeamSearch}
-                    onChange={(event) => {
-                      setCapacityTeamSearch(event.target.value);
-                      setCapacityTeamMenuOpen(true);
-                    }}
-                    onFocus={() => setCapacityTeamMenuOpen(true)}
-                    placeholder={capacityTeamFilterIds.length === 0 ? "All teams" : "Search teams..."}
-                    className="h-6 min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-[12px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                    aria-label="Filter quarter capacity by team"
-                  />
-                </div>
-                {capacityTeamMenuOpen ? (
-                  <div className="absolute left-0 top-[calc(100%+0.25rem)] z-40 max-h-52 w-full overflow-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
-                      onClick={() => {
-                        setCapacityTeamFilterIds([]);
-                        setCapacityTeamSearch("");
-                        setCapacityTeamMenuOpen(false);
-                      }}
-                    >
-                      <span>All teams</span>
-                      {capacityTeamFilterIds.length === 0 ? <Check className="size-3.5" /> : null}
-                    </button>
-                    {capacityTeamOptions.map((team) => {
-                      const selected = capacityTeamFilterIds.includes(team.id);
-                      return (
-                        <button
-                          key={team.id}
-                          type="button"
-                          className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
-                          onClick={() => {
-                            setCapacityTeamFilterIds((prev) =>
-                              prev.includes(team.id) ? prev.filter((id) => id !== team.id) : [...prev, team.id],
-                            );
-                            setCapacityTeamSearch("");
-                          }}
-                        >
-                          <span>{team.label}</span>
-                          {selected ? <Check className="size-3.5 text-sky-700" /> : null}
-                        </button>
-                      );
-                    })}
-                    {capacityTeamOptions.length === 0 ? (
-                      <p className="px-2 py-1.5 text-[12px] text-slate-500">No matching teams</p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              <CapacityPlanTeamCombobox
+                directoryUsers={workspaceDirectoryUsers}
+                selectedIds={capacityTeamFilterIds}
+                onSelectedIdsChange={setCapacityTeamFilterIds}
+                search={capacityTeamSearch}
+                onSearchChange={setCapacityTeamSearch}
+                menuOpen={capacityTeamMenuOpen}
+                onMenuOpenChange={setCapacityTeamMenuOpen}
+                comboboxRef={capacityTeamFilterRef}
+                ariaLabel="Filter year capacity by team (teams from user directory)"
+              />
             }
           />
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "capacity" ? (
@@ -4877,79 +4762,17 @@ export function TimelineGrid({
             }
             teamFilterIds={capacityTeamFilterIds}
             teamSelectorSlot={
-              <div ref={capacityTeamFilterRef} className="relative inline-flex min-w-[13rem] max-w-[22rem] align-middle">
-                <div
-                  className="flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800"
-                  onClick={() => setCapacityTeamMenuOpen(true)}
-                >
-                  {capacityTeamFilterIds.map((id) => {
-                    const label = MONTH_TEAM_COLUMNS.find((team) => team.id === id)?.label ?? id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setCapacityTeamFilterIds((prev) => prev.filter((teamId) => teamId !== id));
-                        }}
-                      >
-                        {label}
-                        <X className="size-3" />
-                      </button>
-                    );
-                  })}
-                  <input
-                    value={capacityTeamSearch}
-                    onChange={(event) => {
-                      setCapacityTeamSearch(event.target.value);
-                      setCapacityTeamMenuOpen(true);
-                    }}
-                    onFocus={() => setCapacityTeamMenuOpen(true)}
-                    placeholder={capacityTeamFilterIds.length === 0 ? "All teams" : "Search teams..."}
-                    className="h-6 min-w-[6rem] flex-1 border-0 bg-transparent p-0 text-[12px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                    aria-label="Filter quarter capacity by team"
-                  />
-                </div>
-                {capacityTeamMenuOpen ? (
-                  <div className="absolute left-0 top-[calc(100%+0.25rem)] z-40 max-h-52 w-full overflow-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
-                      onClick={() => {
-                        setCapacityTeamFilterIds([]);
-                        setCapacityTeamSearch("");
-                        setCapacityTeamMenuOpen(false);
-                      }}
-                    >
-                      <span>All teams</span>
-                      {capacityTeamFilterIds.length === 0 ? <Check className="size-3.5" /> : null}
-                    </button>
-                    {capacityTeamOptions.map((team) => {
-                      const selected = capacityTeamFilterIds.includes(team.id);
-                      return (
-                        <button
-                          key={team.id}
-                          type="button"
-                          className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100"
-                          onClick={() => {
-                            setCapacityTeamFilterIds((prev) =>
-                              prev.includes(team.id) ? prev.filter((id) => id !== team.id) : [...prev, team.id],
-                            );
-                            setCapacityTeamSearch("");
-                          }}
-                        >
-                          <span>{team.label}</span>
-                          {selected ? <Check className="size-3.5 text-sky-700" /> : null}
-                        </button>
-                      );
-                    })}
-                    {capacityTeamOptions.length === 0 ? (
-                      <p className="px-2 py-1.5 text-[12px] text-slate-500">No matching teams</p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              <CapacityPlanTeamCombobox
+                directoryUsers={workspaceDirectoryUsers}
+                selectedIds={capacityTeamFilterIds}
+                onSelectedIdsChange={setCapacityTeamFilterIds}
+                search={capacityTeamSearch}
+                onSearchChange={setCapacityTeamSearch}
+                menuOpen={capacityTeamMenuOpen}
+                onMenuOpenChange={setCapacityTeamMenuOpen}
+                comboboxRef={capacityTeamFilterRef}
+                ariaLabel="Filter quarter capacity by team (teams from user directory)"
+              />
             }
           />
         ) : isFullYearGanttLayout ? (

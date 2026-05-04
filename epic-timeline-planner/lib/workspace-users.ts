@@ -49,4 +49,31 @@ export function teamLabelForWorkspaceUser(teamId: string): string {
   return humanizeWorkspaceUserTeamSlug(teamId);
 }
 
+/** Row shape from the Users directory API (team is the source of truth for capacity plan filters). */
+export type WorkspaceDirectoryTeamSource = { team: string };
+
+export type CapacityPlanTeamOption = { id: string; label: string };
+
+/**
+ * Teams for month / quarter capacity “Team load” filters: unique normalized `team` values from the user directory.
+ * If the directory is empty, falls back to the default delivery columns so the UI stays usable offline.
+ */
+export function capacityPlanTeamCatalogFromDirectory(
+  users: readonly WorkspaceDirectoryTeamSource[],
+): CapacityPlanTeamOption[] {
+  const byId = new Map<string, string>();
+  for (const u of users) {
+    const id = normalizeWorkspaceUserTeam(u.team);
+    if (!id) continue;
+    const label = teamLabelForWorkspaceUser(id);
+    if (!byId.has(id)) byId.set(id, label);
+  }
+  if (byId.size === 0) {
+    return MONTH_TEAM_COLUMNS.map((t) => ({ id: t.id, label: t.label }));
+  }
+  return [...byId.entries()]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+}
+
 export { MONTH_TEAM_IDS };

@@ -327,3 +327,91 @@ export function parseQuarterTeamCapacityBucketDropId(
   if (!quarterLabel || !teamId) return null;
   return { year, quarterLabel, teamId };
 }
+
+/** Month team capacity column reorder (must not use `month-capacity:` prefix — that is reserved for epic bucket drops). */
+const M_CAP_COL_DRAG = "m-cap-col-drag:";
+const M_CAP_COL_DROP = "m-cap-col-drop:";
+const Q_CAP_COL_DRAG = "q-cap-col-drag:";
+const Q_CAP_COL_DROP = "q-cap-col-drop:";
+
+export function monthTeamCapacityColumnDragId(year: number, month: number, teamId: string): string {
+  return `${M_CAP_COL_DRAG}${year}:${month}:${encodeURIComponent(teamId)}`;
+}
+
+export function parseMonthTeamCapacityColumnDragId(
+  id: string,
+): { year: number; month: number; teamId: string } | null {
+  if (!id.startsWith(M_CAP_COL_DRAG)) return null;
+  const rest = id.slice(M_CAP_COL_DRAG.length);
+  const parts = rest.split(":");
+  if (parts.length !== 3) return null;
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const teamId = decodeURIComponent(parts[2] ?? "");
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  if (!teamId) return null;
+  return { year, month, teamId };
+}
+
+export function monthTeamCapacityColumnDropId(year: number, month: number, teamId: string): string {
+  return `${M_CAP_COL_DROP}${year}:${month}:${encodeURIComponent(teamId)}`;
+}
+
+export function parseMonthTeamCapacityColumnDropId(
+  id: string,
+): { year: number; month: number; teamId: string } | null {
+  if (!id.startsWith(M_CAP_COL_DROP)) return null;
+  const rest = id.slice(M_CAP_COL_DROP.length);
+  const parts = rest.split(":");
+  if (parts.length !== 3) return null;
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const teamId = decodeURIComponent(parts[2] ?? "");
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  if (!teamId) return null;
+  return { year, month, teamId };
+}
+
+export function quarterTeamCapacityColumnDragId(year: number, quarterLabel: string, teamId: string): string {
+  return `${Q_CAP_COL_DRAG}${year}:${encodeURIComponent(quarterLabel)}:${encodeURIComponent(teamId)}`;
+}
+
+export function parseQuarterTeamCapacityColumnDragId(
+  id: string,
+): { year: number; quarterLabel: string; teamId: string } | null {
+  if (!id.startsWith(Q_CAP_COL_DRAG)) return null;
+  const rest = id.slice(Q_CAP_COL_DRAG.length);
+  const yearEnd = rest.indexOf(":");
+  if (yearEnd <= 0) return null;
+  const year = Number(rest.slice(0, yearEnd));
+  if (!Number.isFinite(year)) return null;
+  const afterYear = rest.slice(yearEnd + 1);
+  const lastColon = afterYear.lastIndexOf(":");
+  if (lastColon <= 0) return null;
+  const quarterLabel = decodeURIComponent(afterYear.slice(0, lastColon));
+  const teamId = decodeURIComponent(afterYear.slice(lastColon + 1));
+  if (!quarterLabel || !teamId) return null;
+  return { year, quarterLabel, teamId };
+}
+
+export function quarterTeamCapacityColumnDropId(year: number, quarterLabel: string, teamId: string): string {
+  return `${Q_CAP_COL_DROP}${year}:${encodeURIComponent(quarterLabel)}:${encodeURIComponent(teamId)}`;
+}
+
+export function parseQuarterTeamCapacityColumnDropId(
+  id: string,
+): { year: number; quarterLabel: string; teamId: string } | null {
+  if (!id.startsWith(Q_CAP_COL_DROP)) return null;
+  const rest = id.slice(Q_CAP_COL_DROP.length);
+  const yearEnd = rest.indexOf(":");
+  if (yearEnd <= 0) return null;
+  const year = Number(rest.slice(0, yearEnd));
+  if (!Number.isFinite(year)) return null;
+  const afterYear = rest.slice(yearEnd + 1);
+  const lastColon = afterYear.lastIndexOf(":");
+  if (lastColon <= 0) return null;
+  const quarterLabel = decodeURIComponent(afterYear.slice(0, lastColon));
+  const teamId = decodeURIComponent(afterYear.slice(lastColon + 1));
+  if (!quarterLabel || !teamId) return null;
+  return { year, quarterLabel, teamId };
+}

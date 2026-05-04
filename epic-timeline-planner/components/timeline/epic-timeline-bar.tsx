@@ -175,6 +175,8 @@ type EpicPlanTimelineBarProps = {
   showProgress?: boolean;
   /** Renders at the start of the progress row (below the epic title strip), not on the colored title row. */
   progressRowPrefix?: ReactNode;
+  /** Small pill after the title: delivery team assignment (Gantt middle panel). */
+  teamAssignmentChip?: { label: string; className: string } | null;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -194,6 +196,7 @@ export function EpicPlanTimelineBar({
   compact = false,
   showProgress = true,
   progressRowPrefix,
+  teamAssignmentChip = null,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const dragData = {
@@ -269,7 +272,7 @@ export function EpicPlanTimelineBar({
         ) : null}
         <span
           className={cn(
-            "relative z-10 flex min-w-0 flex-1 items-center gap-1 text-left antialiased",
+            "relative z-10 flex min-w-0 flex-1 items-center gap-1.5 text-left antialiased",
             compact ? "px-2" : "px-3",
             emphasizeFlash
               ? "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]"
@@ -279,7 +282,12 @@ export function EpicPlanTimelineBar({
           {!hideIcon ? (
             <EpicPlanBarIcon icon={icon} className="mr-0 text-[12px] [&_svg]:size-3.5 [&_svg]:text-white/95" />
           ) : null}
-          <span className="min-w-0 truncate">{title}</span>
+          <span className="min-w-0 flex-1 truncate">{title}</span>
+          {teamAssignmentChip ? (
+            <span className={teamAssignmentChip.className} title={teamAssignmentChip.label}>
+              {teamAssignmentChip.label}
+            </span>
+          ) : null}
         </span>
       </div>
       <div
