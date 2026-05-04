@@ -4277,7 +4277,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               </div>
               {!leftRailLockedClosed && (
                 <div
-                  className="group relative flex h-full min-h-0 w-3 shrink-0 cursor-col-resize items-center justify-center self-stretch"
+                  className="group relative flex h-full min-h-0 w-4 shrink-0 cursor-col-resize items-center justify-center self-stretch"
                   onMouseDown={(event) => {
                     event.preventDefault();
                     setIsResizingPanel(true);
@@ -4286,11 +4286,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   aria-orientation="vertical"
                   aria-label="Resize panel"
                 >
+                  {/* Separator line — always visible, centered */}
                   <div
-                    className="pointer-events-none h-[58%] min-h-[7.5rem] max-h-[34rem] w-1 shrink-0 rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-white/80 transition-[box-shadow] duration-200 group-hover:shadow-[0_1px_4px_rgba(15,23,42,0.12)]"
+                    className="pointer-events-none absolute inset-y-0 left-[35%] w-[2px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.07)] transition-all duration-150 group-hover:shadow-[0_0_0_1px_rgba(15,23,42,0.13)]"
                     aria-hidden
                   />
-                  <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+                  {/* Drag pill */}
+                  <div
+                    className="pointer-events-none relative z-10 -translate-x-[30%] flex h-10 w-[7px] flex-col items-center justify-center gap-[3px] rounded-full bg-white shadow-[0_1px_4px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/80 transition-all duration-150 group-hover:shadow-[0_2px_8px_rgba(15,23,42,0.16)] group-hover:ring-slate-300 group-active:bg-slate-50"
+                    aria-hidden
+                  >
+                    <span className="h-px w-[3px] rounded-full bg-slate-300" />
+                    <span className="h-px w-[3px] rounded-full bg-slate-300" />
+                    <span className="h-px w-[3px] rounded-full bg-slate-300" />
+                  </div>
                 </div>
               )}
               <div
