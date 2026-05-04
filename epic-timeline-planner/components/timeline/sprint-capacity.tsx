@@ -5,7 +5,6 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { GripVertical, Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { type CapacityLoadBasis } from "@/lib/capacity-load-basis";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -143,27 +142,9 @@ type CapacityStoryCardModel = {
   id: string;
   title: string;
   epicTitle: string;
-  epicId: string;
-  epicOriginalEstimateDays: number;
   estimatedDays: number;
   assigneeLabel: string;
 };
-
-function sprintStoryBucketRollups(cards: CapacityStoryCardModel[]) {
-  const sumStories = cards.reduce((s, c) => s + c.estimatedDays, 0);
-  const epicTotals = new Map<string, number>();
-  for (const c of cards) {
-    epicTotals.set(c.epicId, Math.max(0, c.epicOriginalEstimateDays));
-  }
-  let sumEpicEst = 0;
-  for (const v of epicTotals.values()) sumEpicEst += v;
-  return { sumStories, sumEpicEst };
-}
-
-function sprintBucketPrimaryLoad(cards: CapacityStoryCardModel[], loadBasis: CapacityLoadBasis) {
-  const { sumStories, sumEpicEst } = sprintStoryBucketRollups(cards);
-  return loadBasis === "child" ? sumStories : sumEpicEst;
-}
 
 type SprintCapacityBoardProps = {
   initiatives: InitiativeItem[];
@@ -179,8 +160,6 @@ type SprintCapacityBoardProps = {
   onOpenStory: (storyId: string) => void;
   teamSelectorSlot?: ReactNode;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
-  loadBasis?: CapacityLoadBasis;
-  onLoadBasisChange?: (basis: CapacityLoadBasis) => void;
 };
 
 function CapacityStoryCard({
@@ -283,7 +262,6 @@ function CapacityBucket({
   member,
   capacity,
   cards,
-  loadBasis,
   onCapacityChange,
   onEstimateChange,
   onUnscheduleStory,
@@ -301,7 +279,6 @@ function CapacityBucket({
   member: string;
   capacity: number;
   cards: CapacityStoryCardModel[];
-  loadBasis: CapacityLoadBasis;
   onCapacityChange: (days: number) => void;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
@@ -319,24 +296,24 @@ function CapacityBucket({
   const memberGradientKey = member.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const svgKey = `scap-${memberGradientKey}-${teamKey.replace(/[^a-zA-Z0-9]+/g, "-")}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
   const sprintGaugeMaxDays = 10;
-  const { sumStories, sumEpicEst } = sprintStoryBucketRollups(cards);
-  const primaryLoad = loadBasis === "child" ? sumStories : sumEpicEst;
-  const storiesOverCapacity = sumStories > capacity;
-  const estSumOverCapacity = sumEpicEst > capacity;
-  const fillPct = Math.max(0, Math.min(100, capacity > 0 ? (primaryLoad / capacity) * 100 : primaryLoad > 0 ? 100 : 0));
-  const utilization = capacity > 0 ? (primaryLoad / capacity) * 100 : primaryLoad > 0 ? 200 : 0;
+  const assignedTotal = cards.reduce((sum, c) => sum + c.estimatedDays, 0);
+  const storiesOverCapacity = assignedTotal > capacity;
+  const fillPct = Math.max(
+    0,
+    Math.min(100, capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 100 : 0),
+  );
+  const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
   const thermometerPct = Math.max(0, Math.min(100, utilization));
   const capacityMarkerPct = Math.max(
     0,
     Math.min(100, sprintGaugeMaxDays > 0 ? (capacity / sprintGaugeMaxDays) * 100 : 0),
   );
-  const stressRatio = capacity > 0 ? primaryLoad / capacity : 0;
+  const stressRatio = capacity > 0 ? assignedTotal / capacity : 0;
   const fluidStops = capacityGaugeFluidStops(stressRatio);
   const bucketFill =
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
   const sprintRollupInfoId = `sprint-cap-rollup-info-${svgKey}`;
   const sprintStoriesWarnId = `sprint-cap-stories-warn-${svgKey}`;
-  const sprintEpicEstWarnId = `sprint-cap-epic-est-warn-${svgKey}`;
   const memberTitle = capacityBucketToFilterLabel(member);
   const hasHeaderToolbar =
     Boolean(reorderGrip) || Boolean(panelExpandable && onExpandPanel && onCollapsePanel);
@@ -437,7 +414,7 @@ function CapacityBucket({
                 >
                   Σ Stories{" "}
                   <span className={cn("tabular-nums", storiesOverCapacity ? "text-rose-950" : "text-slate-800")}>
-                    {sumStories.toFixed(1)}
+                    {assignedTotal.toFixed(1)}
                   </span>
                   <span className={cn("ml-1", storiesOverCapacity && "text-rose-950")}>Days</span>
                   {storiesOverCapacity ? (
@@ -447,35 +424,8 @@ function CapacityBucket({
                     >
                       <span className="font-semibold text-rose-800">Over capacity</span>
                       <span className="mt-0.5 block text-slate-600">
-                        Σ Stories is {sumStories.toFixed(1)} Days but Capacity is {capacity} Days. Lower story
+                        Σ Stories is {assignedTotal.toFixed(1)} Days but Capacity is {capacity} Days. Lower story
                         estimates, raise Capacity, or move stories.
-                      </span>
-                    </RollupOverCapWarn>
-                  ) : null}
-                </span>
-                <span className="shrink-0 text-slate-300" aria-hidden>
-                  ·
-                </span>
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
-                    estSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
-                  )}
-                >
-                  Σ Est{" "}
-                  <span className={cn("tabular-nums", estSumOverCapacity ? "text-rose-950" : "text-slate-800")}>
-                    {sumEpicEst.toFixed(1)}
-                  </span>
-                  <span className={cn("ml-1", estSumOverCapacity && "text-rose-950")}>Days</span>
-                  {estSumOverCapacity ? (
-                    <RollupOverCapWarn
-                      tooltipId={sprintEpicEstWarnId}
-                      ariaLabel="Σ Est (epics) exceeds capacity — details"
-                    >
-                      <span className="font-semibold text-rose-800">Over capacity</span>
-                      <span className="mt-0.5 block text-slate-600">
-                        Σ Est counts each epic once ({sumEpicEst.toFixed(1)} Days) but Capacity is {capacity} Days.
-                        Lower epic Est days, raise Capacity, or move stories.
                       </span>
                     </RollupOverCapWarn>
                   ) : null}
@@ -505,15 +455,11 @@ function CapacityBucket({
                   sprint bucket.
                 </span>
                 <span className="mt-1 block">
-                  <strong className="text-slate-800">Σ Stories</strong> — sum of story <em>Est Days</em> in this bucket.
-                </span>
-                <span className="mt-1 block">
-                  <strong className="text-slate-800">Σ Est</strong> — each parent epic&apos;s <em>Est days</em> counted
-                  once (multiple stories from the same epic still add one epic estimate). Use the team toggle for which
-                  drives the gauge.
+                  <strong className="text-slate-800">Σ Stories</strong> — sum of story <em>Est Days</em> in this bucket;
+                  the gauge and team load use this total vs Capacity.
                 </span>
                 <span className="mt-1 block text-slate-600">
-                  Either figure turns red when it exceeds Capacity (Days).
+                  Σ Stories turns red when it exceeds Capacity (Days).
                 </span>
               </span>
             </span>
@@ -632,7 +578,7 @@ function CapacityBucket({
             </svg>
           </div>
           <div className="text-center text-[11px] font-semibold text-slate-600">
-            <p>{primaryLoad.toFixed(1)} Days</p>
+            <p>{assignedTotal.toFixed(1)} Days</p>
             <p>/ {capacity.toFixed(1)} Days</p>
           </div>
         </div>
@@ -654,8 +600,6 @@ export function SprintCapacityBoard({
   onOpenStory,
   teamSelectorSlot,
   workspaceDirectoryUsers = [],
-  loadBasis = "originalEstimate",
-  onLoadBasisChange,
 }: SprintCapacityBoardProps) {
   /** Same story rows as sprint Kanban for the selected delivery team (or all teams). */
   const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, selectedTeamId);
@@ -666,8 +610,6 @@ export function SprintCapacityBoard({
         id: row.story.id,
         title: row.story.title,
         epicTitle: row.epic.title,
-        epicId: row.epic.id,
-        epicOriginalEstimateDays: Math.max(0, Number(row.epic.originalEstimateDays ?? 0)),
         estimatedDays: Number(row.story.estimatedDays ?? 0),
         assigneeLabel: storyAssigneeDisplayLabel(row.story),
       } satisfies CapacityStoryCardModel,
@@ -772,7 +714,7 @@ export function SprintCapacityBoard({
     teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
     const assignedIds = capacityBoard.assignments[member] ?? [];
     const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
-    teamTotalAssigned += sprintBucketPrimaryLoad(cards, loadBasis);
+    teamTotalAssigned += cards.reduce((sum, card) => sum + card.estimatedDays, 0);
   }
 
   return (
@@ -783,8 +725,6 @@ export function SprintCapacityBoard({
         gradientKey={`sprint-${gradientKey}`}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
-        loadBasis={loadBasis}
-        onLoadBasisChange={onLoadBasisChange}
       />
       {assigneeFilterOptions.length > 0 && selectedTeamId != null ? (
         <div className="shrink-0 px-0.5 py-0.5">
@@ -882,7 +822,6 @@ export function SprintCapacityBoard({
                       member={member}
                       capacity={capacityBoard.capacities[member] ?? 6}
                       cards={cards}
-                      loadBasis={loadBasis}
                       onCapacityChange={(days) => onCapacityChange(member, days)}
                       onEstimateChange={onEstimateChange}
                       onUnscheduleStory={onUnscheduleStory}

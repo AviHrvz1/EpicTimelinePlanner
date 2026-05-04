@@ -4276,8 +4276,6 @@ export function TimelineGrid({
                   selectedTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}
-                  loadBasis={capacityLoadBasis}
-                  onLoadBasisChange={setCapacityLoadBasis}
                   columnReorderEnabled={sprintCapacityColumnReorderEnabled}
                   onCapacityChange={(member, days) => onSprintCapacityChange?.(member, days)}
                   onEstimateChange={(storyId, estimatedDays) =>
