@@ -6,6 +6,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
+import { type CapacityLoadBasis } from "@/lib/capacity-load-basis";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
 import {
   monthTeamCapacityBucketDropId,
@@ -146,6 +147,8 @@ type MonthTeamCapacityProps = {
   teamSelectorSlot?: ReactNode;
   /** When set, epic cards use the same queue order as the month team board. */
   monthTeamBoardPersisted?: MonthTeamBoardPersisted | null;
+  loadBasis?: CapacityLoadBasis;
+  onLoadBasisChange?: (basis: CapacityLoadBasis) => void;
 };
 
 export function MonthTeamCapacityBoard({
@@ -160,6 +163,8 @@ export function MonthTeamCapacityBoard({
   teamFilterIds = [],
   teamSelectorSlot,
   monthTeamBoardPersisted = null,
+  loadBasis = "originalEstimate",
+  onLoadBasisChange,
 }: MonthTeamCapacityProps) {
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
   const mergedColumns =
@@ -191,10 +196,10 @@ export function MonthTeamCapacityBoard({
       mergedColumns != null
         ? (mergedColumns.find((c) => c.team.id === team.id)?.cards ?? [])
         : rows.filter((row) => row.epic.team === team.id);
-    teamTotalAssigned += cardRows.reduce(
-      (sum, row) => sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0)),
-      0,
-    );
+    teamTotalAssigned += cardRows.reduce((sum, row) => {
+      if (loadBasis === "child") return sum + epicStoryEstimateDaysSum(row.epic);
+      return sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0));
+    }, 0);
   }
 
   return (
@@ -211,6 +216,8 @@ export function MonthTeamCapacityBoard({
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
+        loadBasis={loadBasis}
+        onLoadBasisChange={onLoadBasisChange}
       />
       <div className="flex flex-wrap gap-6">
         {visibleTeams.map((team) => {
@@ -269,6 +276,7 @@ export function MonthTeamCapacityBoard({
                     onExpandPanel={() => setExpandedTeamId(team.id)}
                     onCollapsePanel={() => setExpandedTeamId(null)}
                     reorderGrip={reorderGrip}
+                    loadBasis={loadBasis}
                   />
                 )}
               </MonthTeamCapacityColumnChrome>

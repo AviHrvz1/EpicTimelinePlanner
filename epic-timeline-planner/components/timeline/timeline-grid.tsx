@@ -46,6 +46,11 @@ import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { computeSprintKanbanSummaryStats } from "@/lib/sprint-plan";
 import { sprintStoryBoardEpicTeamFilter, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
+import {
+  CAPACITY_LOAD_BASIS_STORAGE_KEY,
+  parseCapacityLoadBasis,
+  type CapacityLoadBasis,
+} from "@/lib/capacity-load-basis";
 import { isEpicPlanDraggableId } from "@/lib/epic-dnd-ids";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTERS } from "@/lib/timeline";
@@ -1140,6 +1145,22 @@ export function TimelineGrid({
   const [capacityTeamFilterIds, setCapacityTeamFilterIds] = useState<string[]>([]);
   const [capacityTeamSearch, setCapacityTeamSearch] = useState("");
   const [capacityTeamMenuOpen, setCapacityTeamMenuOpen] = useState(false);
+  const [capacityLoadBasis, setCapacityLoadBasis] = useState<CapacityLoadBasis>("originalEstimate");
+  const skipCapacityLoadBasisPersist = useRef(true);
+  useEffect(() => {
+    setCapacityLoadBasis(parseCapacityLoadBasis(window.localStorage.getItem(CAPACITY_LOAD_BASIS_STORAGE_KEY)));
+  }, []);
+  useEffect(() => {
+    if (skipCapacityLoadBasisPersist.current) {
+      skipCapacityLoadBasisPersist.current = false;
+      return;
+    }
+    try {
+      window.localStorage.setItem(CAPACITY_LOAD_BASIS_STORAGE_KEY, capacityLoadBasis);
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [capacityLoadBasis]);
   const [showYearSprintChips, setShowYearSprintChips] = useState(false);
   /** When true, year or quarter roadmap Gantt uses fixed sprint column width (column threshold via ResizeObserver). */
   const [yearRoadmapHScroll, setYearRoadmapHScroll] = useState(false);
@@ -4203,6 +4224,8 @@ export function TimelineGrid({
                   onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
                     onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
                   }
+                  loadBasis={capacityLoadBasis}
+                  onLoadBasisChange={setCapacityLoadBasis}
                   teamFilterIds={capacityTeamFilterIds}
                   teamSelectorSlot={
                     <CapacityPlanTeamCombobox
@@ -4253,6 +4276,8 @@ export function TimelineGrid({
                   selectedTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}
+                  loadBasis={capacityLoadBasis}
+                  onLoadBasisChange={setCapacityLoadBasis}
                   columnReorderEnabled={sprintCapacityColumnReorderEnabled}
                   onCapacityChange={(member, days) => onSprintCapacityChange?.(member, days)}
                   onEstimateChange={(storyId, estimatedDays) =>
@@ -4729,6 +4754,8 @@ export function TimelineGrid({
             onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
               onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
             }
+            loadBasis={capacityLoadBasis}
+            onLoadBasisChange={setCapacityLoadBasis}
             teamFilterIds={capacityTeamFilterIds}
             teamSelectorSlot={
               <CapacityPlanTeamCombobox
@@ -4760,6 +4787,8 @@ export function TimelineGrid({
             onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
               onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
             }
+            loadBasis={capacityLoadBasis}
+            onLoadBasisChange={setCapacityLoadBasis}
             teamFilterIds={capacityTeamFilterIds}
             teamSelectorSlot={
               <CapacityPlanTeamCombobox

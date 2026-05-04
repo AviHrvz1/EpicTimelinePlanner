@@ -3,6 +3,7 @@
 import { AlertTriangle, Thermometer } from "lucide-react";
 import { type ReactNode } from "react";
 
+import { type CapacityLoadBasis } from "@/lib/capacity-load-basis";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { cn } from "@/lib/utils";
 
@@ -12,12 +13,18 @@ export function TeamLoadSummary({
   gradientKey,
   totalAssigned,
   totalCapacity,
+  loadBasis = "originalEstimate",
+  onLoadBasisChange,
 }: {
   teamLabel: string;
   teamLabelSlot?: ReactNode;
   gradientKey: string;
   totalAssigned: number;
   totalCapacity: number;
+  /** Which load figure drives this summary (matches per-bucket gauges). */
+  loadBasis?: CapacityLoadBasis;
+  /** When set, shows Est days / Σ Child toggle for capacity surfaces. */
+  onLoadBasisChange?: (basis: CapacityLoadBasis) => void;
 }) {
   const overCapacity = totalAssigned > totalCapacity;
   const utilization = totalCapacity > 0 ? (totalAssigned / totalCapacity) * 100 : totalAssigned > 0 ? 200 : 0;
@@ -134,18 +141,60 @@ export function TeamLoadSummary({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200/80 pt-3 text-[13px] font-semibold sm:text-[14px]">
-        <span className="tabular-nums text-slate-800">{totalAssigned.toFixed(1)}d planned</span>
-        <span className="text-slate-300/90">/</span>
-        <span className="tabular-nums text-slate-600">{totalCapacity.toFixed(1)}d available</span>
-        <span className="rounded-lg border border-slate-200/70 bg-white/80 px-2.5 py-0.5 text-[12px] font-bold tabular-nums text-slate-800 shadow-sm sm:text-[13px]">
-          {Math.round(utilization)}% utilized
-        </span>
-        <span className={cn("rounded-lg px-2.5 py-0.5 text-[12px] font-bold shadow-sm ring-1 sm:text-[13px]", statusClass)}>{statusLabel}</span>
-        {overCapacity ? (
-          <span className="inline-flex items-center gap-1 text-rose-600">
-            <AlertTriangle className="size-4 shrink-0" aria-hidden />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-slate-200/80 pt-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[13px] font-semibold sm:text-[14px]">
+          <span className="tabular-nums text-slate-800">{totalAssigned.toFixed(1)}d planned</span>
+          <span className="text-slate-300/90">/</span>
+          <span className="tabular-nums text-slate-600">{totalCapacity.toFixed(1)}d available</span>
+          <span className="rounded-lg border border-slate-200/70 bg-white/80 px-2.5 py-0.5 text-[12px] font-bold tabular-nums text-slate-800 shadow-sm sm:text-[13px]">
+            {Math.round(utilization)}% utilized
           </span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-lg px-2.5 py-0.5 text-[12px] font-bold shadow-sm ring-1 sm:text-[13px]",
+              statusClass,
+            )}
+          >
+            {statusLabel}
+            {overCapacity ? <AlertTriangle className="size-3.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden /> : null}
+          </span>
+        </div>
+        {onLoadBasisChange ? (
+          <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-right sm:max-w-[min(22rem,100%)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gauge &amp; totals</span>
+            <div
+              className="inline-flex shrink-0 rounded-lg border border-sky-200/90 bg-gradient-to-b from-sky-50 to-sky-100/90 p-0.5 shadow-sm ring-1 ring-sky-200/50"
+              role="group"
+              aria-label="Choose whether planned load uses epic Est days or Σ Child"
+            >
+              <button
+                type="button"
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/90 focus-visible:ring-offset-1",
+                  loadBasis === "originalEstimate"
+                    ? "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white shadow-md shadow-sky-600/25 ring-1 ring-white/30"
+                    : "text-sky-900/75 hover:bg-sky-200/90 hover:text-sky-950",
+                )}
+                aria-pressed={loadBasis === "originalEstimate"}
+                onClick={() => onLoadBasisChange("originalEstimate")}
+              >
+                Est days
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/90 focus-visible:ring-offset-1",
+                  loadBasis === "child"
+                    ? "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white shadow-md shadow-sky-600/25 ring-1 ring-white/30"
+                    : "text-sky-900/75 hover:bg-sky-200/90 hover:text-sky-950",
+                )}
+                aria-pressed={loadBasis === "child"}
+                onClick={() => onLoadBasisChange("child")}
+              >
+                Σ Child
+              </button>
+            </div>
+          </div>
         ) : null}
       </div>
     </section>

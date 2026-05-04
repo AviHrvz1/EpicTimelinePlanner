@@ -6,6 +6,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { TeamCapacityBucket } from "@/components/timeline/team-capacity-bucket";
+import { type CapacityLoadBasis } from "@/lib/capacity-load-basis";
 import { epicStoryEstimateDaysSum } from "@/lib/epic-estimates";
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import {
@@ -148,6 +149,8 @@ type QuarterTeamCapacityBoardProps = {
   teamSelectorSlot?: ReactNode;
   /** Per-month team board queues (same keys as month plan) for card ordering and auto-assign. */
   monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
+  loadBasis?: CapacityLoadBasis;
+  onLoadBasisChange?: (basis: CapacityLoadBasis) => void;
 };
 
 export function QuarterTeamCapacityBoard({
@@ -163,6 +166,8 @@ export function QuarterTeamCapacityBoard({
   teamFilterIds = [],
   teamSelectorSlot,
   monthTeamBoardByKey = {},
+  loadBasis = "originalEstimate",
+  onLoadBasisChange,
 }: QuarterTeamCapacityBoardProps) {
   const rows = collectQuarterEpics(initiatives, quarterMonths);
   const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
@@ -207,7 +212,10 @@ export function QuarterTeamCapacityBoard({
   for (const team of visibleTeams) {
     teamTotalCapacity += Number(teamQuarterCapacity.get(team.id) ?? 0);
     const cards = rows.filter((row) => row.epic.team === team.id);
-    teamTotalAssigned += cards.reduce((sum, row) => sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0)), 0);
+    teamTotalAssigned += cards.reduce((sum, row) => {
+      if (loadBasis === "child") return sum + epicStoryEstimateDaysSum(row.epic);
+      return sum + Math.max(0, Number(row.epic.originalEstimateDays ?? 0));
+    }, 0);
   }
 
   return (
@@ -224,6 +232,8 @@ export function QuarterTeamCapacityBoard({
         gradientKey={gradientKey}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
+        loadBasis={loadBasis}
+        onLoadBasisChange={onLoadBasisChange}
       />
       <div className="flex flex-wrap gap-6">
         {visibleTeams.map((team) => {
@@ -288,6 +298,7 @@ export function QuarterTeamCapacityBoard({
                     onExpandPanel={() => setExpandedTeamId(team.id)}
                     onCollapsePanel={() => setExpandedTeamId(null)}
                     reorderGrip={reorderGrip}
+                    loadBasis={loadBasis}
                   />
                 )}
               </QuarterTeamCapacityColumnChrome>

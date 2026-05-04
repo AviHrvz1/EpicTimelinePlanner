@@ -7,6 +7,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
+import { type CapacityLoadBasis } from "@/lib/capacity-load-basis";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { cn } from "@/lib/utils";
@@ -75,7 +76,7 @@ export function RollupOverCapWarn({
       <button
         ref={btnRef}
         type="button"
-        className="-m-px rounded p-0.5 text-rose-800 outline-none hover:text-rose-950 focus-visible:ring-1 focus-visible:ring-rose-500/70"
+        className="-m-px inline-flex shrink-0 items-center rounded p-0.5 align-middle text-rose-800 outline-none hover:text-rose-950 focus-visible:ring-1 focus-visible:ring-rose-500/70"
         aria-label={ariaLabel}
         aria-describedby={open ? tooltipId : undefined}
         onPointerEnter={show}
@@ -258,6 +259,8 @@ export function TeamCapacityBucket({
   onExpandPanel,
   onCollapsePanel,
   reorderGrip = null,
+  /** Drives gauge fill, load %, and “X / capacity” under the thermometer (Est days vs Σ Child). */
+  loadBasis = "originalEstimate",
 }: {
   team: (typeof MONTH_TEAM_COLUMNS)[number];
   /** e.g. "Team:" — shown before `team.label` (quarter capacity). */
@@ -290,27 +293,25 @@ export function TeamCapacityBucket({
   onCollapsePanel?: () => void;
   /** Column reorder handle (month / quarter capacity boards). */
   reorderGrip?: ReactNode;
+  loadBasis?: CapacityLoadBasis;
 }) {
-  const assignedTotal = cards.reduce((sum, c) => sum + c.loadDays, 0);
   const sumChildStoryEstimates = cards.reduce((sum, c) => sum + c.childStoryEstimateDays, 0);
   const sumOriginalEstimates = cards.reduce((sum, c) => sum + c.originalEstimateDays, 0);
+  const primaryLoad = loadBasis === "child" ? sumChildStoryEstimates : sumOriginalEstimates;
   const childSumOverCapacity = sumChildStoryEstimates > capacity;
   const estSumOverCapacity = sumOriginalEstimates > capacity;
-  const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
-  const fillPct = Math.max(0, Math.min(100, capacity > 0 ? (assignedTotal / capacity) * 100 : 0));
+  const utilization = capacity > 0 ? (primaryLoad / capacity) * 100 : primaryLoad > 0 ? 200 : 0;
+  const fillPct = Math.max(0, Math.min(100, capacity > 0 ? (primaryLoad / capacity) * 100 : 0));
   /**
-   * Fluid height = worst case of Σ Est or Σ Child vs team Capacity (not vs period max days).
+   * Fluid height vs team Capacity (not vs period max days).
    * Capped at 100% so e.g. 11d vs 1d capacity reads as a full bar, not 11/60 of the tube.
    */
-  const childUtilizationPct =
-    capacity > 0 ? (sumChildStoryEstimates / capacity) * 100 : sumChildStoryEstimates > 0 ? 200 : 0;
-  const gaugeFillPct = Math.max(0, Math.min(100, Math.max(utilization, childUtilizationPct)));
+  const gaugeFillPct = Math.max(0, Math.min(100, utilization));
   /** Dashed line: where this team’s Capacity sits on the period scale (days). */
   const markerPct = Math.max(0, Math.min(100, gaugeScaleMax > 0 ? (capacity / gaugeScaleMax) * 100 : 0));
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
   const gradientKey = team.id.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const estUtilPct = capacity > 0 ? (sumOriginalEstimates / capacity) * 100 : 0;
-  const stressPct = Math.max(utilization, childUtilizationPct, estUtilPct);
+  const stressPct = utilization;
   const fluidStops = capacityGaugeFluidStops(capacity > 0 ? stressPct / 100 : 0);
   const bucketFill =
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
@@ -407,10 +408,17 @@ export function TeamCapacityBucket({
               >
                 <span
                   className={cn(
-                    "whitespace-nowrap px-1.5 py-0.5",
+                    "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
                     childSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
+                  Σ Child{" "}
+                  <span
+                    className={cn("tabular-nums", childSumOverCapacity ? "text-rose-950" : "text-slate-800")}
+                  >
+                    {Math.round(sumChildStoryEstimates)}
+                  </span>
+                  <span className={cn("ml-1", childSumOverCapacity && "text-rose-950")}>Days</span>
                   {childSumOverCapacity ? (
                     <RollupOverCapWarn
                       tooltipId={rollupWarnChildId}
@@ -423,23 +431,21 @@ export function TeamCapacityBucket({
                       </span>
                     </RollupOverCapWarn>
                   ) : null}
-                  Σ Child{" "}
-                  <span
-                    className={cn("tabular-nums", childSumOverCapacity ? "text-rose-950" : "text-slate-800")}
-                  >
-                    {Math.round(sumChildStoryEstimates)}
-                  </span>
-                  <span className={cn("ml-1", childSumOverCapacity && "text-rose-950")}>Days</span>
                 </span>
                 <span className="shrink-0 text-slate-300" aria-hidden>
                   ·
                 </span>
                 <span
                   className={cn(
-                    "whitespace-nowrap px-1.5 py-0.5",
+                    "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
                     estSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
+                  Σ Est{" "}
+                  <span className={cn("tabular-nums", estSumOverCapacity ? "text-rose-950" : "text-slate-800")}>
+                    {Math.round(sumOriginalEstimates)}
+                  </span>
+                  <span className={cn("ml-1", estSumOverCapacity && "text-rose-950")}>Days</span>
                   {estSumOverCapacity ? (
                     <RollupOverCapWarn
                       tooltipId={rollupWarnEstId}
@@ -452,11 +458,6 @@ export function TeamCapacityBucket({
                       </span>
                     </RollupOverCapWarn>
                   ) : null}
-                  Σ Est{" "}
-                  <span className={cn("tabular-nums", estSumOverCapacity ? "text-rose-950" : "text-slate-800")}>
-                    {Math.round(sumOriginalEstimates)}
-                  </span>
-                  <span className={cn("ml-1", estSumOverCapacity && "text-rose-950")}>Days</span>
                 </span>
               </div>
             </div>
@@ -484,7 +485,7 @@ export function TeamCapacityBucket({
                 </span>
                 <span className="mt-1 block">
                   <strong className="text-slate-800">Σ Est</strong> — sum of each epic&apos;s <em>Est days</em> in this
-                  bucket (planned load used for the gauge and capacity math).
+                  bucket. Use <strong className="text-slate-800">Est days</strong> / <strong className="text-slate-800">Σ Child</strong> above to pick which one drives the gauge and totals.
                 </span>
                 <span className="mt-1 block text-slate-600">
                   Either figure turns red when it is greater than Capacity (Days).
@@ -599,7 +600,7 @@ export function TeamCapacityBucket({
             </svg>
           </div>
           <div className="text-center text-[11px] font-semibold text-slate-600">
-            <p>{assignedTotal.toFixed(1)} Days</p>
+            <p>{primaryLoad.toFixed(1)} Days</p>
             <p>/ {capacity.toFixed(1)} Days</p>
           </div>
         </div>
