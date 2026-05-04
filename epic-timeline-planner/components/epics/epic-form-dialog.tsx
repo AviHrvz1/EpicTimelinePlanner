@@ -23,6 +23,7 @@ import {
   ListTree,
   MessageSquare,
   Quote,
+  Save,
   Tag,
   Trash,
   Type,
@@ -957,7 +958,7 @@ export function EpicFormDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[1px]",
+        "fixed inset-0 z-[70] bg-slate-900/30 backdrop-blur-[1px]",
         !anchored && "flex items-stretch justify-end p-0",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
@@ -1066,20 +1067,22 @@ export function EpicFormDialog({
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
-                className="h-8 min-w-[100px] px-4 text-sm font-medium"
+                variant="ghost"
+                className="h-8 gap-1.5 px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800"
                 onClick={onClose}
               >
+                <X className="size-3.5" aria-hidden />
                 Cancel
               </Button>
               <Button
                 type="button"
                 size="sm"
-                className="h-8 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                className="h-8 gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-700/20 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
                 onClick={handleSave}
                 disabled={isSaving}
               >
-                {isSaving ? "Saving..." : epic ? "Save" : "Create"}
+                <Save className="size-3.5" aria-hidden />
+                {isSaving ? "Saving…" : epic ? "Save" : "Create"}
               </Button>
               <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close epic details">
                 <X />

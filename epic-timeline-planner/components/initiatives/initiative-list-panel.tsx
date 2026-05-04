@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
   Circle,
   Folder,
   ListFilter,
@@ -642,7 +644,7 @@ function InitiativeTreeEpicRow({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-md py-2.5 pl-0.5 pr-0.5 font-sans transition-colors hover:bg-sky-50/70",
+        "rounded-md py-2.5 pl-0.5 pr-0.5 font-sans",
         isDragging && "opacity-60",
       )}
       style={{
@@ -651,6 +653,7 @@ function InitiativeTreeEpicRow({
         position: isDragging ? "relative" : undefined,
       }}
     >
+      <div className="rounded-md transition-colors hover:bg-sky-50/70">
       <div className="flex min-w-0 items-center gap-1.5">
         {epicPlanDragEnabled && !isEpicScheduledOnGantt ? (
           <button
@@ -746,6 +749,7 @@ function InitiativeTreeEpicRow({
               </div>
             ) : null}
       </div>
+      </div>
       {isEpicOpen ? (
         <div className="mt-3 pl-3">
               {stories.length === 0 && !onCreateStoryQuick ? (
@@ -763,7 +767,7 @@ function InitiativeTreeEpicRow({
                       <li key={story.id} className="relative pl-6">
                         <span className="absolute left-0 top-0 w-px bg-border/70" style={{ height: isLast ? "50%" : "100%" }} />
                         <span className="absolute left-0 top-1/2 h-px w-4 -translate-y-px bg-border/70" />
-                        <div className="group/story flex min-h-[28px] w-full items-center gap-2 rounded-md py-0.5 pr-0.5 pl-0 transition-colors hover:bg-white/90">
+                        <div className="group/story flex min-h-[28px] w-full items-center gap-2 rounded-md py-0.5 pr-0.5 pl-0 transition-colors hover:bg-slate-100/70">
                           <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                             <UserStoryIcon />
                           </span>
@@ -799,7 +803,10 @@ function InitiativeTreeEpicRow({
                 </ul>
               ) : null}
               {onCreateStoryQuick ? (
-                <div className={cn("flex items-center gap-1", stories.length > 0 && "mt-2")}>
+                <div className={cn("flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-[0_1px_3px_rgba(15,23,42,0.06)] ring-1 ring-slate-100", stories.length > 0 && "mt-2")}>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500" aria-hidden>
+                    <UserStoryIcon />
+                  </span>
                   <input
                     type="text"
                     name={`tree-quick-story-${epic.id}`}
@@ -820,18 +827,18 @@ function InitiativeTreeEpicRow({
                         void handleAddStory();
                       }
                     }}
-                    placeholder="Add user story"
-                    className="h-7 min-w-0 flex-1 rounded-md border border-border/80 bg-background px-2 text-[13px] shadow-sm outline-none focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
+                    placeholder="Add user story…"
+                    className="h-6 min-w-0 flex-1 bg-transparent text-[13px] text-slate-700 placeholder:text-slate-400 outline-none"
                   />
                   <Button
                     type="button"
                     size="icon-sm"
-                    variant="outline"
-                    className="shrink-0 border-border/80 bg-background shadow-sm"
+                    variant="ghost"
+                    className="shrink-0 h-6 w-6 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
                     disabled={isAddingStory || storyTitle.trim().length === 0}
                     onClick={() => void handleAddStory()}
                   >
-                    <Plus className="size-4" aria-hidden />
+                    <Plus className="size-3.5" aria-hidden />
                   </Button>
                 </div>
               ) : null}
@@ -1126,6 +1133,8 @@ function SprintEpicCard({
   planContextMonth,
   hideScheduledIcon = false,
   storyProgressDetailsVisible,
+  isOpenControlled,
+  onToggleControlled,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -1141,6 +1150,8 @@ function SprintEpicCard({
   planContextMonth: number | null;
   hideScheduledIcon?: boolean;
   storyProgressDetailsVisible: boolean;
+  isOpenControlled?: boolean;
+  onToggleControlled?: () => void;
 }) {
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
@@ -1159,7 +1170,20 @@ function SprintEpicCard({
   const completion = epicCompletionMeta(epic);
   const isEpicScheduledOnGantt =
     epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpenLocal, setIsOpenLocal] = useState(false);
+  const isOpen = isOpenControlled ?? isOpenLocal;
+  function handleToggle() {
+    if (onToggleControlled) {
+      onToggleControlled();
+      queueMicrotask(() => onEpicAccordionChange?.(epic.id, !(isOpenControlled ?? false)));
+    } else {
+      setIsOpenLocal((prev) => {
+        const next = !prev;
+        queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
+        return next;
+      });
+    }
+  }
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
 
@@ -1218,13 +1242,7 @@ function SprintEpicCard({
         ) : null}
         <button
           type="button"
-          onClick={() =>
-            setIsOpen((prev) => {
-              const next = !prev;
-              queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
-              return next;
-            })
-          }
+          onClick={handleToggle}
           className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
           aria-label={isOpen ? "Collapse epic" : "Expand epic"}
           aria-expanded={isOpen}
@@ -1515,6 +1533,7 @@ export function InitiativeListPanel({
   const epicPlanDragEnabled = !isSprintModeActive;
 
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
+  const [monthEpicOpenIds, setMonthEpicOpenIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [initiativeSearchFocused, setInitiativeSearchFocused] = useState(false);
   const [epicSearch, setEpicSearch] = useState("");
@@ -2076,14 +2095,9 @@ export function InitiativeListPanel({
       <div
         className={cn(
           "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white [direction:rtl] [scrollbar-gutter:stable]",
-          "[scrollbar-width:thin] [scrollbar-color:#7dd3fc_#ffffff]",
-          "[&::-webkit-scrollbar]:w-2.5",
-          "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white",
-          "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-sky-300",
-          "hover:[&::-webkit-scrollbar-thumb]:bg-sky-400",
         )}
       >
-        <div className="min-h-0 bg-white ps-3 [direction:ltr]">
+        <div className="min-h-0 bg-white ps-3 pe-3 [direction:ltr]">
       {epicPlanPanelMode ? (
         <div className="space-y-4">
           <div className="relative">
@@ -2278,13 +2292,35 @@ export function InitiativeListPanel({
               </div>
             </div>
           ) : null}
-          <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
-            {epicPanelQuarterLabel
-              ? `${epicPanelQuarterLabel} epics (${filteredMonthBacklogEpics.length})`
-              : activeMonth != null
-                ? `${MONTHS[activeMonth - 1]} epics (${filteredMonthBacklogEpics.length})`
-                : `Month epics (${filteredMonthBacklogEpics.length})`}
-          </h3>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-[15px] font-medium tracking-[0.01em] text-slate-900">
+              My Epics ({filteredMonthBacklogEpics.length})
+            </h3>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                title="Expand all epics"
+                aria-label="Expand all epics"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                onClick={() =>
+                  setMonthEpicOpenIds(
+                    Object.fromEntries(filteredMonthBacklogEpics.map(({ epic }) => [epic.id, true])),
+                  )
+                }
+              >
+                <ChevronsDown className="size-4" />
+              </button>
+              <button
+                type="button"
+                title="Collapse all epics"
+                aria-label="Collapse all epics"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => setMonthEpicOpenIds({})}
+              >
+                <ChevronsUp className="size-4" />
+              </button>
+            </div>
+          </div>
           <div
             ref={setEpicUnplanDropRef}
             className={cn(
@@ -2331,6 +2367,10 @@ export function InitiativeListPanel({
                     planContextMonth={planAnchorMonth}
                     hideScheduledIcon={epicPlanPanelMode || isSprintModeActive}
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
+                    isOpenControlled={monthEpicOpenIds[epic.id] ?? false}
+                    onToggleControlled={() =>
+                      setMonthEpicOpenIds((prev) => ({ ...prev, [epic.id]: !(prev[epic.id] ?? false) }))
+                    }
                   />
                   {planAnchorMonth != null ? (
                     <EpicBacklogDropSlot
@@ -2495,9 +2535,35 @@ export function InitiativeListPanel({
               aria-hidden
             />
           ) : null}
-          <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
-            Initiatives ({filteredInitiatives.length})
-          </h3>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-[15px] font-medium tracking-[0.01em] text-slate-900">
+              Initiatives ({filteredInitiatives.length})
+            </h3>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                title="Expand all initiatives"
+                aria-label="Expand all initiatives"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                onClick={() =>
+                  setOpenInitiativeIds(
+                    Object.fromEntries(filteredInitiatives.map((i) => [i.id, true])),
+                  )
+                }
+              >
+                <ChevronsDown className="size-4" />
+              </button>
+              <button
+                type="button"
+                title="Collapse all initiatives"
+                aria-label="Collapse all initiatives"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => setOpenInitiativeIds({})}
+              >
+                <ChevronsUp className="size-4" />
+              </button>
+            </div>
+          </div>
           {filteredInitiatives.length === 0 ? (
             <p className="rounded-md border border-slate-200/80 bg-white p-3 text-[12px] leading-4 text-slate-600">
               {initiativeList.length === 0
