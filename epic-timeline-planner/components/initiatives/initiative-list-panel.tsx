@@ -912,40 +912,50 @@ function InitiativeTreeCard({
                     })}
                   </div>
                 )}
-                <div className="mt-2 flex items-center gap-1.5 border-t border-border/50 pt-2">
-                  <input
-                    type="text"
-                    name={`init-${initiative.id}-quick-item`}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    inputMode="text"
-                    spellCheck={false}
-                    data-lpignore="true"
-                    data-1p-ignore="true"
-                    data-bwignore="true"
-                    data-form-type="other"
-                    data-protonpass-ignore="true"
-                    value={epicTitle}
-                    onChange={(event) => setEpicTitle(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleAddEpic();
-                      }
-                    }}
-                    placeholder="Add epic"
-                    className="h-8 w-full rounded-md border border-border/80 bg-background px-2.5 text-[13px] text-foreground shadow-sm outline-none transition-[box-shadow,border-color] placeholder:text-muted-foreground focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
-                  />
-                  <Button
-                    size="icon-sm"
-                    variant="outline"
-                    className="shrink-0 border-border/80 bg-background shadow-sm"
-                    disabled={isAddingEpic || epicTitle.trim().length === 0}
-                    onClick={() => void handleAddEpic()}
-                  >
-                    <Plus />
-                  </Button>
+                <div className="mt-2.5 border-t border-border/50 pt-2.5">
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200/80 bg-gradient-to-r from-slate-50/80 to-white px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-slate-200/40">
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-600/10 text-slate-600 ring-1 ring-slate-600/10"
+                      aria-hidden
+                    >
+                      <Folder className="size-3" strokeWidth={2} />
+                    </span>
+                    <input
+                      type="text"
+                      name={`init-${initiative.id}-quick-item`}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      inputMode="text"
+                      spellCheck={false}
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      data-protonpass-ignore="true"
+                      value={epicTitle}
+                      onChange={(event) => setEpicTitle(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleAddEpic();
+                        }
+                      }}
+                      placeholder="New epic title…"
+                      className="h-7 min-w-0 flex-1 border-0 bg-transparent text-[13px] text-slate-900 outline-none placeholder:text-slate-400"
+                      aria-label="New epic title"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 shrink-0 gap-1 bg-slate-800 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-45"
+                      disabled={isAddingEpic || epicTitle.trim().length === 0}
+                      onClick={() => void handleAddEpic()}
+                    >
+                      <Plus className="size-3.5" aria-hidden />
+                      Add
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1858,115 +1868,6 @@ export function InitiativeListPanel({
         )}
       >
         <div className="min-h-0 bg-white ps-3 [direction:ltr]">
-      {inlineNewInitiativeOpen && !epicPlanPanelMode && onCreateInitiativeQuick ? (
-        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200/90 bg-slate-50/80 p-2.5 ring-1 ring-black/5">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">New initiative</label>
-          <div className="flex items-center gap-1.5">
-            <input
-              ref={inlineInitiativeInputRef}
-              type="text"
-              value={inlineNewInitiativeTitle}
-              onChange={(e) => setInlineNewInitiativeTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void submitInlineNewInitiative();
-                }
-                if (e.key === "Escape") {
-                  setInlineNewInitiativeOpen(false);
-                  setInlineNewInitiativeTitle("");
-                }
-              }}
-              placeholder="Title (min. 2 characters)"
-              autoComplete="off"
-              className="h-8 min-w-0 flex-1 rounded-md border border-border/80 bg-white px-2.5 text-[13px] shadow-sm outline-none focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
-              aria-label="New initiative title"
-            />
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="outline"
-              className="shrink-0"
-              disabled={inlineNewInitiativeSubmitting || inlineNewInitiativeTitle.trim().length < 2}
-              onClick={() => void submitInlineNewInitiative()}
-            >
-              <Plus className="size-4" aria-hidden />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="shrink-0 text-slate-600"
-              onClick={() => {
-                setInlineNewInitiativeOpen(false);
-                setInlineNewInitiativeTitle("");
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {inlineNewEpicOpen && epicPlanPanelMode && onCreateEpicQuick && firstScheduledInitiativeForActiveMonth ? (
-        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200/90 bg-slate-50/80 p-2.5 ring-1 ring-black/5">
-          <p className="text-[11px] leading-4 text-slate-600">
-            Adding to{" "}
-            <span className="font-semibold text-slate-800">{firstScheduledInitiativeForActiveMonth.title}</span>
-          </p>
-          <div className="flex items-center gap-1.5">
-            <input
-              ref={inlineEpicInputRef}
-              type="text"
-              value={inlineNewEpicTitle}
-              onChange={(e) => setInlineNewEpicTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void submitInlineNewEpic();
-                }
-                if (e.key === "Escape") {
-                  setInlineNewEpicOpen(false);
-                  setInlineNewEpicTitle("");
-                }
-              }}
-              placeholder="Epic title"
-              autoComplete="off"
-              className="h-8 min-w-0 flex-1 rounded-md border border-border/80 bg-white px-2.5 text-[13px] shadow-sm outline-none focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
-              aria-label="New epic title"
-            />
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="outline"
-              className="shrink-0"
-              disabled={inlineNewEpicSubmitting || inlineNewEpicTitle.trim().length === 0}
-              onClick={() => void submitInlineNewEpic()}
-            >
-              <Plus className="size-4" aria-hidden />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="shrink-0 text-slate-600"
-              onClick={() => {
-                setInlineNewEpicOpen(false);
-                setInlineNewEpicTitle("");
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {showInitiativeBacklogDrop ? (
-        <div
-          ref={setBacklogDropRef}
-          className="pointer-events-auto -mb-2 h-2 w-full max-w-full shrink-0 opacity-0"
-          aria-hidden
-        />
-      ) : null}
-
       {epicPlanPanelMode ? (
         <div className="space-y-4">
           <div className="relative">
@@ -2058,6 +1959,78 @@ export function InitiativeListPanel({
               <Eraser className="size-4" aria-hidden />
             </button>
           </div>
+          {inlineNewEpicOpen && onCreateEpicQuick && firstScheduledInitiativeForActiveMonth ? (
+            <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/35 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/50">
+              <div
+                className="flex gap-3 border-l-[3px] border-slate-400 bg-white/50 px-3 py-3 pl-[14px] backdrop-blur-[1px]"
+                style={{
+                  borderLeftColor: firstScheduledInitiativeForActiveMonth.color || undefined,
+                }}
+              >
+                <div
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-600/10 text-slate-700 ring-1 ring-slate-600/15"
+                  aria-hidden
+                >
+                  <Folder className="size-3.5" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  <div>
+                    <p className="text-[13px] font-semibold tracking-tight text-slate-900">New epic</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
+                      Under{" "}
+                      <span className="font-semibold text-slate-800">
+                        {firstScheduledInitiativeForActiveMonth.title}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={inlineEpicInputRef}
+                      type="text"
+                      value={inlineNewEpicTitle}
+                      onChange={(e) => setInlineNewEpicTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void submitInlineNewEpic();
+                        }
+                        if (e.key === "Escape") {
+                          setInlineNewEpicOpen(false);
+                          setInlineNewEpicTitle("");
+                        }
+                      }}
+                      placeholder="Name this epic…"
+                      autoComplete="off"
+                      className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-900 shadow-inner shadow-slate-900/5 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
+                      aria-label="New epic title"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 shrink-0 gap-1 bg-slate-800 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-50"
+                      disabled={inlineNewEpicSubmitting || inlineNewEpicTitle.trim().length === 0}
+                      onClick={() => void submitInlineNewEpic()}
+                    >
+                      <Plus className="size-3.5" aria-hidden />
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 shrink-0 px-2 text-[12px] text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      onClick={() => {
+                        setInlineNewEpicOpen(false);
+                        setInlineNewEpicTitle("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
             {epicPanelQuarterLabel
               ? `${epicPanelQuarterLabel} epics (${filteredMonthBacklogEpics.length})`
@@ -2204,6 +2177,77 @@ export function InitiativeListPanel({
               <Eraser className="size-4" aria-hidden />
             </button>
           </div>
+          {inlineNewInitiativeOpen && onCreateInitiativeQuick ? (
+            <div className="overflow-hidden rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50/95 via-white to-white shadow-[0_2px_8px_rgba(14,165,233,0.12)] ring-1 ring-sky-100/60">
+              <div className="flex gap-3 border-l-[3px] border-sky-500 bg-white/55 px-3 py-3 pl-[14px] backdrop-blur-[1px]">
+                <div
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 ring-1 ring-sky-500/25"
+                  aria-hidden
+                >
+                  <Zap className="size-3.5" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  <div>
+                    <p className="text-[13px] font-semibold tracking-tight text-slate-900">New initiative</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
+                      Starts in the backlog; schedule it on the roadmap when you are ready.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={inlineInitiativeInputRef}
+                      type="text"
+                      value={inlineNewInitiativeTitle}
+                      onChange={(e) => setInlineNewInitiativeTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void submitInlineNewInitiative();
+                        }
+                        if (e.key === "Escape") {
+                          setInlineNewInitiativeOpen(false);
+                          setInlineNewInitiativeTitle("");
+                        }
+                      }}
+                      placeholder="Name your initiative…"
+                      autoComplete="off"
+                      className="h-8 min-w-0 flex-1 rounded-lg border border-sky-200/90 bg-white px-2.5 text-[13px] text-slate-900 shadow-inner shadow-sky-900/5 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-200/80"
+                      aria-label="New initiative title"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-7 shrink-0 gap-1 bg-sky-600 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
+                      disabled={inlineNewInitiativeSubmitting || inlineNewInitiativeTitle.trim().length < 2}
+                      onClick={() => void submitInlineNewInitiative()}
+                    >
+                      <Plus className="size-3.5" aria-hidden />
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 shrink-0 px-2 text-[12px] text-slate-600 hover:bg-sky-50 hover:text-slate-900"
+                      onClick={() => {
+                        setInlineNewInitiativeOpen(false);
+                        setInlineNewInitiativeTitle("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {showInitiativeBacklogDrop ? (
+            <div
+              ref={setBacklogDropRef}
+              className="pointer-events-auto -mb-2 h-2 w-full max-w-full shrink-0 opacity-0"
+              aria-hidden
+            />
+          ) : null}
           <h3 className="mb-2 text-[15px] font-medium tracking-[0.01em] text-slate-900">
             Initiatives ({filteredInitiatives.length})
           </h3>
