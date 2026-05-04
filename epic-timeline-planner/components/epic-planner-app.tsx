@@ -49,7 +49,6 @@ import {
   collectMonthEpicsForTeamBoard,
   emptyMonthTeamBoard,
   inferEpicTeamIdFromMonthTeamQueues,
-  isKnownEpicTeamId,
   monthTeamBoardStorageKey,
   MONTH_TEAM_IDS,
   removeEpicFromMonthTeamBoardQueues,
@@ -60,17 +59,20 @@ import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import { splitQuarterTotalAcrossMonths } from "@/lib/quarter-team-capacity";
 import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem } from "@/lib/types";
+import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
 import {
   SPRINT_CAPACITY_OTHER_BUCKET,
   SPRINT_CAPACITY_STORAGE_KEY,
   assignStoryToMember,
-  defaultMembersForTeam,
+  assigneeMatchRosterForSprintTeam,
   emptySprintCapacityBoard,
   sanitizeSprintCapacityBoard,
   sprintCapacityBoardKey,
+  sprintStoryBoardEpicTeamFilter,
   syncCapacityAssignmentsWithKanban,
   type SprintCapacityBoard,
+  type SprintWorkspaceDirectoryUser,
 } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import {
@@ -817,6 +819,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [panelStatusQuickFilter, setPanelStatusQuickFilter] = useState<"Scheduled" | "Unscheduled" | null>(null);
   /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
   const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
+  /** Users directory (name + team) for sprint Kanban / capacity assignee rosters. */
+  const [workspaceDirectoryUsers, setWorkspaceDirectoryUsers] = useState<SprintWorkspaceDirectoryUser[]>([]);
   /** Last drag-end snapshot for debugging drops (story Kanban, plan cells, etc.). */
   const [dndDropInspector, setDndDropInspector] = useState<DndDropInspectorPayload | null>(null);
   const [monthTeamBoardByKey, setMonthTeamBoardByKey] = useState<Record<string, MonthTeamBoardPersisted>>(() => {
@@ -1302,6 +1306,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (hasHydratedFromUrlRef.current) return;
     hasHydratedFromUrlRef.current = true;
     const params = new URLSearchParams(window.location.search);
+    const viewRaw = params.get("view");
+    if (viewRaw === "users") setTopMode("users");
+    else if (viewRaw === "backlog") setTopMode("backlog");
     const q = params.get("quarter");
     if (q && QUARTERS.some((item) => item.label === q)) {
       setFocusedQuarterLabel(q);
@@ -1361,8 +1368,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         hydratedMonthPlanTab === "sprint-retrospective"
       ) {
         const sprintTeamRaw = params.get("sprintTeam");
-        if (sprintTeamRaw && MONTH_TEAM_IDS.includes(sprintTeamRaw)) {
-          setSprintStoryBoardTeamId(sprintTeamRaw);
+        if (sprintTeamRaw) {
+          const norm = normalizeWorkspaceUserTeam(sprintTeamRaw);
+          if (norm) setSprintStoryBoardTeamId(norm);
         }
       }
     }
@@ -1455,6 +1463,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   useEffect(() => {
     if (!isUrlHydrated) return;
     const params = new URLSearchParams();
+    if (topMode === "users") params.set("view", "users");
+    else if (topMode === "backlog") params.set("view", "backlog");
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
     if (activeTimelineMonth == null && activeQuarterViewTab !== "gantt") params.set("quarterTab", activeQuarterViewTab);
     if (activeTimelineMonth != null) {
@@ -1469,14 +1479,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
     if (activeYearSprint != null) params.set("sprint", String(activeYearSprint));
     if (activeYearSprint != null) params.set("sprintView", activeSprintTab);
+    const sprintTeamForUrl = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
     if (
       (activeMonthPlanTab === "sprint-kanban" ||
         activeMonthPlanTab === "sprint-status" ||
         activeMonthPlanTab === "sprint-capacity" ||
         activeMonthPlanTab === "sprint-retrospective") &&
-      isKnownEpicTeamId(sprintStoryBoardTeamId)
+      sprintTeamForUrl
     ) {
-      params.set("sprintTeam", sprintStoryBoardTeamId);
+      params.set("sprintTeam", sprintTeamForUrl);
     }
     if (epicDialogOpen && editingEpic?.id) {
       const epicRef = epicRefMaps.byId[editingEpic.id];
@@ -1493,6 +1504,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }, [
     isUrlHydrated,
+    topMode,
     focusedQuarterLabel,
     activeTimelineMonth,
     activeQuarterViewTab,
@@ -1508,6 +1520,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     pathname,
     sprintStoryBoardTeamId,
   ]);
+
+  /** Keep top tab in sync when the user navigates with the browser Back/Forward buttons. */
+  useEffect(() => {
+    if (!isUrlHydrated) return;
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const v = params.get("view");
+      if (v === "users") setTopMode("users");
+      else if (v === "backlog") setTopMode("backlog");
+      else setTopMode("roadmap");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [isUrlHydrated]);
 
   const handleSprintModeChange = useCallback(
     (active: boolean, month: number | null, yearSprint: number | null) => {
@@ -1709,11 +1735,36 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       setActiveYearSprint(clamped);
       setActiveSprintTab("kanban");
       setActiveMonthPlanTab("sprint-kanban");
-      const normalizedTeamId = teamId?.trim() ? teamId.trim() : null;
-      setSprintStoryBoardTeamId(normalizedTeamId && isKnownEpicTeamId(normalizedTeamId) ? normalizedTeamId : null);
+      const normalizedTeamId = teamId?.trim() ? normalizeWorkspaceUserTeam(teamId) : null;
+      setSprintStoryBoardTeamId(normalizedTeamId || null);
     },
     [focusedQuarterLabel],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWorkspaceDirectory() {
+      try {
+        const res = await fetch("/api/workspace-users");
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as Array<{ name: string; team: string }>;
+        if (!cancelled) {
+          setWorkspaceDirectoryUsers(data.map((u) => ({ name: u.name, team: u.team ?? "" })));
+        }
+      } catch {
+        if (!cancelled) setWorkspaceDirectoryUsers([]);
+      }
+    }
+    void loadWorkspaceDirectory();
+    const onRefresh = () => {
+      void loadWorkspaceDirectory();
+    };
+    window.addEventListener("epic-planner-workspace-users-changed", onRefresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("epic-planner-workspace-users-changed", onRefresh);
+    };
+  }, []);
 
   const activeSprintCapacityKey = useMemo(() => {
     if (activeYearSprint == null) return null;
@@ -1735,19 +1786,20 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (!activeSprintCapacityKey || activeYearSprint == null || sprintCapacityPlanMonth == null) {
       return { capacities: {}, assignments: {} };
     }
-    const members = defaultMembersForTeam(sprintStoryBoardTeamId);
+    const sprintTeamFilter = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+    const members = assigneeMatchRosterForSprintTeam(sprintTeamFilter, workspaceDirectoryUsers);
     const raw = sprintCapacityByKey[activeSprintCapacityKey] ?? emptySprintCapacityBoard(members);
-    /** Same scope as {@link SprintCapacityBoard}: all stories in this global sprint (team filter only affects default columns). */
     const rows = collectStoriesForSprintBoard(
       initiatives,
       sprintCapacityPlanMonth,
       activeYearSprint,
-      null,
+      sprintTeamFilter,
     );
     return syncCapacityAssignmentsWithKanban(
       raw,
       members,
       rows.map((r) => ({ id: r.story.id, assignee: r.story.assignee })),
+      members,
     );
   }, [
     activeSprintCapacityKey,
@@ -1756,23 +1808,26 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     initiatives,
     sprintCapacityByKey,
     sprintStoryBoardTeamId,
+    workspaceDirectoryUsers,
   ]);
 
   useEffect(() => {
     if (!activeSprintCapacityKey || activeYearSprint == null || sprintCapacityPlanMonth == null) return;
     setSprintCapacityByKey((prev) => {
-      const members = defaultMembersForTeam(sprintStoryBoardTeamId);
+      const sprintTeamFilter = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+      const members = assigneeMatchRosterForSprintTeam(sprintTeamFilter, workspaceDirectoryUsers);
       const raw = prev[activeSprintCapacityKey] ?? emptySprintCapacityBoard(members);
       const rows = collectStoriesForSprintBoard(
         initiatives,
         sprintCapacityPlanMonth,
         activeYearSprint,
-        null,
+        sprintTeamFilter,
       );
       const merged = syncCapacityAssignmentsWithKanban(
         raw,
         members,
         rows.map((r) => ({ id: r.story.id, assignee: r.story.assignee })),
+        members,
       );
       if (JSON.stringify(merged.assignments) === JSON.stringify(raw.assignments)) return prev;
       return { ...prev, [activeSprintCapacityKey]: merged };
@@ -1783,6 +1838,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     sprintCapacityPlanMonth,
     initiatives,
     sprintStoryBoardTeamId,
+    workspaceDirectoryUsers,
   ]);
 
   const activeSprintRetrospectiveKey = useMemo(() => {
@@ -1816,9 +1872,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     (member: string, days: number) => {
       if (!activeSprintCapacityKey) return;
       setSprintCapacityByKey((prev) => {
-        const cur =
-          prev[activeSprintCapacityKey] ??
-          emptySprintCapacityBoard(defaultMembersForTeam(sprintStoryBoardTeamId));
+        const sprintTeamFilter = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+        const members = assigneeMatchRosterForSprintTeam(sprintTeamFilter, workspaceDirectoryUsers);
+        const cur = prev[activeSprintCapacityKey] ?? emptySprintCapacityBoard(members);
         return {
           ...prev,
           [activeSprintCapacityKey]: {
@@ -1828,7 +1884,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         };
       });
     },
-    [activeSprintCapacityKey, sprintStoryBoardTeamId],
+    [activeSprintCapacityKey, sprintStoryBoardTeamId, workspaceDirectoryUsers],
   );
 
   const updateStoryEstimateFromCapacity = useCallback(async (storyId: string, estimatedDays: number) => {
@@ -2608,10 +2664,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           });
           return;
         }
-        const dropTeamId = MONTH_TEAM_IDS.includes(capacityDrop.teamKey) ? capacityDrop.teamKey : null;
+        const dropTeamId = capacityDrop.teamKey?.trim() ? capacityDrop.teamKey.trim() : null;
         const boardKey = sprintCapacityBoardKey(selectedYear, capacityDrop.yearSprint, dropTeamId);
         setSprintCapacityByKey((prev) => {
-          const cur = prev[boardKey] ?? emptySprintCapacityBoard(defaultMembersForTeam(dropTeamId));
+          const roster = assigneeMatchRosterForSprintTeam(dropTeamId, workspaceDirectoryUsers);
+          const cur = prev[boardKey] ?? emptySprintCapacityBoard(roster);
           return { ...prev, [boardKey]: assignStoryToMember(cur, storyId, capacityDrop.member) };
         });
         const skipAssigneePatch = capacityDrop.member === SPRINT_CAPACITY_OTHER_BUCKET;
@@ -2768,8 +2825,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       const status = kanbanMatch[2] as StoryStatus;
       const nextStatus = status;
 
-      const teamFilter =
-        sprintStoryBoardTeamId && isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null;
+      const teamFilter = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
       const monthForBoard = sprintCapacityPlanMonth;
       let collectRows = 0;
       let storyInCollectRows = false;
@@ -3937,9 +3993,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       }}
                       epicBacklogOrderByMonth={epicBacklogOrderByMonth}
                       monthEpicTeamFilterId={
-                        activeTimelineMonth != null &&
-                        sprintSurfaceUsesDeliveryTeam &&
-                        isKnownEpicTeamId(sprintStoryBoardTeamId)
+                        activeTimelineMonth != null && sprintSurfaceUsesDeliveryTeam && sprintStoryBoardTeamId
                           ? sprintStoryBoardTeamId
                           : null
                       }
@@ -3960,6 +4014,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       onHidePanel={
                         leftRailLockedClosed ? undefined : () => setIsLeftPanelHidden(true)
                       }
+                      workspaceDirectoryUsers={workspaceDirectoryUsers}
                     />
                   </div>
                   <div
@@ -4049,6 +4104,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
                 onSprintKanbanStoryPatch={patchStoryFromKanban}
+                workspaceDirectoryUsers={workspaceDirectoryUsers}
                 onSprintCapacityStoryUnschedule={unscheduleStoryFromCapacity}
                 onRequestSprintKanbanStoryUnschedule={(storyId, storyTitle) => {
                   openConfirmDialog({
@@ -4592,6 +4648,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             toast.error("Failed to delete epic");
           }
         }}
+        workspaceDirectoryUsers={workspaceDirectoryUsers}
         surfaceAnchorRef={planningRightSurfaceRef}
       />
       <StoryDetailsDialog

@@ -1,4 +1,5 @@
 import { MONTH_TEAM_IDS } from "@/lib/month-team-board";
+import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 
 export type SprintCapacityBoard = {
   capacities: Record<string, number>;
@@ -43,9 +44,16 @@ const DEFAULT_TEAM_MEMBERS: Record<string, string[]> = {
   all: mergeUniqueSorted(PLATFORM_MEMBERS, EXPERIENCE_MEMBERS, DATA_MEMBERS),
 };
 
-export function sprintCapacityBoardKey(year: number, yearSprint: number, teamId: string | null): string {
-  const teamKey = teamId && MONTH_TEAM_IDS.includes(teamId) ? teamId : "all";
+export function sprintCapacityBoardKey(year: number, yearSprint: number, teamId: string | null | undefined): string {
+  const t = teamId?.trim();
+  const teamKey = t ? t : "all";
   return `${year}:${yearSprint}:${teamKey}`;
+}
+
+/** `null` = all teams on the sprint board; otherwise filter epics/stories to this `epic.team` id (delivery or custom slug). */
+export function sprintStoryBoardEpicTeamFilter(teamId: string | null | undefined): string | null {
+  const t = teamId?.trim();
+  return t ? t : null;
 }
 
 export function defaultMembersForTeam(teamId: string | null): string[] {
@@ -137,6 +145,47 @@ export function fullDeliveryCapacityRoster(): string[] {
   return defaultMembersForTeam(null);
 }
 
+/** Minimal shape from workspace directory rows merged into sprint rosters. */
+export type SprintWorkspaceDirectoryUser = { name: string; team: string };
+
+/**
+ * First names used to map story assignees → capacity columns; matches sprint Kanban team filter.
+ * When `directoryUsers` is set, people from the Users directory are merged in (deduped case-insensitively):
+ * - **All teams** (`teamId` empty): everyone in the directory (custom teams, delivery trio, unassigned).
+ * - **Delivery team** (`platform` | `experience` | `data`): seed roster + directory users on that team.
+ * - **Custom team** (any other slug, e.g. from the directory): directory users on that team only (+ seed none).
+ */
+export function assigneeMatchRosterForSprintTeam(
+  teamId: string | null | undefined,
+  directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
+): string[] {
+  const fid = teamId?.trim() || null;
+  const isMonthTeam = fid != null && MONTH_TEAM_IDS.includes(fid);
+
+  const base = isMonthTeam ? defaultMembersForTeam(fid) : fid == null ? fullDeliveryCapacityRoster() : [];
+
+  if (!directoryUsers?.length) return base;
+
+  const seenLower = new Set(base.map((b) => b.toLowerCase()));
+  const extras: string[] = [];
+
+  for (const u of directoryUsers) {
+    const n = (u.name ?? "").trim();
+    if (!n) continue;
+    const nt = normalizeWorkspaceUserTeam(u.team);
+    if (fid != null) {
+      if (nt !== fid) continue;
+    }
+
+    const nl = n.toLowerCase();
+    if (seenLower.has(nl)) continue;
+    seenLower.add(nl);
+    extras.push(n);
+  }
+  extras.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return [...base, ...extras];
+}
+
 /**
  * Capacity column for a story: canonical roster name when it matches, otherwise the normalized free-text assignee.
  * Null = treat as unassigned (bucketed under {@link SPRINT_CAPACITY_OTHER_BUCKET} when that column is enabled).
@@ -225,8 +274,10 @@ export function syncCapacityAssignmentsWithKanban(
   board: SprintCapacityBoard,
   members: string[],
   sprintStories: Array<{ id: string; assignee: string | null | undefined }>,
+  /** Same roster as sprint Kanban team filter (per-team first names vs all delivery). */
+  assigneeMatchRoster: string[] = fullDeliveryCapacityRoster(),
 ): SprintCapacityBoard {
-  const fullRoster = fullDeliveryCapacityRoster();
+  const fullRoster = assigneeMatchRoster;
   const hasPersistedOther = (board.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0;
   const hasUnassignedInSprint = sprintStories.some(
     (s) => sprintCapacityAssigneeBucket(s.assignee, fullRoster) == null,

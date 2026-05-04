@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { Info, Maximize2, Minimize2, UserRound, Users, UserX, X } from "lucide-react";
+import { Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -16,12 +16,14 @@ import {
 } from "@/components/timeline/team-capacity-bucket";
 import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
 import {
-  fullDeliveryCapacityRoster,
+  assigneeMatchRosterForSprintTeam,
   sprintCapacityAssigneeBucket,
   SPRINT_CAPACITY_OTHER_BUCKET,
   type SprintCapacityBoard as SprintCapacityBoardState,
+  type SprintWorkspaceDirectoryUser,
 } from "@/lib/sprint-capacity";
 import { MONTH_TEAM_COLUMNS, isKnownEpicTeamId } from "@/lib/month-team-board";
+import { teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
@@ -50,6 +52,14 @@ function assigneeFilterCircleIcon(name: string): LucideIcon {
   return name === "Unassigned" ? UserX : UserRound;
 }
 
+type CapacityStoryCardModel = {
+  id: string;
+  title: string;
+  epicTitle: string;
+  estimatedDays: number;
+  assigneeLabel: string;
+};
+
 type SprintCapacityBoardProps = {
   initiatives: InitiativeItem[];
   month: number;
@@ -61,6 +71,7 @@ type SprintCapacityBoardProps = {
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
   teamSelectorSlot?: ReactNode;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
 function CapacityStoryCard({
@@ -69,20 +80,23 @@ function CapacityStoryCard({
   onUnscheduleStory,
   onOpenStory,
 }: {
-  card: { id: string; title: string; epicTitle: string; estimatedDays: number };
+  card: CapacityStoryCardModel;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
 }) {
+  /** Capacity board: only unassigned stories are draggable (Kanban keeps drag for all). */
+  const isUnassigned = card.assigneeLabel === "Unassigned";
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: storyBoardDraggableId(card.id),
+    disabled: !isUnassigned,
   });
 
   return (
     <article
       ref={setNodeRef}
       className={cn(
-        "group relative min-h-[2.75rem] rounded-lg border border-slate-200/90 bg-white/95 px-2 py-1.5 shadow-sm",
+        "group/storycap relative min-h-[2.75rem] rounded-lg border border-slate-200/90 bg-white/95 py-1.5 pl-2 pr-2 shadow-sm",
         isDragging && "opacity-60",
       )}
       style={{
@@ -93,14 +107,14 @@ function CapacityStoryCard({
       <button
         type="button"
         onClick={() => onUnscheduleStory(card.id)}
-        className="absolute right-1.5 top-1/2 z-30 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+        className="absolute right-1.5 top-1.5 z-50 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition hover:bg-slate-100 hover:text-slate-700 group-hover/storycap:opacity-100 group-focus-within/storycap:opacity-100 focus-visible:opacity-100"
         aria-label="Remove story from sprint capacity bucket"
         title="Remove from sprint"
       >
         <X className="size-3.5" aria-hidden />
       </button>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 pr-8">
-        <div className="flex min-w-0 flex-1 basis-[min(100%,14rem)] items-center gap-2">
+      <div className="flex w-full min-w-0 items-start gap-2">
+        {isUnassigned ? (
           <button
             type="button"
             className="mt-0.5 shrink-0 cursor-grab rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 active:cursor-grabbing"
@@ -110,34 +124,46 @@ function CapacityStoryCard({
           >
             ::
           </button>
-          <div className="min-w-0 flex-1">
-            <button
-              type="button"
-              className="block w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
-              onClick={() => onOpenStory(card.id)}
+        ) : null}
+        <div className="min-w-0 max-w-full flex-1">
+          <button
+            type="button"
+            className="block w-full truncate pr-[calc(0.375rem+1.5rem+0.25rem)] text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
+            onClick={() => onOpenStory(card.id)}
+          >
+            <span className="mr-1.5 inline-flex align-middle text-slate-600">
+              <UserStoryIcon className="size-3.5" />
+            </span>
+            {card.title}
+          </button>
+          <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+            <div
+              className={cn(
+                "flex min-w-0 flex-1 items-center gap-0.5 text-[11px] font-medium",
+                isUnassigned ? "text-slate-400" : "text-slate-600",
+              )}
+              title={card.assigneeLabel}
             >
-              <span className="mr-1.5 inline-flex align-middle text-slate-600">
-                <UserStoryIcon className="size-3.5" />
-              </span>
-              {card.title}
-            </button>
+              <User className="size-3 shrink-0 text-slate-500" aria-hidden />
+              <span className="min-w-0 truncate">{card.assigneeLabel}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="whitespace-nowrap text-right text-[11px] font-semibold text-slate-600">Est Days</span>
+              <input
+                type="number"
+                min={0}
+                max={20}
+                step={1}
+                value={card.estimatedDays}
+                onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
+                className={cn(
+                  "h-[1.375rem] w-11 shrink-0 rounded border border-slate-200 bg-white px-1 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
+                  CAPACITY_DAYS_INPUT_NO_SPIN,
+                )}
+                aria-label="Story Est Days"
+              />
+            </div>
           </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5 @min-[18rem]:ml-auto">
-          <span className="text-right text-[11px] font-semibold text-slate-600">Est days</span>
-          <input
-            type="number"
-            min={0}
-            max={20}
-            step={1}
-            value={card.estimatedDays}
-            onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
-            className={cn(
-              "h-[1.375rem] w-11 shrink-0 rounded border border-slate-200 bg-white px-1 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
-              CAPACITY_DAYS_INPUT_NO_SPIN,
-            )}
-            aria-label="Story estimate days"
-          />
         </div>
       </div>
     </article>
@@ -165,7 +191,7 @@ function CapacityBucket({
   member: string;
   capacity: number;
   assignedTotal: number;
-  cards: Array<{ id: string; title: string; epicTitle: string; estimatedDays: number }>;
+  cards: CapacityStoryCardModel[];
   onCapacityChange: (days: number) => void;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
@@ -325,7 +351,7 @@ function CapacityBucket({
                   sprint bucket.
                 </span>
                 <span className="mt-1 block">
-                  <strong className="text-slate-800">Σ Stories</strong> — sum of <em>Est days</em> on all user stories in
+                  <strong className="text-slate-800">Σ Stories</strong> — sum of <em>Est Days</em> on all user stories in
                   this bucket. The gauge uses this total vs Capacity.
                 </span>
                 <span className="mt-1 block text-slate-600">
@@ -444,12 +470,10 @@ export function SprintCapacityBoard({
   onUnscheduleStory,
   onOpenStory,
   teamSelectorSlot,
+  workspaceDirectoryUsers = [],
 }: SprintCapacityBoardProps) {
-  /**
-   * Capacity assignment is scoped by sprint board key (year+sprint+team bucket set), not by epic.team.
-   * Keep the visible story map broad so assigned cards always render after drop.
-   */
-  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, null);
+  /** Same story rows as sprint Kanban for the selected delivery team (or all teams). */
+  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, selectedTeamId);
   const storyById = new Map(
     rows.map((row) => [
       row.story.id,
@@ -458,42 +482,45 @@ export function SprintCapacityBoard({
         title: row.story.title,
         epicTitle: row.epic.title,
         estimatedDays: Number(row.story.estimatedDays ?? 0),
-      },
+        assigneeLabel: storyAssigneeDisplayLabel(row.story),
+      } satisfies CapacityStoryCardModel,
     ]),
   );
-  const fullRoster = fullDeliveryCapacityRoster();
+  const assigneeRoster = assigneeMatchRosterForSprintTeam(selectedTeamId, workspaceDirectoryUsers);
   /**
-   * Only show capacity columns and filter chips for people who matter on this sprint — same idea as Kanban
-   * (not the full `defaultMembersForTeam` roster). Include a column if they have a story here or already have
-   * cards in that bucket from persisted capacity state.
+   * Always include everyone on the selected delivery team (or full combined roster for “All teams”),
+   * then add anyone else who has sprint work or persisted bucket assignments.
    */
-  const memberSet = new Set<string>();
+  const memberSet = new Set<string>(assigneeRoster);
   for (const row of rows) {
-    const m = sprintCapacityAssigneeBucket(row.story.assignee, fullRoster);
+    const m = sprintCapacityAssigneeBucket(row.story.assignee, assigneeRoster);
     if (m) memberSet.add(m);
   }
   for (const [key, ids] of Object.entries(capacityBoard.assignments ?? {})) {
     if (key === SPRINT_CAPACITY_OTHER_BUCKET) continue;
-    if (Array.isArray(ids) && ids.length > 0) memberSet.add(key);
+    if (Array.isArray(ids) && ids.length > 0 && ids.some((id) => storyById.has(id))) {
+      memberSet.add(key);
+    }
   }
+  const otherIds = capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET] ?? [];
   const needsOtherColumn =
-    (capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0 ||
-    rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, fullRoster) == null);
+    otherIds.some((id) => storyById.has(id)) ||
+    rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, assigneeRoster) == null);
   const sortedPeopleCols = [...memberSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   const members = [...sortedPeopleCols, ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
 
   const assigneeFilterOptions = useMemo(() => {
-    const fromStories = new Set<string>();
+    const labels = new Set<string>(assigneeMatchRosterForSprintTeam(selectedTeamId, workspaceDirectoryUsers));
     for (const row of rows) {
-      fromStories.add(storyAssigneeDisplayLabel(row.story));
+      labels.add(storyAssigneeDisplayLabel(row.story));
     }
-    const named = [...fromStories]
+    const named = [...labels]
       .filter((n) => n !== "Unassigned")
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     const out: string[] = [...named];
-    if (fromStories.has("Unassigned")) out.push("Unassigned");
+    if (labels.has("Unassigned")) out.push("Unassigned");
     return out;
-  }, [rows]);
+  }, [rows, selectedTeamId, workspaceDirectoryUsers]);
 
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string[]>([]);
   const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);
@@ -542,7 +569,9 @@ export function SprintCapacityBoard({
   const teamLabel =
     selectedTeamId && isKnownEpicTeamId(selectedTeamId)
       ? MONTH_TEAM_COLUMNS.find((t) => t.id === selectedTeamId)?.label ?? "Team"
-      : "All teams (combined)";
+      : selectedTeamId
+        ? teamLabelForWorkspaceUser(selectedTeamId)
+        : "All teams (combined)";
   const gradientKey = teamKey.replace(/[^a-zA-Z0-9]+/g, "-");
 
   let teamTotalCapacity = 0;

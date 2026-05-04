@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
+import { assigneeMatchRosterForSprintTeam, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,7 @@ function assigneeFilterIcon(name: string): LucideIcon {
   return name === "Unassigned" ? UserX : UserRound;
 }
 
-/** Same names as filter circles, plus the story’s current assignee (for typing/editing). No extra roster-only names. */
+/** Roster for the active team filter plus names on stories (for typing/editing). */
 function kanbanAssigneeSuggestions(
   boardStoryAssigneeNames: ReadonlySet<string>,
   currentAssignee: string | null | undefined,
@@ -381,6 +382,7 @@ type SprintKanbanProps = {
   onPatchStory?: (storyId: string, patch: SprintKanbanStoryPatch) => void;
   /** When viewing a closed sprint, jump to the first still-open sprint in `planYear` (same team filter). */
   onGoToOpenSprint?: (yearSprint: number) => void;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
 export function SprintKanbanBoard({
@@ -397,6 +399,7 @@ export function SprintKanbanBoard({
   onOpenStory,
   onPatchStory,
   onGoToOpenSprint,
+  workspaceDirectoryUsers = [],
 }: SprintKanbanProps) {
   const sprintClosed = sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
   /** Fresh on each render so the target matches wall-clock “today” when the tab stays open across a sprint boundary. */
@@ -408,25 +411,25 @@ export function SprintKanbanBoard({
     [initiatives, month, yearSprint, filterEpicTeamId],
   );
 
-  /** Names on visible sprint stories — same set that drives filter circles; merged into edit autocomplete. */
+  /** Team roster + assignees on visible sprint stories — drives filter chips and assignee autocomplete. */
   const boardStoryAssigneeNames = useMemo(() => {
-    const s = new Set<string>();
+    const s = new Set<string>(assigneeMatchRosterForSprintTeam(filterEpicTeamId, workspaceDirectoryUsers));
     for (const row of allRows) {
       const a = row.story.assignee?.trim();
       if (a) s.add(a);
     }
     return s;
-  }, [allRows]);
+  }, [allRows, filterEpicTeamId, workspaceDirectoryUsers]);
 
   const assigneeOptions = useMemo(() => {
-    const names = new Set<string>();
+    const names = new Set<string>(assigneeMatchRosterForSprintTeam(filterEpicTeamId, workspaceDirectoryUsers));
     for (const row of allRows) names.add(storyAssigneeLabel(row.story));
     return [...names].sort((a, b) => {
       if (a === "Unassigned") return 1;
       if (b === "Unassigned") return -1;
       return a.localeCompare(b, undefined, { sensitivity: "base" });
     });
-  }, [allRows]);
+  }, [allRows, filterEpicTeamId, workspaceDirectoryUsers]);
 
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);

@@ -1,9 +1,10 @@
 import { StoryStatus } from "@/lib/generated/prisma";
 import { epicOriginalEstimateDays, epicStoryEstimateDaysSum, type EstimateSource } from "@/lib/epic-estimates";
 import {
-  fullDeliveryCapacityRoster,
+  assigneeMatchRosterForSprintTeam,
   SPRINT_CAPACITY_OTHER_BUCKET,
   sprintCapacityAssigneeBucket,
+  type SprintWorkspaceDirectoryUser,
 } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -287,21 +288,26 @@ function sprintCapacityVisibleMemberKeys(
   yearSprint: number,
   capacityBoard: { capacities: Record<string, number>; assignments: Record<string, string[]> },
   filterEpicTeamId?: string | null,
+  directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): string[] {
   const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId ?? null);
-  const fullRoster = fullDeliveryCapacityRoster();
-  const memberSet = new Set<string>();
+  const storyIds = new Set(rows.map((r) => r.story.id));
+  const assigneeRoster = assigneeMatchRosterForSprintTeam(filterEpicTeamId ?? null, directoryUsers);
+  const memberSet = new Set<string>(assigneeRoster);
   for (const row of rows) {
-    const m = sprintCapacityAssigneeBucket(row.story.assignee, fullRoster);
+    const m = sprintCapacityAssigneeBucket(row.story.assignee, assigneeRoster);
     if (m) memberSet.add(m);
   }
   for (const [key, ids] of Object.entries(capacityBoard.assignments ?? {})) {
     if (key === SPRINT_CAPACITY_OTHER_BUCKET) continue;
-    if (Array.isArray(ids) && ids.length > 0) memberSet.add(key);
+    if (Array.isArray(ids) && ids.length > 0 && ids.some((id) => storyIds.has(id))) {
+      memberSet.add(key);
+    }
   }
+  const otherIds = capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET] ?? [];
   const needsOtherColumn =
-    (capacityBoard.assignments[SPRINT_CAPACITY_OTHER_BUCKET]?.length ?? 0) > 0 ||
-    rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, fullRoster) == null);
+    otherIds.some((id) => storyIds.has(id)) ||
+    rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, assigneeRoster) == null);
   const sortedPeopleCols = [...memberSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   return [...sortedPeopleCols, ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
 }
@@ -326,6 +332,7 @@ function buildWorkloadCapacityByAssignee(
   initiatives: InitiativeItem[],
   capacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
   filterEpicTeamId?: string | null,
+  directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): { workloadCapacityByAssignee: WorkloadCapacityRow[]; workloadSprintCalendarDaysLeft: number } {
   const workloadSprintCalendarDaysLeft = sprintCalendarDaysRemaining(planYear, month, yearSprint);
   const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
@@ -378,13 +385,14 @@ function buildWorkloadCapacityByAssignee(
 
   const boardStoryRows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId ?? null);
   const storyById = new Map(boardStoryRows.map((r) => [r.story.id, r.story]));
-  const fullRoster = fullDeliveryCapacityRoster();
+  const fullRoster = assigneeMatchRosterForSprintTeam(filterEpicTeamId ?? null, directoryUsers);
   const visibleMembers = sprintCapacityVisibleMemberKeys(
     initiatives,
     month,
     yearSprint,
     capacityBoard,
     filterEpicTeamId,
+    directoryUsers,
   );
   const visibleSet = new Set(visibleMembers);
   const visibleHasOther = visibleMembers.includes(SPRINT_CAPACITY_OTHER_BUCKET);
@@ -679,6 +687,7 @@ export function buildSprintAnalytics(
   filterEpicTeamId?: string | null,
   estimateSource: EstimateSource = "auto",
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): SprintAnalyticsData {
   const stories = collectMonthStories(initiatives, month, filterEpicTeamId, estimateSource);
   const workload = buildWorkloadByAssignee(stories, month, yearSprint);
@@ -690,6 +699,7 @@ export function buildSprintAnalytics(
     initiatives,
     sprintCapacityBoard,
     filterEpicTeamId,
+    workspaceDirectoryUsers,
   );
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);
   return {

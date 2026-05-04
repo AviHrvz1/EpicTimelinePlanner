@@ -18,6 +18,7 @@ import {
 } from "recharts";
 
 import { buildSprintAnalytics, BurndownMetric } from "@/lib/sprint-analytics";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { type EstimateSource } from "@/lib/epic-estimates";
 import { storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { InitiativeItem } from "@/lib/types";
@@ -144,6 +145,8 @@ type SprintAnalyticsProps = {
   filterEpicTeamId?: string | null;
   /** When provided, Sprint load matches Sprint capacity board caps and bucket assignments. */
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null;
+  /** Users directory rows — merged into assignee rosters for the active team filter. */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   onOpenStory?: (storyId: string) => void;
 };
 
@@ -154,6 +157,7 @@ export function SprintAnalytics({
   planYear,
   filterEpicTeamId = null,
   sprintCapacityBoard = null,
+  workspaceDirectoryUsers = [],
   onOpenStory,
 }: SprintAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
@@ -174,8 +178,19 @@ export function SprintAnalytics({
         filterEpicTeamId,
         estimateSource,
         sprintCapacityBoard,
+        workspaceDirectoryUsers,
       ),
-    [initiatives, month, yearSprint, metric, planYear, filterEpicTeamId, estimateSource, sprintCapacityBoard],
+    [
+      initiatives,
+      month,
+      yearSprint,
+      metric,
+      planYear,
+      filterEpicTeamId,
+      estimateSource,
+      sprintCapacityBoard,
+      workspaceDirectoryUsers,
+    ],
   );
 
   const pieData = analytics.statusPie.filter((x) => x.value > 0);

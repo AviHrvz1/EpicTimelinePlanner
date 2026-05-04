@@ -46,7 +46,9 @@ import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { MONTHS } from "@/lib/timeline";
+import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { useResizableTableColumns } from "@/lib/use-resizable-table-columns";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
@@ -147,6 +149,8 @@ type EpicFormDialogProps = {
   onAddComment?: (epicId: string, body: string) => Promise<void>;
   onExitComplete?: () => void;
   surfaceAnchorRef?: RefObject<HTMLElement | null>;
+  /** Users directory — custom team slugs appear in the team combobox alongside delivery teams. */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
 export function EpicFormDialog({
@@ -165,6 +169,7 @@ export function EpicFormDialog({
   onPatchStory,
   onAddComment,
   surfaceAnchorRef,
+  workspaceDirectoryUsers = [],
 }: EpicFormDialogProps) {
   const [title, setTitle] = useState(epic?.title ?? "");
   const [icon, setIcon] = useState(epic?.icon ?? "📁");
@@ -265,7 +270,7 @@ export function EpicFormDialog({
       setPlanMonthDraft("");
     }
     setForceTeamFieldEdit(false);
-    setTeamDraft(epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : "");
+    setTeamDraft(epic?.team ? normalizeWorkspaceUserTeam(epic.team) : "");
     setActivityTab("comments");
     if (epic?.id) {
       const raw = window.localStorage.getItem(`epic-labels:${epic.id}`) ?? "";
@@ -556,7 +561,28 @@ export function EpicFormDialog({
     setLabelsAutocompleteIndex(-1);
   }, [newLabel, labelsDraft, filteredLabelSuggestions.length]);
 
-  const persistedTeam = epic?.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : null;
+  const directoryExtraTeamIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const u of workspaceDirectoryUsers) {
+      const id = normalizeWorkspaceUserTeam(u.team);
+      if (id && !MONTH_TEAM_IDS.includes(id)) ids.add(id);
+    }
+    for (const initiative of initiatives) {
+      for (const row of initiative.epics ?? []) {
+        const id = normalizeWorkspaceUserTeam(row.team);
+        if (id && !MONTH_TEAM_IDS.includes(id)) ids.add(id);
+      }
+    }
+    return [...ids].sort((a, b) =>
+      teamLabelForWorkspaceUser(a).localeCompare(teamLabelForWorkspaceUser(b), undefined, { sensitivity: "base" }),
+    );
+  }, [workspaceDirectoryUsers, initiatives]);
+
+  const persistedTeam = epic?.team ? normalizeWorkspaceUserTeam(epic.team) || null : null;
+  const persistedTeamLabel =
+    !persistedTeam
+      ? "Not set"
+      : MONTH_TEAM_COLUMNS.find((t) => t.id === persistedTeam)?.label ?? teamLabelForWorkspaceUser(persistedTeam);
   const showTeamSelect = !persistedTeam || forceTeamFieldEdit;
   const planningYearDisplay =
     selectedInitiative?.year != null ? String(selectedInitiative.year) : epic?.planYear != null ? String(epic.planYear) : "Not set";
@@ -1737,13 +1763,15 @@ export function EpicFormDialog({
                     <TeamIdCombobox
                       teamId={teamDraft}
                       onTeamIdChange={setTeamDraft}
+                      allowCustomTeam
+                      extraTeamIds={directoryExtraTeamIds}
                       placeholder="Type or pick a team"
                       className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
                     />
                   ) : (
                     <div className="flex items-center gap-2">
                       <input
-                        value={MONTH_TEAM_COLUMNS.find((t) => t.id === persistedTeam)?.label ?? persistedTeam ?? "Not set"}
+                        value={persistedTeamLabel}
                         readOnly
                         className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-700"
                       />

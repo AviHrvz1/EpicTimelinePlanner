@@ -43,18 +43,21 @@ import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { computeSprintKanbanSummaryStats } from "@/lib/sprint-plan";
+import { sprintStoryBoardEpicTeamFilter, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import { isEpicPlanDraggableId } from "@/lib/epic-dnd-ids";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTERS } from "@/lib/timeline";
 import {
   MONTH_TEAM_COLUMNS,
+  MONTH_TEAM_IDS,
   isKnownEpicTeamId,
   monthTeamBoardStorageKey,
   monthTeamLabelForId,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem, type UserStoryItem } from "@/lib/types";
+import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import {
   clampYearSprint,
   firstGlobalSprintForMonth,
@@ -819,6 +822,8 @@ type TimelineGridProps = {
     storyId: string,
     patch: { assignee?: string | null; estimatedDays?: number; daysLeft?: number },
   ) => void;
+  /** Users directory — merged into sprint Kanban / capacity / insights assignee rosters by team. */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   sprintRetrospective?: (SprintRetrospectiveDoc & { updatedAt: string }) | null;
   onSaveSprintRetrospective?: (doc: SprintRetrospectiveDoc) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
@@ -1096,6 +1101,7 @@ export function TimelineGrid({
   onSprintCapacityStoryUnschedule,
   onRequestSprintKanbanStoryUnschedule,
   onSprintKanbanStoryPatch,
+  workspaceDirectoryUsers = [],
   sprintRetrospective = null,
   onSaveSprintRetrospective,
   showRoadmapProgress,
@@ -1989,7 +1995,7 @@ export function TimelineGrid({
     if (monthPlanTab !== "sprint-kanban" || resolvedActiveYearSprint == null) return null;
     const m = sprintBoardContextMonth;
     if (m == null) return null;
-    const teamId = isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null;
+    const teamId = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
     return computeSprintKanbanSummaryStats(initiatives, m, resolvedActiveYearSprint, teamId);
   }, [monthPlanTab, initiatives, resolvedActiveYearSprint, sprintBoardContextMonth, sprintStoryBoardTeamId]);
 
@@ -2711,9 +2717,22 @@ export function TimelineGrid({
       monthPlanTab === "sprint-status" ||
       monthPlanTab === "sprint-retrospective" ||
       monthPlanTab === "month-status");
-  const selectedSprintTeamId = isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : "all";
-  const sprintTeamOptions = useMemo(
-    () => [
+  const selectedSprintTeamId = sprintStoryBoardTeamId ?? "all";
+  const sprintTeamOptions = useMemo(() => {
+    const customIds = new Map<string, string>();
+    for (const u of workspaceDirectoryUsers) {
+      const id = normalizeWorkspaceUserTeam(u.team);
+      if (!id || MONTH_TEAM_IDS.includes(id)) continue;
+      if (!customIds.has(id)) customIds.set(id, teamLabelForWorkspaceUser(id));
+    }
+    const customOpts = [...customIds.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1], undefined, { sensitivity: "base" }))
+      .map(([value, label]) => ({
+        value,
+        label,
+        icon: <span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />,
+      }));
+    const base = [
       {
         value: "all",
         label: "All Teams",
@@ -2734,9 +2753,18 @@ export function TimelineGrid({
           />
         ),
       })),
-    ],
-    [],
-  );
+      ...customOpts,
+    ];
+    const st = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+    if (st && !base.some((o) => o.value === st)) {
+      base.push({
+        value: st,
+        label: teamLabelForWorkspaceUser(st),
+        icon: <span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />,
+      });
+    }
+    return base;
+  }, [workspaceDirectoryUsers, sprintStoryBoardTeamId]);
   const selectedSprintTeamOption =
     sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
   const focusedQuarterDisplayName = useMemo(() => {
@@ -3006,6 +3034,11 @@ export function TimelineGrid({
         ? RIGHT_PANEL_MIN_CONTENT_PX
         : undefined
     : undefined;
+
+  /** Capacity boards stack many columns; keep native scrollbars on this surface (`.planning-surface-scroll` hides them). */
+  const showCapacityPlanningScrollbar =
+    (activeMonth != null && (monthPlanTab === "month-capacity" || monthPlanTab === "sprint-capacity")) ||
+    (activeMonth == null && quarterViewTab === "capacity");
 
   /** Chips share the same sprint column grid as Gantt lanes so they shrink and scroll with the timeline. */
   const useRoadmapGanttChipTrack =
@@ -3476,7 +3509,12 @@ export function TimelineGrid({
       <div
         key={isInsightsSurfaceRender ? `insights-${activeMonth ?? "year"}-${focusedQuarterLabel ?? "all"}` : "planning-surface"}
         ref={timelineContentScrollRef}
-        className="planning-surface-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain"
+        className={cn(
+          "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain",
+          showCapacityPlanningScrollbar
+            ? "min-w-0 [scrollbar-gutter:stable] [scrollbar-width:thin]"
+            : "planning-surface-scroll",
+        )}
       >
       {activeMonth ? (
         <div className="relative z-30 h-0">
@@ -3912,14 +3950,14 @@ export function TimelineGrid({
                 monthPlanTab !== "month-status" &&
                 monthPlanTab !== "sprint-status" &&
                 "rounded-xl border border-white/70 bg-white/95 shadow-inner ring-1 ring-slate-200/45 backdrop-blur-sm",
-              monthPlanTab === "sprint-kanban" ? "min-h-min overflow-visible" : "overflow-hidden",
-              monthPlanTab === "epic-gantt" ||
-              monthPlanTab === "month-capacity" ||
-              monthPlanTab === "sprint-retrospective"
-                ? "min-h-[56rem]"
-                : monthPlanTab === "sprint-kanban"
-                  ? "min-h-min"
-                  : "min-h-0",
+              monthPlanTab === "sprint-kanban"
+                ? "min-h-min overflow-visible"
+                : cn(
+                    "overflow-hidden",
+                    monthPlanTab === "epic-gantt" || monthPlanTab === "sprint-retrospective"
+                      ? "min-h-[56rem]"
+                      : "min-h-0",
+                  ),
             )}
           >
             {monthPlanTab === "epic-gantt" && activeMonth != null ? (
@@ -4132,7 +4170,7 @@ export function TimelineGrid({
                 </div>
               </div>
             ) : monthPlanTab === "month-capacity" ? (
-              <div className="flex-1 p-3 sm:p-5">
+              <div className="p-3 sm:p-5">
                 <MonthTeamCapacityBoard
                   initiatives={initiatives}
                   year={currentYear}
@@ -4232,7 +4270,8 @@ export function TimelineGrid({
                   planYear={currentYear}
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
-                  filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  filterEpicTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
+                  workspaceDirectoryUsers={workspaceDirectoryUsers}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
                   sprintToolbarEnd={
@@ -4245,17 +4284,18 @@ export function TimelineGrid({
                   onOpenStory={onOpenStory ?? (() => {})}
                   onPatchStory={onSprintKanbanStoryPatch}
                   onGoToOpenSprint={(ys) =>
-                    onEnterSprintStoryBoard?.(ys, isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null)
+                    onEnterSprintStoryBoard?.(ys, sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId))
                   }
                 />
               </div>
             ) : monthPlanTab === "sprint-capacity" ? (
-              <div className="flex-1 p-3 sm:p-5">
+              <div className="p-3 sm:p-5">
                 <SprintCapacityBoard
                   initiatives={initiatives}
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
-                  selectedTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  selectedTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
+                  workspaceDirectoryUsers={workspaceDirectoryUsers}
                   capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}
                   onCapacityChange={(member, days) => onSprintCapacityChange?.(member, days)}
                   onEstimateChange={(storyId, estimatedDays) =>
@@ -4318,11 +4358,11 @@ export function TimelineGrid({
                   initiatives={initiatives}
                   month={activeMonth}
                   planYear={currentYear}
-                  filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  filterEpicTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
                   onOpenEpic={onOpenEpic}
                   onOpenStory={onOpenStory ?? (() => {})}
                   onOpenSprintKanban={(yearSprint, teamId) =>
-                    onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+                    onEnterSprintStoryBoard?.(yearSprint, sprintStoryBoardEpicTeamFilter(teamId))
                   }
                 />
               </div>
@@ -4333,8 +4373,9 @@ export function TimelineGrid({
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
                   planYear={currentYear}
-                  filterEpicTeamId={isKnownEpicTeamId(sprintStoryBoardTeamId) ? sprintStoryBoardTeamId : null}
+                  filterEpicTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
                   sprintCapacityBoard={sprintCapacityBoard}
+                  workspaceDirectoryUsers={workspaceDirectoryUsers}
                   onOpenStory={onOpenStory ?? (() => {})}
                 />
               </div>
@@ -5054,7 +5095,7 @@ export function TimelineGrid({
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
       <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
         {panelHScroll ? (
-          <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]">
             <div
               className="flex min-h-0 min-w-0 w-max min-w-full flex-1 flex-col"
               style={panelScrollMinWidthPx != null ? { minWidth: panelScrollMinWidthPx } : undefined}
@@ -5066,11 +5107,9 @@ export function TimelineGrid({
             </div>
           </div>
         ) : (
-          <div className="min-h-0 min-w-0 flex-1">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="shrink-0">{timelineHeaderRow}</div>
-              {planningSurface}
-            </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="shrink-0">{timelineHeaderRow}</div>
+            {planningSurface}
           </div>
         )}
       </div>

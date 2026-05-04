@@ -16,11 +16,22 @@ import {
   PanelLeftClose,
   Search,
   Eraser,
+  User,
   Users,
   Zap,
 } from "lucide-react";
 import Image from "next/image";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -35,7 +46,9 @@ import {
   storyListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
-import { MONTH_TEAM_COLUMNS, isKnownEpicTeamId } from "@/lib/month-team-board";
+import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
+import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint } from "@/lib/year-sprint";
@@ -44,6 +57,117 @@ import { cn } from "@/lib/utils";
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
   if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
+
+function normalizedEpicTeamId(epic: EpicItem): string {
+  const raw = epic.team?.trim();
+  if (!raw) return "";
+  return normalizeWorkspaceUserTeam(raw);
+}
+
+function storyAssigneeDisplayName(story: UserStoryItem): string | null {
+  const t = story.assignee?.trim();
+  return t || null;
+}
+
+/** Same visual language as Gantt bar + insights truncation hovers (indigo gradient). */
+const LEFT_PANEL_TRUNCATION_TOOLTIP_CLASS =
+  "pointer-events-none w-max max-w-[min(22rem,calc(100vw-2rem))] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug text-slate-700 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm";
+
+function useStoryTitleTruncationFlag(text: string) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setIsTruncated(el.scrollWidth > el.clientWidth + 1);
+  }, []);
+  useLayoutEffect(() => {
+    measure();
+  }, [text, measure]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+  return { ref, isTruncated };
+}
+
+function LeftPanelStoryTitleTooltipPortal({
+  show,
+  anchorRef,
+  text,
+}: {
+  show: boolean;
+  anchorRef: RefObject<HTMLButtonElement | null>;
+  text: string;
+}) {
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const updatePosition = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCoords({ top: r.bottom + 6, left: r.left });
+  }, [anchorRef]);
+  useLayoutEffect(() => {
+    if (!show) return;
+    updatePosition();
+    const onReposition = () => updatePosition();
+    window.addEventListener("scroll", onReposition, true);
+    window.addEventListener("resize", onReposition);
+    return () => {
+      window.removeEventListener("scroll", onReposition, true);
+      window.removeEventListener("resize", onReposition);
+    };
+  }, [show, updatePosition, text]);
+  if (!show || typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{ position: "fixed", top: coords.top, left: coords.left, zIndex: 9999 }}
+      className={LEFT_PANEL_TRUNCATION_TOOLTIP_CLASS}
+    >
+      {text}
+    </div>,
+    document.body,
+  );
+}
+
+function MiddlePanelStoryTitleButton({
+  storyTitle,
+  ariaLabel,
+  onOpen,
+  className,
+}: {
+  storyTitle: string;
+  ariaLabel: string;
+  onOpen: () => void;
+  className: string;
+}) {
+  const { ref, isTruncated } = useStoryTitleTruncationFlag(storyTitle);
+  const [hover, setHover] = useState(false);
+  return (
+    <>
+      <span
+        className="min-w-0 flex-1"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
+        <button
+          ref={ref}
+          type="button"
+          onClick={onOpen}
+          aria-label={ariaLabel}
+          className={cn("min-w-0 w-full truncate", className)}
+        >
+          {storyTitle}
+        </button>
+      </span>
+      <LeftPanelStoryTitleTooltipPortal show={hover && isTruncated} anchorRef={ref} text={storyTitle} />
+    </>
+  );
 }
 
 function quarterFromMonth(month: number): string {
@@ -413,6 +537,11 @@ type InitiativeListPanelProps = {
   panelStatusQuickFilter?: "Scheduled" | "Unscheduled" | null;
   /** Optional action to hide this entire left panel. */
   onHidePanel?: () => void;
+  /**
+   * Users directory (and derived custom teams) — merged into the Epics “All teams” filter with Platform /
+   * Experience / Data.
+   */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
 function DraggableInitiativeCard({
@@ -561,7 +690,7 @@ function InitiativeTreeEpicRow({
           className="min-w-0 flex-1 rounded-md px-0.5 text-left font-normal hover:bg-white/90"
           aria-label={`Open epic ${epic.title}`}
         >
-          <div className="flex min-w-0 items-center gap-1 pl-0">
+          <div className="flex min-w-0 items-center gap-2.5 pl-0">
             <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
               <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
             </span>
@@ -626,22 +755,30 @@ function InitiativeTreeEpicRow({
                   {stories.map((story) => {
                     const meta = storyStatusMeta(story, planContextMonth);
                     const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
-                    const a11y = [story.title, statusLabel, sprintLabel].filter(Boolean).join(", ");
+                    const assigneeName = storyAssigneeDisplayName(story);
+                    const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
                     return (
                       <li key={story.id}>
                         <div className="group/story flex min-h-[28px] w-full items-center gap-2 rounded-md py-0.5 pr-0.5 pl-0 transition-colors hover:bg-white/90">
                           <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                             <UserStoryIcon />
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => onOpenStory(story.id)}
-                            aria-label={a11y}
-                            className="min-w-0 flex-1 truncate text-left text-[14px] font-normal text-slate-700 antialiased hover:text-foreground"
-                          >
-                            {story.title}
-                          </button>
-                          <div className="flex max-w-[55%] shrink-0 items-center justify-end gap-1">
+                          <MiddlePanelStoryTitleButton
+                            storyTitle={story.title}
+                            ariaLabel={a11y}
+                            onOpen={() => onOpenStory(story.id)}
+                            className="text-left text-[14px] font-normal text-slate-700 antialiased hover:text-foreground"
+                          />
+                          <div className="flex max-w-[58%] shrink-0 items-center justify-end gap-1">
+                            {assigneeName ? (
+                              <span
+                                className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-0.5 truncate rounded-md border border-border/60 bg-background px-1 py-0.5 text-[11px] font-medium text-slate-600"
+                                title={assigneeName}
+                              >
+                                <User className="size-3 shrink-0 text-slate-500" aria-hidden />
+                                <span className="min-w-0 truncate">{assigneeName}</span>
+                              </span>
+                            ) : null}
                             {sprintLabel ? (
                               <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                                 {sprintLabel}
@@ -1098,8 +1235,8 @@ function SprintEpicCard({
             className="w-full rounded-md px-0.5 text-left font-normal hover:bg-slate-50"
             aria-label={`Open epic ${epic.title}`}
           >
-            <div className="flex w-full min-w-0 items-center gap-1">
-              <div className="flex min-w-0 flex-1 items-center gap-1 pl-0">
+            <div className="flex w-full min-w-0 items-center gap-2.5">
+              <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-0">
                 <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                   <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
                 </span>
@@ -1171,13 +1308,14 @@ function SprintEpicCard({
             stories.map((story) => {
               const meta = storyStatusMeta(story, planContextMonth);
               const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
+              const assigneeName = storyAssigneeDisplayName(story);
               const resolvedStorySprint =
                 planContextMonth == null ? story.sprint : resolveStoryYearSprint(story, planContextMonth);
               const isScheduledInActiveSprint =
                 activeYearSprint != null &&
                 resolvedStorySprint != null &&
                 resolvedStorySprint === activeYearSprint;
-              const a11y = [story.title, statusLabel, sprintLabel].filter(Boolean).join(", ");
+              const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
               return (
                 <div
                   key={story.id}
@@ -1199,17 +1337,24 @@ function SprintEpicCard({
                   <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                     <UserStoryIcon />
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => onOpenStory(story.id)}
-                    aria-label={a11y}
-                    className="min-w-0 flex-1 truncate rounded-md px-0.5 text-left text-[14px] font-normal text-slate-700 hover:text-foreground"
-                  >
-                    {story.title}
-                  </button>
-                  <div className="flex max-w-[55%] shrink-0 items-center justify-end gap-1">
+                  <MiddlePanelStoryTitleButton
+                    storyTitle={story.title}
+                    ariaLabel={a11y}
+                    onOpen={() => onOpenStory(story.id)}
+                    className="rounded-md px-0.5 text-left text-[14px] font-normal text-slate-700 hover:text-foreground"
+                  />
+                  <div className="flex max-w-[58%] shrink-0 items-center justify-end gap-1">
+                    {assigneeName ? (
+                      <span
+                        className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-0.5 truncate rounded-md border border-border/60 bg-background px-1 py-0.5 text-[11px] font-medium text-slate-600"
+                        title={assigneeName}
+                      >
+                        <User className="size-3 shrink-0 text-slate-500" aria-hidden />
+                        <span className="min-w-0 truncate">{assigneeName}</span>
+                      </span>
+                    ) : null}
                     {sprintLabel ? (
-                      <span className="truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                         {sprintLabel}
                       </span>
                     ) : null}
@@ -1332,6 +1477,7 @@ export function InitiativeListPanel({
   onEpicAccordionChange,
   panelStatusQuickFilter = null,
   onHidePanel,
+  workspaceDirectoryUsers = [],
 }: InitiativeListPanelProps) {
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
@@ -1411,23 +1557,48 @@ export function InitiativeListPanel({
       icon: <CalendarDays className="size-3.5 text-slate-500" />,
     },
   ];
-  const teamFilterOptions: IconFilterOption<string>[] = [
-    { value: "all", label: "All Teams", icon: <Users className="size-3.5 text-slate-500" /> },
-    ...MONTH_TEAM_COLUMNS.map((team) => ({
-      value: team.id,
-      label: team.label,
-      icon: (
-        <span
-          className={cn(
-            "inline-block size-2.5 rounded-full",
-            team.id === "platform" && "bg-sky-500",
-            team.id === "experience" && "bg-violet-500",
-            team.id === "data" && "bg-amber-500",
-          )}
-        />
-      ),
-    })),
-  ];
+  const teamFilterOptions: IconFilterOption<string>[] = useMemo(() => {
+    const customIds = new Map<string, string>();
+    for (const u of workspaceDirectoryUsers) {
+      const id = normalizeWorkspaceUserTeam(u.team);
+      if (!id || MONTH_TEAM_IDS.includes(id)) continue;
+      if (!customIds.has(id)) customIds.set(id, teamLabelForWorkspaceUser(id));
+    }
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        const raw = epic.team?.trim();
+        if (!raw) continue;
+        const id = normalizeWorkspaceUserTeam(raw);
+        if (!id || MONTH_TEAM_IDS.includes(id)) continue;
+        if (!customIds.has(id)) customIds.set(id, teamLabelForWorkspaceUser(id));
+      }
+    }
+    const customOpts = [...customIds.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1], undefined, { sensitivity: "base" }))
+      .map(([value, label]) => ({
+        value,
+        label,
+        icon: <span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />,
+      }));
+    return [
+      { value: "all", label: "All Teams", icon: <Users className="size-3.5 text-slate-500" /> },
+      ...MONTH_TEAM_COLUMNS.map((team) => ({
+        value: team.id,
+        label: team.label,
+        icon: (
+          <span
+            className={cn(
+              "inline-block size-2.5 rounded-full",
+              team.id === "platform" && "bg-sky-500",
+              team.id === "experience" && "bg-violet-500",
+              team.id === "data" && "bg-amber-500",
+            )}
+          />
+        ),
+      })),
+      ...customOpts,
+    ];
+  }, [workspaceDirectoryUsers, initiatives]);
   const statusFilterOptions: IconFilterOption<
     "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
   >[] = [
@@ -1455,7 +1626,7 @@ export function InitiativeListPanel({
         return;
       }
       const id = withoutAll[0];
-      onSprintBoardTeamFilterSync(isKnownEpicTeamId(id) ? id : null);
+      onSprintBoardTeamFilterSync(id);
     },
     [onSprintBoardTeamFilterSync],
   );
@@ -1515,7 +1686,7 @@ export function InitiativeListPanel({
    * single-team chip so epics from every team stay visible in the list.
    */
   useEffect(() => {
-    if (isKnownEpicTeamId(monthEpicTeamFilterId)) {
+    if (monthEpicTeamFilterId) {
       setPanelTeamFilterIds([monthEpicTeamFilterId]);
       return;
     }
@@ -1580,8 +1751,9 @@ export function InitiativeListPanel({
   }, [initiatives, epicListScopeMonth, epicPanelQuarterMonths]);
   /** Month list scope: all epics for the month, or only those on the selected team when viewing that team’s sprint board. */
   const monthPanelEpics = useMemo(() => {
-    if (!isKnownEpicTeamId(monthEpicTeamFilterId)) return monthAssignedEpics;
-    return monthAssignedEpics.filter(({ epic }) => epic.team === monthEpicTeamFilterId);
+    if (!monthEpicTeamFilterId) return monthAssignedEpics;
+    const filterId = normalizeWorkspaceUserTeam(monthEpicTeamFilterId);
+    return monthAssignedEpics.filter(({ epic }) => normalizedEpicTeamId(epic) === filterId);
   }, [monthAssignedEpics, monthEpicTeamFilterId]);
   const monthPanelEpicsFiltered = useMemo(() => {
     return monthPanelEpics.filter(({ epic, initiative }) => {
@@ -1594,7 +1766,7 @@ export function InitiativeListPanel({
           return false;
         }
       }
-      if (!panelTeamFilterIds.includes("all") && !panelTeamFilterIds.includes(epic.team ?? "")) return false;
+      if (!panelTeamFilterIds.includes("all") && !panelTeamFilterIds.includes(normalizedEpicTeamId(epic))) return false;
       if (!panelStatusFilters.includes("all")) {
         const planning = epicPlanningStatusMeta(epic).label;
         const execution = epicExecutionStatusMeta(epic).label as "To Do" | "In Progress" | "Done" | "Approved";
@@ -1687,7 +1859,9 @@ export function InitiativeListPanel({
         }
       }
       if (!panelTeamFilterIds.includes("all")) {
-        const hasTeam = (initiative.epics ?? []).some((epic) => panelTeamFilterIds.includes(epic.team ?? ""));
+        const hasTeam = (initiative.epics ?? []).some((epic) =>
+          panelTeamFilterIds.includes(normalizedEpicTeamId(epic)),
+        );
         if (!hasTeam) return false;
       }
       if (!panelStatusFilters.includes("all")) {

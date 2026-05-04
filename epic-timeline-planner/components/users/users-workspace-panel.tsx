@@ -58,6 +58,14 @@ type SortKey = "name" | "email" | "team" | "permission" | "status";
 type SortState = { key: SortKey; dir: "asc" | "desc" };
 type UserEditField = "name" | "email" | "team" | "permission";
 
+/** Lets roadmap sprint views refetch unfiltered directory users after directory edits. */
+const WORKSPACE_USERS_CHANGED_EVENT = "epic-planner-workspace-users-changed";
+
+function notifyWorkspaceUsersChangedForSprint(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(WORKSPACE_USERS_CHANGED_EVENT));
+}
+
 const USER_DIRECTORY_DEFAULT_COLUMN_ORDER: SortKey[] = ["name", "email", "team", "permission", "status"];
 const USERS_DIRECTORY_COLUMN_ORDER_STORAGE_KEY = "epic-planner.users-directory.column-order.v1";
 /** Custom team slugs registered from “Add team” (no server entity; merged into combobox + filter hints). */
@@ -115,6 +123,15 @@ const USER_DIR_TD_BASE = "min-w-0 px-2 py-2 align-middle";
 /** Drawer field captions — larger than inputs (`cellInputCn` keeps control heights unchanged). */
 const USER_DRAWER_FIELD_LABEL_CLASS = "mb-1.5 block text-[15px] font-semibold text-slate-800";
 
+function workspaceUserRequiredFieldsMessage(nameTrimmed: string, emailTrimmed: string): string | null {
+  const needName = !nameTrimmed;
+  const needEmail = !emailTrimmed;
+  if (!needName && !needEmail) return null;
+  if (needName && needEmail) return "Name and email are required.";
+  if (needName) return "Name is required.";
+  return "Email is required.";
+}
+
 function isSortKey(v: string): v is SortKey {
   return v === "name" || v === "email" || v === "team" || v === "permission" || v === "status";
 }
@@ -158,7 +175,21 @@ const cellInputCn =
   "h-9 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-[16px] outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200/80 disabled:opacity-60";
 
 function emptyForm() {
-  return { name: "", email: "", team: "" as string, permission: "Viewer" as string };
+  return { name: "", email: "", team: "" as string, permission: "" as string };
+}
+
+/** Drawer field stays empty for Viewer so the placeholder shows; other roles show their value. */
+function permissionToFormValue(stored: string | null | undefined): string {
+  const p = (stored ?? "").trim();
+  if (!p) return "";
+  const match = WORKSPACE_USER_PERMISSIONS.find((x) => x.toLowerCase() === p.toLowerCase());
+  if (match === "Viewer") return "";
+  return match ?? p;
+}
+
+/** Choosing or typing "Viewer" clears the field so only the placeholder represents the default. */
+function permissionFromPickerInput(next: string): string {
+  return next.trim().toLowerCase() === "viewer" ? "" : next;
 }
 
 function teamFilterLabel(f: string): string {
@@ -775,6 +806,7 @@ export function UsersWorkspacePanel() {
       if (!res.ok) throw new Error(await res.text());
       const data = (await res.json()) as WorkspaceUserRow[];
       setRows(data);
+      notifyWorkspaceUsersChangedForSprint();
     } catch (e) {
       console.error(e);
       toast.error("Failed to load users");
@@ -952,6 +984,7 @@ export function UsersWorkspacePanel() {
         }
         const updated = data as WorkspaceUserRow;
         setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...updated } : r)));
+        notifyWorkspaceUsersChangedForSprint();
         return true;
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Update failed");
@@ -1017,7 +1050,7 @@ export function UsersWorkspacePanel() {
               name: r.name,
               email: r.email,
               team: r.team,
-              permission: r.permission,
+              permission: permissionToFormValue(r.permission),
             });
             setUserPanel({ kind: "view", user: r });
           }}
@@ -1067,14 +1100,18 @@ export function UsersWorkspacePanel() {
                         }}
                       >
                         {isOpen ? (
-                          <ChevronDown className="size-4 shrink-0 text-slate-600" aria-hidden />
+                          <ChevronDown className="size-4 shrink-0 self-center text-slate-600" aria-hidden />
                         ) : (
-                          <ChevronRight className="size-4 shrink-0 text-slate-600" aria-hidden />
+                          <ChevronRight className="size-4 shrink-0 self-center text-slate-600" aria-hidden />
                         )}
-                        {userDirectoryGroupLevelIcon(level)}
-                        <span className="shrink-0 text-slate-600">{USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}:</span>
-                        <span className="min-w-0 truncate">{g.label}</span>
-                        <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">
+                        <span className="flex size-4 shrink-0 items-center justify-center text-slate-500 [&_svg]:size-4">
+                          {userDirectoryGroupLevelIcon(level)}
+                        </span>
+                        <span className="flex shrink-0 items-center leading-none text-slate-600">
+                          {USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}:
+                        </span>
+                        <span className="min-w-0 truncate leading-none">{g.label}</span>
+                        <span className="flex shrink-0 items-center text-[12px] font-normal tabular-nums leading-none text-slate-500">
                           ({g.rows.length})
                         </span>
                       </button>
@@ -1216,8 +1253,9 @@ export function UsersWorkspacePanel() {
     blurActiveField();
     const name = form.name.trim();
     const email = form.email.trim().toLowerCase();
-    if (!name || !email) {
-      toast.message("Name and email are required.");
+    const requiredMsg = workspaceUserRequiredFieldsMessage(name, email);
+    if (requiredMsg) {
+      toast.message(requiredMsg);
       return;
     }
     if (!email.includes("@")) {
@@ -1260,8 +1298,9 @@ export function UsersWorkspacePanel() {
     blurActiveField();
     const name = form.name.trim();
     const email = form.email.trim().toLowerCase();
-    if (!name || !email) {
-      toast.message("Name and email are required.");
+    const requiredMsg = workspaceUserRequiredFieldsMessage(name, email);
+    if (requiredMsg) {
+      toast.message(requiredMsg);
       return;
     }
     if (!email.includes("@")) {
@@ -1276,7 +1315,9 @@ export function UsersWorkspacePanel() {
     const prevTeamNorm = normalizeWorkspaceUserTeam(viewUser.team || "");
     const teamChanged = nextTeam !== prevTeamNorm;
     if (teamChanged) body.team = nextTeam;
-    if (permission !== viewUser.permission) body.permission = permission;
+    if (permission !== normalizeWorkspaceUserPermission(viewUser.permission)) {
+      body.permission = permission;
+    }
     const announceNewTeam =
       teamChanged && shouldAnnounceNewDirectoryTeam(nextTeam, directoryTeamIds);
     if (Object.keys(body).length === 0) {
@@ -1433,10 +1474,12 @@ export function UsersWorkspacePanel() {
               className="flex h-10 min-w-[11rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
             >
               <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
-                <Layers3 className="size-3.5 text-indigo-500/90" strokeWidth={2} aria-hidden />
+                <Layers3 className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
                 Group by
               </span>
-              <span className="ml-1 max-w-[7rem] truncate font-medium text-slate-600">{userDirGroupSummaryLabel}</span>
+              <span className="ml-1 flex max-w-[7rem] items-center justify-end truncate font-medium leading-none text-slate-600">
+                {userDirGroupSummaryLabel}
+              </span>
             </button>
             {userDirGroupMenuOpen ? (
               <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg border border-slate-100 bg-white p-2 shadow-lg">
@@ -1445,16 +1488,20 @@ export function UsersWorkspacePanel() {
                   return (
                     <label
                       key={level}
-                      className="mb-1 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-700 last:mb-0"
+                      className="mb-1 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] text-slate-700 last:mb-0"
                     >
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleUserDirGroupLevel(level)}
-                        className="h-3.5 w-3.5 rounded border-slate-300 accent-violet-600"
+                        className="h-3.5 w-3.5 shrink-0 rounded border-slate-300 accent-violet-600"
                       />
-                      {userDirectoryGroupLevelIcon(level, "menu")}
-                      {USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}
+                      <span className="flex size-4 shrink-0 items-center justify-center text-slate-500 [&_svg]:size-3.5">
+                        {userDirectoryGroupLevelIcon(level, "menu")}
+                      </span>
+                      <span className="flex items-center leading-none">
+                        {USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}
+                      </span>
                     </label>
                   );
                 })}
@@ -1575,26 +1622,40 @@ export function UsersWorkspacePanel() {
                   <div className="flex-1 overflow-y-auto p-5">
                     <div className="w-full max-w-[400px] space-y-4">
                       <label className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Name</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
+                          Name{" "}
+                          <span className="font-semibold text-red-600" title="Required">
+                            *
+                          </span>
+                        </span>
                         <input
                           value={form.name}
                           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                           className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
                           autoComplete="name"
+                          required
+                          aria-required="true"
                         />
                       </label>
                       <label className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Email</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
+                          Email{" "}
+                          <span className="font-semibold text-red-600" title="Required">
+                            *
+                          </span>
+                        </span>
                         <input
                           type="email"
                           value={form.email}
                           onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                           className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
                           autoComplete="email"
+                          required
+                          aria-required="true"
                         />
                       </label>
                       <div className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team (optional)</span>
                         <TeamIdCombobox
                           teamId={form.team}
                           onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
@@ -1606,13 +1667,15 @@ export function UsersWorkspacePanel() {
                         />
                       </div>
                       <div className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission (optional)</span>
                         <AssigneeCombobox
                           value={form.permission}
-                          onChange={(permission) => setForm((f) => ({ ...f, permission }))}
+                          onChange={(permission) =>
+                            setForm((f) => ({ ...f, permission: permissionFromPickerInput(permission) }))
+                          }
                           suggestions={WORKSPACE_USER_PERMISSIONS}
                           disabled={saving}
-                          placeholder="Type or pick a permission"
+                          placeholder="Viewer"
                           aria-label="Permission"
                           className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
                         />
@@ -1683,26 +1746,40 @@ export function UsersWorkspacePanel() {
                   <div className="flex-1 overflow-y-auto p-5">
                     <div className="w-full max-w-[400px] space-y-4">
                       <label className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Name</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
+                          Name{" "}
+                          <span className="font-semibold text-red-600" title="Required">
+                            *
+                          </span>
+                        </span>
                         <input
                           value={form.name}
                           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                           className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
                           autoComplete="name"
+                          required
+                          aria-required="true"
                         />
                       </label>
                       <label className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Email</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
+                          Email{" "}
+                          <span className="font-semibold text-red-600" title="Required">
+                            *
+                          </span>
+                        </span>
                         <input
                           type="email"
                           value={form.email}
                           onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                           className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
                           autoComplete="email"
+                          required
+                          aria-required="true"
                         />
                       </label>
                       <div className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team (optional)</span>
                         <TeamIdCombobox
                           teamId={form.team}
                           onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
@@ -1714,13 +1791,15 @@ export function UsersWorkspacePanel() {
                         />
                       </div>
                       <div className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission</span>
+                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission (optional)</span>
                         <AssigneeCombobox
                           value={form.permission}
-                          onChange={(permission) => setForm((f) => ({ ...f, permission }))}
+                          onChange={(permission) =>
+                            setForm((f) => ({ ...f, permission: permissionFromPickerInput(permission) }))
+                          }
                           suggestions={WORKSPACE_USER_PERMISSIONS}
                           disabled={saving}
-                          placeholder="Type or pick a permission"
+                          placeholder="Viewer"
                           aria-label="Permission"
                           className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
                         />
