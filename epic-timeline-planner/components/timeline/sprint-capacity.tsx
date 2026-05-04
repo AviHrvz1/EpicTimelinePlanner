@@ -85,18 +85,16 @@ function CapacityStoryCard({
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
 }) {
-  /** Capacity board: only unassigned stories are draggable (Kanban keeps drag for all). */
   const isUnassigned = card.assigneeLabel === "Unassigned";
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: storyBoardDraggableId(card.id),
-    disabled: !isUnassigned,
   });
 
   return (
     <article
       ref={setNodeRef}
       className={cn(
-        "group/storycap relative min-h-[2.75rem] rounded-lg border border-slate-200/90 bg-white/95 py-1.5 pl-2 pr-2 shadow-sm",
+        "group/storycap relative min-h-[3.25rem] rounded-lg border border-indigo-100/90 bg-indigo-50 py-2 pl-2 pr-2 shadow-sm transition-colors hover:bg-indigo-100/70",
         isDragging && "opacity-60",
       )}
       style={{
@@ -113,22 +111,20 @@ function CapacityStoryCard({
       >
         <X className="size-3.5" aria-hidden />
       </button>
-      <div className="flex w-full min-w-0 items-start gap-2">
-        {isUnassigned ? (
+      <div className="flex w-full min-w-0 flex-col gap-2.5">
+        <div className="flex min-w-0 items-center gap-1.5">
           <button
             type="button"
-            className="mt-0.5 shrink-0 cursor-grab rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 active:cursor-grabbing"
-            aria-label="Drag story card"
+            className="shrink-0 cursor-grab rounded border border-indigo-100/90 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 transition-colors hover:bg-indigo-100/70 active:cursor-grabbing"
+            aria-label="Drag story to another person or unschedule"
             {...attributes}
             {...listeners}
           >
             ::
           </button>
-        ) : null}
-        <div className="min-w-0 max-w-full flex-1">
           <button
             type="button"
-            className="block w-full truncate pr-[calc(0.375rem+1.5rem+0.25rem)] text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
+            className="min-w-0 flex-1 truncate pr-[calc(0.375rem+1.5rem+0.25rem)] text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
             onClick={() => onOpenStory(card.id)}
           >
             <span className="mr-1.5 inline-flex align-middle text-slate-600">
@@ -136,33 +132,35 @@ function CapacityStoryCard({
             </span>
             {card.title}
           </button>
-          <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-            <div
+        </div>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div
+            className={cn(
+              "inline-flex max-w-full min-w-0 items-center gap-0.5 rounded border px-1 py-px text-[10px] font-medium leading-tight",
+              isUnassigned
+                ? "border-slate-200/70 bg-slate-50 text-slate-500"
+                : "border-emerald-200/80 bg-emerald-50 text-emerald-900",
+            )}
+            title={card.assigneeLabel}
+          >
+            <User className="size-2.5 shrink-0 opacity-80" aria-hidden />
+            <span className="min-w-0 truncate">{card.assigneeLabel}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="whitespace-nowrap text-right text-[11px] font-semibold text-slate-600">Est Days</span>
+            <input
+              type="number"
+              min={0}
+              max={20}
+              step={1}
+              value={card.estimatedDays}
+              onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
               className={cn(
-                "flex min-w-0 flex-1 items-center gap-0.5 text-[11px] font-medium",
-                isUnassigned ? "text-slate-400" : "text-slate-600",
+                "h-[1.375rem] w-11 shrink-0 rounded border border-slate-200 bg-white px-1 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
+                CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
-              title={card.assigneeLabel}
-            >
-              <User className="size-3 shrink-0 text-slate-500" aria-hidden />
-              <span className="min-w-0 truncate">{card.assigneeLabel}</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <span className="whitespace-nowrap text-right text-[11px] font-semibold text-slate-600">Est Days</span>
-              <input
-                type="number"
-                min={0}
-                max={20}
-                step={1}
-                value={card.estimatedDays}
-                onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
-                className={cn(
-                  "h-[1.375rem] w-11 shrink-0 rounded border border-slate-200 bg-white px-1 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
-                  CAPACITY_DAYS_INPUT_NO_SPIN,
-                )}
-                aria-label="Story Est Days"
-              />
-            </div>
+              aria-label="Story Est Days"
+            />
           </div>
         </div>
       </div>
