@@ -36,6 +36,8 @@ import {
   parseMonthTeamCapacityBucketDropId,
   parseQuarterTeamCapacityBucketDropId,
   parseSprintCapacityBucketDropId,
+  parseSprintCapacityColumnDragId,
+  parseSprintCapacityColumnDropId,
 } from "@/lib/epic-dnd-ids";
 import {
   clientXLeadingEdgeFromDragEnd,
@@ -67,6 +69,8 @@ import {
   assignStoryToMember,
   assigneeMatchRosterForSprintTeam,
   emptySprintCapacityBoard,
+  orderedSprintCapacityMembers,
+  reorderSprintCapacityPeopleOrder,
   sanitizeSprintCapacityBoard,
   sprintCapacityBoardKey,
   sprintStoryBoardEpicTeamFilter,
@@ -148,6 +152,7 @@ const DND_DROP_INSPECTOR_SUPPRESS_BRANCHES = new Set<string>([
   "story:kanban-reorder",
   "story:kanban-reorder-noop",
   "story:capacity",
+  "capcol:reorder",
 ]);
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -2287,7 +2292,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     await refresh();
   }
 
-  async function createInitiativeQuick(title: string) {
+  async function createInitiativeQuick(title: string): Promise<string> {
     const response = await fetch("/api/initiatives", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2296,7 +2301,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (!response.ok) {
       throw new Error("Failed to create initiative");
     }
+    const created = (await response.json()) as { id: string };
     await refresh();
+    return created.id;
   }
 
   async function createStoryQuick(epicId: string, title: string) {
@@ -2635,6 +2642,45 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     try {
       step("onDragEnd");
       console.info("[gantt-drop] app onDragEnd", { activeId, overId });
+
+      const capColDrag = parseSprintCapacityColumnDragId(activeId);
+      const capColDrop = parseSprintCapacityColumnDropId(overId);
+      if (capColDrag && capColDrop) {
+        step("capacity-column-reorder");
+        if (isActiveSprintClosed) {
+          record("capcol:blocked-closed", {});
+          toast.message("Sprint is closed. Drag and drop is disabled.");
+          return;
+        }
+        if (capColDrag.yearSprint !== capColDrop.yearSprint || capColDrag.teamKey !== capColDrop.teamKey) {
+          record("capcol:cross-target", { capColDrag, capColDrop });
+          return;
+        }
+        const dropTeamId = capColDrag.teamKey === "all" ? null : capColDrag.teamKey.trim() || null;
+        const boardKey = sprintCapacityBoardKey(selectedYear, capColDrag.yearSprint, dropTeamId);
+        setSprintCapacityByKey((prev) => {
+          const cur = prev[boardKey];
+          if (!cur) return prev;
+          const keySet = new Set([
+            ...Object.keys(cur.assignments ?? {}),
+            ...Object.keys(cur.capacities ?? {}),
+          ]);
+          keySet.delete(SPRINT_CAPACITY_OTHER_BUCKET);
+          const sortedFallback = [...keySet].sort((a, b) =>
+            a.localeCompare(b, undefined, { sensitivity: "base" }),
+          );
+          const peopleOnly = orderedSprintCapacityMembers({
+            columnOrder: cur.columnOrder,
+            sortedPeopleCols: sortedFallback,
+            needsOtherColumn: false,
+          });
+          const nextPeople = reorderSprintCapacityPeopleOrder(peopleOnly, capColDrag.member, capColDrop.member);
+          if (!nextPeople) return prev;
+          return { ...prev, [boardKey]: { ...cur, columnOrder: nextPeople } };
+        });
+        record("capcol:reorder", { boardKey, from: capColDrag.member, to: capColDrop.member });
+        return;
+      }
 
       if (isStoryDraggableId(activeId)) {
         step("story-branch");
@@ -4061,8 +4107,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       isSprintModeActive={isSprintModeActive}
                       onCreateInitiativeQuick={async (title) => {
                         try {
-                          await createInitiativeQuick(title);
+                          const id = await createInitiativeQuick(title);
                           toast.success("Initiative added");
+                          return id;
                         } catch (err) {
                           toast.error("Failed to add initiative");
                           throw err;
@@ -4210,6 +4257,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onCapacityEpicOriginalEstimateChange={updateEpicOriginalEstimateFromCapacity}
                 monthTeamBoardByKey={monthTeamBoardByKey}
                 sprintCapacityBoard={activeSprintCapacityBoard}
+                sprintCapacityColumnReorderEnabled={!isActiveSprintClosed}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
                 onSprintKanbanStoryPatch={patchStoryFromKanban}
@@ -4499,8 +4547,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 }}
                 onCreateInitiativeQuick={async (title) => {
                   try {
-                    await createInitiativeQuick(title);
+                    const id = await createInitiativeQuick(title);
                     toast.success("Initiative added");
+                    return id;
                   } catch {
                     toast.error("Failed to add initiative");
                   }
@@ -4705,6 +4754,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         epic={currentEditingEpic}
         initiatives={initiatives}
         lockInitiativeId={editingEpicInitiativeId}
+        onCreateInitiativeQuick={async (title) => {
+          try {
+            const id = await createInitiativeQuick(title);
+            toast.success("Initiative added");
+            return id;
+          } catch {
+            toast.error("Failed to add initiative");
+            throw new Error("Failed to create initiative");
+          }
+        }}
         onOpenInitiative={(initiativeId) => {
           setTopMode("roadmap");
           const initiative = initiatives.find((i) => i.id === initiativeId);

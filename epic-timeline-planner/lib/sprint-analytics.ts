@@ -2,6 +2,7 @@ import { StoryStatus } from "@/lib/generated/prisma";
 import { epicOriginalEstimateDays, epicStoryEstimateDaysSum, type EstimateSource } from "@/lib/epic-estimates";
 import {
   assigneeMatchRosterForSprintTeam,
+  orderedSprintCapacityMembers,
   SPRINT_CAPACITY_OTHER_BUCKET,
   sprintCapacityAssigneeBucket,
   type SprintWorkspaceDirectoryUser,
@@ -286,7 +287,11 @@ function sprintCapacityVisibleMemberKeys(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
-  capacityBoard: { capacities: Record<string, number>; assignments: Record<string, string[]> },
+  capacityBoard: {
+    capacities: Record<string, number>;
+    assignments: Record<string, string[]>;
+    columnOrder?: string[];
+  },
   filterEpicTeamId?: string | null,
   directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): string[] {
@@ -309,7 +314,11 @@ function sprintCapacityVisibleMemberKeys(
     otherIds.some((id) => storyIds.has(id)) ||
     rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, assigneeRoster) == null);
   const sortedPeopleCols = [...memberSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  return [...sortedPeopleCols, ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
+  return orderedSprintCapacityMembers({
+    columnOrder: capacityBoard.columnOrder,
+    sortedPeopleCols,
+    needsOtherColumn,
+  });
 }
 
 function workloadLegacyAssigneeKeyToCapacityColumn(

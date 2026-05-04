@@ -29,7 +29,7 @@ import {
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -39,6 +39,7 @@ import { createPortal } from "react-dom";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { InitiativeCombobox } from "@/components/ui/initiative-combobox";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
@@ -134,6 +135,8 @@ type EpicFormDialogProps = {
   onRequestCreateStory?: (epicId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onOpenInitiative?: (initiativeId: string) => void;
+  /** Create a backlog initiative from the Parent field; must return the new row id. */
+  onCreateInitiativeQuick?: (title: string) => Promise<string>;
   onPatchStory?: (
     storyId: string,
     patch: {
@@ -166,6 +169,7 @@ export function EpicFormDialog({
   onRequestCreateStory,
   onOpenStory,
   onOpenInitiative,
+  onCreateInitiativeQuick,
   onPatchStory,
   onAddComment,
   surfaceAnchorRef,
@@ -510,52 +514,6 @@ export function EpicFormDialog({
   }, [epic?.userStories]);
   const infoTooltipClass =
     "pointer-events-none absolute left-1/2 top-0 z-[320] w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
-
-  const parentSelectWrapRef = useRef<HTMLSpanElement | null>(null);
-  const [isParentTitleTruncated, setIsParentTitleTruncated] = useState(false);
-  const parentInitiativeTitle = selectedInitiative?.title ?? "";
-
-  useLayoutEffect(() => {
-    const wrap = parentSelectWrapRef.current;
-    const select = wrap?.querySelector("select");
-    if (!select || !initiativeId || !parentInitiativeTitle.trim()) {
-      setIsParentTitleTruncated(false);
-      return;
-    }
-    const selectedText = select.selectedOptions[0]?.text?.trim() ?? "";
-    if (!selectedText) {
-      setIsParentTitleTruncated(false);
-      return;
-    }
-
-    const measure = () => {
-      const text = select.selectedOptions[0]?.text?.trim() ?? "";
-      if (!text) {
-        setIsParentTitleTruncated(false);
-        return;
-      }
-      const byScroll = select.scrollWidth > select.clientWidth + 1;
-      if (byScroll) {
-        setIsParentTitleTruncated(true);
-        return;
-      }
-      const ctx = document.createElement("canvas").getContext("2d");
-      if (!ctx) {
-        setIsParentTitleTruncated(text.length > 36);
-        return;
-      }
-      const cs = window.getComputedStyle(select);
-      ctx.font = `${cs.fontSize} ${cs.fontFamily}`;
-      const textW = ctx.measureText(text).width;
-      const padFudge = 36;
-      setIsParentTitleTruncated(textW > select.clientWidth - padFudge);
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(select);
-    return () => ro.disconnect();
-  }, [initiativeId, parentInitiativeTitle, open, detailsPanelWidthPx]);
 
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
@@ -1717,45 +1675,27 @@ export function EpicFormDialog({
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-sm font-normal text-slate-700">Parent</p>
-                  <span ref={parentSelectWrapRef} className="group relative min-w-0">
-                    <select
-                      className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
-                      value={initiativeId}
-                      title=""
-                      onChange={(event) => {
-                        const next = event.target.value;
-                        setInitiativeId(next);
-                        if (epic) return;
-                        const nextInit = initiatives.find((i) => i.id === next);
-                        if (nextInit?.startMonth != null) {
-                          setPlanQuarterDraft(`Q${quarterNumFromMonth(nextInit.startMonth)}`);
-                          setPlanMonthDraft(MONTHS[nextInit.startMonth - 1] ?? "");
-                        } else {
-                          setPlanQuarterDraft("");
-                          setPlanMonthDraft("");
-                        }
-                      }}
-                      disabled={Boolean(lockInitiativeId) && !epic}
-                    >
-                      <option value="">Select initiative</option>
-                      {initiativeOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    {isParentTitleTruncated && parentInitiativeTitle ? (
-                      <span
-                        role="tooltip"
-                        className={cn(
-                          infoTooltipClass,
-                          "w-max max-w-[min(22rem,calc(100vw-3rem))]",
-                        )}
-                      >
-                        {parentInitiativeTitle}
-                      </span>
-                    ) : null}
-                  </span>
+                  <InitiativeCombobox
+                    valueId={initiativeId}
+                    onValueChange={(next) => {
+                      setInitiativeId(next);
+                      if (epic) return;
+                      const nextInit = initiatives.find((i) => i.id === next);
+                      if (nextInit?.startMonth != null) {
+                        setPlanQuarterDraft(`Q${quarterNumFromMonth(nextInit.startMonth)}`);
+                        setPlanMonthDraft(MONTHS[nextInit.startMonth - 1] ?? "");
+                      } else {
+                        setPlanQuarterDraft("");
+                        setPlanMonthDraft("");
+                      }
+                    }}
+                    options={initiativeOptions.map((o) => ({ id: o.id, title: o.label }))}
+                    onCreateNew={onCreateInitiativeQuick}
+                    disabled={isSaving}
+                    placeholder="Search, pick, or create an initiative"
+                    aria-label="Parent initiative"
+                    className="h-7 w-full min-w-0 rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+                  />
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-sm font-normal text-slate-700">Team</p>

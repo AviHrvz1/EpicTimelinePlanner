@@ -35,6 +35,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { InitiativeCombobox } from "@/components/ui/initiative-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
@@ -504,8 +505,8 @@ type InitiativeListPanelProps = {
   onCreateInitiative?: () => void;
   /** Opens full epic dialog (optional if inline + Epic via `onCreateEpicQuick` is used). */
   onCreateEpic?: () => void;
-  /** When set, + Initiative opens an inline title field in this panel instead of a dialog. */
-  onCreateInitiativeQuick?: (title: string) => Promise<void>;
+  /** When set, + Initiative opens an inline title field in this panel instead of a dialog. Return the new initiative id when creating (needed for parent pickers). */
+  onCreateInitiativeQuick?: (title: string) => Promise<string | void>;
   onEditInitiative: (initiative: InitiativeItem) => void;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onOpenStory: (storyId: string) => void;
@@ -1516,6 +1517,7 @@ export function InitiativeListPanel({
   const [inlineNewInitiativeSubmitting, setInlineNewInitiativeSubmitting] = useState(false);
   const [inlineNewEpicOpen, setInlineNewEpicOpen] = useState(false);
   const [inlineNewEpicTitle, setInlineNewEpicTitle] = useState("");
+  const [inlineNewEpicInitiativeId, setInlineNewEpicInitiativeId] = useState("");
   const [inlineNewEpicSubmitting, setInlineNewEpicSubmitting] = useState(false);
   const inlineInitiativeInputRef = useRef<HTMLInputElement>(null);
   const inlineEpicInputRef = useRef<HTMLInputElement>(null);
@@ -1542,6 +1544,7 @@ export function InitiativeListPanel({
     setInlineNewEpicOpen(false);
     setInlineNewInitiativeTitle("");
     setInlineNewEpicTitle("");
+    setInlineNewEpicInitiativeId("");
   }, [epicPlanPanelMode]);
 
   useEffect(() => {
@@ -1926,28 +1929,44 @@ export function InitiativeListPanel({
 
   const showNewButton = epicPlanPanelMode || !isSprintModeActive;
 
+  const initiativePickerOptions = useMemo(
+    () =>
+      initiatives
+        .map((i) => ({ id: i.id, title: i.title }))
+        .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" })),
+    [initiatives],
+  );
+
   const handleNewButtonClick = useCallback(() => {
     if (epicPlanPanelMode) {
-      if (onCreateEpicQuick && firstScheduledInitiativeForActiveMonth) {
-        setInlineNewInitiativeOpen(false);
-        setInlineNewInitiativeTitle("");
-        setInlineNewEpicOpen(true);
+      if (!onCreateEpicQuick) {
+        onCreateEpic?.();
         return;
       }
-      if (!firstScheduledInitiativeForActiveMonth) {
+      const canInline =
+        firstScheduledInitiativeForActiveMonth != null ||
+        initiatives.length > 0 ||
+        onCreateInitiativeQuick != null;
+      if (!canInline) {
         toast.message(
           activeMonth != null
-            ? "No scheduled initiative for this month. Plan an initiative in this month first."
+            ? "Add an initiative first (or schedule one for this month), then create an epic."
             : "Create an initiative first, then add an epic.",
         );
         return;
       }
-      onCreateEpic?.();
+      setInlineNewEpicInitiativeId(
+        firstScheduledInitiativeForActiveMonth?.id ?? initiatives[0]?.id ?? "",
+      );
+      setInlineNewInitiativeOpen(false);
+      setInlineNewInitiativeTitle("");
+      setInlineNewEpicOpen(true);
       return;
     }
     if (onCreateInitiativeQuick) {
       setInlineNewEpicOpen(false);
       setInlineNewEpicTitle("");
+      setInlineNewEpicInitiativeId("");
       setInlineNewInitiativeOpen(true);
       return;
     }
@@ -1956,6 +1975,7 @@ export function InitiativeListPanel({
     activeMonth,
     epicPlanPanelMode,
     firstScheduledInitiativeForActiveMonth,
+    initiatives,
     onCreateEpic,
     onCreateEpicQuick,
     onCreateInitiative,
@@ -1979,21 +1999,21 @@ export function InitiativeListPanel({
   }, [inlineNewInitiativeTitle, onCreateInitiativeQuick]);
 
   const submitInlineNewEpic = useCallback(async () => {
-    const initiative = firstScheduledInitiativeForActiveMonth;
-    if (!initiative || !onCreateEpicQuick) return;
+    if (!onCreateEpicQuick || !inlineNewEpicInitiativeId) return;
     const title = inlineNewEpicTitle.trim();
     if (!title) return;
     setInlineNewEpicSubmitting(true);
     try {
-      await onCreateEpicQuick(initiative.id, title);
+      await onCreateEpicQuick(inlineNewEpicInitiativeId, title);
       setInlineNewEpicTitle("");
+      setInlineNewEpicInitiativeId("");
       setInlineNewEpicOpen(false);
     } catch {
       // Parent surfaces toast and rethrows so the composer stays open.
     } finally {
       setInlineNewEpicSubmitting(false);
     }
-  }, [firstScheduledInitiativeForActiveMonth, inlineNewEpicTitle, onCreateEpicQuick]);
+  }, [inlineNewEpicInitiativeId, inlineNewEpicTitle, onCreateEpicQuick]);
 
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-7 pb-4 pl-0 pr-4 shadow-xl ring-1 ring-black/8">
@@ -2142,12 +2162,15 @@ export function InitiativeListPanel({
               <Eraser className="size-4" aria-hidden />
             </button>
           </div>
-          {inlineNewEpicOpen && onCreateEpicQuick && firstScheduledInitiativeForActiveMonth ? (
+          {inlineNewEpicOpen && onCreateEpicQuick && (initiativePickerOptions.length > 0 || onCreateInitiativeQuick) ? (
             <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/35 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/50">
               <div
                 className="flex gap-3 border-l-[3px] border-slate-400 bg-white/50 px-3 py-3 pl-[14px] backdrop-blur-[1px]"
                 style={{
-                  borderLeftColor: firstScheduledInitiativeForActiveMonth.color || undefined,
+                  borderLeftColor:
+                    initiatives.find((i) => i.id === inlineNewEpicInitiativeId)?.color ||
+                    firstScheduledInitiativeForActiveMonth?.color ||
+                    undefined,
                 }}
               >
                 <div
@@ -2158,57 +2181,85 @@ export function InitiativeListPanel({
                 </div>
                 <div className="min-w-0 flex-1 space-y-2.5">
                   <div>
-                    <p className="text-[13px] font-semibold tracking-tight text-slate-900">New epic</p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
-                      Under{" "}
-                      <span className="font-semibold text-slate-800">
-                        {firstScheduledInitiativeForActiveMonth.title}
-                      </span>
+                    <p className="text-lg font-bold tracking-tight text-slate-900">New epic</p>
+                    <p className="mt-1 text-[12px] leading-snug text-slate-600">
+                      Choose a parent initiative or create a new one from the field below.
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      ref={inlineEpicInputRef}
-                      type="text"
-                      value={inlineNewEpicTitle}
-                      onChange={(e) => setInlineNewEpicTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void submitInlineNewEpic();
+                  <div className="space-y-2">
+                    <div>
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Initiative
+                      </p>
+                      <InitiativeCombobox
+                        valueId={inlineNewEpicInitiativeId}
+                        onValueChange={setInlineNewEpicInitiativeId}
+                        options={initiativePickerOptions}
+                        onCreateNew={
+                          onCreateInitiativeQuick
+                            ? async (t) => {
+                                const id = await onCreateInitiativeQuick(t);
+                                if (typeof id === "string" && id) return id;
+                                throw new Error("Initiative was not created");
+                              }
+                            : undefined
                         }
-                        if (e.key === "Escape") {
+                        disabled={inlineNewEpicSubmitting}
+                        placeholder="Search, pick, or create an initiative"
+                        aria-label="Initiative for new epic"
+                        className="h-8 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-900 shadow-inner shadow-slate-900/5 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        ref={inlineEpicInputRef}
+                        type="text"
+                        value={inlineNewEpicTitle}
+                        onChange={(e) => setInlineNewEpicTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void submitInlineNewEpic();
+                          }
+                          if (e.key === "Escape") {
+                            setInlineNewEpicOpen(false);
+                            setInlineNewEpicTitle("");
+                            setInlineNewEpicInitiativeId("");
+                          }
+                        }}
+                        placeholder="Name this epic…"
+                        autoComplete="off"
+                        className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-900 shadow-inner shadow-slate-900/5 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
+                        aria-label="New epic title"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 shrink-0 gap-1 bg-slate-800 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-50"
+                        disabled={
+                          inlineNewEpicSubmitting ||
+                          inlineNewEpicTitle.trim().length === 0 ||
+                          !inlineNewEpicInitiativeId
+                        }
+                        onClick={() => void submitInlineNewEpic()}
+                      >
+                        <Plus className="size-3.5" aria-hidden />
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 shrink-0 px-2 text-[12px] text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        onClick={() => {
                           setInlineNewEpicOpen(false);
                           setInlineNewEpicTitle("");
-                        }
-                      }}
-                      placeholder="Name this epic…"
-                      autoComplete="off"
-                      className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-900 shadow-inner shadow-slate-900/5 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
-                      aria-label="New epic title"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-7 shrink-0 gap-1 bg-slate-800 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-50"
-                      disabled={inlineNewEpicSubmitting || inlineNewEpicTitle.trim().length === 0}
-                      onClick={() => void submitInlineNewEpic()}
-                    >
-                      <Plus className="size-3.5" aria-hidden />
-                      Add
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 shrink-0 px-2 text-[12px] text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      onClick={() => {
-                        setInlineNewEpicOpen(false);
-                        setInlineNewEpicTitle("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
+                          setInlineNewEpicInitiativeId("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2371,8 +2422,8 @@ export function InitiativeListPanel({
                 </div>
                 <div className="min-w-0 flex-1 space-y-2.5">
                   <div>
-                    <p className="text-[13px] font-semibold tracking-tight text-slate-900">New initiative</p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
+                    <p className="text-lg font-bold tracking-tight text-slate-900">New initiative</p>
+                    <p className="mt-1 text-[12px] leading-snug text-slate-600">
                       Starts in the backlog; schedule it on the roadmap when you are ready.
                     </p>
                   </div>

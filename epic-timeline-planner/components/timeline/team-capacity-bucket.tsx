@@ -510,11 +510,11 @@ export function TeamCapacityBucket({
           />
           <div
             className={cn(
-              "capacity-bucket-scroll relative z-20 min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+              "capacity-bucket-scroll relative z-20 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden",
               bucketScrollMaxClass,
             )}
           >
-            <div className="flex min-h-min flex-col-reverse gap-2.5 pb-2 pt-1">
+            <div className="mt-auto flex w-full min-w-0 flex-col-reverse gap-2.5 pb-2 pt-1">
               {cards.length === 0 ? (
                 <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
                   Drop epic here

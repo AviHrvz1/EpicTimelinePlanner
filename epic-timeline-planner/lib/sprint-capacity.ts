@@ -4,6 +4,8 @@ import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 export type SprintCapacityBoard = {
   capacities: Record<string, number>;
   assignments: Record<string, string[]>;
+  /** Preferred left-to-right order of people buckets (excludes {@link SPRINT_CAPACITY_OTHER_BUCKET}). */
+  columnOrder?: string[];
 };
 
 export const SPRINT_CAPACITY_STORAGE_KEY = "epicPlanner.sprintCapacity.v1";
@@ -71,7 +73,65 @@ export function sanitizeSprintCapacityBoard(board: SprintCapacityBoard): SprintC
   for (const [member, ids] of Object.entries(board.assignments ?? {})) {
     assignments[member] = [...new Set((ids ?? []).filter(Boolean))];
   }
-  return { capacities, assignments };
+  let columnOrder: string[] | undefined;
+  if (Array.isArray(board.columnOrder)) {
+    const cleaned = board.columnOrder.filter(
+      (m) => typeof m === "string" && m.trim().length > 0 && m !== SPRINT_CAPACITY_OTHER_BUCKET,
+    );
+    if (cleaned.length > 0) columnOrder = [...new Set(cleaned)];
+  }
+  return { capacities, assignments, ...(columnOrder ? { columnOrder } : {}) };
+}
+
+/** Merge persisted column order with the current roster-derived list; append Other last when needed. */
+export function orderedSprintCapacityMembers(args: {
+  columnOrder: string[] | undefined;
+  sortedPeopleCols: string[];
+  needsOtherColumn: boolean;
+}): string[] {
+  const { columnOrder, sortedPeopleCols, needsOtherColumn } = args;
+  const people =
+    columnOrder?.length ?
+      (() => {
+        const set = new Set(sortedPeopleCols);
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const m of columnOrder) {
+          if (!set.has(m) || seen.has(m)) continue;
+          out.push(m);
+          seen.add(m);
+        }
+        for (const m of sortedPeopleCols) {
+          if (!seen.has(m)) {
+            out.push(m);
+            seen.add(m);
+          }
+        }
+        return out;
+      })()
+    : [...sortedPeopleCols];
+  return [...people, ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
+}
+
+function arrayMovePeopleOrder(order: string[], from: number, to: number): string[] {
+  const next = [...order];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+/** Reorder people buckets (not Other). Returns null if no change. */
+export function reorderSprintCapacityPeopleOrder(
+  peopleOrder: string[],
+  activeMember: string,
+  overMember: string,
+): string[] | null {
+  if (activeMember === overMember) return null;
+  if (activeMember === SPRINT_CAPACITY_OTHER_BUCKET || overMember === SPRINT_CAPACITY_OTHER_BUCKET) return null;
+  const a = peopleOrder.indexOf(activeMember);
+  const b = peopleOrder.indexOf(overMember);
+  if (a < 0 || b < 0) return null;
+  return arrayMovePeopleOrder(peopleOrder, a, b);
 }
 
 export function emptySprintCapacityBoard(members: string[]): SprintCapacityBoard {
@@ -86,6 +146,7 @@ export function emptySprintCapacityBoard(members: string[]): SprintCapacityBoard
 
 export function assignStoryToMember(board: SprintCapacityBoard, storyId: string, member: string): SprintCapacityBoard {
   const next: SprintCapacityBoard = {
+    ...board,
     capacities: { ...board.capacities },
     assignments: {},
   };
@@ -322,5 +383,6 @@ export function syncCapacityAssignmentsWithKanban(
   return {
     capacities: nextCapacities,
     assignments: nextAssignments,
+    ...(board.columnOrder?.length ? { columnOrder: board.columnOrder } : {}),
   };
 }

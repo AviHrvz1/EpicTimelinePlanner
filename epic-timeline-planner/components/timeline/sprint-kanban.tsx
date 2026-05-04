@@ -87,7 +87,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[24rem] w-full flex-col rounded-xl border p-2 transition",
+        "flex min-h-[24rem] w-full min-w-0 flex-col rounded-xl border p-2 transition",
         tone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
@@ -612,7 +612,7 @@ export function SprintKanbanBoard({
           </div>
         </div>
       ) : null}
-      <div className="grid w-full grid-cols-2 items-stretch gap-3 lg:grid-cols-4">
+      <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => {
           const colRows = byStatus.get(status) ?? [];
           const sortableItemIds = colRows.map((r) => storyBoardDraggableId(r.story.id));

@@ -2,8 +2,9 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
+import { GripVertical, Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -14,9 +15,15 @@ import {
   rollupNeutralPill,
   rollupOverCapacityPill,
 } from "@/components/timeline/team-capacity-bucket";
-import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
+import {
+  sprintCapacityBucketDropId,
+  sprintCapacityColumnDragId,
+  sprintCapacityColumnDropId,
+  storyBoardDraggableId,
+} from "@/lib/epic-dnd-ids";
 import {
   assigneeMatchRosterForSprintTeam,
+  orderedSprintCapacityMembers,
   sprintCapacityAssigneeBucket,
   SPRINT_CAPACITY_OTHER_BUCKET,
   type SprintCapacityBoard as SprintCapacityBoardState,
@@ -52,6 +59,84 @@ function assigneeFilterCircleIcon(name: string): LucideIcon {
   return name === "Unassigned" ? UserX : UserRound;
 }
 
+const CAPACITY_HEADER_ICON_BTN_CLASS =
+  "inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300";
+
+function SprintCapacityColumnChrome({
+  yearSprint,
+  teamKey,
+  member,
+  reorderEnabled,
+  children,
+}: {
+  yearSprint: number;
+  teamKey: string;
+  member: string;
+  reorderEnabled: boolean;
+  children: (reorderGrip: ReactNode) => ReactNode;
+}) {
+  const isOther = member === SPRINT_CAPACITY_OTHER_BUCKET;
+  const dropId = sprintCapacityColumnDropId(yearSprint, teamKey, member);
+  const dragId = sprintCapacityColumnDragId(yearSprint, teamKey, member);
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: dropId,
+    disabled: !reorderEnabled || isOther,
+  });
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
+    id: dragId,
+    disabled: !reorderEnabled || isOther,
+  });
+
+  const setColumnRef = (el: HTMLDivElement | null) => {
+    setDropRef(el);
+    setDragRef(el);
+  };
+
+  const columnStyle =
+    reorderEnabled && !isOther && (transform != null || isDragging)
+      ? {
+          transform: transform
+            ? `${CSS.Transform.toString(transform)}${isDragging ? " scale(1.015)" : ""}`
+            : isDragging
+              ? "scale(1.015)"
+              : undefined,
+          zIndex: isDragging ? 80 : undefined,
+          boxShadow: isDragging
+            ? "0 20px 40px -14px rgb(15 23 42 / 0.28), 0 0 0 1px rgb(15 23 42 / 0.06)"
+            : undefined,
+          transition: isDragging ? undefined : "box-shadow 180ms ease",
+        }
+      : undefined;
+
+  const reorderGrip =
+    reorderEnabled && !isOther ? (
+      <button
+        type="button"
+        className={cn(CAPACITY_HEADER_ICON_BTN_CLASS, "cursor-grab active:cursor-grabbing", isDragging && "cursor-grabbing")}
+        aria-label={`Reorder ${member} column`}
+        title="Drag to reorder column"
+        {...listeners}
+        {...attributes}
+      >
+        <GripVertical className="size-3" strokeWidth={2} aria-hidden />
+      </button>
+    ) : null;
+
+  return (
+    <div
+      ref={setColumnRef}
+      className={cn(
+        "relative w-full min-w-0 rounded-xl",
+        reorderEnabled && !isOther && isOver && !isDragging && "ring-2 ring-dashed ring-indigo-400/45",
+        isDragging && "rounded-xl ring-1 ring-slate-300/80",
+      )}
+      style={columnStyle}
+    >
+      {children(reorderGrip)}
+    </div>
+  );
+}
+
 type CapacityStoryCardModel = {
   id: string;
   title: string;
@@ -66,6 +151,8 @@ type SprintCapacityBoardProps = {
   yearSprint: number;
   selectedTeamId?: string | null;
   capacityBoard: SprintCapacityBoardState;
+  /** Drag grip to reorder person columns (not applied to Other / closed sprint). */
+  columnReorderEnabled?: boolean;
   onCapacityChange: (member: string, days: number) => void;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onUnscheduleStory: (storyId: string) => void;
@@ -183,6 +270,7 @@ function CapacityBucket({
   isPanelExpanded = false,
   onExpandPanel,
   onCollapsePanel,
+  reorderGrip = null,
 }: {
   yearSprint: number;
   teamKey: string;
@@ -198,6 +286,8 @@ function CapacityBucket({
   isPanelExpanded?: boolean;
   onExpandPanel?: () => void;
   onCollapsePanel?: () => void;
+  /** Column reorder handle (same size / row as expand control). */
+  reorderGrip?: ReactNode;
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
@@ -224,6 +314,13 @@ function CapacityBucket({
   const sprintRollupInfoId = `sprint-cap-rollup-info-${svgKey}`;
   const sprintStoriesWarnId = `sprint-cap-stories-warn-${svgKey}`;
   const memberTitle = capacityBucketToFilterLabel(member);
+  const hasHeaderToolbar =
+    Boolean(reorderGrip) || Boolean(panelExpandable && onExpandPanel && onCollapsePanel);
+  const headerTitleReserveClass = hasHeaderToolbar
+    ? reorderGrip && panelExpandable && onExpandPanel && onCollapsePanel
+      ? "max-w-[calc(100%-5.5rem)]"
+      : "max-w-[calc(100%-2.75rem)]"
+    : "max-w-full";
   /** Min height matches the old fixed column; list area below can grow to `bucketScrollMaxClass` before scrolling. */
   const bucketColumnShellClass = isPanelExpanded
     ? "min-h-[28rem]"
@@ -246,37 +343,38 @@ function CapacityBucket({
           <p
             className={cn(
               "flex min-h-8 min-w-0 items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800",
-              panelExpandable && onExpandPanel && onCollapsePanel
-                ? "max-w-[calc(100%-2.75rem)]"
-                : "max-w-full",
+              headerTitleReserveClass,
             )}
           >
             <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
             <span className="min-w-0 truncate">{memberTitle}</span>
           </p>
-          {panelExpandable && onExpandPanel && onCollapsePanel ? (
-            <div className="absolute right-0 top-1/2 z-10 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
-              {isPanelExpanded ? (
-                <button
-                  type="button"
-                  onClick={onCollapsePanel}
-                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
-                  aria-label="Show all people buckets"
-                  title="Show all people"
-                >
-                  <Minimize2 className="size-3" aria-hidden />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onExpandPanel}
-                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"
-                  aria-label="Expand this person bucket to full width"
-                  title="Expand bucket"
-                >
-                  <Maximize2 className="size-3" aria-hidden />
-                </button>
-              )}
+          {hasHeaderToolbar ? (
+            <div className="absolute right-0 top-1/2 z-10 flex items-center gap-1 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+              {reorderGrip}
+              {panelExpandable && onExpandPanel && onCollapsePanel ? (
+                isPanelExpanded ? (
+                  <button
+                    type="button"
+                    onClick={onCollapsePanel}
+                    className={CAPACITY_HEADER_ICON_BTN_CLASS}
+                    aria-label="Show all people buckets"
+                    title="Show all people"
+                  >
+                    <Minimize2 className="size-3" aria-hidden />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onExpandPanel}
+                    className={CAPACITY_HEADER_ICON_BTN_CLASS}
+                    aria-label="Expand this person bucket to full width"
+                    title="Expand bucket"
+                  >
+                    <Maximize2 className="size-3" aria-hidden />
+                  </button>
+                )
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -390,14 +488,14 @@ function CapacityBucket({
               background: bucketFill,
             }}
           />
-          {/* Scroll on this wrapper only; inner flex-col-reverse avoids flex+overflow quirks. */}
+          {/* Scroll: flex column + mt-auto on list so short stacks sit on the bucket floor; flex-col-reverse = first story lowest, next above. */}
           <div
             className={cn(
-              "capacity-bucket-scroll relative z-20 min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+              "capacity-bucket-scroll relative z-20 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden",
               bucketScrollMaxClass,
             )}
           >
-            <div className="flex min-h-min flex-col-reverse gap-2 pb-0.5">
+            <div className="mt-auto flex w-full min-w-0 flex-col-reverse gap-2 pb-0.5">
               {cards.length === 0 ? (
                 <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
                   Drop story here
@@ -479,6 +577,7 @@ export function SprintCapacityBoard({
   yearSprint,
   selectedTeamId = null,
   capacityBoard,
+  columnReorderEnabled = true,
   onCapacityChange,
   onEstimateChange,
   onUnscheduleStory,
@@ -521,7 +620,11 @@ export function SprintCapacityBoard({
     otherIds.some((id) => storyById.has(id)) ||
     rows.some((row) => sprintCapacityAssigneeBucket(row.story.assignee, assigneeRoster) == null);
   const sortedPeopleCols = [...memberSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  const members = [...sortedPeopleCols, ...(needsOtherColumn ? [SPRINT_CAPACITY_OTHER_BUCKET] : [])];
+  const members = orderedSprintCapacityMembers({
+    columnOrder: capacityBoard.columnOrder,
+    sortedPeopleCols,
+    needsOtherColumn: needsOtherColumn,
+  });
 
   const assigneeFilterOptions = useMemo(() => {
     const labels = new Set<string>(assigneeMatchRosterForSprintTeam(selectedTeamId, workspaceDirectoryUsers));
@@ -678,30 +781,46 @@ export function SprintCapacityBoard({
           const assignedIds = capacityBoard.assignments[member] ?? [];
           const cards = assignedIds.map((id) => storyById.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
           const assignedTotal = cards.reduce((sum, card) => sum + card.estimatedDays, 0);
+          const reorderAllowed =
+            columnReorderEnabled &&
+            expandedMemberKey == null &&
+            members.filter((m) => m !== SPRINT_CAPACITY_OTHER_BUCKET).length >= 2;
           return (
             <div
               key={member}
               className={cn(
-                "box-border w-full max-w-full min-w-[min(100%,22rem)] grow basis-[22rem]",
+                "box-border max-w-full min-w-[min(100%,22rem)] grow basis-[22rem]",
                 expandedMemberKey === member && "min-w-0 basis-full max-w-none",
               )}
             >
-              <CapacityBucket
+              <SprintCapacityColumnChrome
                 yearSprint={yearSprint}
                 teamKey={teamKey}
                 member={member}
-                capacity={capacityBoard.capacities[member] ?? 6}
-                assignedTotal={assignedTotal}
-                cards={cards}
-                onCapacityChange={(days) => onCapacityChange(member, days)}
-                onEstimateChange={onEstimateChange}
-                onUnscheduleStory={onUnscheduleStory}
-                onOpenStory={onOpenStory}
-                panelExpandable={visibleMembers.length > 1}
-                isPanelExpanded={expandedMemberKey === member}
-                onExpandPanel={() => setExpandedMemberKey(member)}
-                onCollapsePanel={() => setExpandedMemberKey(null)}
-              />
+                reorderEnabled={reorderAllowed}
+              >
+                {(reorderGrip) => (
+                  <div className="box-border w-full max-w-full">
+                    <CapacityBucket
+                      yearSprint={yearSprint}
+                      teamKey={teamKey}
+                      member={member}
+                      capacity={capacityBoard.capacities[member] ?? 6}
+                      assignedTotal={assignedTotal}
+                      cards={cards}
+                      onCapacityChange={(days) => onCapacityChange(member, days)}
+                      onEstimateChange={onEstimateChange}
+                      onUnscheduleStory={onUnscheduleStory}
+                      onOpenStory={onOpenStory}
+                      panelExpandable={visibleMembers.length > 1}
+                      isPanelExpanded={expandedMemberKey === member}
+                      onExpandPanel={() => setExpandedMemberKey(member)}
+                      onCollapsePanel={() => setExpandedMemberKey(null)}
+                      reorderGrip={reorderGrip}
+                    />
+                  </div>
+                )}
+              </SprintCapacityColumnChrome>
             </div>
           );
         })}

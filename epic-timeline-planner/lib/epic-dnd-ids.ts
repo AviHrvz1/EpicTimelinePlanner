@@ -215,6 +215,56 @@ const SPRINT_CAPACITY_BUCKET_PREFIX = "capacity:";
 const MONTH_TEAM_CAPACITY_BUCKET_PREFIX = "month-capacity:";
 const QUARTER_TEAM_CAPACITY_BUCKET_PREFIX = "quarter-capacity:";
 
+const CAPACITY_COL_DRAG = "capacity-col-drag:";
+const CAPACITY_COL_DROP = "capacity-col-drop:";
+
+/** Drag handle: reorder sprint capacity person columns (same sprint + team scope as bucket drops). */
+export function sprintCapacityColumnDragId(yearSprint: number, teamKey: string, member: string): string {
+  return `${CAPACITY_COL_DRAG}${yearSprint}:${encodeURIComponent(teamKey)}:${encodeURIComponent(member)}`;
+}
+
+export function parseSprintCapacityColumnDragId(
+  id: string,
+): { yearSprint: number; teamKey: string; member: string } | null {
+  if (!id.startsWith(CAPACITY_COL_DRAG)) return null;
+  const rest = id.slice(CAPACITY_COL_DRAG.length);
+  const parts = rest.split(":");
+  if (parts.length !== 3) return null;
+  const yearSprint = Number(parts[0]);
+  if (!Number.isFinite(yearSprint) || yearSprint < 1 || yearSprint > 48) return null;
+  try {
+    const teamKey = decodeURIComponent(parts[1] ?? "");
+    const member = decodeURIComponent(parts[2] ?? "");
+    if (!member) return null;
+    return { yearSprint, teamKey, member };
+  } catch {
+    return null;
+  }
+}
+
+export function sprintCapacityColumnDropId(yearSprint: number, teamKey: string, member: string): string {
+  return `${CAPACITY_COL_DROP}${yearSprint}:${encodeURIComponent(teamKey)}:${encodeURIComponent(member)}`;
+}
+
+export function parseSprintCapacityColumnDropId(
+  id: string,
+): { yearSprint: number; teamKey: string; member: string } | null {
+  if (!id.startsWith(CAPACITY_COL_DROP)) return null;
+  const rest = id.slice(CAPACITY_COL_DROP.length);
+  const parts = rest.split(":");
+  if (parts.length !== 3) return null;
+  const yearSprint = Number(parts[0]);
+  if (!Number.isFinite(yearSprint) || yearSprint < 1 || yearSprint > 48) return null;
+  try {
+    const teamKey = decodeURIComponent(parts[1] ?? "");
+    const member = decodeURIComponent(parts[2] ?? "");
+    if (!member) return null;
+    return { yearSprint, teamKey, member };
+  } catch {
+    return null;
+  }
+}
+
 /** Sprint capacity drop target by sprint + team + member. */
 export function sprintCapacityBucketDropId(yearSprint: number, teamKey: string, member: string): string {
   return `${SPRINT_CAPACITY_BUCKET_PREFIX}${yearSprint}:${encodeURIComponent(teamKey)}:${encodeURIComponent(member)}`;

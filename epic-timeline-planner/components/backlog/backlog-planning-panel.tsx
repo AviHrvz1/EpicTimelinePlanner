@@ -66,7 +66,7 @@ type BacklogPlanningPanelProps = {
   onOpenInitiative: (initiativeId: string) => void;
   onOpenEpic: (epicId: string) => void;
   onOpenStory: (storyId: string) => void;
-  onCreateInitiativeQuick: (title: string) => Promise<void>;
+  onCreateInitiativeQuick: (title: string) => Promise<string | void>;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   onPatchStoryQuick: (

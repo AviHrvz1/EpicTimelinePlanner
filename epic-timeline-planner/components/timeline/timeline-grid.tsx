@@ -812,7 +812,13 @@ type TimelineGridProps = {
   /** Sprint view team filter selector (null = all teams). */
   onSprintStoryBoardTeamChange?: (teamId: string | null) => void;
   /** Sprint capacity buckets state for the active sprint + team filter. */
-  sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> };
+  sprintCapacityBoard?: {
+    capacities: Record<string, number>;
+    assignments: Record<string, string[]>;
+    columnOrder?: string[];
+  };
+  /** When false, sprint capacity person columns cannot be reordered by drag (e.g. closed sprint). */
+  sprintCapacityColumnReorderEnabled?: boolean;
   onSprintCapacityChange?: (member: string, days: number) => void;
   onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
   /** Capacity board X: clear assignee only (story stays on sprint). */
@@ -1098,6 +1104,7 @@ export function TimelineGrid({
   sprintStoryBoardTeamId = null,
   onSprintStoryBoardTeamChange,
   sprintCapacityBoard,
+  sprintCapacityColumnReorderEnabled = true,
   onSprintCapacityChange,
   onSprintCapacityStoryEstimateChange,
   onSprintCapacityStoryClearAssignee,
@@ -3918,8 +3925,8 @@ export function TimelineGrid({
               monthPlanTab !== "month-status" &&
               monthPlanTab !== "sprint-status" &&
               "rounded-2xl p-1.5 shadow-lg ring-1",
-            monthPlanTab === "sprint-kanban" && "flex w-full flex-col min-h-min",
-            hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
+            monthPlanTab === "sprint-kanban" && "flex w-full min-w-0 flex-col min-h-min pl-[4rem]",
+            hasContextSideMenu && monthPlanTab !== "sprint-kanban" && "w-[calc(100%-4rem)] ml-[4rem]",
     monthPlanTab !== "sprint-kanban" &&
     monthPlanTab !== "sprint-retrospective" &&
     monthPlanTab !== "month-capacity" &&
@@ -4300,6 +4307,7 @@ export function TimelineGrid({
                   selectedTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}
+                  columnReorderEnabled={sprintCapacityColumnReorderEnabled}
                   onCapacityChange={(member, days) => onSprintCapacityChange?.(member, days)}
                   onEstimateChange={(storyId, estimatedDays) =>
                     onSprintCapacityStoryEstimateChange?.(storyId, estimatedDays)
