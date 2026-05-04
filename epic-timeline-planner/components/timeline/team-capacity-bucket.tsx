@@ -315,15 +315,16 @@ export function TeamCapacityBucket({
   const rollupInfoTooltipId = `capacity-rollup-info-${dropId.replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
   const rollupWarnChildId = `rollup-warn-child-${dropId.replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
   const rollupWarnEstId = `rollup-warn-est-${dropId.replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
-  const bucketColumnHeightClass = isPanelExpanded
-    ? "min-h-[28rem] h-[min(72vh,44rem)]"
-    : "h-[24rem]";
+  const bucketColumnShellClass = isPanelExpanded ? "min-h-[28rem]" : "min-h-[24rem]";
+  /** 150% of previous fixed list area (24rem → 36rem) before vertical scroll. */
+  const bucketScrollMaxClass = isPanelExpanded
+    ? "max-h-[min(72vh,66rem)]"
+    : "max-h-[36rem]";
 
   return (
     <section
       className={cn(
-        "group @container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
-        isPanelExpanded && "min-h-0",
+        "group @container min-h-0 min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
       )}
     >
       <div className="mb-2 flex flex-col gap-2 pr-0.5">
@@ -488,12 +489,12 @@ export function TeamCapacityBucket({
         </div>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_56px] gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_56px] items-stretch gap-2">
         <div
           ref={setNodeRef}
           className={cn(
-            "relative flex flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition",
-            bucketColumnHeightClass,
+            "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition",
+            bucketColumnShellClass,
             isOver && "ring-2 ring-primary/25",
           )}
         >
@@ -507,25 +508,32 @@ export function TeamCapacityBucket({
             className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] transition-all"
             style={{ height: `${fillPct}%`, background: bucketFill }}
           />
-          <div className="relative z-20 flex min-h-0 flex-1 flex-col-reverse gap-2.5 overflow-y-auto pb-2 pt-1 capacity-bucket-scroll">
-            {cards.length === 0 ? (
-              <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
-                Drop epic here
-              </p>
-            ) : (
-              cards.map((card) => (
-                <TeamEpicCard
-                  key={card.epicId}
-                  {...card}
-                  onOpenEpic={onOpenEpic}
-                  onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
-                  onOriginalEstimateChange={onEpicOriginalEstimateChange}
-                />
-              ))
+          <div
+            className={cn(
+              "capacity-bucket-scroll relative z-20 min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+              bucketScrollMaxClass,
             )}
+          >
+            <div className="flex min-h-min flex-col-reverse gap-2.5 pb-2 pt-1">
+              {cards.length === 0 ? (
+                <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
+                  Drop epic here
+                </p>
+              ) : (
+                cards.map((card) => (
+                  <TeamEpicCard
+                    key={card.epicId}
+                    {...card}
+                    onOpenEpic={onOpenEpic}
+                    onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
+                    onOriginalEstimateChange={onEpicOriginalEstimateChange}
+                  />
+                ))
+              )}
+            </div>
           </div>
         </div>
-        <div className={cn("flex flex-col items-center p-2", bucketColumnHeightClass)}>
+        <div className={cn("flex min-h-0 flex-col items-center p-2", bucketColumnShellClass)}>
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">{Math.round(utilization)}%</p>

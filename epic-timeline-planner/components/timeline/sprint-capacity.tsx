@@ -106,8 +106,8 @@ function CapacityStoryCard({
         type="button"
         onClick={() => onUnscheduleStory(card.id)}
         className="absolute right-1.5 top-1.5 z-50 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition hover:bg-slate-100 hover:text-slate-700 group-hover/storycap:opacity-100 group-focus-within/storycap:opacity-100 focus-visible:opacity-100"
-        aria-label="Remove story from sprint capacity bucket"
-        title="Remove from sprint"
+        aria-label="Clear assignee (story stays on sprint)"
+        title="Unassign"
       >
         <X className="size-3.5" aria-hidden />
       </button>
@@ -156,7 +156,7 @@ function CapacityStoryCard({
               value={card.estimatedDays}
               onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
               className={cn(
-                "h-[1.375rem] w-11 shrink-0 rounded border border-slate-200 bg-white px-1 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
+                "h-5 w-10 shrink-0 rounded border border-slate-200 bg-white px-0.5 text-center text-[10px] font-semibold leading-none text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-100",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
               aria-label="Story Est Days"
@@ -224,15 +224,21 @@ function CapacityBucket({
   const sprintRollupInfoId = `sprint-cap-rollup-info-${svgKey}`;
   const sprintStoriesWarnId = `sprint-cap-stories-warn-${svgKey}`;
   const memberTitle = capacityBucketToFilterLabel(member);
-  const bucketColumnHeightClass = isPanelExpanded
-    ? "min-h-[28rem] h-[min(72vh,44rem)]"
-    : "h-[23rem] @[28rem]:h-[26rem]";
+  /** Min height matches the old fixed column; list area below can grow to `bucketScrollMaxClass` before scrolling. */
+  const bucketColumnShellClass = isPanelExpanded
+    ? "min-h-[28rem]"
+    : "min-h-[23rem] @[28rem]:min-h-[26rem]";
+  /** 150% of previous fixed list heights before vertical scroll. */
+  const bucketScrollMaxClass = isPanelExpanded
+    ? "max-h-[min(72vh,66rem)]"
+    : "max-h-[34.5rem] @[28rem]:max-h-[39rem]";
 
   return (
     <section
       className={cn(
-        "group @container min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
-        isPanelExpanded && "min-h-0",
+        "group @container min-h-0 min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        "transition-[border-color,box-shadow,background-color,filter] duration-200 ease-out",
+        "hover:border-indigo-300/70 hover:from-indigo-50/90 hover:via-indigo-100/55 hover:to-sky-100/70 hover:shadow-md hover:ring-indigo-200/55",
       )}
     >
       <div className="mb-2 flex flex-col gap-2 pr-0.5">
@@ -360,13 +366,15 @@ function CapacityBucket({
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_56px] gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_56px] items-stretch gap-2">
         <div
           ref={setNodeRef}
           className={cn(
-            "relative flex flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition",
-            bucketColumnHeightClass,
-            isOver && "ring-2 ring-primary/25",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border-0 bg-white p-2",
+            "transition-[background-color,box-shadow] duration-200 ease-out",
+            "hover:bg-sky-50/40 hover:shadow-inner",
+            bucketColumnShellClass,
+            isOver && "bg-sky-50/50 ring-2 ring-primary/25 shadow-inner",
           )}
         >
           {/* Bucket SVG hidden for now — remove `hidden` from className to show again */}
@@ -382,25 +390,33 @@ function CapacityBucket({
               background: bucketFill,
             }}
           />
-          <div className="capacity-bucket-scroll relative z-20 flex min-h-0 flex-1 flex-col-reverse gap-2 overflow-y-auto">
-            {cards.length === 0 ? (
-              <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
-                Drop story here
-              </p>
-            ) : (
-              cards.map((card) => (
-                <CapacityStoryCard
-                  key={card.id}
-                  card={card}
-                  onEstimateChange={onEstimateChange}
-                  onUnscheduleStory={onUnscheduleStory}
-                  onOpenStory={onOpenStory}
-                />
-              ))
+          {/* Scroll on this wrapper only; inner flex-col-reverse avoids flex+overflow quirks. */}
+          <div
+            className={cn(
+              "capacity-bucket-scroll relative z-20 min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+              bucketScrollMaxClass,
             )}
+          >
+            <div className="flex min-h-min flex-col-reverse gap-2 pb-0.5">
+              {cards.length === 0 ? (
+                <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
+                  Drop story here
+                </p>
+              ) : (
+                cards.map((card) => (
+                  <CapacityStoryCard
+                    key={card.id}
+                    card={card}
+                    onEstimateChange={onEstimateChange}
+                    onUnscheduleStory={onUnscheduleStory}
+                    onOpenStory={onOpenStory}
+                  />
+                ))
+              )}
+            </div>
           </div>
         </div>
-        <div className={cn("flex flex-col items-center p-2", bucketColumnHeightClass)}>
+        <div className={cn("flex min-h-0 flex-col items-center p-2", bucketColumnShellClass)}>
           <div className="text-center">
             <p className="text-[11px] font-semibold text-slate-600">Load</p>
             <p className="text-[13px] font-bold text-slate-700">

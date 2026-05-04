@@ -815,6 +815,8 @@ type TimelineGridProps = {
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> };
   onSprintCapacityChange?: (member: string, days: number) => void;
   onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
+  /** Capacity board X: clear assignee only (story stays on sprint). */
+  onSprintCapacityStoryClearAssignee?: (storyId: string) => void;
   onSprintCapacityStoryUnschedule?: (storyId: string) => void;
   onRequestSprintKanbanStoryUnschedule?: (storyId: string, storyTitle: string) => void;
   /** Sprint Kanban: inline edits for assignee / estimate / days left. */
@@ -1098,6 +1100,7 @@ export function TimelineGrid({
   sprintCapacityBoard,
   onSprintCapacityChange,
   onSprintCapacityStoryEstimateChange,
+  onSprintCapacityStoryClearAssignee,
   onSprintCapacityStoryUnschedule,
   onRequestSprintKanbanStoryUnschedule,
   onSprintKanbanStoryPatch,
@@ -4301,7 +4304,11 @@ export function TimelineGrid({
                   onEstimateChange={(storyId, estimatedDays) =>
                     onSprintCapacityStoryEstimateChange?.(storyId, estimatedDays)
                   }
-                  onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
+                  onUnscheduleStory={(storyId) =>
+                    onSprintCapacityStoryClearAssignee
+                      ? onSprintCapacityStoryClearAssignee(storyId)
+                      : onSprintCapacityStoryUnschedule?.(storyId)
+                  }
                   onOpenStory={onOpenStory ?? (() => {})}
                   teamSelectorSlot={
                     <div className="relative inline-flex min-w-[12rem] max-w-[20rem] align-middle" ref={sprintTeamMenuRef}>

@@ -99,6 +99,13 @@ type StoryDetailsDialogProps = {
     },
   ) => Promise<void>;
   onDelete?: (storyId: string) => Promise<void>;
+  /** Styled confirm (matches planner overlay); falls back to `window.confirm` when omitted. */
+  onRequestConfirm?: (opts: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void | Promise<void>;
+  }) => void;
   onAddComment: (storyId: string, body: string) => Promise<void>;
   /** Updates the parent epic’s delivery team (saved with the story). */
   onPatchEpicTeam?: (epicId: string, team: string | null) => Promise<void>;
@@ -122,6 +129,7 @@ export function StoryDetailsDialog({
   onCreate,
   onSave,
   onDelete,
+  onRequestConfirm,
   onAddComment,
   onPatchEpicTeam,
   onOpenInitiative,
@@ -407,6 +415,31 @@ export function StoryDetailsDialog({
   const anchored = false;
   const isCreateMode = !story;
 
+  function requestDeleteConfirmation() {
+    if (isCreateMode || !story || !onDelete) return;
+    const storyTitle = story.title?.trim() || "Untitled story";
+    const usRef = displayIds.byStoryId.get(story.id);
+    const runDelete = async () => {
+      await onDelete(story.id);
+      onClose();
+    };
+    if (onRequestConfirm) {
+      onRequestConfirm({
+        title: "Delete user story?",
+        message: usRef
+          ? `${usRef} · ${storyTitle} will be permanently deleted. This cannot be undone.`
+          : `“${storyTitle}” will be permanently deleted. This cannot be undone.`,
+        confirmLabel: "Delete",
+        onConfirm: runDelete,
+      });
+      return;
+    }
+    void (async () => {
+      if (!window.confirm("Delete this user story?")) return;
+      await runDelete();
+    })();
+  }
+
   function buildStoryPayload() {
     const normalizedTitle = title.trim();
     if (!normalizedTitle || !epicId) return null;
@@ -471,14 +504,6 @@ export function StoryDetailsDialog({
   }
 
   if (!visible) return null;
-
-  async function handleDelete() {
-    if (isCreateMode || !story || !onDelete) return;
-    const confirmed = window.confirm("Delete this user story?");
-    if (!confirmed) return;
-    await onDelete(story.id);
-    onClose();
-  }
 
   function addLabel(label: string) {
     const normalized = label.trim();
@@ -725,7 +750,7 @@ export function StoryDetailsDialog({
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  onClick={() => void handleDelete()}
+                  onClick={() => requestDeleteConfirmation()}
                   aria-label="Delete story"
                   className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                 >
@@ -987,7 +1012,7 @@ export function StoryDetailsDialog({
                 min={0}
                 value={estimatedDays}
                 onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+                className="h-5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-0 text-[12px] leading-none text-slate-800"
               />
             </div>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -997,7 +1022,7 @@ export function StoryDetailsDialog({
                 min={0}
                 value={daysLeft}
                 onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+                className="h-5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-0 text-[12px] leading-none text-slate-800"
               />
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">

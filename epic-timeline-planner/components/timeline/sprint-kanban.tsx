@@ -2,7 +2,9 @@
 
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
@@ -65,6 +67,7 @@ function KanbanColumn({
   tone,
   Icon,
   dropDisabled = false,
+  sortableItemIds,
   children,
 }: {
   yearSprint: number;
@@ -73,6 +76,8 @@ function KanbanColumn({
   tone: string;
   Icon: LucideIcon;
   dropDisabled?: boolean;
+  /** Draggable ids (`story:board:…`) in column order for vertical sortable. */
+  sortableItemIds: string[];
   children: ReactNode;
 }) {
   const dropId = sprintKanbanDropId(yearSprint, status);
@@ -91,7 +96,9 @@ function KanbanColumn({
         <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
         <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
       </div>
-      <div className="flex flex-col gap-2">{children}</div>
+      <SortableContext items={sortableItemIds} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col gap-2">{children}</div>
+      </SortableContext>
     </div>
   );
 }
@@ -118,7 +125,7 @@ function KanbanStoryCard({
   emphasizeTick?: number;
 }) {
   const { story, epic } = row;
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: storyBoardDraggableId(story.id),
     disabled: dragDisabled,
   });
@@ -198,7 +205,8 @@ function KanbanStoryCard({
         isDragging && "opacity-60",
       )}
       style={{
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        transform: CSS.Transform.toString(transform),
+        transition,
         zIndex: isDragging ? 20 : undefined,
       }}
     >
@@ -473,6 +481,19 @@ export function SprintKanbanBoard({
     const list = byStatus.get(row.story.status);
     if (list) list.push(row);
   }
+  for (const col of KANBAN_COLUMNS) {
+    const list = byStatus.get(col.status);
+    if (list && list.length > 1) {
+      list.sort((a, b) => {
+        const ao = a.story.backlogOrder ?? 0;
+        const bo = b.story.backlogOrder ?? 0;
+        if (ao !== bo) return ao - bo;
+        const t = a.story.title.localeCompare(b.story.title, undefined, { sensitivity: "base" });
+        if (t !== 0) return t;
+        return a.story.id.localeCompare(b.story.id);
+      });
+    }
+  }
 
   const assigneeBadgeLabel = useCallback((name: string) => {
     if (name === "Unassigned") return "U";
@@ -592,7 +613,10 @@ export function SprintKanbanBoard({
         </div>
       ) : null}
       <div className="grid w-full grid-cols-2 items-stretch gap-3 lg:grid-cols-4">
-        {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => (
+        {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => {
+          const colRows = byStatus.get(status) ?? [];
+          const sortableItemIds = colRows.map((r) => storyBoardDraggableId(r.story.id));
+          return (
           <KanbanColumn
             key={status}
             yearSprint={yearSprint}
@@ -601,8 +625,9 @@ export function SprintKanbanBoard({
             tone={tone}
             Icon={Icon}
             dropDisabled={sprintClosed}
+            sortableItemIds={sortableItemIds}
           >
-            {(byStatus.get(status) ?? []).map((row) => {
+            {colRows.map((row) => {
               const accordionEmphasis =
                 epicAccordionEmphasis != null && epicAccordionEmphasis.epicId === row.epic.id;
               const scheduledBatch = scheduledStoriesEmphasis != null;
@@ -628,7 +653,8 @@ export function SprintKanbanBoard({
               );
             })}
           </KanbanColumn>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -84,7 +84,7 @@ export async function PATCH(
           comments: { orderBy: { createdAt: "desc" } },
           history: { orderBy: { createdAt: "desc" } },
           userStories: {
-            orderBy: { createdAt: "asc" },
+            orderBy: [{ backlogOrder: "asc" }, { createdAt: "asc" }],
             include: {
               comments: { orderBy: { createdAt: "desc" } },
               history: { orderBy: { createdAt: "desc" } },
@@ -111,7 +111,7 @@ export async function PATCH(
             comments: { orderBy: { createdAt: "desc" } },
             history: { orderBy: { createdAt: "desc" } },
             userStories: {
-              orderBy: { createdAt: "asc" },
+              orderBy: [{ backlogOrder: "asc" }, { createdAt: "asc" }],
               include: {
                 comments: { orderBy: { createdAt: "desc" } },
                 history: { orderBy: { createdAt: "desc" } },

@@ -15,7 +15,7 @@ const INITIATIVE_INCLUDE = {
       comments: { orderBy: { createdAt: "desc" as const } },
       history: { orderBy: { createdAt: "desc" as const } },
       userStories: {
-        orderBy: { createdAt: "asc" as const },
+        orderBy: [{ backlogOrder: "asc" as const }, { createdAt: "asc" as const }],
         include: {
           comments: { orderBy: { createdAt: "desc" as const } },
           history: { orderBy: { createdAt: "desc" as const } },

@@ -243,19 +243,21 @@
 }
 
 @layer utilities {
-  /** Thin scrollbar for fixed-height capacity bucket lists (Firefox + WebKit). */
+  /** Visible but light scrollbar for capacity bucket lists (Firefox + WebKit). */
   .capacity-bucket-scroll {
+    scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: rgb(148 163 184 / 0.6) transparent;
+    scrollbar-color: rgb(100 116 139 / 0.55) rgb(241 245 249 / 0.9);
   }
   .capacity-bucket-scroll::-webkit-scrollbar {
-    width: 5px;
+    width: 8px;
   }
   .capacity-bucket-scroll::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgb(241 245 249 / 0.95);
+    border-radius: 9999px;
   }
   .capacity-bucket-scroll::-webkit-scrollbar-thumb {
-    background-color: rgb(148 163 184 / 0.5);
+    background-color: rgb(100 116 139 / 0.45);
     border-radius: 9999px;
   }
   .capacity-bucket-scroll::-webkit-scrollbar-thumb:hover {

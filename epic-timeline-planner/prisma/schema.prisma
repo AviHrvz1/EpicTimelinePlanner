@@ -79,6 +79,8 @@ model Epic {
   planEndSprint  Int?          @default(2)
   /** Vertical order in roadmap Gantt for epic bars (lower = higher on screen). */
   timelineRow    Int           @default(0)
+  /** Order in initiative backlog / epic list (lower = higher). */
+  backlogOrder   Int           @default(0)
   /** Delivery team id when assigned on the month team board (`platform` | `experience` | `data`). */
   team           String?
   userStories    UserStory[]
@@ -119,6 +121,8 @@ model UserStory {
   estimatedDays Int?
   daysLeft      Int?
   status        StoryStatus    @default(todo)
+  /** Order within a sprint Kanban column (lower = higher). Scoped per status column on the board. */
+  backlogOrder  Int            @default(0)
   epicId        String
   epic          Epic           @relation(fields: [epicId], references: [id], onDelete: Cascade)
   comments      StoryComment[]

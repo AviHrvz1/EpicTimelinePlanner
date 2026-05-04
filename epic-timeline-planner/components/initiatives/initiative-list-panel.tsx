@@ -1315,6 +1315,8 @@ function SprintEpicCard({
                 activeYearSprint != null &&
                 resolvedStorySprint != null &&
                 resolvedStorySprint === activeYearSprint;
+              /** Drag handle hidden only while someone is assigned; clearing assignee (capacity X) restores drag. */
+              const showActiveSprintAssignedIcon = isScheduledInActiveSprint && assigneeName != null;
               const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
               return (
                 <div
@@ -1322,13 +1324,20 @@ function SprintEpicCard({
                   className="group/story flex min-h-[28px] w-full items-center gap-1.5 rounded-md py-0.5 pr-0.5 transition-colors hover:bg-muted/40"
                 >
                   {storyDragEnabled ? (
-                    isScheduledInActiveSprint ? (
+                    showActiveSprintAssignedIcon ? (
                       <span
                         className="inline-flex shrink-0 rounded-md p-1 text-emerald-600"
-                        title="Scheduled in active sprint"
-                        aria-label="Scheduled in active sprint"
+                        title="Assigned in active sprint"
+                        aria-label="Assigned in active sprint"
                       >
-                        <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
+                        <Image
+                          src="/scheduled-icon.png"
+                          alt=""
+                          width={16}
+                          height={16}
+                          className="size-4 object-contain"
+                          aria-hidden
+                        />
                       </span>
                     ) : (
                       <StoryDragHandle storyId={story.id} />

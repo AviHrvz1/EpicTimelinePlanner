@@ -19,6 +19,8 @@ const updateStorySchema = z.object({
   estimatedDays: z.number().int().min(0).max(3650).optional().nullable(),
   daysLeft: z.number().int().min(0).max(3650).optional().nullable(),
   status: z.nativeEnum(StoryStatus).optional(),
+  /** Kanban column order (per status) on the sprint board. */
+  backlogOrder: z.number().int().min(0).max(10_000).optional(),
   epicId: z.string().uuid().optional(),
   /** Optional explicit history line for system-driven updates (e.g. sprint auto-rollover). */
   historyEntry: z.string().trim().min(1).max(240).optional(),
@@ -36,6 +38,7 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  try {
   const { id } = await context.params;
   const payload = await request.json();
   const parsed = updateStorySchema.safeParse(payload);
@@ -60,6 +63,7 @@ export async function PATCH(
       estimatedDays: true,
       daysLeft: true,
       status: true,
+      backlogOrder: true,
       epicId: true,
       planYear: true,
       planQuarter: true,
@@ -86,6 +90,8 @@ export async function PATCH(
   if (patch.daysLeft !== undefined && patch.daysLeft !== existing.daysLeft) changes.push("Days left updated");
   if (patch.status !== undefined && patch.status !== existing.status)
     changes.push(`Status changed to ${patch.status}`);
+  if (patch.backlogOrder !== undefined && patch.backlogOrder !== existing.backlogOrder)
+    changes.push("Kanban order updated");
   if (patch.epicId !== undefined && patch.epicId !== existing.epicId) changes.push("Parent epic changed");
 
   const targetEpicId = patch.epicId ?? existing.epicId;
@@ -118,6 +124,7 @@ export async function PATCH(
       ...(patch.estimatedDays !== undefined ? { estimatedDays: patch.estimatedDays } : {}),
       ...(patch.daysLeft !== undefined ? { daysLeft: patch.daysLeft } : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.backlogOrder !== undefined ? { backlogOrder: patch.backlogOrder } : {}),
       ...(patch.epicId !== undefined ? { epicId: patch.epicId } : {}),
       planYear: nextPlanYear,
       planQuarter: nextPlanQuarter,
@@ -144,4 +151,28 @@ export async function PATCH(
   await captureStoryDailySnapshot(story);
 
   return NextResponse.json(story);
+  } catch (err) {
+    console.error("[PATCH /api/stories/[id]]", err);
+    const message = err instanceof Error ? err.message : "Story update failed";
+    return NextResponse.json({ message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await context.params;
+    const existing = await db.userStory.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) {
+      return NextResponse.json({ message: "Story not found" }, { status: 404 });
+    }
+    await db.userStory.delete({ where: { id } });
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    console.error("[DELETE /api/stories/[id]]", err);
+    const message = err instanceof Error ? err.message : "Story delete failed";
+    return NextResponse.json({ message }, { status: 500 });
+  }
 }

@@ -71,6 +71,8 @@ export type UserStoryItem = {
   estimatedDays: number | null;
   daysLeft: number | null;
   status: StoryStatus;
+  /** Order within a sprint Kanban column (per status). */
+  backlogOrder?: number;
   epicId: string;
   comments: StoryCommentItem[];
   history: StoryHistoryItem[];
@@ -96,6 +98,8 @@ export type EpicItem = {
   planEndMonth: number | null;
   planEndSprint: number | null;
   timelineRow: number;
+  /** Order in initiative backlog / epic list. */
+  backlogOrder?: number;
   /** Month team board lane id, when assigned. */
   team: string | null;
   userStories: UserStoryItem[];

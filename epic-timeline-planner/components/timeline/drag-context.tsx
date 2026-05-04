@@ -14,6 +14,7 @@ import {
   useDndMonitor,
   useSensor,
   useSensors,
+  type Collision,
   type CollisionDetection,
 } from "@dnd-kit/core";
 import { useMemo, useState } from "react";
@@ -151,6 +152,28 @@ const epicPlanCollision: CollisionDetection = (args) => {
   return centerHits;
 };
 
+/**
+ * When Kanban columns overlap sprint-capacity buckets in layout/stacking, `pointerWithin` returns
+ * multiple hits; dnd-kit would otherwise pick an arbitrary `over.id` and story drops on Kanban could
+ * be treated as capacity (assignee change). Prefer explicit column/plan targets over `capacity:`.
+ */
+function prioritizeStoryDropCollisions(hits: Collision[]): Collision[] {
+  if (hits.length <= 1) return hits;
+  const un = hits.filter((c) => String(c.id) === STORIES_UNSCHEDULE_DROP_ID);
+  if (un.length > 0) return un;
+  /** Prefer a specific card hit so sprint Kanban can reorder within a column (not only the column droppable). */
+  const boardCards = hits.filter((c) => String(c.id).startsWith("story:board:"));
+  if (boardCards.length > 0) return boardCards;
+  const kanban = hits.filter((c) => String(c.id).startsWith("kanban:"));
+  if (kanban.length > 0) return kanban;
+  const plan = hits.filter((c) => {
+    const id = String(c.id);
+    return id.startsWith("month:") || id.startsWith("epic-plan:");
+  });
+  if (plan.length > 0) return plan;
+  return hits;
+}
+
 const storyKanbanCollision: CollisionDetection = (args) => {
   const unscheduleId = STORIES_UNSCHEDULE_DROP_ID;
   /** Prefer left-panel unschedule so drops aren’t stolen by Kanban columns when crossing the layout. */
@@ -160,16 +183,24 @@ const storyKanbanCollision: CollisionDetection = (args) => {
   if (unscheduleRect.length > 0) return unscheduleRect;
 
   const isKanban = (id: string) => id.startsWith("kanban:");
+  const isStoryBoardCard = (id: string) => id.startsWith("story:board:");
   const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
   /** Same Gantt cells as epics (`MonthDropCell`, `epic-plan:`) so stories can be scheduled on the plan. */
   const isPlanCell = (id: string) => id.startsWith("month:") || id.startsWith("epic-plan:");
-  const isStoryDropTarget = (id: string) => isKanban(id) || isSprintCapacityDrop(id) || isPlanCell(id);
-  const pointerHits = pointerWithin(args).filter((c) => isStoryDropTarget(String(c.id)));
+  const isStoryDropTarget = (id: string) =>
+    isKanban(id) || isSprintCapacityDrop(id) || isPlanCell(id) || isStoryBoardCard(id);
+  const pointerHits = prioritizeStoryDropCollisions(
+    pointerWithin(args).filter((c) => isStoryDropTarget(String(c.id))),
+  );
   if (pointerHits.length > 0) return pointerHits;
-  const rectHits = rectIntersection(args).filter((c) => isStoryDropTarget(String(c.id)));
+  const rectHits = prioritizeStoryDropCollisions(
+    rectIntersection(args).filter((c) => isStoryDropTarget(String(c.id))),
+  );
   if (rectHits.length > 0) return rectHits;
-  return closestCenter(args).filter(
-    (c) => isStoryDropTarget(String(c.id)) || String(c.id) === unscheduleId,
+  return prioritizeStoryDropCollisions(
+    closestCenter(args).filter(
+      (c) => isStoryDropTarget(String(c.id)) || String(c.id) === unscheduleId,
+    ),
   );
 };
 

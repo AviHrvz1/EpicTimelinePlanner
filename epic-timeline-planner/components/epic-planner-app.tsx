@@ -74,6 +74,10 @@ import {
   type SprintCapacityBoard,
   type SprintWorkspaceDirectoryUser,
 } from "@/lib/sprint-capacity";
+import {
+  applyKanbanOrderPatchesToInitiatives,
+  computeKanbanStoryReorderPatches,
+} from "@/lib/kanban-story-order";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import {
   MONTH_TEAM_CAPACITY_STORAGE_KEY,
@@ -141,6 +145,8 @@ const DND_DROP_INSPECTOR_SUPPRESS_BRANCHES = new Set<string>([
   "story:unschedule-ok",
   "story:plan-cell",
   "story:kanban",
+  "story:kanban-reorder",
+  "story:kanban-reorder-noop",
   "story:capacity",
 ]);
 
@@ -1988,9 +1994,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }, []);
 
-  const unscheduleStoryFromCapacity = useCallback(async (storyId: string) => {
-    setSprintCapacityByKey((prev) => {
-      const next = Object.fromEntries(
+  const stripStoryFromPersistedCapacityAssignments = useCallback((storyId: string) => {
+    setSprintCapacityByKey((prev) =>
+      Object.fromEntries(
         Object.entries(prev).map(([k, board]) => [
           k,
           {
@@ -2000,9 +2006,46 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             ),
           },
         ]),
-      );
-      return next;
-    });
+      ),
+    );
+  }, []);
+
+  /** Capacity card X: clear assignee only; story stays on the sprint (status, labels, etc. unchanged). */
+  const clearStoryAssigneeFromSprintCapacity = useCallback(
+    async (storyId: string) => {
+      stripStoryFromPersistedCapacityAssignments(storyId);
+      flushSync(() => {
+        setInitiatives((prev) =>
+          prev.map((init) => ({
+            ...init,
+            epics: (init.epics ?? []).map((epic) => ({
+              ...epic,
+              userStories: (epic.userStories ?? []).map((story) =>
+                story.id === storyId ? { ...story, assignee: null } : story,
+              ),
+            })),
+          })),
+        );
+      });
+      try {
+        const response = await fetch(`/api/stories/${storyId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignee: null }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        toast.success("Assignee cleared");
+      } catch {
+        await refresh();
+        toast.error("Failed to clear assignee");
+      }
+    },
+    [stripStoryFromPersistedCapacityAssignments],
+  );
+
+  /** Kanban / confirm dialog: remove story from sprint (same as drag-to-unschedule). */
+  const unscheduleStoryFromCapacity = useCallback(async (storyId: string) => {
+    stripStoryFromPersistedCapacityAssignments(storyId);
     flushSync(() => {
       setInitiatives((prev) =>
         prev.map((init) => ({
@@ -2028,7 +2071,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       await refresh();
       toast.error("Failed to unschedule story");
     }
-  }, []);
+  }, [stripStoryFromPersistedCapacityAssignments]);
 
   async function refresh(targetYear = selectedYear) {
     const data = await parseJson<InitiativeItem[]>(
@@ -2811,6 +2854,72 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           toast.error("Failed to schedule story on sprint");
         }
         return;
+      }
+
+      if (
+        overId.startsWith("story:board:") &&
+        activeYearSprint != null &&
+        sprintCapacityPlanMonth != null
+      ) {
+        const overStoryId = parseStoryIdFromDraggable(overId);
+        if (overStoryId && overStoryId !== storyId) {
+          const teamFilter = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+          const boardRows = collectStoriesForSprintBoard(
+            initiatives,
+            sprintCapacityPlanMonth,
+            activeYearSprint,
+            teamFilter,
+          );
+          const patches = computeKanbanStoryReorderPatches({
+            boardRows,
+            activeStoryId: storyId,
+            overStoryId,
+            targetSprint: activeYearSprint,
+          });
+          if (patches != null) {
+            if (patches.length === 0) {
+              record("story:kanban-reorder-noop", { storyId, overStoryId });
+              return;
+            }
+            flushSync(() => {
+              setInitiatives((prev) => applyKanbanOrderPatchesToInitiatives(prev, patches));
+            });
+            try {
+              /** SQLite + Prisma: parallel PATCHes often hit SQLITE_BUSY / 500; apply in series. */
+              for (const p of patches) {
+                const res = await fetch(`/api/stories/${p.storyId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    backlogOrder: p.backlogOrder,
+                    ...(p.status !== undefined ? { status: p.status } : {}),
+                    ...(p.sprint !== undefined ? { sprint: p.sprint } : {}),
+                  }),
+                });
+                if (!res.ok) {
+                  const body = await res.text().catch(() => "");
+                  throw new Error(`HTTP ${res.status}${body ? `: ${body.slice(0, 500)}` : ""}`);
+                }
+              }
+              toast.success("Story updated");
+              record("story:kanban-reorder", { storyId, overStoryId, patchCount: patches.length });
+            } catch (err) {
+              console.error("[story-move] kanban reorder failed", {
+                storyId,
+                overStoryId,
+                cause: err instanceof Error ? err.message : String(err),
+              });
+              record("story:kanban-reorder-failed", {
+                storyId,
+                overStoryId,
+                cause: err instanceof Error ? err.message : String(err),
+              });
+              await refresh();
+              toast.error("Failed to reorder story");
+            }
+            return;
+          }
+        }
       }
 
       const kanbanMatch = /^kanban:(\d+):(todo|inProgress|done|approved)$/.exec(overId);
@@ -4105,6 +4214,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
                 onSprintKanbanStoryPatch={patchStoryFromKanban}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
+                onSprintCapacityStoryClearAssignee={clearStoryAssigneeFromSprintCapacity}
                 onSprintCapacityStoryUnschedule={unscheduleStoryFromCapacity}
                 onRequestSprintKanbanStoryUnschedule={(storyId, storyTitle) => {
                   openConfirmDialog({
@@ -4701,12 +4811,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             throw new Error("Failed to update epic team");
           }
         }}
+        onRequestConfirm={openConfirmDialog}
         onDelete={async (storyId) => {
           try {
             await deleteStory(storyId);
             toast.success("User story deleted");
           } catch {
             toast.error("Failed to delete user story");
+            throw new Error("Failed to delete user story");
           }
         }}
         onOpenInitiative={(initiativeId) => {

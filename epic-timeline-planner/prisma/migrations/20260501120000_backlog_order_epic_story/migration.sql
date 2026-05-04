@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Epic" ADD COLUMN "backlogOrder" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "UserStory" ADD COLUMN "backlogOrder" INTEGER NOT NULL DEFAULT 0;
