@@ -3584,7 +3584,8 @@ export function TimelineGrid({
                   }}
                   title="Sprint Board"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-kanban"
                       ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3610,7 +3611,8 @@ export function TimelineGrid({
                   }}
                   title={sprintInsightsLabel}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-status"
                       ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3635,7 +3637,8 @@ export function TimelineGrid({
                   }}
                   title="Sprint Capacity"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-capacity"
                       ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3660,7 +3663,8 @@ export function TimelineGrid({
                   }}
                   title="Sprint Retrospective"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-retrospective"
                       ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3686,7 +3690,8 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("epic-gantt")}
                   title="Epic Plan"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "epic-gantt"
                       ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3709,7 +3714,8 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("month-capacity")}
                   title="Team Capacity"
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "month-capacity"
                       ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3732,7 +3738,8 @@ export function TimelineGrid({
                   onClick={() => onMonthPlanTabChange?.("month-status")}
                   title={monthInsightsLabel}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "month-status"
                       ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3783,7 +3790,8 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "gantt"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3806,7 +3814,8 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("insights")}
               title={quarterInsightsLabel}
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "insights"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3829,7 +3838,8 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("capacity")}
               title={quarterCapacityLabel}
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "capacity"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3864,7 +3874,8 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "gantt"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3887,7 +3898,8 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("insights")}
               title="Portfolio Insights"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "insights"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3910,7 +3922,8 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("capacity")}
               title="Portfolio Capacity"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "capacity"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
