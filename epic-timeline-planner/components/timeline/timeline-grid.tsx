@@ -4079,12 +4079,7 @@ export function TimelineGrid({
               <div className="relative flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
                 <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
-                  <div
-                    className={cn(
-                      "col-span-2 mb-2 overflow-hidden rounded-2xl px-5 pt-4 pb-2 ring-1 ring-black/[0.03]",
-                      "bg-white",
-                    )}
-                  >
+                  <div className="col-span-2 mb-2">
                     <div className="grid min-w-0 grid-cols-2 gap-3">
                       <button
                         type="button"
