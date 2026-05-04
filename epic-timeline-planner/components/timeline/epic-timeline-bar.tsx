@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { X } from "lucide-react";
 
@@ -36,8 +37,8 @@ export function TimelineBarDragPreview({
           {title}
         </span>
       </div>
-      <div className="mt-0.5 flex items-center gap-1.5 px-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+      <div className="mt-0.5 flex min-w-0 items-center gap-1.5 px-2">
+        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500"
             style={{ width: `${safeProgress}%` }}
@@ -68,6 +69,8 @@ type InitiativeTimelineBarProps = {
   emphasizeFlash?: boolean;
   emphasizeTick?: number;
   showProgress?: boolean;
+  /** Renders at the start of the progress row (below the title strip), not on the colored title row. */
+  progressRowPrefix?: ReactNode;
 };
 
 export function InitiativeTimelineBar({
@@ -82,6 +85,7 @@ export function InitiativeTimelineBar({
   emphasizeFlash = false,
   emphasizeTick = 0,
   showProgress = true,
+  progressRowPrefix,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
 
@@ -128,12 +132,15 @@ export function InitiativeTimelineBar({
       </div>
       <div
         className={cn(
-          "mt-0.5 flex items-center gap-1.5 px-2",
+          "mt-0.5 flex min-w-0 items-center gap-1.5 px-2",
           showProgress ? "visible" : "invisible pointer-events-none",
         )}
         aria-hidden={!showProgress}
       >
-        <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+        {progressRowPrefix ? (
+          <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
+        ) : null}
+        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
             style={{ width: `${safeProgress}%` }}
@@ -166,6 +173,8 @@ type EpicPlanTimelineBarProps = {
   emphasizeTick?: number;
   compact?: boolean;
   showProgress?: boolean;
+  /** Renders at the start of the progress row (below the epic title strip), not on the colored title row. */
+  progressRowPrefix?: ReactNode;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -184,6 +193,7 @@ export function EpicPlanTimelineBar({
   emphasizeTick = 0,
   compact = false,
   showProgress = true,
+  progressRowPrefix,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const dragData = {
@@ -274,13 +284,16 @@ export function EpicPlanTimelineBar({
       </div>
       <div
         className={cn(
-          "flex items-center gap-1.5 px-2",
+          "flex min-w-0 items-center gap-1.5 px-2",
           compact ? "mt-0.25" : "mt-0.5",
           showProgress ? "visible" : "invisible pointer-events-none",
         )}
         aria-hidden={!showProgress}
       >
-        <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+        {progressRowPrefix ? (
+          <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
+        ) : null}
+        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
             style={{ width: `${safeProgress}%` }}

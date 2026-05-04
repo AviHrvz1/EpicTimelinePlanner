@@ -2994,7 +2994,7 @@ export function BacklogPlanningPanel({
             </form>
           ) : null}
           {isOpen ? (
-            <div>
+            <div className="ml-2 border-l border-slate-300/70 bg-slate-50/50 pl-3">
               {(() => {
                 const byEpic = new Map<string, typeof groupedStoryRows>();
                 for (const r of initiativeRows) {
@@ -3258,7 +3258,7 @@ export function BacklogPlanningPanel({
               </form>
             ) : null}
             {isInitOpen ? (
-              <div>
+              <div className="ml-2 border-l border-slate-300/70 bg-slate-50/50 pl-3">
                 {initiative.epics.map((epic) => {
                   const standEpicModel = standInitModel?.epics?.find((e) => e.id === epic.epicId);
                   const standPlanYear = Number(initiative.initiativeYear);
@@ -4698,7 +4698,7 @@ export function BacklogPlanningPanel({
                   ) : null}
 
                   {isInitOpen ? (
-                    <div className="bg-slate-50/50">
+                    <div className="ml-2 border-l border-slate-300/70 bg-slate-50/50 pl-3">
                       {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
                         <form
                           onSubmit={handleCreateSubmit}

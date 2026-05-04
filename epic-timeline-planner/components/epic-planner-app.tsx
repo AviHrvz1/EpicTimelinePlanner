@@ -923,6 +923,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [panelWidth, setPanelWidth] = useState(520);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const [isLeftPanelHidden, setIsLeftPanelHidden] = useState(false);
+  /** Synced with TimelineGrid “Progress” chip — Gantt bar rows + left-panel story progress. */
+  const [showRoadmapProgress, setShowRoadmapProgress] = useState(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
   const leftInitiativePanelAutoCollapsedForInsightsRef = useRef(false);
@@ -3879,38 +3881,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     <InitiativeListPanel
                       initiatives={initiatives}
                       activeMonth={initiativeListActiveMonth}
+                      storyProgressDetailsVisible={showRoadmapProgress}
                       useEpicPlanLeftPanel={initiativeListActiveMonth != null}
                       activeYearSprint={activeYearSprint}
                       storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
                       isSprintModeActive={isSprintModeActive}
-                      onCreateInitiative={() => {
-                        setEditingInitiative(undefined);
-                        setInitiativeDialogOpen(true);
-                      }}
-                      onCreateEpic={() => {
-                        setEditingEpic(undefined);
-                        const m = activeTimelineMonth;
-                        const firstForMonth =
-                          m == null
-                            ? undefined
-                            : initiatives.find(
-                                (i) =>
-                                  i.status === InitiativeStatus.scheduled &&
-                                  i.startMonth != null &&
-                                  i.endMonth != null &&
-                                  i.startMonth <= m &&
-                                  i.endMonth >= m,
-                              );
-                        if (!firstForMonth) {
-                          if (m != null) {
-                            toast.message("No scheduled initiative for this month. Plan an initiative in this month first.");
-                          } else {
-                            toast.message("Create an initiative first, then add an epic.");
-                          }
-                          return;
+                      onCreateInitiativeQuick={async (title) => {
+                        try {
+                          await createInitiativeQuick(title);
+                          toast.success("Initiative added");
+                        } catch (err) {
+                          toast.error("Failed to add initiative");
+                          throw err;
                         }
-                        setEditingEpicInitiativeId(firstForMonth.id);
-                        setEpicDialogOpen(true);
                       }}
                       onEditInitiative={(initiative) => {
                         setEditingInitiative(initiative);
@@ -3930,16 +3913,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                         try {
                           await createEpicQuick(initiativeId, title);
                           toast.success("Epic added");
-                        } catch {
+                        } catch (err) {
                           toast.error("Failed to add epic");
+                          throw err;
                         }
                       }}
                       onCreateStoryQuick={async (epicId, title) => {
                         try {
                           await createStoryQuick(epicId, title);
                           toast.success("User story added");
-                        } catch {
+                        } catch (err) {
                           toast.error("Failed to add user story");
+                          throw err;
                         }
                       }}
                       epicBacklogOrderByMonth={epicBacklogOrderByMonth}
@@ -4022,6 +4007,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 initiatives={initiatives}
                 zoom={1}
                 currentYear={selectedYear}
+                showRoadmapProgress={showRoadmapProgress}
+                onShowRoadmapProgressChange={setShowRoadmapProgress}
                 summaryBadges={roadmapSummary}
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 summaryStatusQuickFilter={panelStatusQuickFilter}

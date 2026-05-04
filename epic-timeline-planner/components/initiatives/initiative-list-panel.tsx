@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
@@ -35,6 +36,7 @@ import {
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
 import { MONTH_TEAM_COLUMNS, isKnownEpicTeamId } from "@/lib/month-team-board";
+import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
@@ -248,6 +250,13 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
   };
 }
 
+/** Left-panel initiative/epic cards: track grows to fill the row; summary stays on the same line (nowrap). */
+const leftPanelProgressTrackClass =
+  "h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80";
+const leftPanelProgressRowClass = "flex min-w-0 flex-nowrap items-center gap-x-2";
+const leftPanelProgressSummaryClass =
+  "shrink-0 whitespace-nowrap text-[11px] font-medium tabular-nums tracking-tight text-slate-600";
+
 function epicCompletionMeta(epic: EpicItem): {
   total: number;
   finished: number;
@@ -354,6 +363,11 @@ type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
   activeMonth: number | null;
   /**
+   * When true (Roadmap header “Progress” on), show done % and progress bars in initiative/epic cards.
+   * Parent keeps this in sync with the timeline grid.
+   */
+  storyProgressDetailsVisible: boolean;
+  /**
    * When true, show the month epic backlog layout (Epics header, + Epic). When false, show the initiatives
    * tree. The parent sets this from timeline month scope: any drilled-in month (Gantt, sprint, capacity,
    * insights, etc.) uses the epic list for that month.
@@ -362,8 +376,12 @@ type InitiativeListPanelProps = {
   activeYearSprint: number | null;
   storyDragEnabled: boolean;
   isSprintModeActive: boolean;
-  onCreateInitiative: () => void;
-  onCreateEpic: () => void;
+  /** Opens full initiative dialog (optional if `onCreateInitiativeQuick` is used for + Initiative). */
+  onCreateInitiative?: () => void;
+  /** Opens full epic dialog (optional if inline + Epic via `onCreateEpicQuick` is used). */
+  onCreateEpic?: () => void;
+  /** When set, + Initiative opens an inline title field in this panel instead of a dialog. */
+  onCreateInitiativeQuick?: (title: string) => Promise<void>;
   onEditInitiative: (initiative: InitiativeItem) => void;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onOpenStory: (storyId: string) => void;
@@ -425,7 +443,7 @@ function DraggableInitiativeCard({
       <div className="flex items-center gap-2.5">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1 pl-0">
               <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                 <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
               </span>
@@ -457,6 +475,8 @@ function InitiativeTreeEpicRow({
   epicPlanDragEnabled,
   onOpenEpic,
   onOpenStory,
+  onCreateStoryQuick,
+  storyProgressDetailsVisible,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -467,6 +487,8 @@ function InitiativeTreeEpicRow({
   epicPlanDragEnabled: boolean;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onOpenStory: (storyId: string) => void;
+  onCreateStoryQuick?: (epicId: string, title: string) => Promise<void>;
+  storyProgressDetailsVisible: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
@@ -478,6 +500,21 @@ function InitiativeTreeEpicRow({
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
   const isEpicScheduledOnGantt =
     epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  const [storyTitle, setStoryTitle] = useState("");
+  const [isAddingStory, setIsAddingStory] = useState(false);
+
+  async function handleAddStory() {
+    if (!onCreateStoryQuick) return;
+    const title = storyTitle.trim();
+    if (!title) return;
+    setIsAddingStory(true);
+    try {
+      await onCreateStoryQuick(epic.id, title);
+      setStoryTitle("");
+    } finally {
+      setIsAddingStory(false);
+    }
+  }
 
   return (
     <div
@@ -492,11 +529,11 @@ function InitiativeTreeEpicRow({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex min-w-0 items-center gap-1.5">
         {epicPlanDragEnabled && !isEpicScheduledOnGantt ? (
           <button
             type="button"
-            className="mt-0.5 shrink-0 cursor-grab rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
@@ -505,83 +542,94 @@ function InitiativeTreeEpicRow({
           </button>
         ) : isEpicScheduledOnGantt && !hideScheduledIcon ? (
           <span
-            className="mt-0.5 inline-flex shrink-0 rounded-md p-1 text-emerald-600"
+            className="inline-flex h-7 shrink-0 items-center rounded-md p-0.5 text-emerald-600"
             title="Scheduled on Gantt"
             aria-label="Scheduled on Gantt"
           >
             <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
           </span>
         ) : null}
-        <div className="min-w-0 flex-1">
-          <div className="group/epic flex items-start justify-between gap-2">
-            <div className="flex min-w-0 flex-1 items-start gap-1.5">
-              <button
-                type="button"
-                onClick={onToggleEpic}
-                className="mt-0.5 inline-flex shrink-0 rounded-sm text-slate-400 transition-colors hover:text-slate-600"
-                aria-label={isEpicOpen ? "Collapse epic" : "Expand epic"}
-                aria-expanded={isEpicOpen}
-              >
-                <ChevronRight
-                  className={cn(
-                    "size-3.5 shrink-0 transition-transform",
-                    isEpicOpen && "rotate-90",
-                  )}
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => onOpenEpic(epic, initiative)}
-                className="min-w-0 flex-1 rounded-md px-0.5 text-left font-normal hover:bg-white/90"
-                aria-label={`Open epic ${epic.title}`}
-              >
-                <div className="flex min-w-0 items-center gap-2 pl-0.5">
-                  <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                    <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
-                  </span>
-                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
-                    {epic.title}
-                  </p>
-                </div>
-              </button>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pt-0.5">
-              <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
-                {epicPlanStatus.label}
-              </span>
-              <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
-                {epicExecutionStatus.label}
-              </span>
-            </div>
+        <button
+          type="button"
+          onClick={onToggleEpic}
+          className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-400 transition-colors hover:text-slate-600"
+          aria-label={isEpicOpen ? "Collapse epic" : "Expand epic"}
+          aria-expanded={isEpicOpen}
+        >
+          <ChevronRight
+            className={cn(
+              "size-3.5 shrink-0 transition-transform",
+              isEpicOpen && "rotate-90",
+            )}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenEpic(epic, initiative)}
+          className="min-w-0 flex-1 rounded-md px-0.5 text-left font-normal hover:bg-white/90"
+          aria-label={`Open epic ${epic.title}`}
+        >
+          <div className="flex min-w-0 items-center gap-1 pl-0">
+            <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
+              <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
+            </span>
+            <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
+              {epic.title}
+            </p>
           </div>
-          <div className="mt-2 space-y-1.5">
-            <div className="flex items-baseline justify-between gap-2 text-[12px] text-muted-foreground">
-              <span className="min-w-0 truncate">
+        </button>
+      </div>
+      <div className="mt-2 space-y-2 px-0.5">
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+              <span className="min-w-0 shrink-0 text-left">
                 {completion.total === 0 ? "No stories yet" : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
               </span>
-              {completion.total > 0 ? (
-                <span className="shrink-0 tabular-nums tracking-tight text-slate-600">
-                  {completion.finished}/{completion.total} done · {completion.percent}%
+              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
+                    epicPlanStatus.className,
+                  )}
+                >
+                  {epicPlanStatus.label}
                 </span>
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
+                    epicExecutionStatus.className,
+                  )}
+                >
+                  {epicExecutionStatus.label}
+                </span>
+              </div>
+            </div>
+            {storyProgressDetailsVisible ? (
+              <div className={leftPanelProgressRowClass}>
+                <div
+                  className={leftPanelProgressTrackClass}
+                  role="progressbar"
+                  aria-valuenow={completion.percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`${completion.finished} of ${completion.total} stories done`}
+                >
+                  <div
+                    className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
+                    style={{ width: `${completion.percent}%` }}
+                  />
+                </div>
+                <span className={leftPanelProgressSummaryClass}>
+                  {completion.finished}/{completion.total} stories done · {completion.percent}%
+                </span>
+              </div>
+            ) : null}
+      </div>
+      {isEpicOpen ? (
+        <div className="mt-3 border-l border-border/70 pl-3">
+              {stories.length === 0 && !onCreateStoryQuick ? (
+                <p className="text-[11px] text-muted-foreground">No user stories.</p>
               ) : null}
-            </div>
-            <div
-              className="h-1.5 w-full overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80"
-              role="progressbar"
-              aria-valuenow={completion.percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`${completion.finished} of ${completion.total} stories done`}
-            >
-              <div
-                className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
-                style={{ width: `${completion.percent}%` }}
-              />
-            </div>
-          </div>
-          {isEpicOpen ? (
-            <div className="mt-3 border-l border-border/70 pl-3">
-              {stories.length === 0 ? null : (
+              {stories.length > 0 ? (
                 <ul className="space-y-0.5">
                   {stories.map((story) => {
                     const meta = storyStatusMeta(story, planContextMonth);
@@ -616,11 +664,46 @@ function InitiativeTreeEpicRow({
                     );
                   })}
                 </ul>
-              )}
+              ) : null}
+              {onCreateStoryQuick ? (
+                <div className={cn("flex items-center gap-1", stories.length > 0 && "mt-2")}>
+                  <input
+                    type="text"
+                    name={`tree-quick-story-${epic.id}`}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
+                    data-protonpass-ignore="true"
+                    value={storyTitle}
+                    onChange={(event) => setStoryTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleAddStory();
+                      }
+                    }}
+                    placeholder="Add user story"
+                    className="h-7 min-w-0 flex-1 rounded-md border border-border/80 bg-background px-2 text-[13px] shadow-sm outline-none focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
+                  />
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="outline"
+                    className="shrink-0 border-border/80 bg-background shadow-sm"
+                    disabled={isAddingStory || storyTitle.trim().length === 0}
+                    onClick={() => void handleAddStory()}
+                  >
+                    <Plus className="size-4" aria-hidden />
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
-        </div>
-      </div>
     </div>
   );
 }
@@ -636,10 +719,12 @@ function InitiativeTreeCard({
   onOpenStory,
   onDeleteEpic,
   onCreateEpicQuick,
+  onCreateStoryQuick,
   onEpicAccordionChange,
   backlogDropIndex,
   planContextMonth,
   epicPlanDragEnabled,
+  storyProgressDetailsVisible,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -651,10 +736,12 @@ function InitiativeTreeCard({
   onOpenStory: (storyId: string) => void;
   onDeleteEpic: (epicId: string) => void;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
+  onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   onEpicAccordionChange?: (epicId: string, isOpen: boolean) => void;
   backlogDropIndex?: number;
   planContextMonth: number | null;
   epicPlanDragEnabled: boolean;
+  storyProgressDetailsVisible: boolean;
 }) {
   const inMonthView = planContextMonth != null;
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
@@ -700,12 +787,12 @@ function InitiativeTreeCard({
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="group/init flex items-start justify-between gap-1">
-            <div className="flex min-w-0 flex-1 items-start gap-2">
+          <div className="group/init">
+            <div className="flex min-w-0 items-start gap-2">
               <button
                 type="button"
                 onClick={onToggle}
-                className="mt-1 inline-flex shrink-0 rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+                className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
                 aria-label={isOpen ? "Collapse initiative" : "Expand initiative"}
                 aria-expanded={isOpen}
               >
@@ -716,80 +803,89 @@ function InitiativeTreeCard({
                   )}
                 />
               </button>
-              <button
-                type="button"
-                onClick={() => onEditInitiative(initiative)}
-                className="min-w-0 flex-1 rounded-md px-0.5 text-left hover:bg-white/90"
-                aria-label={`Open initiative ${initiative.title}`}
-              >
-                <div className="flex w-full min-w-0 items-center gap-1">
-                  <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
-                    <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                      <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
-                    </span>
-                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
-                      {initiative.title}
-                    </p>
-                  </div>
-                </div>
-                {initiative.description ? (
-                  <p className="line-clamp-2 text-[13px] leading-5 text-slate-600">{initiative.description}</p>
-                ) : null}
-                <div className="mt-2 space-y-1">
-                  <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
-                    <span className="min-w-0 truncate">
-                      {initiativeStoryTotal === 0
-                        ? "No user stories"
-                        : `${initiativeStoryTotal} user stor${initiativeStoryTotal === 1 ? "y" : "ies"}`}
-                    </span>
-                    {initiativeStoryTotal > 0 ? (
-                      <span className="shrink-0 tabular-nums text-slate-600">
-                        {initiativeStoryDone}/{initiativeStoryTotal} done · {initiativeProgressPct}%
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={() => onEditInitiative(initiative)}
+                  className="w-full rounded-md px-0.5 text-left hover:bg-white/90"
+                  aria-label={`Open initiative ${initiative.title}`}
+                >
+                  <div className="flex w-full min-w-0 items-center gap-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-1 pl-0">
+                      <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
+                        <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
                       </span>
-                    ) : null}
+                      <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
+                        {initiative.title}
+                      </p>
+                    </div>
                   </div>
-                  <div
-                    className="h-1.5 w-full overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80"
-                    role="progressbar"
-                    aria-valuenow={initiativeProgressPct}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={
-                      initiativeStoryTotal > 0
-                        ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories done or approved`
-                        : "No user stories"
-                    }
-                  >
-                    <div
-                      className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
-                      style={{ width: `${initiativeProgressPct}%` }}
-                    />
+                  {initiative.description ? (
+                    <p className="line-clamp-2 text-[13px] leading-5 text-slate-600">{initiative.description}</p>
+                  ) : null}
+                </button>
+                <div className="mt-2 space-y-2 px-0.5">
+                  <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                    <span className="min-w-0 shrink-0 text-left">
+                      {epics.length === 0
+                        ? "No epics"
+                        : `${epics.length} epic${epics.length !== 1 ? "s" : ""}`}
+                    </span>
+                    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                      {initiative.status === "scheduled" && initiative.startMonth != null ? (
+                        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-violet-700 sm:px-2 sm:text-[11px]">
+                          {quarterFromMonth(initiative.startMonth)}
+                        </span>
+                      ) : null}
+                      {initiative.status === "scheduled" ? (
+                        <span className="rounded border border-emerald-200/90 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-emerald-800 sm:px-2 sm:text-[11px]">
+                          Scheduled
+                        </span>
+                      ) : null}
+                      <span
+                        className={cn(
+                          "px-1.5 py-0.5 text-[10px] font-semibold leading-tight tracking-[0.02em] sm:px-2 sm:text-[11px]",
+                          initiativeExecutionStatus.className,
+                        )}
+                      >
+                        {initiativeExecutionStatus.label}
+                      </span>
+                    </div>
                   </div>
+                  {storyProgressDetailsVisible ? (
+                    <div className={leftPanelProgressRowClass}>
+                      <div
+                        className={leftPanelProgressTrackClass}
+                        role="progressbar"
+                        aria-valuenow={initiativeProgressPct}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={
+                          initiativeStoryTotal > 0
+                            ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories done or approved`
+                            : "No user stories"
+                        }
+                      >
+                        <div
+                          className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
+                          style={{ width: `${initiativeProgressPct}%` }}
+                        />
+                      </div>
+                      <span className={leftPanelProgressSummaryClass}>
+                        {initiativeStoryDone}/{initiativeStoryTotal} stories done · {initiativeProgressPct}%
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-              </button>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 pl-1 pr-0.5 pt-0.5">
-              {initiative.status === "scheduled" && initiative.startMonth != null ? (
-                <span className="rounded bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
-                  {quarterFromMonth(initiative.startMonth)}
-                </span>
-              ) : null}
-              <span
-                className={cn(
-                  "px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]",
-                  initiativeExecutionStatus.className,
-                )}
-              >
-                {initiativeExecutionStatus.label}
-              </span>
+              </div>
             </div>
           </div>
 
           {isOpen ? (
             <div className="mt-3 border-t border-border/80 pt-3 font-sans antialiased">
-              <div className="rounded-lg border border-slate-200/80 bg-white p-2 shadow-sm">
+              <div className="ml-3 border-l border-border/70 pl-4">
                 {epics.length === 0 ? (
-                  <p className="px-1.5 py-2 text-[12px] leading-relaxed text-muted-foreground">
+                  <p className="py-2 text-[12px] leading-relaxed text-muted-foreground">
                     No epics yet.
                   </p>
                 ) : (
@@ -817,6 +913,8 @@ function InitiativeTreeCard({
                           epicPlanDragEnabled={epicPlanDragEnabled}
                           onOpenEpic={onOpenEpic}
                           onOpenStory={onOpenStory}
+                          onCreateStoryQuick={onCreateStoryQuick}
+                          storyProgressDetailsVisible={storyProgressDetailsVisible}
                         />
                       );
                     })}
@@ -880,6 +978,7 @@ function SprintEpicCard({
   backlogDropSlot,
   planContextMonth,
   hideScheduledIcon = false,
+  storyProgressDetailsVisible,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -894,6 +993,7 @@ function SprintEpicCard({
   backlogDropSlot?: { month: number; index: number };
   planContextMonth: number | null;
   hideScheduledIcon?: boolean;
+  storyProgressDetailsVisible: boolean;
 }) {
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
@@ -949,11 +1049,11 @@ function SprintEpicCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex min-w-0 items-start gap-1.5">
         {epicPlanDragEnabled && !isEpicScheduledOnGantt ? (
           <button
             type="button"
-            className="shrink-0 cursor-grab rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
@@ -962,93 +1062,103 @@ function SprintEpicCard({
           </button>
         ) : isEpicScheduledOnGantt && !hideScheduledIcon ? (
           <span
-            className="inline-flex shrink-0 rounded-md p-1.5 text-emerald-600"
+            className="inline-flex h-7 shrink-0 items-center rounded-md p-0.5 text-emerald-600"
             title="Scheduled on Gantt"
             aria-label="Scheduled on Gantt"
           >
             <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
           </span>
         ) : null}
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-start gap-1.5 text-left">
-            <button
-              type="button"
-              onClick={() =>
-                setIsOpen((prev) => {
-                  const next = !prev;
-                  queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
-                  return next;
-                })
-              }
-              className="mt-0.5 inline-flex shrink-0 rounded-sm text-slate-500 transition-colors hover:text-slate-700"
-              aria-label={isOpen ? "Collapse epic" : "Expand epic"}
-              aria-expanded={isOpen}
-            >
-              <ChevronRight
-                className={cn(
-                  "size-4 shrink-0 transition-transform",
-                  isOpen && "rotate-90",
-                )}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpenEpic(epic, initiative)}
-              className="min-w-0 flex-1 rounded-md px-0.5 text-left font-normal hover:bg-slate-50"
-              aria-label={`Open epic ${epic.title}`}
-            >
-              <div className="min-w-0 flex-1 text-left">
-              <div className="flex w-full min-w-0 items-center gap-1">
-                <div className="flex min-w-0 flex-1 items-center gap-2 pl-0.5">
-                  <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                    <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
-                  </span>
-                  <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">{epic.title}</p>
-                </div>
+        <button
+          type="button"
+          onClick={() =>
+            setIsOpen((prev) => {
+              const next = !prev;
+              queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
+              return next;
+            })
+          }
+          className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+          aria-label={isOpen ? "Collapse epic" : "Expand epic"}
+          aria-expanded={isOpen}
+        >
+          <ChevronRight
+            className={cn(
+              "size-4 shrink-0 transition-transform",
+              isOpen && "rotate-90",
+            )}
+          />
+        </button>
+        <div className="min-w-0 flex-1 text-left">
+          <button
+            type="button"
+            onClick={() => onOpenEpic(epic, initiative)}
+            className="w-full rounded-md px-0.5 text-left font-normal hover:bg-slate-50"
+            aria-label={`Open epic ${epic.title}`}
+          >
+            <div className="flex w-full min-w-0 items-center gap-1">
+              <div className="flex min-w-0 flex-1 items-center gap-1 pl-0">
+                <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
+                  <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
+                </span>
+                <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
+                  {epic.title}
+                </p>
               </div>
-              <p className="truncate text-[13px] leading-5 text-slate-600">{initiative.title}</p>
-              <div className="mt-2 space-y-1">
-                <div className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
-                  <span className="min-w-0 truncate">
+            </div>
+            <p className="truncate text-[13px] leading-5 text-slate-600">{initiative.title}</p>
+          </button>
+          <div className="mt-2 space-y-2 px-0.5">
+                <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  <span className="min-w-0 shrink-0 text-left">
                     {completion.total === 0
                       ? "No stories yet"
                       : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
                   </span>
-                  {completion.total > 0 ? (
-                    <span className="shrink-0 tabular-nums tracking-tight text-slate-600">
-                      {completion.finished}/{completion.total} done · {completion.percent}%
+                  <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                    <span
+                      className={cn(
+                        "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
+                        epicPlanStatus.className,
+                      )}
+                    >
+                      {epicPlanStatus.label}
                     </span>
-                  ) : null}
+                    <span
+                      className={cn(
+                        "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
+                        epicExecutionStatus.className,
+                      )}
+                    >
+                      {epicExecutionStatus.label}
+                    </span>
+                  </div>
                 </div>
-                <div
-                  className="h-1.5 w-full overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80"
-                  role="progressbar"
-                  aria-valuenow={completion.percent}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={
-                    completion.total > 0
-                      ? `${completion.finished} of ${completion.total} stories done or approved`
-                      : "No user stories"
-                  }
-                >
-                  <div
-                    className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
-                    style={{ width: `${completion.percent}%` }}
-                  />
-                </div>
-              </div>
-              </div>
-            </button>
+                {storyProgressDetailsVisible ? (
+                  <div className={leftPanelProgressRowClass}>
+                    <div
+                      className={leftPanelProgressTrackClass}
+                      role="progressbar"
+                      aria-valuenow={completion.percent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={
+                        completion.total > 0
+                          ? `${completion.finished} of ${completion.total} stories done or approved`
+                          : "No user stories"
+                      }
+                    >
+                      <div
+                        className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
+                        style={{ width: `${completion.percent}%` }}
+                      />
+                    </div>
+                    <span className={leftPanelProgressSummaryClass}>
+                      {completion.finished}/{completion.total} stories done · {completion.percent}%
+                    </span>
+                  </div>
+                ) : null}
           </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 pl-1 pr-0.5 pt-0.5">
-          <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicPlanStatus.className)}>
-            {epicPlanStatus.label}
-          </span>
-          <span className={cn("px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em]", epicExecutionStatus.className)}>
-            {epicExecutionStatus.label}
-          </span>
         </div>
       </div>
       {isOpen ? (
@@ -1194,12 +1304,14 @@ function EpicBacklogDropSlot({
 export function InitiativeListPanel({
   initiatives,
   activeMonth,
+  storyProgressDetailsVisible,
   useEpicPlanLeftPanel,
   activeYearSprint,
   storyDragEnabled,
   isSprintModeActive,
   onCreateInitiative,
   onCreateEpic,
+  onCreateInitiativeQuick,
   onEditInitiative,
   onOpenEpic,
   onOpenStory,
@@ -1236,16 +1348,53 @@ export function InitiativeListPanel({
     useEpicPlanLeftPanel === undefined ? activeMonth != null : useEpicPlanLeftPanel;
   const epicListScopeMonth = epicPlanPanelMode ? activeMonth : null;
   const epicPlanDragEnabled = !isSprintModeActive;
+
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [initiativeSearchFocused, setInitiativeSearchFocused] = useState(false);
   const [epicSearch, setEpicSearch] = useState("");
   const [epicSearchFocused, setEpicSearchFocused] = useState(false);
+  const [inlineNewInitiativeOpen, setInlineNewInitiativeOpen] = useState(false);
+  const [inlineNewInitiativeTitle, setInlineNewInitiativeTitle] = useState("");
+  const [inlineNewInitiativeSubmitting, setInlineNewInitiativeSubmitting] = useState(false);
+  const [inlineNewEpicOpen, setInlineNewEpicOpen] = useState(false);
+  const [inlineNewEpicTitle, setInlineNewEpicTitle] = useState("");
+  const [inlineNewEpicSubmitting, setInlineNewEpicSubmitting] = useState(false);
+  const inlineInitiativeInputRef = useRef<HTMLInputElement>(null);
+  const inlineEpicInputRef = useRef<HTMLInputElement>(null);
   const [panelQuarterFilters, setPanelQuarterFilters] = useState<Array<"all" | "Q1" | "Q2" | "Q3" | "Q4">>(["all"]);
   const [panelTeamFilterIds, setPanelTeamFilterIds] = useState<string[]>(["all"]);
   const [panelStatusFilters, setPanelStatusFilters] = useState<Array<
     "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
   >>(["all"]);
+
+  const firstScheduledInitiativeForActiveMonth = useMemo(() => {
+    if (activeMonth == null) return undefined;
+    return initiatives.find(
+      (i) =>
+        i.status === InitiativeStatus.scheduled &&
+        i.startMonth != null &&
+        i.endMonth != null &&
+        i.startMonth <= activeMonth &&
+        i.endMonth >= activeMonth,
+    );
+  }, [initiatives, activeMonth]);
+
+  useEffect(() => {
+    setInlineNewInitiativeOpen(false);
+    setInlineNewEpicOpen(false);
+    setInlineNewInitiativeTitle("");
+    setInlineNewEpicTitle("");
+  }, [epicPlanPanelMode]);
+
+  useEffect(() => {
+    if (inlineNewInitiativeOpen) inlineInitiativeInputRef.current?.focus();
+  }, [inlineNewInitiativeOpen]);
+
+  useEffect(() => {
+    if (inlineNewEpicOpen) inlineEpicInputRef.current?.focus();
+  }, [inlineNewEpicOpen]);
+
   const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
     { value: "all", label: "All quarters", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
     { value: "Q1", label: "Q1", icon: <QuarterProgressGlyph steps={1} /> },
@@ -1592,6 +1741,75 @@ export function InitiativeListPanel({
 
   const showNewButton = epicPlanPanelMode || !isSprintModeActive;
 
+  const handleNewButtonClick = useCallback(() => {
+    if (epicPlanPanelMode) {
+      if (onCreateEpicQuick && firstScheduledInitiativeForActiveMonth) {
+        setInlineNewInitiativeOpen(false);
+        setInlineNewInitiativeTitle("");
+        setInlineNewEpicOpen(true);
+        return;
+      }
+      if (!firstScheduledInitiativeForActiveMonth) {
+        toast.message(
+          activeMonth != null
+            ? "No scheduled initiative for this month. Plan an initiative in this month first."
+            : "Create an initiative first, then add an epic.",
+        );
+        return;
+      }
+      onCreateEpic?.();
+      return;
+    }
+    if (onCreateInitiativeQuick) {
+      setInlineNewEpicOpen(false);
+      setInlineNewEpicTitle("");
+      setInlineNewInitiativeOpen(true);
+      return;
+    }
+    onCreateInitiative?.();
+  }, [
+    activeMonth,
+    epicPlanPanelMode,
+    firstScheduledInitiativeForActiveMonth,
+    onCreateEpic,
+    onCreateEpicQuick,
+    onCreateInitiative,
+    onCreateInitiativeQuick,
+  ]);
+
+  const submitInlineNewInitiative = useCallback(async () => {
+    if (!onCreateInitiativeQuick) return;
+    const title = inlineNewInitiativeTitle.trim();
+    if (title.length < 2) return;
+    setInlineNewInitiativeSubmitting(true);
+    try {
+      await onCreateInitiativeQuick(title);
+      setInlineNewInitiativeTitle("");
+      setInlineNewInitiativeOpen(false);
+    } catch {
+      // Parent surfaces toast and rethrows so the composer stays open.
+    } finally {
+      setInlineNewInitiativeSubmitting(false);
+    }
+  }, [inlineNewInitiativeTitle, onCreateInitiativeQuick]);
+
+  const submitInlineNewEpic = useCallback(async () => {
+    const initiative = firstScheduledInitiativeForActiveMonth;
+    if (!initiative || !onCreateEpicQuick) return;
+    const title = inlineNewEpicTitle.trim();
+    if (!title) return;
+    setInlineNewEpicSubmitting(true);
+    try {
+      await onCreateEpicQuick(initiative.id, title);
+      setInlineNewEpicTitle("");
+      setInlineNewEpicOpen(false);
+    } catch {
+      // Parent surfaces toast and rethrows so the composer stays open.
+    } finally {
+      setInlineNewEpicSubmitting(false);
+    }
+  }, [firstScheduledInitiativeForActiveMonth, inlineNewEpicTitle, onCreateEpicQuick]);
+
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-7 pb-4 pl-0 pr-4 shadow-xl ring-1 ring-black/8">
       <div className="z-10 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-4 pb-3">
@@ -1615,7 +1833,7 @@ export function InitiativeListPanel({
             <Button
               size="sm"
               className="h-8 px-3 text-[13px] font-bold"
-              onClick={epicPlanPanelMode ? onCreateEpic : onCreateInitiative}
+              onClick={handleNewButtonClick}
             >
               <Plus className="size-3.5" />
               {epicPlanPanelMode ? "Epic" : "Initiative"}
@@ -1648,6 +1866,107 @@ export function InitiativeListPanel({
         )}
       >
         <div className="min-h-0 bg-white ps-3 [direction:ltr]">
+      {inlineNewInitiativeOpen && !epicPlanPanelMode && onCreateInitiativeQuick ? (
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200/90 bg-slate-50/80 p-2.5 ring-1 ring-black/5">
+          <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">New initiative</label>
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={inlineInitiativeInputRef}
+              type="text"
+              value={inlineNewInitiativeTitle}
+              onChange={(e) => setInlineNewInitiativeTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void submitInlineNewInitiative();
+                }
+                if (e.key === "Escape") {
+                  setInlineNewInitiativeOpen(false);
+                  setInlineNewInitiativeTitle("");
+                }
+              }}
+              placeholder="Title (min. 2 characters)"
+              autoComplete="off"
+              className="h-8 min-w-0 flex-1 rounded-md border border-border/80 bg-white px-2.5 text-[13px] shadow-sm outline-none focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
+              aria-label="New initiative title"
+            />
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              className="shrink-0"
+              disabled={inlineNewInitiativeSubmitting || inlineNewInitiativeTitle.trim().length < 2}
+              onClick={() => void submitInlineNewInitiative()}
+            >
+              <Plus className="size-4" aria-hidden />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="shrink-0 text-slate-600"
+              onClick={() => {
+                setInlineNewInitiativeOpen(false);
+                setInlineNewInitiativeTitle("");
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {inlineNewEpicOpen && epicPlanPanelMode && onCreateEpicQuick && firstScheduledInitiativeForActiveMonth ? (
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200/90 bg-slate-50/80 p-2.5 ring-1 ring-black/5">
+          <p className="text-[11px] leading-4 text-slate-600">
+            Adding to{" "}
+            <span className="font-semibold text-slate-800">{firstScheduledInitiativeForActiveMonth.title}</span>
+          </p>
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={inlineEpicInputRef}
+              type="text"
+              value={inlineNewEpicTitle}
+              onChange={(e) => setInlineNewEpicTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void submitInlineNewEpic();
+                }
+                if (e.key === "Escape") {
+                  setInlineNewEpicOpen(false);
+                  setInlineNewEpicTitle("");
+                }
+              }}
+              placeholder="Epic title"
+              autoComplete="off"
+              className="h-8 min-w-0 flex-1 rounded-md border border-border/80 bg-white px-2.5 text-[13px] shadow-sm outline-none focus:border-ring/40 focus:ring-2 focus:ring-ring/25"
+              aria-label="New epic title"
+            />
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              className="shrink-0"
+              disabled={inlineNewEpicSubmitting || inlineNewEpicTitle.trim().length === 0}
+              onClick={() => void submitInlineNewEpic()}
+            >
+              <Plus className="size-4" aria-hidden />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="shrink-0 text-slate-600"
+              onClick={() => {
+                setInlineNewEpicOpen(false);
+                setInlineNewEpicTitle("");
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {showInitiativeBacklogDrop ? (
         <div
           ref={setBacklogDropRef}
@@ -1799,6 +2118,7 @@ export function InitiativeListPanel({
                     }
                     planContextMonth={planAnchorMonth}
                     hideScheduledIcon={epicPlanPanelMode || isSprintModeActive}
+                    storyProgressDetailsVisible={storyProgressDetailsVisible}
                   />
                   {planAnchorMonth != null ? (
                     <EpicBacklogDropSlot
@@ -1913,6 +2233,7 @@ export function InitiativeListPanel({
                     backlogDropIndex={idx}
                     planContextMonth={activeMonth}
                     epicPlanDragEnabled={epicPlanDragEnabled}
+                    storyProgressDetailsVisible={storyProgressDetailsVisible}
                     onToggle={() => {
                       const next = !(openInitiativeIds[initiative.id] ?? false);
                       setOpenInitiativeIds((prev) => ({ ...prev, [initiative.id]: next }));
@@ -1924,6 +2245,7 @@ export function InitiativeListPanel({
                     onOpenStory={onOpenStory}
                     onDeleteEpic={onDeleteEpic}
                     onCreateEpicQuick={onCreateEpicQuick}
+                    onCreateStoryQuick={onCreateStoryQuick}
                     onEpicAccordionChange={onEpicAccordionChange}
                   />
                   <BacklogDropSlot index={idx + 1} />

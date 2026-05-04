@@ -32,7 +32,6 @@ import {
 } from "react";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
-import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
@@ -674,34 +673,28 @@ function EpicGanttLaneRow({
   }
 
   const laneBody = (
-    <>
-      <p className="mb-1 inline-flex min-w-0 items-center gap-1 truncate text-[11px] font-medium text-slate-500">
-        <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-[11px] [&_svg]:size-3 [&_svg]:text-blue-600" />
-        <span className="truncate">{initiative.title}</span>
-      </p>
-      <div className="relative grid min-w-0 gap-2" style={sprintGridStyle}>
-        <div
-          className={cn("relative z-20 min-w-0 pt-0.5 pb-0.5", emphasize && "overflow-visible")}
-          style={{ gridColumn: barGridColumn, gridRow: 1 }}
-        >
-          <EpicPlanTimelineBar
-            id={epic.id}
-            title={epic.title}
-            icon={epic.icon}
-            color={barColor}
-            progressPercent={completionPercent}
-            progressLabel={
-              totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
-            }
-            emphasizeFlash={emphasize}
-            emphasizeTick={emphasizeTick}
-            showProgress={showProgress}
-            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
-            onClick={() => onOpenEpic(epic.id)}
-          />
-        </div>
+    <div className="relative grid min-w-0 gap-2" style={sprintGridStyle}>
+      <div
+        className={cn("relative z-20 min-w-0 pt-0.5 pb-0.5", emphasize && "overflow-visible")}
+        style={{ gridColumn: barGridColumn, gridRow: 1 }}
+      >
+        <EpicPlanTimelineBar
+          id={epic.id}
+          title={epic.title}
+          icon={epic.icon}
+          color={barColor}
+          progressPercent={completionPercent}
+          progressLabel={
+            totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+          }
+          emphasizeFlash={emphasize}
+          emphasizeTick={emphasizeTick}
+          showProgress={showProgress}
+          onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
+          onClick={() => onOpenEpic(epic.id)}
+        />
       </div>
-    </>
+    </div>
   );
 
   return (
@@ -857,6 +850,9 @@ type TimelineGridProps = {
   sprintEpicAccordionEmphasis?: { epicId: string; tick: number } | null;
   /** Pulse Kanban cards for stories on the active sprint when “Scheduled” filter is turned on (sprint board). */
   sprintKanbanScheduledStoriesEmphasis?: { tick: number } | null;
+  /** Toggled by the Roadmap header “Progress” chip; shows Gantt bar progress rows and left-panel story progress. */
+  showRoadmapProgress: boolean;
+  onShowRoadmapProgressChange: (next: boolean) => void;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -1102,13 +1098,14 @@ export function TimelineGrid({
   onSprintKanbanStoryPatch,
   sprintRetrospective = null,
   onSaveSprintRetrospective,
+  showRoadmapProgress,
+  onShowRoadmapProgressChange,
 }: TimelineGridProps) {
   const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
-  const [showRoadmapProgress, setShowRoadmapProgress] = useState(false);
   const [quarterViewTabState, setQuarterViewTabState] = useState<QuarterSurfaceTab>("gantt");
   const quarterViewTab = quarterViewTabExternal ?? quarterViewTabState;
   const setQuarterViewTab = useCallback((tab: QuarterSurfaceTab) => {
@@ -3123,7 +3120,7 @@ export function TimelineGrid({
                     ) : null}
                     <button
                       type="button"
-                      onClick={() => setShowRoadmapProgress((v) => !v)}
+                      onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
                       className={cn(
                         summaryChipBaseClass,
                         showRoadmapProgress
@@ -3224,7 +3221,7 @@ export function TimelineGrid({
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => setShowRoadmapProgress((v) => !v)}
+                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
                     className={cn(
                       summaryChipBaseClass,
                       showRoadmapProgress
@@ -3385,7 +3382,7 @@ export function TimelineGrid({
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => setShowRoadmapProgress((v) => !v)}
+                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
                     className={cn(
                       summaryChipBaseClass,
                       showRoadmapProgress
