@@ -3924,7 +3924,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     function onMouseMove(event: MouseEvent) {
       if (!layoutRef.current) return;
       const layoutBounds = layoutRef.current.getBoundingClientRect();
-      const proposedWidth = event.clientX - layoutBounds.left;
+      const proposedWidth = event.clientX - layoutBounds.left - 6;
       const minPanelWidth = 260;
       const minTimelineWidth = 520;
       const maxPanelWidth = Math.max(minPanelWidth, layoutBounds.width - minTimelineWidth);
@@ -3954,6 +3954,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [isModeRailExpanded, setIsModeRailExpanded] = useState(false);
   const modeRailLabelClass =
     "min-w-0 flex-1 truncate text-left text-[15px] font-semibold leading-snug";
+  /** Right mode rail only (Roadmap / Backlog / Users). Flat indigo active — separate from timeline toolbar chips. */
+  const modeRailActiveClass = "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200";
 
   const modeSwitchMenu = (
     <aside className="relative z-20 flex h-full min-h-0 w-full flex-col overflow-visible">
@@ -3967,16 +3969,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
               topMode === "roadmap"
-                ? "bg-slate-100 text-indigo-800 shadow-sm ring-1 ring-slate-200/70"
+                ? modeRailActiveClass
                 : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <span
               className={cn(
                 "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
-                topMode === "roadmap"
-                  ? "text-indigo-700"
-                  : "text-slate-500 group-hover:text-indigo-700",
+                topMode === "roadmap" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
             >
@@ -4003,16 +4003,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
               topMode === "backlog"
-                ? "bg-slate-100 text-amber-950 shadow-sm ring-1 ring-slate-200/70"
+                ? modeRailActiveClass
                 : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <span
               className={cn(
                 "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
-                topMode === "backlog"
-                  ? "text-amber-800"
-                  : "text-slate-500 group-hover:text-amber-800",
+                topMode === "backlog" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
             >
@@ -4039,16 +4037,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
               isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
               topMode === "users"
-                ? "bg-slate-100 text-sky-900 shadow-sm ring-1 ring-slate-200/70"
+                ? modeRailActiveClass
                 : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             )}
           >
             <span
               className={cn(
                 "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
-                topMode === "users"
-                  ? "text-sky-800"
-                  : "text-slate-500 group-hover:text-sky-800",
+                topMode === "users" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
             >
@@ -4144,17 +4140,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               ref={layoutRef}
               className={cn(
                 "grid min-h-0 flex-1 items-stretch",
-                leftRailLockedClosed ? "gap-x-0" : "gap-x-0.5",
+                leftRailLockedClosed ? "gap-x-0" : "gap-x-0",
                 isResizingPanel && "select-none",
               )}
               style={{
-                gridTemplateColumns: "auto minmax(0, 1fr)",
+                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr)" : "auto 12px minmax(0, 1fr)",
               }}
             >
               <div
                 className={cn(
                   "relative min-h-0 overflow-hidden rounded-l-xl bg-white/90 motion-reduce:transition-none",
-                  "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                  !isResizingPanel && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
                 style={{
@@ -4162,7 +4158,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     ? "0px"
                     : isLeftPanelHidden
                       ? "2.75rem"
-                      : `${panelWidth + 12}px`,
+                      : `${panelWidth}px`,
                 }}
               >
                 <div
@@ -4172,7 +4168,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     isLeftPanelHidden && "pointer-events-none",
                   )}
                   style={{
-                    width: `${panelWidth + 12}px`,
+                    width: `${panelWidth}px`,
                     transform: isLeftPanelHidden ? "translateX(-100%)" : "translateX(0)",
                   }}
                 >
@@ -4253,22 +4249,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       workspaceDirectoryUsers={workspaceDirectoryUsers}
                     />
                   </div>
-                  <div
-                    className="group relative flex h-full min-h-0 w-3 shrink-0 cursor-col-resize items-center justify-center self-stretch"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      setIsResizingPanel(true);
-                    }}
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label="Resize panel"
-                  >
-                    <div
-                      className="pointer-events-none h-[58%] min-h-[7.5rem] max-h-[34rem] w-1 shrink-0 rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-white/80 transition-[box-shadow] duration-200 group-hover:shadow-[0_1px_4px_rgba(15,23,42,0.12)]"
-                      aria-hidden
-                    />
-                    <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
-                  </div>
                 </div>
                 <div
                   className={cn(
@@ -4295,6 +4275,24 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   </Button>
                 </div>
               </div>
+              {!leftRailLockedClosed && (
+                <div
+                  className="group relative flex h-full min-h-0 w-3 shrink-0 cursor-col-resize items-center justify-center self-stretch"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setIsResizingPanel(true);
+                  }}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize panel"
+                >
+                  <div
+                    className="pointer-events-none h-[58%] min-h-[7.5rem] max-h-[34rem] w-1 shrink-0 rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08)] ring-1 ring-white/80 transition-[box-shadow] duration-200 group-hover:shadow-[0_1px_4px_rgba(15,23,42,0.12)]"
+                    aria-hidden
+                  />
+                  <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2" />
+                </div>
+              )}
               <div
                 ref={planningRightSurfaceRef}
                 className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"

@@ -57,7 +57,6 @@ import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTER
 import {
   MONTH_TEAM_COLUMNS,
   MONTH_TEAM_IDS,
-  epicDeliveryTeamAssignmentChip,
   isKnownEpicTeamId,
   monthTeamBoardStorageKey,
   monthTeamLabelForId,
@@ -704,7 +703,6 @@ function EpicGanttLaneRow({
           emphasizeFlash={emphasize}
           emphasizeTick={emphasizeTick}
           showProgress={showProgress}
-          teamAssignmentChip={epicDeliveryTeamAssignmentChip(epic.team)}
           onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
           onClick={() => onOpenEpic(epic.id)}
         />
@@ -931,7 +929,7 @@ function QuarterYearProgressIcon({
   );
 }
 
-/** Year control: sky family (distinct from teal Progress, indigo Initiatives, etc.). */
+/** Year control: soft sky tint + dark type (calmer than saturated gradient). */
 function RoadmapYearSelect({
   year,
   onYearChange,
@@ -940,8 +938,8 @@ function RoadmapYearSelect({
   onYearChange: (nextYear: number) => void | Promise<void>;
 }) {
   return (
-    <label className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full bg-sky-100 text-sky-950 shadow-none ring-1 ring-sky-300/90 transition-colors outline-none select-none hover:bg-sky-200/90 focus-within:ring-2 focus-within:ring-sky-400/50">
-      <span className="flex shrink-0 items-center border-r border-sky-400/35 px-1.5 text-[10px] font-bold tracking-[0.05em] uppercase sm:px-2 sm:text-[11px]">
+    <label className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 shadow-none ring-1 ring-blue-200/75 outline-none select-none transition-colors hover:from-sky-100 hover:via-blue-200 hover:to-blue-200 focus-within:ring-2 focus-within:ring-blue-400/30 focus-within:ring-offset-0">
+      <span className="flex shrink-0 items-center border-r border-blue-200/80 px-1.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
         Roadmap
       </span>
       <div className="relative flex items-center">
@@ -952,7 +950,7 @@ function RoadmapYearSelect({
             if (nextYear === year) return;
             void Promise.resolve(onYearChange(nextYear));
           }}
-          className="h-7 min-w-[4.25rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-sky-950 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[4.75rem] sm:pl-2.5 sm:pr-7 sm:text-[12px]"
+          className="h-7 min-w-[4.25rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-blue-950 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[4.75rem] sm:pl-2.5 sm:pr-7 sm:text-[12px]"
           aria-label="Roadmap year"
         >
           <option value={2024}>2024</option>
@@ -961,7 +959,7 @@ function RoadmapYearSelect({
           <option value={2027}>2027</option>
         </select>
         <ChevronDown
-          className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-sky-800 sm:right-1.5"
+          className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-600/80 sm:right-1.5"
           aria-hidden
         />
       </div>
@@ -1599,20 +1597,23 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex h-7 max-w-full shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[11px] font-semibold leading-none tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:text-[12px] lg:px-2.5";
-  /** Distinct idle colors per chip (toolbar reads as a coordinated spectrum, not one gray). */
-  const summaryChipProgressIdleClass = `${summaryChipBaseClass} bg-teal-100 text-teal-900 ring-teal-300/90 hover:bg-teal-200/90`;
-  const summaryChipProgressOnClass = `${summaryChipBaseClass} bg-emerald-100 text-emerald-900 ring-emerald-400/90 shadow-sm`;
-  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} bg-indigo-50 text-indigo-950 ring-indigo-300/85 hover:bg-indigo-100/95`;
-  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} bg-indigo-100 text-indigo-900 ring-indigo-400/80 shadow-sm`;
-  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} bg-amber-50 text-amber-950 ring-amber-300/90 hover:bg-amber-100/95`;
-  const summaryChipEpicsOnClass = `${summaryChipBaseClass} bg-amber-100 text-amber-950 ring-amber-400/75 shadow-sm`;
-  const summaryChipEstimatedClass = `${summaryChipBaseClass} bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-300/90 hover:bg-fuchsia-200/85`;
-  const summaryChipStoriesClass = `${summaryChipBaseClass} bg-blue-100 text-blue-900 ring-blue-300/90`;
-  const summaryChipStoriesStaticClass = `${summaryChipBaseClass} bg-blue-100 text-blue-900 ring-blue-300/90`;
+    "inline-flex h-7 max-w-full shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[11px] font-bold leading-none tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:text-[12px] lg:px-2.5";
+  /** Calm row: light tinted gradients + dark text. Selected = one step deeper, still dark text (no white-on-neon). */
+  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-50 via-violet-100 to-indigo-100 text-indigo-950 ring-indigo-200/70 hover:from-indigo-100 hover:via-violet-100 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/35`;
+  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-100 via-violet-200 to-indigo-300 text-indigo-950 ring-indigo-300/70 shadow-sm hover:from-indigo-200 hover:via-violet-200 hover:to-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/45`;
+  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 text-amber-950 ring-amber-200/70 hover:from-amber-100 hover:via-orange-50 hover:to-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/35`;
+  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 text-amber-950 ring-amber-300/70 shadow-sm hover:from-amber-200 hover:via-orange-100 hover:to-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/45`;
+  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-50 via-purple-50 to-violet-100 text-violet-950 ring-violet-200/70 hover:from-violet-100 hover:to-purple-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35`;
+  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-100 via-purple-100 to-violet-200 text-violet-950 ring-violet-300/70 shadow-sm hover:from-violet-200 hover:to-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45`;
+  /** Same structure as Initiatives/Epics pills (3-stop gradient, ring, hover, shadow when on). */
+  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-teal-50 via-teal-100 to-emerald-100 text-teal-950 ring-teal-200/70 hover:from-teal-100 hover:via-teal-100 hover:to-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/35`;
+  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-teal-100 via-emerald-200 to-teal-300 text-teal-950 ring-teal-300/70 shadow-sm hover:from-teal-200 hover:via-emerald-200 hover:to-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/45`;
+  /** Rose/pink calm — between Epics (amber) and Stories (slate-sky); not adjacent to same hue as Initiatives. */
+  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-rose-50 via-pink-50 to-rose-100 text-rose-950 ring-rose-200/70 hover:from-rose-100 hover:via-pink-50 hover:to-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/35`;
+  /** Cool slate-sky calm — distinct from Roadmap (saturated), Initiatives (purple), Estimated (rose), Progress (teal). */
+  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 text-slate-900 ring-slate-200/80 hover:from-slate-200 hover:via-sky-100 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/35`;
+  const summaryChipStoriesStaticClass = summaryChipStoriesClass;
   const summaryChipUnscheduledClass = `${summaryChipBaseClass} bg-orange-50 text-orange-950 ring-orange-300/85`;
-  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} bg-violet-100 text-violet-950 ring-violet-300/90 hover:bg-violet-200/85`;
-  const summaryChipSprintsOnClass = `${summaryChipBaseClass} bg-violet-200 text-violet-950 ring-violet-400/85 shadow-sm`;
   const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
   const estimatePanelScopeLabel = activeMonth
@@ -2699,6 +2700,8 @@ export function TimelineGrid({
   );
   const railLabelBaseClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
+  /** Month / quarter plan rail only (between center and right panel). Flat indigo — not shared with roadmap summary chips. */
+  const planRailTabActiveClass = "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200";
 
   const runSurfaceTransition = useCallback(() => {
     const el = timelineContentScrollRef.current;
@@ -3022,7 +3025,6 @@ export function TimelineGrid({
                             emphasizeFlash={emphasizeFlash}
                             emphasizeTick={emphasizeTick}
                             showProgress={showRoadmapProgress}
-                            teamAssignmentChip={epicDeliveryTeamAssignmentChip(row.epic.team)}
                             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                             onClick={() => onOpenEpic(row.epic.id)}
                           />
@@ -3192,13 +3194,9 @@ export function TimelineGrid({
                     ) : null}
                     <button
                       type="button"
+                      aria-pressed={showRoadmapProgress}
                       onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                      className={cn(
-                        summaryChipBaseClass,
-                        showRoadmapProgress
-                          ? summaryChipProgressOnClass
-                          : summaryChipProgressIdleClass,
-                      )}
+                      className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
                     >
                       Progress
                     </button>
@@ -3239,13 +3237,13 @@ export function TimelineGrid({
                     </button>
                     <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
                       <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                        <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                        <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
                         <circle
                           cx="8"
                           cy="8"
                           r="6"
                           fill="none"
-                          stroke="#c026d3"
+                          stroke="#9f1239"
                           strokeWidth="2.5"
                           strokeLinecap="round"
                           transform="rotate(-90 8 8)"
@@ -3293,13 +3291,9 @@ export function TimelineGrid({
                   ) : null}
                   <button
                     type="button"
+                    aria-pressed={showRoadmapProgress}
                     onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                    className={cn(
-                      summaryChipBaseClass,
-                      showRoadmapProgress
-                        ? summaryChipProgressOnClass
-                        : summaryChipProgressIdleClass,
-                    )}
+                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
                   >
                     Progress
                   </button>
@@ -3340,13 +3334,13 @@ export function TimelineGrid({
                   </button>
                   <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
                     <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                      <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
                       <circle
                         cx="8"
                         cy="8"
                         r="6"
                         fill="none"
-                        stroke="#c026d3"
+                        stroke="#9f1239"
                         strokeWidth="2.5"
                         strokeLinecap="round"
                         transform="rotate(-90 8 8)"
@@ -3418,13 +3412,13 @@ export function TimelineGrid({
                     className={summaryChipEstimatedClass}
                   >
                     <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                      <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
                       <circle
                         cx="8"
                         cy="8"
                         r="6"
                         fill="none"
-                        stroke="#c026d3"
+                        stroke="#9f1239"
                         strokeWidth="2.5"
                         strokeLinecap="round"
                         transform="rotate(-90 8 8)"
@@ -3454,13 +3448,9 @@ export function TimelineGrid({
                   ) : null}
                   <button
                     type="button"
+                    aria-pressed={showRoadmapProgress}
                     onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                    className={cn(
-                      summaryChipBaseClass,
-                      showRoadmapProgress
-                        ? summaryChipProgressOnClass
-                        : summaryChipProgressIdleClass,
-                    )}
+                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
                   >
                     Progress
                   </button>
@@ -3505,13 +3495,13 @@ export function TimelineGrid({
                     className={summaryChipEstimatedClass}
                   >
                     <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                      <circle cx="8" cy="8" r="6" fill="none" stroke="#e9d5ff" strokeWidth="2.5" />
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
                       <circle
                         cx="8"
                         cy="8"
                         r="6"
                         fill="none"
-                        stroke="#c026d3"
+                        stroke="#9f1239"
                         strokeWidth="2.5"
                         strokeLinecap="round"
                         transform="rotate(-90 8 8)"
@@ -3597,7 +3587,7 @@ export function TimelineGrid({
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-kanban"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
@@ -3623,7 +3613,7 @@ export function TimelineGrid({
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-status"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
@@ -3648,7 +3638,7 @@ export function TimelineGrid({
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-capacity"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
@@ -3673,7 +3663,7 @@ export function TimelineGrid({
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "sprint-retrospective"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
@@ -3699,7 +3689,7 @@ export function TimelineGrid({
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "epic-gantt"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
@@ -3722,7 +3712,7 @@ export function TimelineGrid({
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "month-capacity"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
@@ -3745,7 +3735,7 @@ export function TimelineGrid({
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                     monthPlanTab === "month-status"
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                      ? planRailTabActiveClass
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                   )}
                 >
@@ -3796,7 +3786,7 @@ export function TimelineGrid({
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "gantt"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
@@ -3819,7 +3809,7 @@ export function TimelineGrid({
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "insights"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
@@ -3842,7 +3832,7 @@ export function TimelineGrid({
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "capacity"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
@@ -3877,7 +3867,7 @@ export function TimelineGrid({
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "gantt"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
@@ -3900,7 +3890,7 @@ export function TimelineGrid({
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "insights"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
@@ -3923,7 +3913,7 @@ export function TimelineGrid({
               className={cn(
                 "group relative inline-flex h-9 w-full items-center justify-start gap-2 overflow-visible rounded-md px-2 transition",
                 quarterViewTab === "capacity"
-                  ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                  ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
@@ -4651,7 +4641,6 @@ export function TimelineGrid({
                                     emphasizeFlash={emphasizeFlash}
                                     emphasizeTick={emphasizeTick}
                                     showProgress={showRoadmapProgress}
-                                    teamAssignmentChip={epicDeliveryTeamAssignmentChip(row.epic.team)}
                                     onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                     onClick={() => onOpenEpic(row.epic.id)}
                                   />
