@@ -69,6 +69,11 @@ export function isEpicPlanDraggableId(activeId: string): boolean {
   return activeId.startsWith(EPIC_LIST_PREFIX) || activeId.startsWith(EPIC_TIMELINE_PREFIX);
 }
 
+/** Draggable id for an epic bar already placed on the Gantt (not the left-panel list handle). */
+export function isEpicTimelineDraggableId(activeId: string): boolean {
+  return activeId.startsWith(EPIC_TIMELINE_PREFIX);
+}
+
 export function parseEpicIdFromPlanDraggable(activeId: string): string | null {
   if (activeId.startsWith(EPIC_LIST_PREFIX)) return activeId.slice(EPIC_LIST_PREFIX.length);
   if (activeId.startsWith(EPIC_TIMELINE_PREFIX)) return activeId.slice(EPIC_TIMELINE_PREFIX.length);

@@ -413,14 +413,6 @@ type InitiativeListPanelProps = {
   panelStatusQuickFilter?: "Scheduled" | "Unscheduled" | null;
   /** Optional action to hide this entire left panel. */
   onHidePanel?: () => void;
-  /**
-   * When the month rail is on a surface other than Epic Plan (e.g. Sprint Capacity), the main timeline
-   * has no `month:*` / `epic-plan:*` epic droppables — only these backlog slots would win collision,
-   * which looks like “highlights on the left” and clears the plan. Disable backlog-slot targets for
-   * `timeline-epic:` drags until the user opens Epic Plan. The wide unplan strip (`EPICS_UNPLAN_DROP_ID`)
-   * stays available.
-   */
-  suppressTimelineEpicBacklogSlotDrops?: boolean;
 };
 
 function DraggableInitiativeCard({
@@ -1330,18 +1322,18 @@ export function InitiativeListPanel({
   onEpicAccordionChange,
   panelStatusQuickFilter = null,
   onHidePanel,
-  suppressTimelineEpicBacklogSlotDrops = false,
 }: InitiativeListPanelProps) {
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
-  const blockEpicBacklogSlotsForTimelineDrag =
-    suppressTimelineEpicBacklogSlotDrops && isTimelineEpicDragActive;
+  /** Gantt epic bars must stay on the timeline; do not accept drops on the unplan / month backlog strip. */
+  const blockEpicBacklogSlotsForTimelineDrag = isTimelineEpicDragActive;
 
   const { setNodeRef: setBacklogDropRef } = useDroppable({
     id: "initiatives:backlog-drop",
   });
   const { setNodeRef: setEpicUnplanDropRef, isOver: isEpicUnplanDropOver } = useDroppable({
     id: EPICS_UNPLAN_DROP_ID,
+    disabled: isTimelineEpicDragActive,
   });
 
   const epicPlanPanelMode =

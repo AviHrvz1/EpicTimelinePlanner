@@ -22,6 +22,7 @@ import {
   EPICS_UNPLAN_DROP_ID,
   STORIES_UNSCHEDULE_DROP_ID,
   isEpicPlanDraggableId,
+  isEpicTimelineDraggableId,
   isInitiativeDraggableId,
   parseEpicIdFromPlanDraggable,
   parseBacklogSlotDropId,
@@ -3171,6 +3172,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }
       }
       if (overId === EPICS_UNPLAN_DROP_ID || epicBacklogSlot != null) {
+        if (isEpicTimelineDraggableId(activeId)) {
+          toast.message(
+            "Epics on the roadmap can’t be dragged back to the list. Open the epic to clear its plan if needed.",
+          );
+          record("epic:unplan-blocked-timeline-source", { epicId, overId });
+          return;
+        }
         const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
         const epic = initiative?.epics?.find((e) => e.id === epicId);
         if (!initiative || !epic) {
@@ -3951,9 +3959,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       panelStatusQuickFilter={panelStatusQuickFilter}
                       onHidePanel={
                         leftRailLockedClosed ? undefined : () => setIsLeftPanelHidden(true)
-                      }
-                      suppressTimelineEpicBacklogSlotDrops={
-                        activeTimelineMonth != null && activeMonthPlanTab !== "epic-gantt"
                       }
                     />
                   </div>
