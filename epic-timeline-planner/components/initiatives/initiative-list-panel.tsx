@@ -380,7 +380,7 @@ const leftPanelProgressTrackClass =
   "h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80";
 const leftPanelProgressRowClass = "flex min-w-0 flex-nowrap items-center gap-x-2";
 const leftPanelProgressSummaryClass =
-  "shrink-0 whitespace-nowrap text-[11px] font-medium tabular-nums tracking-tight text-slate-600";
+  "shrink-0 whitespace-nowrap text-[13px] font-medium tabular-nums tracking-tight text-slate-600";
 
 function epicCompletionMeta(epic: EpicItem): {
   total: number;
