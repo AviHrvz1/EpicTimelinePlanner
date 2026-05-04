@@ -955,7 +955,7 @@ function InitiativeTreeCard({
                   ) : null}
                 </button>
                 <div className="mt-2 space-y-2 px-0.5">
-                  <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                  <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
                     <span className="min-w-0 shrink-0 text-left">
                       {epics.length === 0
                         ? "No epics"
@@ -1248,8 +1248,8 @@ function SprintEpicCard({
             </div>
             <p className="truncate text-[13px] leading-5 text-slate-600">{initiative.title}</p>
           </button>
-          <div className="mt-2 space-y-2 px-0.5">
-                <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+              <div className="mt-2 space-y-2 px-0.5">
+                <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
                   <span className="min-w-0 shrink-0 text-left">
                     {completion.total === 0
                       ? "No stories yet"
