@@ -143,29 +143,24 @@ function StripedGanttLaneScrollArea({
 }
 
 /**
- * Portfolio roadmap Gantt (all-quarters year + drilled-in quarter): horizontal scroll when sprint columns
- * would shrink below a readability sprint width. Full year uses {@link YEAR_ROADMAP_MIN_SPRINT_PX}px; short
- * horizons (≤ {@link ROADMAP_SHORT_HORIZON_MAX_COLUMNS} sprints) use a derived sprint width so the minimum
- * timeline width is {@link ROADMAP_SHORT_HORIZON_MIN_CONTAINER_PX}px before scroll engages.
- * Hysteresis avoids flicker on resize. Sprint track `gap-2` matches {@link YEAR_ROADMAP_GANTT_GAP_PX}.
+ * Portfolio roadmap Gantt (all-quarters year + drilled-in quarter): same measured-width rule as
+ * {@link RIGHT_PANEL_MIN_CONTENT_PX} — fluid layout at/above that band; below it, horizontal scroll + fixed
+ * sprint columns. Short horizons (≤ {@link ROADMAP_SHORT_HORIZON_MAX_COLUMNS} sprints) derive sprint width
+ * from {@link ROADMAP_SHORT_HORIZON_MIN_CONTAINER_PX}. Hysteresis: {@link YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX}.
+ * Sprint track `gap-2` matches {@link YEAR_ROADMAP_GANTT_GAP_PX}.
  */
 const YEAR_ROADMAP_GANTT_GAP_PX = 8;
 const YEAR_ROADMAP_MIN_SPRINT_PX = 36;
 const ROADMAP_SHORT_HORIZON_MAX_COLUMNS = 8;
-/** Minimum total width (sprints + gaps) for quarter-scale views before horizontal scroll turns on. */
-const ROADMAP_SHORT_HORIZON_MIN_CONTAINER_PX = 1400;
-/**
- * Quarter lane stack uses `px-3` / `sm:px-4`; sprint grids are narrower than the measure ref — subtract so
- * scroll engages when lanes actually get tight, not only when the outer box is tiny.
- */
-const ROADMAP_QUARTER_LANE_HORIZONTAL_INSET_PX = 64;
+/** Target total width (sprints + gaps) for derived per-sprint px when column count ≤ 8; kept in sync with {@link RIGHT_PANEL_MIN_CONTENT_PX}. */
+const ROADMAP_SHORT_HORIZON_MIN_CONTAINER_PX = 1000;
 const YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX = 48;
 
 /**
- * Minimum width for the timeline “right panel” (breadcrumbs, chips, rails, sprint/kanban/insights/capacity/etc.)
- * before horizontal scroll engages. Applies on all surfaces, not only portfolio Gantt.
+ * Measured {@link yearRoadmapMeasureRef} width: at or above this (plus hysteresis when leaving narrow mode)
+ * the right panel stays fluid; below, outer horizontal scroll appears and portfolio Gantt stops shrinking lanes.
  */
-const RIGHT_PANEL_MIN_CONTENT_PX = 1400;
+const RIGHT_PANEL_MIN_CONTENT_PX = 1000;
 /** Matches `pl-[4rem]` / `ml-[4rem]` when the context rail is shown so scroll width fits the sprint grid. */
 const ROADMAP_PORTFOLIO_CONTEXT_RAIL_INSET_PX = 64;
 
@@ -2363,37 +2358,26 @@ export function TimelineGrid({
     const el = yearRoadmapMeasureRef.current;
     if (!el) return;
     const hyst = YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX;
-    const laneHorizontalInsetPx =
-      focusedQuarterLabel != null ? ROADMAP_QUARTER_LANE_HORIZONTAL_INSET_PX : 0;
-    const ganttMinW = yearRoadmapGanttMinWidthPx(
-      ganttLaneColumnCount,
-      getRoadmapHScrollMinSprintPx(ganttLaneColumnCount),
-    );
     const apply = () => {
       const raw = el.clientWidth;
-      setRightPanelHScroll((prev) => {
+      const nextFromThreshold = (prev: boolean) => {
         if (raw <= 0) return false;
         if (!prev && raw < RIGHT_PANEL_MIN_CONTENT_PX) return true;
         if (prev && raw >= RIGHT_PANEL_MIN_CONTENT_PX + hyst) return false;
         return prev;
-      });
+      };
+      setRightPanelHScroll(nextFromThreshold);
       if (!portfolioRoadmapGanttHScrollMeasure) {
         setYearRoadmapHScroll(false);
         return;
       }
-      const w = Math.max(0, raw - laneHorizontalInsetPx);
-      setYearRoadmapHScroll((prev) => {
-        if (w <= 0) return false;
-        if (!prev && w < ganttMinW) return true;
-        if (prev && w >= ganttMinW + hyst) return false;
-        return prev;
-      });
+      setYearRoadmapHScroll(nextFromThreshold);
     };
     apply();
     const ro = new ResizeObserver(() => apply());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [portfolioRoadmapGanttHScrollMeasure, ganttLaneColumnCount, focusedQuarterLabel]);
+  }, [portfolioRoadmapGanttHScrollMeasure]);
 
   /** Today line over initiative lanes (sprint resolution). */
   const roadmapLaneTodayLeft = useMemo(() => {
@@ -3016,7 +3000,7 @@ export function TimelineGrid({
 
   const ganttNeedsFixedColumns = portfolioRoadmapGanttHScrollMeasure && yearRoadmapHScroll;
   const panelHScroll = rightPanelHScroll || ganttNeedsFixedColumns;
-  /** Avoid `max(1400, grid)` dead space: when the roadmap uses fixed sprint px, size scroll to the grid + rail inset. */
+  /** Avoid oversizing scroll vs grid: when the roadmap uses fixed sprint px, size scroll to the grid + rail inset. */
   const panelScrollMinWidthPx = panelHScroll
     ? ganttNeedsFixedColumns
       ? portfolioRoadmapHScrollContentMinWidthPx +
