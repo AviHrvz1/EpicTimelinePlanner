@@ -747,19 +747,22 @@ function InitiativeTreeEpicRow({
             ) : null}
       </div>
       {isEpicOpen ? (
-        <div className="mt-3 border-l border-border/70 pl-3">
+        <div className="mt-3 pl-3">
               {stories.length === 0 && !onCreateStoryQuick ? (
                 <p className="text-[11px] text-muted-foreground">No user stories.</p>
               ) : null}
               {stories.length > 0 ? (
                 <ul className="space-y-0.5">
-                  {stories.map((story) => {
+                  {stories.map((story, storyIdx) => {
+                    const isLast = storyIdx === stories.length - 1;
                     const meta = storyStatusMeta(story, planContextMonth);
                     const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
                     const assigneeName = storyAssigneeDisplayName(story);
                     const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
                     return (
-                      <li key={story.id}>
+                      <li key={story.id} className="relative pl-6">
+                        <span className="absolute left-0 top-0 w-px bg-border/70" style={{ height: isLast ? "50%" : "100%" }} />
+                        <span className="absolute left-0 top-1/2 h-px w-4 -translate-y-px bg-border/70" />
                         <div className="group/story flex min-h-[28px] w-full items-center gap-2 rounded-md py-0.5 pr-0.5 pl-0 transition-colors hover:bg-white/90">
                           <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                             <UserStoryIcon />
@@ -1013,39 +1016,43 @@ function InitiativeTreeCard({
 
           {isOpen ? (
             <div className="mt-3 border-t border-border/80 pt-3 font-sans antialiased">
-              <div className="ml-3 border-l border-border/70 pl-4">
+              <div className="ml-3 pl-2">
                 {epics.length === 0 ? (
                   <p className="py-2 text-[12px] leading-relaxed text-muted-foreground">
                     No epics yet.
                   </p>
                 ) : (
-                  <div className="divide-y divide-border/55">
-                    {epics.map((epic) => {
+                  <div>
+                    {epics.map((epic, epicIdx) => {
                       const isEpicOpen = openEpicIds[epic.id] ?? false;
+                      const isLast = epicIdx === epics.length - 1;
                       return (
-                        <InitiativeTreeEpicRow
-                          key={epic.id}
-                          epic={epic}
-                          initiative={initiative}
-                          isEpicOpen={isEpicOpen}
-                          onToggleEpic={() =>
-                            setOpenEpicIds((prev) => {
-                              const next = !(prev[epic.id] ?? false);
-                              queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
-                              return {
-                                ...prev,
-                                [epic.id]: next,
-                              };
-                            })
-                          }
-                          planContextMonth={planContextMonth}
-                          hideScheduledIcon={inMonthView || isSprintModeActive}
-                          epicPlanDragEnabled={epicPlanDragEnabled}
-                          onOpenEpic={onOpenEpic}
-                          onOpenStory={onOpenStory}
-                          onCreateStoryQuick={onCreateStoryQuick}
-                          storyProgressDetailsVisible={storyProgressDetailsVisible}
-                        />
+                        <div key={epic.id} className="relative pl-6">
+                          <span className="absolute left-0 top-0 w-px bg-border/70" style={{ height: isLast ? "22px" : "100%" }} />
+                          <span className="absolute left-0 top-[22px] h-px w-4 -translate-y-px bg-border/70" />
+                          <InitiativeTreeEpicRow
+                            epic={epic}
+                            initiative={initiative}
+                            isEpicOpen={isEpicOpen}
+                            onToggleEpic={() =>
+                              setOpenEpicIds((prev) => {
+                                const next = !(prev[epic.id] ?? false);
+                                queueMicrotask(() => onEpicAccordionChange?.(epic.id, next));
+                                return {
+                                  ...prev,
+                                  [epic.id]: next,
+                                };
+                              })
+                            }
+                            planContextMonth={planContextMonth}
+                            hideScheduledIcon={inMonthView || isSprintModeActive}
+                            epicPlanDragEnabled={epicPlanDragEnabled}
+                            onOpenEpic={onOpenEpic}
+                            onOpenStory={onOpenStory}
+                            onCreateStoryQuick={onCreateStoryQuick}
+                            storyProgressDetailsVisible={storyProgressDetailsVisible}
+                          />
+                        </div>
                       );
                     })}
                   </div>
