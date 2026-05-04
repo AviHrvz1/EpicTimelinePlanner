@@ -3841,7 +3841,11 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             {topMode === "roadmap" ? (
             <div
               ref={layoutRef}
-              className={cn("grid min-h-0 flex-1 items-stretch gap-x-0.5", isResizingPanel && "select-none")}
+              className={cn(
+                "grid min-h-0 flex-1 items-stretch",
+                leftRailLockedClosed ? "gap-x-0" : "gap-x-0.5",
+                isResizingPanel && "select-none",
+              )}
               style={{
                 gridTemplateColumns: "auto minmax(0, 1fr)",
               }}
@@ -3850,9 +3854,14 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 className={cn(
                   "relative min-h-0 overflow-hidden rounded-l-xl bg-white/90 motion-reduce:transition-none",
                   "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                  leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
                 style={{
-                  width: isLeftPanelHidden ? "2.75rem" : `${panelWidth + 12}px`,
+                  width: leftRailLockedClosed
+                    ? "0px"
+                    : isLeftPanelHidden
+                      ? "2.75rem"
+                      : `${panelWidth + 12}px`,
                 }}
               >
                 <div
@@ -3955,7 +3964,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                         flashSprintEpicAccordionEmphasis(epicId);
                       }}
                       panelStatusQuickFilter={panelStatusQuickFilter}
-                      onHidePanel={() => setIsLeftPanelHidden(true)}
+                      onHidePanel={
+                        leftRailLockedClosed ? undefined : () => setIsLeftPanelHidden(true)
+                      }
                       suppressTimelineEpicBacklogSlotDrops={
                         activeTimelineMonth != null && activeMonthPlanTab !== "epic-gantt"
                       }
