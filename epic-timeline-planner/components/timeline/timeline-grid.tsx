@@ -3436,8 +3436,7 @@ export function TimelineGrid({
                     <span className="sm:hidden">Stories</span>
                   </div>
                   {showSprintEndCountdown &&
-                  activeYearSprintForMonthDrill != null &&
-                  monthPlanTab !== "sprint-kanban" ? (
+                  activeYearSprintForMonthDrill != null ? (
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
                 </>
@@ -4244,7 +4243,7 @@ export function TimelineGrid({
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
                   sprintToolbarEnd={
-                    showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                    showSprintEndCountdown && activeYearSprintForMonthDrill != null && monthPlanTab !== "sprint-kanban" ? (
                       <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                     ) : null
                   }
