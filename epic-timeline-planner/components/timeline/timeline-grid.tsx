@@ -1598,22 +1598,18 @@ export function TimelineGrid({
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
     "inline-flex h-7 max-w-full shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[11px] font-bold leading-none tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:text-[12px] lg:px-2.5";
-  /** Calm row: light tinted gradients + dark text. Selected = one step deeper, still dark text (no white-on-neon). */
-  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-50 via-violet-100 to-indigo-100 text-indigo-950 ring-indigo-200/70 hover:from-indigo-100 hover:via-violet-100 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/35`;
-  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-100 via-violet-200 to-indigo-300 text-indigo-950 ring-indigo-300/70 shadow-sm hover:from-indigo-200 hover:via-violet-200 hover:to-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/45`;
-  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-amber-50 via-orange-50 to-amber-100 text-amber-950 ring-amber-200/70 hover:from-amber-100 hover:via-orange-50 hover:to-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/35`;
-  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-amber-100 via-orange-100 to-amber-200 text-amber-950 ring-amber-300/70 shadow-sm hover:from-amber-200 hover:via-orange-100 hover:to-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/45`;
-  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-50 via-purple-50 to-violet-100 text-violet-950 ring-violet-200/70 hover:from-violet-100 hover:to-purple-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35`;
-  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-100 via-purple-100 to-violet-200 text-violet-950 ring-violet-300/70 shadow-sm hover:from-violet-200 hover:to-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45`;
-  /** Same structure as Initiatives/Epics pills (3-stop gradient, ring, hover, shadow when on). */
-  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-teal-50 via-teal-100 to-emerald-100 text-teal-950 ring-teal-200/70 hover:from-teal-100 hover:via-teal-100 hover:to-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/35`;
-  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-teal-100 via-emerald-200 to-teal-300 text-teal-950 ring-teal-300/70 shadow-sm hover:from-teal-200 hover:via-emerald-200 hover:to-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/45`;
-  /** Rose/pink calm — between Epics (amber) and Stories (slate-sky); not adjacent to same hue as Initiatives. */
-  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-rose-50 via-pink-50 to-rose-100 text-rose-950 ring-rose-200/70 hover:from-rose-100 hover:via-pink-50 hover:to-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/35`;
-  /** Cool slate-sky calm — distinct from Roadmap (saturated), Initiatives (purple), Estimated (rose), Progress (teal). */
-  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 text-slate-900 ring-slate-200/80 hover:from-slate-200 hover:via-sky-100 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/35`;
+  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/30`;
+  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm hover:from-indigo-200 hover:via-indigo-300 hover:to-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40`;
+  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/30`;
+  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-200 text-yellow-950 ring-yellow-300/75 shadow-sm hover:from-yellow-200 hover:via-yellow-300 hover:to-yellow-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/40`;
+  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-50 via-violet-100 to-violet-100 text-violet-950 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30`;
+  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-100 via-violet-200 to-violet-200 text-violet-950 ring-violet-300/75 shadow-sm hover:from-violet-200 hover:via-violet-300 hover:to-violet-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
+  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-emerald-50 via-emerald-100 to-emerald-100 text-emerald-950 ring-emerald-200/75 hover:from-emerald-100 hover:via-emerald-200 hover:to-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30`;
+  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-teal-50 via-teal-100 to-teal-100 text-teal-950 ring-teal-200/75 shadow-sm hover:from-teal-100 hover:via-teal-200 hover:to-teal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40`;
+  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-rose-50 via-rose-100 to-rose-100 text-rose-950 ring-rose-200/75 hover:from-rose-100 hover:via-rose-200 hover:to-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/30`;
+  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-sky-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/30`;
   const summaryChipStoriesStaticClass = summaryChipStoriesClass;
-  const summaryChipUnscheduledClass = `${summaryChipBaseClass} bg-orange-50 text-orange-950 ring-orange-300/85`;
+  const summaryChipUnscheduledClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-100 text-orange-950 ring-orange-200/75`;
   const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
   const estimatePanelScopeLabel = activeMonth
@@ -1634,12 +1630,12 @@ export function TimelineGrid({
   }, [estEpicsPanelOpen, estimatePanelScopeLabel, scopedEpicsForEstimatePanel.all]);
 
   const estimatePanelTableClass =
-    "w-full table-fixed border-collapse text-[13px] text-slate-700";
+    "w-full table-fixed border-collapse text-[15px] text-slate-700";
   const estimatePanelHeadCellClass =
-    "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600";
+    "px-3 py-2.5 text-left text-[13px] font-semibold uppercase tracking-wide text-slate-600";
   const estimatePanelBodyRowClass =
     "group transition hover:bg-[#c5ebff]";
-  const estimatePanelCellClass = "px-3 py-2.5";
+  const estimatePanelCellClass = "px-3 py-3";
   const toggleEstimateEpicExpanded = (epicId: string) =>
     setExpandedEstimateEpicIds((prev) => {
       const next = new Set(prev);
@@ -1757,21 +1753,21 @@ export function TimelineGrid({
                       <span className="truncate">{row.initiative.title}</span>
                     </button>
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
                     {estimatePanelEpicSprintLabel(row.epic)}
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
                     {estimatePanelTeamLabel(row.epic.team)}
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
                     {estimatePanelAssigneeLabel(row.epic.assignee)}
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-center text-[12px] font-semibold tabular-nums text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-center text-[14px] font-semibold tabular-nums text-slate-700")}>
                     {Math.max(0, Number(row.epic.originalEstimateDays ?? 0))}d
                   </td>
                   {showEstimatedColumns ? (
                     <>
-                      <td className={cn(estimatePanelCellClass, "text-center text-[12px] font-semibold tabular-nums text-slate-700")}>
+                      <td className={cn(estimatePanelCellClass, "text-center text-[14px] font-semibold tabular-nums text-slate-700")}>
                         {childEstimateSum}d
                       </td>
                       <td className={cn(estimatePanelCellClass, "text-center")}>
@@ -1784,7 +1780,7 @@ export function TimelineGrid({
                             />
                             <circle cx="12" cy="12" r="5.2" fill="#ffffff" />
                           </svg>
-                          <span className="text-[11px] font-semibold tabular-nums text-slate-600">
+                          <span className="text-[13px] font-semibold tabular-nums text-slate-600">
                             {Math.round(storyEstimatedPct)}% / {Math.round(storyUnestimatedPct)}%
                           </span>
                         </div>
@@ -1793,41 +1789,66 @@ export function TimelineGrid({
                   ) : null}
                 </tr>
                 {isExpanded ? (
-                  <tr className="bg-white">
-                    <td className="px-3 py-2" colSpan={colCount}>
-                      {stories.length === 0 ? (
-                        <p className="text-[12px] text-slate-500">No user stories yet.</p>
-                      ) : (
-                        <div>
-                          {stories.map((story) => (
-                            <button
-                              key={story.id}
-                              type="button"
-                              onClick={() => {
-                                if (!onOpenStory) return;
-                                closeEstEpicsPanel();
-                                onOpenStory(story.id);
-                              }}
-                              className={cn(
-                                "flex w-full items-center justify-between px-1 py-1.5 text-left transition first:pt-0 last:pb-0",
-                                onOpenStory
-                                  ? "hover:bg-slate-100 hover:text-blue-700"
-                                  : "cursor-default",
-                              )}
-                            >
-                              <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-[12px] font-medium text-slate-800">
-                                <UserStoryIcon className="size-3.5 shrink-0 text-slate-500" />
-                                <span className="truncate">{story.title}</span>
-                              </span>
-                              <span className="ml-2 shrink-0 text-[11px] font-semibold tabular-nums text-slate-600">
-                                {Math.max(0, Number(story.estimatedDays ?? 0))}d
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                  stories.length === 0 ? (
+                    <tr className="bg-slate-50">
+                      <td colSpan={colCount} className="py-2 pl-14 pr-3 text-[13px] text-slate-400">
+                        No user stories yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    stories.map((story, storyIdx) => {
+                      const isLast = storyIdx === stories.length - 1;
+                      return (
+                        <tr
+                          key={story.id}
+                          className={cn(
+                            storyIdx % 2 === 0 ? "bg-[#d8f2ff]/50 transition" : "bg-white transition",
+                            onOpenStory ? "cursor-pointer hover:bg-blue-50" : "cursor-default",
+                            storyIdx === 0 && "border-t border-slate-200",
+                            isLast && "border-b-2 border-slate-200",
+                          )}
+                          onClick={() => {
+                            if (!onOpenStory) return;
+                            closeEstEpicsPanel();
+                            onOpenStory(story.id);
+                          }}
+                        >
+                          <td className={cn(estimatePanelCellClass, "relative pl-14")}>
+                            {/* vertical tree line — stops at midpoint for last story */}
+                            <span
+                              className="absolute left-8 top-0 w-px bg-indigo-300"
+                              style={{ height: isLast ? "50%" : "100%" }}
+                            />
+                            {/* horizontal branch */}
+                            <span className="absolute left-8 top-1/2 h-px w-3.5 -translate-y-px bg-indigo-300" />
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <UserStoryIcon className="size-3.5 shrink-0 text-slate-400" />
+                              <span className="truncate text-[14px] font-medium text-slate-700">{story.title}</span>
+                            </span>
+                          </td>
+                          <td className={cn(estimatePanelCellClass, "text-[13px] text-slate-400")}>—</td>
+                          <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
+                            {estimatePanelStorySprintLabel(story)}
+                          </td>
+                          <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
+                            {estimatePanelTeamLabel(row.epic.team)}
+                          </td>
+                          <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
+                            {estimatePanelAssigneeLabel(story.assignee)}
+                          </td>
+                          <td className={cn(estimatePanelCellClass, "text-center text-[13px] font-semibold tabular-nums text-slate-700")}>
+                            {Math.max(0, Number(story.estimatedDays ?? 0))}d
+                          </td>
+                          {showEstimatedColumns ? (
+                            <>
+                              <td className={cn(estimatePanelCellClass, "text-center text-[13px] text-slate-400")}>—</td>
+                              <td className={cn(estimatePanelCellClass, "text-center text-[13px] text-slate-400")}>—</td>
+                            </>
+                          ) : null}
+                        </tr>
+                      );
+                    })
+                  )
                 ) : null}
               </Fragment>
             );
@@ -1859,69 +1880,122 @@ export function TimelineGrid({
   }
 
   function renderEpicsWithoutDescriptionTable(rows: Array<{ epic: EpicItem; initiative: InitiativeItem }>) {
-    const narrowHead = cn(estimatePanelHeadCellClass, "text-[10px]");
+    const colCount = 5;
     return (
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(narrowHead, "w-[28%] min-w-0")}>Epic</th>
-            <th className={cn(narrowHead, "w-[12%]")}>Sprint</th>
-            <th className={cn(narrowHead, "w-[11%]")}>Team</th>
-            <th className={cn(narrowHead, "w-[12%]")}>Assignee</th>
-            <th className={cn(narrowHead, "min-w-0")}>Parent initiative</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[28%] min-w-0")}>Epic</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Sprint</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[11%]")}>Team</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Assignee</th>
+            <th className={cn(estimatePanelHeadCellClass, "min-w-0")}>Parent initiative</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-500")} colSpan={5}>
+              <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-500")} colSpan={colCount}>
                 All epics in this scope have a description.
               </td>
             </tr>
           ) : (
-            rows.map((row, rowIndex) => (
-              <tr
-                key={row.epic.id}
-                className={cn(
-                  estimatePanelBodyRowClass,
-                  rowIndex % 2 === 0 ? "bg-[#d8f2ff]" : "bg-white",
-                )}
-              >
-                <td className={estimatePanelCellClass}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeEstEpicsPanel();
-                      onOpenEpic(row.epic.id);
-                    }}
-                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
+            rows.map((row, rowIndex) => {
+              const isExpanded = expandedEstimateEpicIds.has(row.epic.id);
+              const stories = row.epic.userStories ?? [];
+              return (
+                <Fragment key={row.epic.id}>
+                  <tr
+                    className={cn(
+                      estimatePanelBodyRowClass,
+                      rowIndex % 2 === 0 ? "bg-[#d8f2ff]" : "bg-white",
+                    )}
                   >
-                    <span className="truncate">{row.epic.title}</span>
-                  </button>
-                </td>
-                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
-                  {estimatePanelEpicSprintLabel(row.epic)}
-                </td>
-                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
-                  {estimatePanelTeamLabel(row.epic.team)}
-                </td>
-                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
-                  {estimatePanelAssigneeLabel(row.epic.assignee)}
-                </td>
-                <td className={cn(estimatePanelCellClass, "text-slate-600")}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeEstEpicsPanel();
-                      onOpenInitiative(row.initiative.id);
-                    }}
-                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
-                  >
-                    <span className="truncate">{row.initiative.title}</span>
-                  </button>
-                </td>
-              </tr>
-            ))
+                    <td className={estimatePanelCellClass}>
+                      <div className="inline-flex min-w-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleEstimateEpicExpanded(row.epic.id)}
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                          aria-label={isExpanded ? "Collapse user stories" : "Expand user stories"}
+                        >
+                          {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { closeEstEpicsPanel(); onOpenEpic(row.epic.id); }}
+                          className="inline-flex min-w-0 max-w-full rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
+                        >
+                          <span className="truncate">{row.epic.title}</span>
+                        </button>
+                      </div>
+                    </td>
+                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                      {estimatePanelEpicSprintLabel(row.epic)}
+                    </td>
+                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                      {estimatePanelTeamLabel(row.epic.team)}
+                    </td>
+                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                      {estimatePanelAssigneeLabel(row.epic.assignee)}
+                    </td>
+                    <td className={cn(estimatePanelCellClass, "text-slate-600")}>
+                      <button
+                        type="button"
+                        onClick={() => { closeEstEpicsPanel(); onOpenInitiative(row.initiative.id); }}
+                        className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                      >
+                        <span className="truncate">{row.initiative.title}</span>
+                      </button>
+                    </td>
+                  </tr>
+                  {isExpanded ? (
+                    stories.length === 0 ? (
+                      <tr className="bg-slate-50">
+                        <td colSpan={colCount} className="py-2 pl-14 pr-3 text-[13px] text-slate-400">
+                          No user stories yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      stories.map((story, storyIdx) => {
+                        const isLast = storyIdx === stories.length - 1;
+                        return (
+                          <tr
+                            key={story.id}
+                            className={cn(
+                              storyIdx % 2 === 0 ? "bg-[#d8f2ff]/50 transition" : "bg-white transition",
+                              onOpenStory ? "cursor-pointer hover:bg-blue-50" : "cursor-default",
+                              storyIdx === 0 && "border-t border-slate-200",
+                              isLast && "border-b-2 border-slate-200",
+                            )}
+                            onClick={() => { if (!onOpenStory) return; closeEstEpicsPanel(); onOpenStory(story.id); }}
+                          >
+                            <td className={cn(estimatePanelCellClass, "relative pl-14")}>
+                              <span className="absolute left-8 top-0 w-px bg-indigo-300" style={{ height: isLast ? "50%" : "100%" }} />
+                              <span className="absolute left-8 top-1/2 h-px w-3.5 -translate-y-px bg-indigo-300" />
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <UserStoryIcon className="size-3.5 shrink-0 text-slate-400" />
+                                <span className="truncate text-[14px] font-medium text-slate-700">{story.title}</span>
+                              </span>
+                            </td>
+                            <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
+                              {estimatePanelStorySprintLabel(story)}
+                            </td>
+                            <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
+                              {estimatePanelTeamLabel(row.epic.team)}
+                            </td>
+                            <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
+                              {estimatePanelAssigneeLabel(story.assignee)}
+                            </td>
+                            <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-400")}>—</td>
+                          </tr>
+                        );
+                      })
+                    )
+                  ) : null}
+                </Fragment>
+              );
+            })
           )}
         </tbody>
       </table>
@@ -1977,13 +2051,13 @@ export function TimelineGrid({
                     <span className="truncate">{row.story.title}</span>
                   </button>
                 </td>
-                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
                   {estimatePanelStorySprintLabel(row.story)}
                 </td>
-                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
                   {estimatePanelTeamLabel(row.epic.team)}
                 </td>
-                <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-700")}>
+                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
                   {estimatePanelAssigneeLabel(row.story.assignee)}
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-slate-600")}>
@@ -5015,16 +5089,18 @@ export function TimelineGrid({
               className="mb-4 flex shrink-0 cursor-move items-center justify-between pb-1"
               onPointerDown={beginEstimateCoverageDrag}
             >
-              <div>
-                <h3 className="inline-flex items-center gap-2.5 text-[22px] font-bold leading-tight text-slate-900 sm:text-2xl">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-700 ring-1 ring-fuchsia-200 sm:h-9 sm:w-9">
-                    <PieChart className="size-4 sm:size-[1.125rem]" />
-                  </span>
-                  Epic Estimation Coverage
-                </h3>
-                <p className="mt-1.5 text-[13px] text-slate-600">
-                  Scope: {estimatePanelScopeLabel} · {estimatedEpicsPercentForScope}% estimated
-                </p>
+              <div className="flex items-start gap-2.5">
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-700 ring-1 ring-fuchsia-200 sm:h-9 sm:w-9">
+                  <PieChart className="size-4 sm:size-[1.125rem]" />
+                </span>
+                <div>
+                  <h3 className="text-[22px] font-bold leading-tight text-slate-900 sm:text-2xl">
+                    Epic Estimation Coverage
+                  </h3>
+                  <p className="mt-1 text-[14px] text-slate-500">
+                    Scope: {estimatePanelScopeLabel} · {estimatedEpicsPercentForScope}% estimated
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -5037,7 +5113,7 @@ export function TimelineGrid({
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <nav
-                className="mb-3 flex shrink-0 gap-0.5 overflow-x-auto border-b border-slate-200"
+                className="mb-4 flex shrink-0 flex-wrap gap-1.5 overflow-x-auto"
                 aria-label="Estimation coverage tables"
               >
                 {(
@@ -5071,20 +5147,20 @@ export function TimelineGrid({
                       type="button"
                       onClick={() => setEstimateCoveragePanelTab(tab.id)}
                       className={cn(
-                        "shrink-0 border-b-2 px-3 py-2.5 text-left text-[13px] font-semibold transition-colors",
+                        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors",
                         active
-                          ? "border-fuchsia-600 text-fuchsia-900"
-                          : "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900",
+                          ? "bg-fuchsia-100 text-fuchsia-900 ring-1 ring-fuchsia-300/80"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900",
                       )}
                     >
                       <span className="whitespace-nowrap">{tab.label}</span>
                       <span
                         className={cn(
-                          "ml-1.5 tabular-nums",
-                          active ? "text-fuchsia-700/90" : "text-slate-500",
+                          "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[12px] tabular-nums font-bold",
+                          active ? "bg-fuchsia-200 text-fuchsia-800" : "bg-slate-200 text-slate-500",
                         )}
                       >
-                        ({tab.count})
+                        {tab.count}
                       </span>
                     </button>
                   );
