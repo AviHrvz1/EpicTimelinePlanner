@@ -569,7 +569,7 @@ function DraggableInitiativeCard({
               <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                 <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
               </span>
-              <p className="min-w-0 truncate text-[17px] leading-6 font-normal text-slate-900">{initiative.title}</p>
+              <p className="min-w-0 truncate text-[15px] leading-6 font-normal text-slate-900">{initiative.title}</p>
             </div>
             <div className="flex shrink-0 gap-1" />
           </div>
@@ -695,7 +695,7 @@ function InitiativeTreeEpicRow({
             <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
               <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
             </span>
-            <p className="min-w-0 truncate text-[19px] font-normal leading-7 tracking-tight text-slate-900">
+            <p className="min-w-0 truncate text-[17px] font-normal leading-7 tracking-tight text-slate-900">
               {epic.title}
             </p>
           </div>
