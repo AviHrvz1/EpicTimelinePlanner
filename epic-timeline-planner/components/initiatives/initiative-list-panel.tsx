@@ -2037,7 +2037,13 @@ export function InitiativeListPanel({
           {showNewButton ? (
             <Button
               size="sm"
-              className="h-8 px-3 text-[13px] font-bold"
+              variant="default"
+              className={cn(
+                "h-8 border-0 px-3 text-[13px] font-bold shadow-none",
+                "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white",
+                "hover:from-sky-500 hover:via-blue-600 hover:to-sky-600 hover:text-white",
+                "focus-visible:ring-2 focus-visible:ring-sky-400/90 focus-visible:ring-offset-0 [&_svg]:text-white",
+              )}
               onClick={handleNewButtonClick}
             >
               <Plus className="size-3.5" />
