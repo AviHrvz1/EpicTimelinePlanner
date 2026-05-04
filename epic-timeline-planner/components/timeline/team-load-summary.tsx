@@ -50,7 +50,7 @@ export function TeamLoadSummary({
   const fillW = (thermometerPct / 100) * innerW;
 
   return (
-    <section className="rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/30 to-sky-50/45 px-4 py-3 shadow-sm shadow-slate-900/5 ring-1 ring-indigo-100/45">
+    <section className="rounded-2xl border border-slate-200/90 bg-slate-50 px-4 py-3 shadow-sm shadow-slate-900/[0.04] ring-1 ring-slate-200/70">
       <div className="flex flex-nowrap items-center gap-2.5 sm:gap-3.5">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/60 bg-white/90 shadow-sm shadow-indigo-900/5">
@@ -123,7 +123,7 @@ export function TeamLoadSummary({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-indigo-100/50 pt-3 text-[13px] font-semibold sm:text-[14px]">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200/80 pt-3 text-[13px] font-semibold sm:text-[14px]">
         <span className="tabular-nums text-slate-800">{totalAssigned.toFixed(1)}d planned</span>
         <span className="text-slate-300/90">/</span>
         <span className="tabular-nums text-slate-600">{totalCapacity.toFixed(1)}d available</span>

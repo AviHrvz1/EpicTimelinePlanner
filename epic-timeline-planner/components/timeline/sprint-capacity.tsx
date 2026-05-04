@@ -271,6 +271,8 @@ function CapacityBucket({
   onExpandPanel,
   onCollapsePanel,
   reorderGrip = null,
+  /** Shown as a small label above the bucket when a single delivery team is selected (hidden for all-teams view). */
+  teamFilterLabel = null,
 }: {
   yearSprint: number;
   teamKey: string;
@@ -288,6 +290,7 @@ function CapacityBucket({
   onCollapsePanel?: () => void;
   /** Column reorder handle (same size / row as expand control). */
   reorderGrip?: ReactNode;
+  teamFilterLabel?: string | null;
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
@@ -316,11 +319,6 @@ function CapacityBucket({
   const memberTitle = capacityBucketToFilterLabel(member);
   const hasHeaderToolbar =
     Boolean(reorderGrip) || Boolean(panelExpandable && onExpandPanel && onCollapsePanel);
-  const headerTitleReserveClass = hasHeaderToolbar
-    ? reorderGrip && panelExpandable && onExpandPanel && onCollapsePanel
-      ? "max-w-[calc(100%-5.5rem)]"
-      : "max-w-[calc(100%-2.75rem)]"
-    : "max-w-full";
   /** Min height matches the old fixed column; list area below can grow to `bucketScrollMaxClass` before scrolling. */
   const bucketColumnShellClass = isPanelExpanded
     ? "min-h-[28rem]"
@@ -333,50 +331,58 @@ function CapacityBucket({
   return (
     <section
       className={cn(
-        "group @container min-h-0 min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        "group @container relative min-h-0 min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
         "transition-[border-color,box-shadow,background-color,filter] duration-200 ease-out",
         "hover:border-indigo-300/70 hover:from-indigo-50/90 hover:via-indigo-100/55 hover:to-sky-100/70 hover:shadow-md hover:ring-indigo-200/55",
       )}
     >
       <div className="mb-2 flex flex-col gap-2 pr-0.5">
-        <div className="relative flex min-h-8 min-w-0 items-center justify-center">
-          <p
-            className={cn(
-              "flex min-h-8 min-w-0 items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800",
-              headerTitleReserveClass,
-            )}
-          >
+        {/* 1fr | auto | 1fr keeps the person name centered; label sits in the left fringe only. */}
+        <div className="relative grid min-h-8 w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-x-1">
+          <div className="flex min-w-0 items-center justify-self-start self-center">
+            {teamFilterLabel ? (
+              <span
+                className="inline-flex max-w-[5.25rem] items-center rounded-sm bg-sky-100/90 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-sky-900/85 ring-1 ring-sky-200/70"
+                title={teamFilterLabel}
+              >
+                <span className="truncate">{teamFilterLabel}</span>
+              </span>
+            ) : null}
+          </div>
+          <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800">
             <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
             <span className="min-w-0 truncate">{memberTitle}</span>
           </p>
-          {hasHeaderToolbar ? (
-            <div className="absolute right-0 top-1/2 z-10 flex items-center gap-1 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
-              {reorderGrip}
-              {panelExpandable && onExpandPanel && onCollapsePanel ? (
-                isPanelExpanded ? (
-                  <button
-                    type="button"
-                    onClick={onCollapsePanel}
-                    className={CAPACITY_HEADER_ICON_BTN_CLASS}
-                    aria-label="Show all people buckets"
-                    title="Show all people"
-                  >
-                    <Minimize2 className="size-3" aria-hidden />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onExpandPanel}
-                    className={CAPACITY_HEADER_ICON_BTN_CLASS}
-                    aria-label="Expand this person bucket to full width"
-                    title="Expand bucket"
-                  >
-                    <Maximize2 className="size-3" aria-hidden />
-                  </button>
-                )
-              ) : null}
-            </div>
-          ) : null}
+          <div className="relative min-h-8 min-w-0 justify-self-stretch self-center">
+            {hasHeaderToolbar ? (
+              <div className="absolute right-0 top-1/2 z-10 flex items-center gap-1 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                {reorderGrip}
+                {panelExpandable && onExpandPanel && onCollapsePanel ? (
+                  isPanelExpanded ? (
+                    <button
+                      type="button"
+                      onClick={onCollapsePanel}
+                      className={CAPACITY_HEADER_ICON_BTN_CLASS}
+                      aria-label="Show all people buckets"
+                      title="Show all people"
+                    >
+                      <Minimize2 className="size-3" aria-hidden />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onExpandPanel}
+                      className={CAPACITY_HEADER_ICON_BTN_CLASS}
+                      aria-label="Expand this person bucket to full width"
+                      title="Expand bucket"
+                    >
+                      <Maximize2 className="size-3" aria-hidden />
+                    </button>
+                  )
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
           <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
@@ -389,7 +395,7 @@ function CapacityBucket({
               value={capacity}
               onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
               className={cn(
-                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 shadow-sm",
+                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />
@@ -405,7 +411,9 @@ function CapacityBucket({
                 <span
                   className={cn(
                     "whitespace-nowrap",
-                    storiesOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
+                    storiesOverCapacity
+                      ? cn(rollupOverCapacityPill, "font-medium", "px-2 py-1")
+                      : cn(rollupNeutralPill, "px-2 py-1"),
                   )}
                 >
                   {storiesOverCapacity ? (
@@ -710,7 +718,7 @@ export function SprintCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
       />
-      {assigneeFilterOptions.length > 0 ? (
+      {assigneeFilterOptions.length > 0 && selectedTeamId != null ? (
         <div className="shrink-0 px-0.5 py-0.5">
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             People in this sprint
@@ -817,6 +825,7 @@ export function SprintCapacityBoard({
                       onExpandPanel={() => setExpandedMemberKey(member)}
                       onCollapsePanel={() => setExpandedMemberKey(null)}
                       reorderGrip={reorderGrip}
+                      teamFilterLabel={selectedTeamId ? teamLabel : null}
                     />
                   </div>
                 )}
