@@ -2773,9 +2773,9 @@ export function TimelineGrid({
     [activeMonth, focusedQuarterLabel, quarterViewTab, monthPlanTab, activeSprint, activeSprintTab],
   );
   const railLabelBaseClass =
-    "pointer-events-none overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-150";
+    "pointer-events-none overflow-hidden whitespace-nowrap text-[14px] font-semibold tracking-[0.01em] transition-all duration-150";
   /** Month / quarter plan rail only (between center and right panel). Flat indigo — not shared with roadmap summary chips. */
-  const planRailTabActiveClass = "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200";
+  const planRailTabActiveClass = "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/80 shadow-sm";
 
   const runSurfaceTransition = useCallback(() => {
     const el = timelineContentScrollRef.current;
@@ -3863,8 +3863,8 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
-              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
+                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
+              isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "gantt"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -3947,14 +3947,14 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
-              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
+                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
+              isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "gantt"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
-              <MapIcon className="size-4" aria-hidden />
+              <MapIcon className="size-[18px]" aria-hidden />
               <span className="sr-only">Gantt</span>
               <span
                 aria-hidden
@@ -3971,14 +3971,14 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("insights")}
               title="Portfolio Insights"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
-              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
+                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
+              isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "insights"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
-              <Activity className="size-4" aria-hidden />
+              <Activity className="size-[18px]" aria-hidden />
               <span className="sr-only">Portfolio Insights</span>
               <span
                 aria-hidden
@@ -3995,14 +3995,14 @@ export function TimelineGrid({
               onClick={() => setQuarterViewTab("capacity")}
               title="Portfolio Capacity"
               className={cn(
-                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
-              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
+                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
+              isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "capacity"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
-              <Thermometer className="size-4" aria-hidden />
+              <Thermometer className="size-[18px]" aria-hidden />
               <span className="sr-only">Portfolio Capacity</span>
               <span
                 aria-hidden
