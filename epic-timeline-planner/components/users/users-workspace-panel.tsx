@@ -446,6 +446,26 @@ function EditCommitButtons({
   );
 }
 
+function UserDirTreeConnector({ depth }: { depth: number }) {
+  if (depth <= 0) return null;
+  const indentPx = 8 + depth * USER_DIRECTORY_TREE_LEVEL_STEP_PX;
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute"
+      style={{
+        left: Math.max(2, indentPx - 18),
+        top: 0,
+        bottom: "50%",
+        width: 14,
+        borderLeft: "1.5px solid #e2e8f0",
+        borderBottom: "1.5px solid #e2e8f0",
+        borderBottomLeftRadius: 3,
+      }}
+    />
+  );
+}
+
 function UsersTableRow({
   row,
   columnOrder,
@@ -566,7 +586,8 @@ function UsersTableRow({
 
   const cells: Record<SortKey, ReactNode> = {
     name: (
-      <td key="name" className={USER_DIR_TD_BASE} style={nameTdStyle}>
+      <td key="name" className={cn(USER_DIR_TD_BASE, treeDepth > 0 && "relative")} style={nameTdStyle}>
+        {treeDepth > 0 && <UserDirTreeConnector depth={treeDepth} />}
         {editing("name") ? (
           <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <User className="size-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
@@ -739,7 +760,7 @@ function UsersTableRow({
     <tr
       data-users-zebra-row="true"
       className={cn(
-        "group border-t border-[#7cd3f7]/95 text-[16px] text-slate-800 transition-colors hover:bg-[#c5ebff]",
+        "group border-t border-[#7cd3f7]/95 text-[16px] text-slate-800 transition-colors hover:!bg-[#c5ebff]",
         saving && "opacity-70",
         !rowBusy && "cursor-pointer",
       )}
@@ -1084,9 +1105,10 @@ export function UsersWorkspacePanel() {
                 <Fragment key={folderId}>
                   <tr
                     data-users-zebra-row="true"
-                    className="border-t border-[#7cd3f7]/95 text-[15px] text-slate-800"
+                    className="border-t border-[#7cd3f7]/95 text-[15px] text-slate-800 transition-colors hover:!bg-[#c5ebff]"
                   >
-                    <td colSpan={columnOrder.length} className="px-2 py-1.5">
+                    <td colSpan={columnOrder.length} className={cn("px-2 py-1.5", levelIndex > 0 && "relative")}>
+                      {levelIndex > 0 && <UserDirTreeConnector depth={levelIndex} />}
                       <button
                         type="button"
                         className="flex min-w-0 max-w-full items-center gap-1.5 text-left font-semibold text-slate-800"
@@ -1380,7 +1402,8 @@ export function UsersWorkspacePanel() {
         </div>
       </header>
 
-      <div className="flex shrink-0 flex-col gap-3 pb-8 lg:flex-row lg:items-center lg:gap-3">
+      <div className="mb-5 shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-6 pt-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
         <div ref={searchFieldWrapRef} className="relative min-w-0 w-full flex-1 lg:max-w-md">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-slate-400"
@@ -1393,7 +1416,7 @@ export function UsersWorkspacePanel() {
             onBlur={handleDirectorySearchBlur}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search name, email, team, or permission…"
-            className="relative z-[1] h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-[14px] text-slate-900 shadow-sm outline-none ring-slate-200/80 transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+            className="relative z-[1] h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
             aria-label="Search users"
             aria-controls="users-directory-name-suggestions"
             aria-expanded={searchSuggestOpen && nameSuggestions.length > 0}
@@ -1434,7 +1457,7 @@ export function UsersWorkspacePanel() {
               suggestions={teamFilterSuggestions}
               placeholder="All Teams"
               aria-label="Filter by team"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] shadow-sm outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
               onSuggestionPick={(s) => {
                 const next = resolveTeamFilterQuery(s, rows, registeredTeamSlugs);
                 setTeamFilter(next);
@@ -1454,7 +1477,7 @@ export function UsersWorkspacePanel() {
               suggestions={PERMISSION_FILTER_SUGGESTIONS}
               placeholder="All Permissions"
               aria-label="Filter by permission"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] shadow-sm outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
               onSuggestionPick={(s) => {
                 const next = resolvePermissionFilterQuery(s);
                 setPermissionFilter(next);
@@ -1471,7 +1494,7 @@ export function UsersWorkspacePanel() {
             <button
               type="button"
               onClick={() => setUserDirGroupMenuOpen((prev) => !prev)}
-              className="flex h-10 min-w-[11rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100"
+              className="flex h-10 min-w-[11rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] transition hover:from-indigo-100 hover:to-violet-100"
             >
               <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
@@ -1509,6 +1532,7 @@ export function UsersWorkspacePanel() {
             ) : null}
           </div>
         </div>
+      </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-white">

@@ -58,7 +58,7 @@ import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 /** Softer than shared table zebra -- long wide rows read cleaner with lower-contrast bands. */
-const BACKLOG_TABLE_STRIPE_BG = "#f1f5f9";
+const BACKLOG_TABLE_STRIPE_BG = "#f4f7fc";
 const BACKLOG_TABLE_BASE_BG = "#ffffff";
 
 type BacklogPlanningPanelProps = {
@@ -948,7 +948,7 @@ function BacklogTeamFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -1057,7 +1057,7 @@ function BacklogAssigneeFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -1163,7 +1163,7 @@ function BacklogLabelsFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -1265,7 +1265,7 @@ function MultiCheckboxFilter({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -2308,7 +2308,7 @@ export function BacklogPlanningPanel({
                 <span className="text-center text-[14px] tabular-nums text-slate-700">{row.storyEndDateLabel}</span>
               ),
               status: (
-            <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
+            <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
                 <span className="flex items-center gap-1">
                   <select
@@ -2785,7 +2785,7 @@ export function BacklogPlanningPanel({
                 </span>
               ),
               status: (
-                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
                   {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
                 </span>
               ),
@@ -2999,7 +2999,7 @@ export function BacklogPlanningPanel({
                 </button>
               ),
               status: (
-                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(initiativeStatus))}>
+                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeStatus))}>
                   {workflowStatusLabel(initiativeStatus)}
                 </span>
               ),
@@ -3321,7 +3321,7 @@ export function BacklogPlanningPanel({
                   </button>
                 ),
                 status: (
-                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(initiative.initiativeStatus))}>
+                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiative.initiativeStatus))}>
                     {workflowStatusLabel(initiative.initiativeStatus)}
                   </span>
                 ),
@@ -3489,7 +3489,7 @@ export function BacklogPlanningPanel({
                             {formatBacklogPlanDate(standEpicGantt.end)}
                           </span>
                         ),
-                        status: <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip("todo"))}>To do</span>,
+                        status: <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip("todo"))}>To do</span>,
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
                         labels: <BacklogLabelsEmptyRowSlot />,
@@ -3983,12 +3983,12 @@ export function BacklogPlanningPanel({
 
   return (
     <section className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
-      <div className="mb-5 flex shrink-0 items-center justify-between gap-3 pb-1 pt-2">
+      <div className="mb-6 flex shrink-0 items-center justify-between gap-3 pb-2 pt-4">
         <div className="flex items-center gap-2.5">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
             <ListTodo className="size-4.5" strokeWidth={2} aria-hidden />
           </span>
-          <h2 className="text-[21px] font-bold tracking-tight text-slate-900">Backlog</h2>
+          <h2 className="text-[23px] font-bold tracking-tight text-slate-900">Backlog Workspace</h2>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -3997,7 +3997,7 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "initiative"}
             title="Show only initiatives in the table (click again for all work items)"
             className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold leading-none tracking-[0.015em] ring-1 transition",
+              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "initiative"
                 ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm"
                 : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
@@ -4011,7 +4011,7 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "epic"}
             title="Show only epics in the table (click again for all work items)"
             className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold leading-none tracking-[0.015em] ring-1 transition",
+              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "epic"
                 ? "bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-200 text-yellow-950 ring-yellow-300/75 shadow-sm"
                 : "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200",
@@ -4025,7 +4025,7 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "story"}
             title="Show only user stories in the table (click again for all work items)"
             className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold leading-none tracking-[0.015em] ring-1 transition",
+              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "story"
                 ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm"
                 : "bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-sky-100 hover:via-blue-200 hover:to-blue-200",
@@ -4036,7 +4036,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative z-20 mb-4 max-w-full shrink-0 rounded-xl border border-slate-200 bg-slate-100 px-4 pb-6 pt-6 shadow-[0_4px_16px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.03)] [contain:inline-size]">
+      <div className="relative z-20 mb-5 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-6 pt-6 [contain:inline-size]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
           style={{ gridTemplateColumns: "auto auto repeat(10, minmax(0, 1fr)) auto" }}
@@ -4052,7 +4052,7 @@ export function BacklogPlanningPanel({
               onBlur={() => {
                 window.setTimeout(() => setShowSearchSuggestions(false), 120);
               }}
-              className="h-9 w-full min-w-0 rounded-lg border border-slate-200/80 bg-white pl-9 pr-3 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 transition hover:border-slate-300 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200/50"
+              className="h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[14px] text-slate-800 outline-none placeholder:text-slate-400 transition hover:border-slate-300 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
             />
             {showSearchSuggestions && searchSuggestions.length > 0 ? (
               <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
@@ -4082,7 +4082,7 @@ export function BacklogPlanningPanel({
               onClick={() => setPresetMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={presetMenuOpen}
-              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-indigo-200/60 bg-white px-1.5 text-[12px] text-slate-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60 sm:px-2"
+              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-600">
                 <Bookmark className="size-3 shrink-0 text-indigo-400" strokeWidth={2} aria-hidden />
@@ -4160,7 +4160,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-indigo-200/60 bg-white px-1.5 text-[12px] text-slate-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60 sm:px-2"
+              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
               aria-haspopup="listbox"
               aria-expanded={viewPresetMenuOpen}
             >
@@ -4226,7 +4226,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[30px] w-full min-w-0 items-center justify-between rounded-lg border border-indigo-200/70 bg-indigo-50 px-2 text-[12px] transition hover:bg-indigo-100/80 sm:px-2.5"
+              className="flex h-[30px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 sm:px-2.5"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-indigo-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2} aria-hidden />
@@ -4272,7 +4272,7 @@ export function BacklogPlanningPanel({
                   next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
                 )
               }
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-4 row-start-2 min-w-0">
@@ -4281,7 +4281,7 @@ export function BacklogPlanningPanel({
               options={yearOptions}
               selected={yearFilter}
               onChange={setYearFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-5 row-start-2 min-w-0">
@@ -4290,7 +4290,7 @@ export function BacklogPlanningPanel({
               options={quarterOptions}
               selected={quarterFilter}
               onChange={setQuarterFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-6 row-start-2 min-w-0">
@@ -4299,7 +4299,7 @@ export function BacklogPlanningPanel({
               options={statusOptions}
               selected={statusFilter}
               onChange={setStatusFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-7 row-start-2 min-w-0">
@@ -4308,14 +4308,14 @@ export function BacklogPlanningPanel({
               options={sprintOptions}
               selected={sprintFilter}
               onChange={setSprintFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-8 row-start-2 min-w-0">
             <BacklogTeamFilterControl
               selectedIds={teamFilter}
               onChange={setTeamFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-9 row-start-2 min-w-0">
@@ -4323,7 +4323,7 @@ export function BacklogPlanningPanel({
               selected={assigneeFilter}
               onChange={setAssigneeFilter}
               suggestions={assigneeAutocompleteSuggestions}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-10 row-start-2 min-w-0">
@@ -4331,7 +4331,7 @@ export function BacklogPlanningPanel({
               selected={labelFilter}
               onChange={setLabelFilter}
               suggestions={storyLabelSuggestions}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
           <div className="col-start-13 row-start-2 flex min-w-0 justify-start">
@@ -4340,7 +4340,7 @@ export function BacklogPlanningPanel({
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-indigo-200/60 bg-white text-slate-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label="Clear all filters"
             >
               <Eraser className="size-3.5" strokeWidth={2} />
@@ -4384,7 +4384,7 @@ export function BacklogPlanningPanel({
 
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/60 bg-white">
         <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]">
-        <div className="w-max min-w-full text-[13px] leading-snug text-slate-700">
+        <div className="w-max min-w-full text-[15px] leading-snug text-slate-700">
         <>
         {showTableHeaderRow ? (
           <div className="sticky top-0 z-10 min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)] relative">
@@ -4407,7 +4407,7 @@ export function BacklogPlanningPanel({
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[13px] font-semibold tracking-[0.03em] text-white uppercase"
+                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[14px] font-semibold tracking-[0.03em] text-white uppercase"
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {
@@ -4654,7 +4654,7 @@ export function BacklogPlanningPanel({
                         </button>
                       ),
                       status: (
-                        <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
+                        <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
                           {workflowStatusLabel(initiativeWorkflowStatus)}
                         </span>
                       ),
@@ -4993,7 +4993,7 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 status: (
-                                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
+                                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
                                     {workflowStatusLabel(epicWorkflowStatus)}
                                   </span>
                                 ),
@@ -5255,7 +5255,7 @@ export function BacklogPlanningPanel({
                                       status: (
                                     <span
                                       className={cn(
-                                        "inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide",
+                                        "inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide",
                                         statusChip(story.status),
                                       )}
                                     >

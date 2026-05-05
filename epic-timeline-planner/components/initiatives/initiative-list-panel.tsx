@@ -917,12 +917,13 @@ function InitiativeTreeCard({
     <div
       ref={setDropRef}
       className={cn(
-        "rounded-xl border border-slate-200/90 bg-white p-3 font-sans antialiased shadow-sm ring-1 ring-black/5",
+        "rounded-xl border border-slate-200/90 p-3 font-sans antialiased shadow-sm ring-1 ring-black/5",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
       style={{
         borderLeftColor: initiative.color,
         borderLeftWidth: 4,
+        background: `linear-gradient(160deg, #cffafe 0%, #ecfeff 55%, #ffffff 100%)`,
       }}
     >
       <div className="flex items-start gap-3">
@@ -1022,7 +1023,7 @@ function InitiativeTreeCard({
           </div>
 
           {isOpen ? (
-            <div className="mt-3 border-t border-border/80 pt-3 font-sans antialiased">
+            <div className="mt-3 rounded-lg bg-white px-2 py-2 border-t border-border/80 pt-3 font-sans antialiased">
               <div className="ml-3 pl-2">
                 {epics.length === 0 ? (
                   <p className="py-2 text-[12px] leading-relaxed text-muted-foreground">
