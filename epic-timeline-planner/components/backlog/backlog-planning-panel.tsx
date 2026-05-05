@@ -57,7 +57,7 @@ import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
-/** Softer than shared table zebra — long wide rows read cleaner with lower-contrast bands. */
+/** Softer than shared table zebra -- long wide rows read cleaner with lower-contrast bands. */
 const BACKLOG_TABLE_STRIPE_BG = "#f1f5f9";
 const BACKLOG_TABLE_BASE_BG = "#ffffff";
 
@@ -182,7 +182,7 @@ function BacklogLabelsChipPanel({
           focusRing,
         )}
       >
-        —
+        --
       </button>
     );
   }
@@ -217,12 +217,12 @@ function BacklogLabelsEmptyRowSlot() {
 
 const BACKLOG_READONLY_AUTO_SUM_DAYS = {
   title: "Totals are automatic",
-  body: "Estimated days and days left on initiative and epic rows are the sum of their child user stories. They cannot be edited here — change the values on the user stories instead.",
+  body: "Estimated days and days left on initiative and epic rows are the sum of their child user stories. They cannot be edited here -- change the values on the user stories instead.",
 } as const;
 
 const BACKLOG_READONLY_INITIATIVE_DATES = {
   title: "Initiative dates are set by epics",
-  body: "Start and end dates come from child epics: the earliest epic start and the latest epic end. Initiative timelines are defined by those epics — edit epic and story plans to change these dates.",
+  body: "Start and end dates come from child epics: the earliest epic start and the latest epic end. Initiative timelines are defined by those epics -- edit epic and story plans to change these dates.",
 } as const;
 
 const BACKLOG_READONLY_PROGRESS = {
@@ -363,7 +363,7 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   year: false,
   quarter: false,
   month: false,
-  /** Shown via Table → columns when needed — dates add a lot of horizontal noise. */
+  /** Shown via Table → columns when needed -- dates add a lot of horizontal noise. */
   startDate: false,
   endDate: false,
   /** Turn on from Table → columns when you want status in the grid (filters still apply). */
@@ -372,7 +372,7 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   assignee: false,
   /** Wide; turn on for label-heavy workflows. */
   labels: false,
-  /** Core planning columns — on by default. */
+  /** Core planning columns -- on by default. */
   estDays: true,
   /** Often redundant with story estimates; toggle on when useful. */
   epicOriginalEst: false,
@@ -1876,7 +1876,7 @@ export function BacklogPlanningPanel({
         key === "workItem" ? "relative min-w-0 pl-4"
         : key === "progress" ? "min-w-0"
         : key === "labels" ? "min-w-0 w-full max-w-full overflow-hidden"
-        : "min-w-0"; // no justify-self-center — grid default is stretch
+        : "min-w-0"; // no justify-self-center -- grid default is stretch
 
       return (
         <div key={key} className={cn(stretchClass, "group/cell flex items-center gap-0.5 pr-1")}>
@@ -4034,58 +4034,57 @@ export function BacklogPlanningPanel({
             ) : null}
           </div>
           <div
-            className="relative col-span-2 col-start-5 row-start-1 flex h-9 w-full min-w-0 items-center gap-1 rounded-lg bg-white/90 px-1 ring-1 ring-slate-200/80"
+            className="relative col-span-3 col-start-5 row-start-1 min-w-0"
             ref={savedFilterMenuRef}
           >
-            <Bookmark className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
-            <div className="relative min-w-0 flex-1">
-              <input
-                value={presetSearch}
-                onChange={(event) => {
-                  setPresetSearch(event.target.value);
-                  setPresetMenuOpen(true);
-                }}
-                onFocus={() => setPresetMenuOpen(true)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setPresetMenuOpen(false);
-                    return;
-                  }
-                  if (event.key === "Enter" && filteredSavedFilterPresets.length === 1) {
-                    event.preventDefault();
-                    const pick = filteredSavedFilterPresets[0];
-                    applyBacklogFilterSnapshot(pick.snapshot);
-                    setPresetSearch(pick.name);
-                    setPresetMenuOpen(false);
-                    toast.success(`Loaded filter "${pick.name}"`);
-                  }
-                }}
-                placeholder="Search Filters"
-                autoComplete="off"
-                role="combobox"
-                aria-label="Select saved filter preset"
-                aria-expanded={presetMenuOpen}
-                aria-controls="backlog-saved-filter-listbox"
-                className="h-7 w-full min-w-0 bg-transparent text-[13px] text-slate-800 outline-none placeholder:text-slate-400"
-              />
-              {presetMenuOpen ? (
-                <div
-                  id="backlog-saved-filter-listbox"
-                  role="listbox"
-                  className="absolute right-0 top-[calc(100%+0.25rem)] z-30 w-[min(calc(100vw-2rem),18rem)] max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg sm:left-0 sm:right-0 sm:w-auto"
-                >
-                  {filteredSavedFilterPresets.length === 0 ? (
-                    <div className="px-2.5 py-2 text-[12px] leading-snug text-slate-500">
-                      {savedFilterPresets.length === 0
-                        ? "No saved filters yet. Use “Save as filter” to store search, group-by, and facet filters."
-                        : "No matches. Try another search or save a new filter."}
-                    </div>
-                  ) : (
-                    filteredSavedFilterPresets.map((preset) => (
-                      <div key={preset.id} role="option" className="flex items-center gap-0.5 pr-1 hover:bg-slate-50">
+            <button
+              type="button"
+              onClick={() => setPresetMenuOpen((v) => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={presetMenuOpen}
+              className="flex h-9 w-full min-w-0 items-center gap-1.5 rounded-lg bg-white/90 px-2.5 text-[13px] text-slate-700 ring-1 ring-slate-200/80 transition hover:bg-white hover:ring-slate-300"
+            >
+              <Bookmark className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-left font-medium">
+                {presetSearch || "Saved filters"}
+              </span>
+              <ChevronDown className={cn("size-3.5 shrink-0 text-slate-400 transition-transform", presetMenuOpen && "rotate-180")} aria-hidden />
+            </button>
+            {presetMenuOpen && (
+              <div
+                id="backlog-saved-filter-listbox"
+                role="listbox"
+                className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-full min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 ring-1 ring-slate-100"
+              >
+                {/* Save current filter -- always first */}
+                <div className="p-1">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-indigo-700 transition hover:bg-indigo-50"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      setPresetMenuOpen(false);
+                      openSaveAsFilterDialog();
+                    }}
+                  >
+                    <Plus className="size-3.5 shrink-0" aria-hidden />
+                    Save current filter
+                  </button>
+                </div>
+                {savedFilterPresets.length > 0 && (
+                  <div className="border-t border-slate-100" />
+                )}
+                {savedFilterPresets.length === 0 ? (
+                  <div className="px-3 py-2.5 text-[12px] leading-snug text-slate-400">
+                    No saved filters yet. Click "Save current filter" to store your current search and facets.
+                  </div>
+                ) : (
+                  <div className="max-h-56 overflow-y-auto p-1">
+                    {savedFilterPresets.map((preset) => (
+                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg hover:bg-slate-50">
                         <button
                           type="button"
-                          className="min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-[13px] text-slate-800"
+                          className="min-w-0 flex-1 truncate px-3 py-2 text-left text-[13px] text-slate-800"
                           onMouseDown={(event) => {
                             event.preventDefault();
                             applyBacklogFilterSnapshot(preset.snapshot);
@@ -4098,7 +4097,7 @@ export function BacklogPlanningPanel({
                         </button>
                         <button
                           type="button"
-                          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/80 hover:text-slate-800"
+                          className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200/80 hover:text-slate-700"
                           aria-label={`Delete saved filter ${preset.name}`}
                           title="Remove saved filter"
                           onMouseDown={(event) => {
@@ -4107,32 +4106,15 @@ export function BacklogPlanningPanel({
                             deleteSavedFilterPreset(preset.id);
                           }}
                         >
-                          <Trash2 className="size-3.5" strokeWidth={2} />
+                          <Trash2 className="size-3" strokeWidth={2} />
                         </button>
                       </div>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <span className="group relative col-start-7 row-start-1 block min-w-0 self-center">
-            <button
-              type="button"
-              onClick={openSaveAsFilterDialog}
-              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-emerald-50 to-teal-50 px-1.5 text-[10px] font-semibold text-emerald-950 shadow-sm ring-1 ring-emerald-300/75 transition hover:from-emerald-100 hover:to-teal-100 hover:text-emerald-950 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
-              aria-haspopup="dialog"
-            >
-              <Save className="size-3.5 shrink-0 text-emerald-700" strokeWidth={2} aria-hidden />
-              Save as filter
-            </button>
-            <span
-              role="tooltip"
-              className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
-            >
-              Saves search, group-by, and all facet filters (not sort or table layout). Load from the Search Filters field.
-            </span>
-          </span>
           <div
             className="relative col-span-2 col-start-8 row-start-1 flex h-9 w-full min-w-0 items-center gap-1 rounded-lg bg-white/90 px-1 ring-1 ring-slate-200/80"
             ref={savedViewMenuRef}
@@ -4177,7 +4159,7 @@ export function BacklogPlanningPanel({
                   {filteredSavedViewPresets.length === 0 ? (
                     <div className="px-2.5 py-2 text-[12px] leading-snug text-slate-500">
                       {savedViewPresets.length === 0
-                        ? "No saved views yet. Use “Save view” for sort, columns, and column widths."
+                        ? "No saved views yet. Use &ldquo;Save view&rdquo; for sort, columns, and column widths."
                         : "No matches. Try another search or save a new view."}
                     </div>
                   ) : (
@@ -5608,7 +5590,7 @@ export function BacklogPlanningPanel({
                 Save as filter
               </h3>
               <p className="mt-1 text-[13px] leading-snug text-slate-600">
-                Name this preset. The list below is what will be restored — search, group-by, and facet filters only (not
+                Name this preset. The list below is what will be restored -- search, group-by, and facet filters only (not
                 sort or table layout).
               </p>
             </div>
@@ -5685,7 +5667,7 @@ export function BacklogPlanningPanel({
               </h3>
               <p className="mt-1 text-[13px] leading-snug text-slate-600">
                 Saves how the table looks and sorts: column order, visible columns, header row, column widths, and sort.
-                Filters and group-by are not included — use Save as filter for those.
+                Filters and group-by are not included -- use Save as filter for those.
               </p>
             </div>
             <form
