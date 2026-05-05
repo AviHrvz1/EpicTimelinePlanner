@@ -159,43 +159,6 @@ export function TeamLoadSummary({
             {overCapacity ? <AlertTriangle className="size-3.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden /> : null}
           </span>
         </div>
-        {onLoadBasisChange ? (
-          <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-right sm:max-w-[min(22rem,100%)]">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gauge &amp; totals</span>
-            <div
-              className="inline-flex shrink-0 rounded-lg border border-sky-200/90 bg-gradient-to-b from-sky-50 to-sky-100/90 p-0.5 shadow-sm ring-1 ring-sky-200/50"
-              role="group"
-              aria-label="Choose whether planned load uses epic Est days or Σ Child"
-            >
-              <button
-                type="button"
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/90 focus-visible:ring-offset-1",
-                  loadBasis === "originalEstimate"
-                    ? "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white shadow-md shadow-sky-600/25 ring-1 ring-white/30"
-                    : "text-sky-900/75 hover:bg-sky-200/90 hover:text-sky-950",
-                )}
-                aria-pressed={loadBasis === "originalEstimate"}
-                onClick={() => onLoadBasisChange("originalEstimate")}
-              >
-                Est days
-              </button>
-              <button
-                type="button"
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/90 focus-visible:ring-offset-1",
-                  loadBasis === "child"
-                    ? "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white shadow-md shadow-sky-600/25 ring-1 ring-white/30"
-                    : "text-sky-900/75 hover:bg-sky-200/90 hover:text-sky-950",
-                )}
-                aria-pressed={loadBasis === "child"}
-                onClick={() => onLoadBasisChange("child")}
-              >
-                Σ Child
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
     </section>
   );

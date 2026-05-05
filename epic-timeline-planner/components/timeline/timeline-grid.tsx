@@ -2775,7 +2775,7 @@ export function TimelineGrid({
   const railLabelBaseClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[14px] font-semibold tracking-[0.01em] transition-all duration-150";
   /** Month / quarter plan rail only (between center and right panel). Flat indigo — not shared with roadmap summary chips. */
-  const planRailTabActiveClass = "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/80 shadow-sm";
+  const planRailTabActiveClass = "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/80";
 
   const runSurfaceTransition = useCallback(() => {
     const el = timelineContentScrollRef.current;
@@ -3621,7 +3621,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 shadow-lg ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
             onMouseEnter={() => {
@@ -3838,7 +3838,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 shadow-lg ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
             onMouseEnter={() => {
@@ -3936,7 +3936,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 shadow-lg ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex h-[calc(100vh-5rem)] flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
             onMouseEnter={() => setIsRailExpanded(true)}
@@ -4294,8 +4294,7 @@ export function TimelineGrid({
                   onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
                     onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
                   }
-                  loadBasis={capacityLoadBasis}
-                  onLoadBasisChange={setCapacityLoadBasis}
+                  loadBasis="originalEstimate"
                   teamFilterIds={capacityTeamFilterIds}
                   teamSelectorSlot={
                     <CapacityPlanTeamCombobox
@@ -4821,8 +4820,7 @@ export function TimelineGrid({
             onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
               onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
             }
-            loadBasis={capacityLoadBasis}
-            onLoadBasisChange={setCapacityLoadBasis}
+            loadBasis="originalEstimate"
             teamFilterIds={capacityTeamFilterIds}
             teamSelectorSlot={
               <CapacityPlanTeamCombobox
@@ -4854,8 +4852,7 @@ export function TimelineGrid({
             onEpicOriginalEstimateChange={(epicId, estimatedDays) =>
               onCapacityEpicOriginalEstimateChange?.(epicId, estimatedDays)
             }
-            loadBasis={capacityLoadBasis}
-            onLoadBasisChange={setCapacityLoadBasis}
+            loadBasis="originalEstimate"
             teamFilterIds={capacityTeamFilterIds}
             teamSelectorSlot={
               <CapacityPlanTeamCombobox

@@ -206,19 +206,13 @@ export function TeamEpicCard({
         <div className="relative z-10 flex w-full min-w-0 shrink-0 flex-col items-start gap-1 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:ml-auto @min-[22rem]:w-auto @min-[22rem]:justify-self-end @min-[22rem]:pt-6">
           <div className="grid w-full max-w-[9.5rem] grid-cols-[3.5rem_3.5rem] items-center gap-x-1.5 @min-[22rem]:max-w-none">
             <span className="text-right text-[11px] font-semibold text-slate-600">Σ Child</span>
-            <input
-              type="number"
-              readOnly
-              tabIndex={-1}
-              value={Math.round(childStoryEstimateDays)}
+            <span
               title="Sum of child user story estimates — edit estimates on each story"
               aria-label="Sum of child story estimate days (read-only)"
-              aria-readonly="true"
-              className={cn(
-                "h-[1.375rem] w-[3.5rem] shrink-0 cursor-default rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums focus:outline-none",
-                CAPACITY_DAYS_INPUT_NO_SPIN,
-              )}
-            />
+              className="inline-flex h-[1.375rem] w-[3.5rem] shrink-0 cursor-default items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums"
+            >
+              {Math.round(childStoryEstimateDays)}
+            </span>
           </div>
           <label className="grid w-full max-w-[9.5rem] grid-cols-[3.5rem_3.5rem] items-center gap-x-1.5 text-[11px] font-semibold text-slate-600 @min-[22rem]:max-w-none">
             <span className="text-right">Est days</span>
