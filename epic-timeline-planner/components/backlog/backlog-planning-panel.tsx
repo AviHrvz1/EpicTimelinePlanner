@@ -192,8 +192,8 @@ function BacklogLabelsChipPanel({
       title={title}
       onMouseDown={onMouseDownBeginEdit}
       className={cn(
-        "flex w-full min-w-0 items-center overflow-hidden rounded-lg border border-slate-200/90 bg-gradient-to-b from-white via-slate-50/40 to-slate-100/50 px-2 py-1.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition",
-        "hover:border-indigo-200/90 hover:from-indigo-50/50 hover:via-white hover:to-slate-50/60",
+        "flex w-full min-w-0 items-center overflow-hidden rounded-lg px-2 py-1.5 text-left transition",
+        "hover:bg-indigo-50/60",
         focusRing,
       )}
     >
@@ -2519,8 +2519,7 @@ export function BacklogPlanningPanel({
               onClick={() => {}}
               className={backlogReadonlyProgressButtonClass}
             >
-              <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
-                <span>{progress.label}</span>
+              <div className="text-right text-[12px] tabular-nums text-slate-600">
                 <span>{progress.percent}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -3731,7 +3730,7 @@ export function BacklogPlanningPanel({
       const rect = anchor.getBoundingClientRect();
       const margin = 8;
       const panelMaxPx = Math.min(window.innerHeight * 0.7, 26 * 16);
-      let left = rect.right - COLUMNS_MENU_PANEL_WIDTH_PX;
+      let left = rect.left;
       left = Math.max(margin, Math.min(left, window.innerWidth - COLUMNS_MENU_PANEL_WIDTH_PX - margin));
       let top = rect.bottom + 4;
       const spaceBelow = window.innerHeight - rect.bottom - margin;
@@ -3998,10 +3997,10 @@ export function BacklogPlanningPanel({
 
       <div className="relative z-20 mb-6 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6 [contain:inline-size]">
         <div
-          className="grid w-full min-w-0 max-w-full items-center gap-x-3 gap-y-7 sm:gap-x-3.5 sm:gap-y-8"
-          style={{ gridTemplateColumns: "repeat(11, minmax(0, 1fr))" }}
+          className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-2.5 gap-y-7 sm:gap-y-8"
+          style={{ gridTemplateColumns: "auto auto repeat(10, minmax(0, 1fr)) auto" }}
         >
-          <div className="relative col-span-4 col-start-1 row-start-1 min-w-0">
+          <div className="relative col-span-13 col-start-1 row-start-1 min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
@@ -4034,7 +4033,7 @@ export function BacklogPlanningPanel({
             ) : null}
           </div>
           <div
-            className="relative col-span-3 col-start-5 row-start-1 min-w-0"
+            className="relative col-start-11 row-start-2 min-w-0"
             ref={savedFilterMenuRef}
           >
             <button
@@ -4042,13 +4041,14 @@ export function BacklogPlanningPanel({
               onClick={() => setPresetMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={presetMenuOpen}
-              className="flex h-9 w-full min-w-0 items-center gap-1.5 rounded-lg bg-white/90 px-2.5 text-[13px] text-slate-700 ring-1 ring-slate-200/80 transition hover:bg-white hover:ring-slate-300"
+              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-1.5 text-[13px] text-slate-700 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 sm:px-2"
             >
-              <Bookmark className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left font-medium">
-                {presetSearch || "Saved filters"}
+              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-700">
+                <Bookmark className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+                <span>Filters</span>
               </span>
-              <ChevronDown className={cn("size-3.5 shrink-0 text-slate-400 transition-transform", presetMenuOpen && "rotate-180")} aria-hidden />
+              <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{presetSearch}</span>
+              <ChevronDown className={cn("size-3 shrink-0 text-slate-400 transition-transform", presetMenuOpen && "rotate-180")} aria-hidden />
             </button>
             {presetMenuOpen && (
               <div
@@ -4115,61 +4115,44 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div
-            className="relative col-span-2 col-start-8 row-start-1 flex h-9 w-full min-w-0 items-center gap-1 rounded-lg bg-white/90 px-1 ring-1 ring-slate-200/80"
-            ref={savedViewMenuRef}
-          >
-            <LayoutGrid className="size-3.5 shrink-0 text-sky-600/90" strokeWidth={2} aria-hidden />
-            <div className="relative min-w-0 flex-1">
-              <input
-                value={viewPresetSearch}
-                onChange={(event) => {
-                  setViewPresetSearch(event.target.value);
-                  setViewPresetMenuOpen(true);
-                }}
-                onFocus={() => setViewPresetMenuOpen(true)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setViewPresetMenuOpen(false);
-                    return;
-                  }
-                  if (event.key === "Enter" && filteredSavedViewPresets.length === 1) {
-                    event.preventDefault();
-                    const pick = filteredSavedViewPresets[0];
-                    applyBacklogViewSnapshot(pick.snapshot);
-                    setViewPresetSearch(pick.name);
-                    setViewPresetMenuOpen(false);
-                    toast.success(`Loaded view "${pick.name}"`);
-                  }
-                }}
-                placeholder="Search Views"
-                autoComplete="off"
-                role="combobox"
-                aria-label="Select saved table view preset"
-                aria-expanded={viewPresetMenuOpen}
-                aria-controls="backlog-saved-view-listbox"
-                className="h-7 w-full min-w-0 bg-transparent text-[13px] text-slate-800 outline-none placeholder:text-slate-400"
-              />
-              {viewPresetMenuOpen ? (
-                <div
-                  id="backlog-saved-view-listbox"
-                  role="listbox"
-                  className="absolute right-0 top-[calc(100%+0.25rem)] z-30 w-[min(calc(100vw-2rem),18rem)] max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg sm:left-0 sm:right-0 sm:w-auto"
-                >
-                  {filteredSavedViewPresets.length === 0 ? (
-                    <div className="px-2.5 py-2 text-[12px] leading-snug text-slate-500">
-                      {savedViewPresets.length === 0
-                        ? "No saved views yet. Use &ldquo;Save view&rdquo; for sort, columns, and column widths."
-                        : "No matches. Try another search or save a new view."}
-                    </div>
-                  ) : (
-                    filteredSavedViewPresets.map((preset) => (
-                      <div key={preset.id} role="option" className="flex items-center gap-0.5 pr-1 hover:bg-slate-50">
+          <div className="relative col-start-12 row-start-2 min-w-0" ref={savedViewMenuRef}>
+            <button
+              type="button"
+              onClick={() => setViewPresetMenuOpen((v) => !v)}
+              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-1.5 text-[13px] text-slate-700 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 sm:px-2"
+              aria-haspopup="listbox"
+              aria-expanded={viewPresetMenuOpen}
+            >
+              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-700">
+                <LayoutGrid className="size-3.5 shrink-0 text-sky-600/90" strokeWidth={2} aria-hidden />
+                <span>Views</span>
+              </span>
+              <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{viewPresetSearch}</span>
+              <ChevronDown className={cn("size-3 shrink-0 text-slate-400 transition-transform", viewPresetMenuOpen && "rotate-180")} />
+            </button>
+            {viewPresetMenuOpen && (
+              <div className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-full min-w-[14rem] rounded-xl border border-slate-200/80 bg-white shadow-xl ring-1 ring-slate-900/5">
+                <div className="p-1">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
+                    onMouseDown={() => { setViewPresetMenuOpen(false); openSaveViewDialog(); }}
+                  >
+                    <Plus className="size-3.5 shrink-0" />
+                    Save current view
+                  </button>
+                </div>
+                {savedViewPresets.length > 0 && <div className="border-t border-slate-100" />}
+                {savedViewPresets.length === 0 ? (
+                  <div className="px-3 py-2.5 text-[12px] text-slate-400">No saved views yet...</div>
+                ) : (
+                  <div className="max-h-56 overflow-y-auto p-1">
+                    {savedViewPresets.map((preset) => (
+                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg pr-1 hover:bg-slate-50">
                         <button
                           type="button"
-                          className="min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-[13px] text-slate-800"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
+                          className="min-w-0 flex-1 truncate px-3 py-2 text-left text-[13px] text-slate-800"
+                          onMouseDown={() => {
                             applyBacklogViewSnapshot(preset.snapshot);
                             setViewPresetSearch(preset.name);
                             setViewPresetMenuOpen(false);
@@ -4180,7 +4163,7 @@ export function BacklogPlanningPanel({
                         </button>
                         <button
                           type="button"
-                          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/80 hover:text-slate-800"
+                          className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200/80 hover:text-slate-700"
                           aria-label={`Delete saved view ${preset.name}`}
                           title="Remove saved view"
                           onMouseDown={(event) => {
@@ -4189,45 +4172,14 @@ export function BacklogPlanningPanel({
                             deleteSavedViewPreset(preset.id);
                           }}
                         >
-                          <Trash2 className="size-3.5" strokeWidth={2} />
+                          <Trash2 className="size-3" strokeWidth={2} />
                         </button>
                       </div>
-                    ))
-                  )}
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <span className="group relative col-start-10 row-start-1 block min-w-0 self-center">
-            <button
-              type="button"
-              onClick={openSaveViewDialog}
-              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-gradient-to-b from-violet-50 to-fuchsia-50 px-1.5 text-[10px] font-semibold text-violet-950 shadow-sm ring-1 ring-violet-300/75 transition hover:from-violet-100 hover:to-fuchsia-100 hover:text-violet-950 sm:gap-1.5 sm:px-2 sm:text-[11px] md:text-[12px]"
-              aria-haspopup="dialog"
-            >
-              <Save className="size-3.5 shrink-0 text-violet-700" strokeWidth={2} aria-hidden />
-              Save view
-            </button>
-            <span
-              role="tooltip"
-              className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
-            >
-              Saves sort order, column order (drag headers), visible columns, header row toggle, and column widths. Does
-              not change filters or group-by.
-            </span>
-          </span>
-          <div className="relative col-start-11 row-start-1 flex min-w-0 items-center justify-start" ref={columnsMenuRef}>
-            <button
-              type="button"
-              onClick={() => setColumnsMenuOpen((open) => !open)}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 ring-1 ring-indigo-300/80 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:ring-indigo-400/80 hover:text-slate-900"
-              aria-label="Table columns and layout"
-              title="Table columns and layout"
-              aria-expanded={columnsMenuOpen}
-              aria-haspopup="menu"
-            >
-              <TableProperties className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
-            </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="relative col-start-1 row-start-2 min-w-0" ref={groupMenuRef}>
             <button
@@ -4341,7 +4293,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
-          <div className="col-start-11 row-start-2 flex min-w-0 justify-start">
+          <div className="col-start-13 row-start-2 flex min-w-0 justify-start">
             <span className="group relative inline-flex h-[30px] w-[30px] shrink-0">
             <button
               type="button"
@@ -4394,7 +4346,20 @@ export function BacklogPlanningPanel({
         <div className="w-max min-w-full text-[15px] leading-snug text-slate-800">
         <>
         {showTableHeaderRow ? (
-          <div className="sticky top-0 z-10 min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+          <div className="sticky top-0 z-10 min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)] relative">
+            <div ref={columnsMenuRef} className="absolute left-4 top-0 flex h-full items-center z-20">
+              <button
+                type="button"
+                onClick={() => setColumnsMenuOpen((open) => !open)}
+                className="inline-flex size-6 items-center justify-center rounded-md text-white/85 ring-1 ring-white/30 transition hover:bg-white/20 hover:text-white hover:ring-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                aria-label="Table columns and layout"
+                title="Table columns and layout"
+                aria-expanded={columnsMenuOpen}
+                aria-haspopup="menu"
+              >
+                <TableProperties className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+              </button>
+            </div>
             <DndContext sensors={columnDragSensors} collisionDetection={closestCenter} onDragEnd={handleBacklogColumnDragEnd}>
               <SortableContext
                 items={visibleColumnKeys.filter((k) => k !== "workItem")}
@@ -4425,7 +4390,9 @@ export function BacklogPlanningPanel({
                       return (
                         <div key={key} className={cellClass}>
                           <span className="flex items-center justify-between gap-2">
-                            <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+                            <span className="flex items-center gap-1.5 truncate pl-7">
+                              <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
+                            </span>
                             <span
                               className="mr-1.5 inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
                               role="group"
@@ -5489,8 +5456,7 @@ export function BacklogPlanningPanel({
                                       onClick={() => {}}
                                       className={backlogReadonlyProgressButtonClass}
                                     >
-                                      <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
-                                        <span>{progress.label}</span>
+                                      <div className="text-right text-[12px] tabular-nums text-slate-600">
                                         <span>{progress.percent}%</span>
                                       </div>
                                       <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
