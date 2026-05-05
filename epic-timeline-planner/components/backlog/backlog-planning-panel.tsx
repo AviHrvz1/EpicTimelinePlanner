@@ -201,7 +201,10 @@ function BacklogLabelsChipPanel({
         {tokens.map((lab, i) => (
           <span
             key={`${lab}-${i}`}
-            className="inline-flex max-w-[min(100%,11rem)] shrink-0 items-center rounded-md border border-violet-200/75 bg-violet-50/95 px-2 py-0.5 text-[11px] font-medium leading-tight text-violet-950 shadow-[0_1px_0_rgba(255,255,255,0.65)]"
+            className={cn(
+              "inline-flex max-w-[min(100%,10rem)] shrink-0 items-center rounded-md border px-2 py-0.5 text-[10.5px] font-semibold leading-tight",
+              labelChipClasses(lab),
+            )}
           >
             <span className="truncate">{lab}</span>
           </span>
@@ -213,6 +216,25 @@ function BacklogLabelsChipPanel({
 
 function BacklogLabelsEmptyRowSlot() {
   return <span className="inline-block w-full min-w-0" aria-hidden />;
+}
+
+function BacklogTreeConnector({ indentPx }: { indentPx: number }) {
+  if (indentPx <= 0) return null;
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute"
+      style={{
+        left: Math.max(2, indentPx - 18),
+        top: 0,
+        bottom: "50%",
+        width: 14,
+        borderLeft: "1.5px solid #e2e8f0",
+        borderBottom: "1.5px solid #e2e8f0",
+        borderBottomLeftRadius: 3,
+      }}
+    />
+  );
 }
 
 const BACKLOG_READONLY_AUTO_SUM_DAYS = {
@@ -427,20 +449,6 @@ function normalizeColumnOrder(input: unknown): BacklogColumnKey[] {
     out.splice(wi, 1);
     out.unshift("workItem");
   }
-  const statusIdx = out.indexOf("status");
-  const sprintIdx = out.indexOf("sprint");
-  if (statusIdx !== -1 && sprintIdx !== -1 && sprintIdx !== statusIdx + 1) {
-    out.splice(sprintIdx, 1);
-    const anchor = out.indexOf("status");
-    out.splice(anchor + 1, 0, "sprint");
-  }
-  const sprintAnchor = out.indexOf("sprint");
-  const progressIdx = out.indexOf("progress");
-  if (sprintAnchor !== -1 && progressIdx !== -1 && progressIdx !== sprintAnchor + 1) {
-    out.splice(progressIdx, 1);
-    const sprintAfter = out.indexOf("sprint");
-    out.splice(sprintAfter + 1, 0, "progress");
-  }
   return out;
 }
 
@@ -453,7 +461,7 @@ type SortableBacklogColumnHeaderProps = {
 };
 
 function SortableBacklogColumnHeader({ id, className, centered, label, resizeHandle }: SortableBacklogColumnHeaderProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -461,8 +469,9 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
   };
   const grip = (
     <button
+      ref={setActivatorNodeRef}
       type="button"
-      className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-[#0a8ec4]/45 active:cursor-grabbing"
+      className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-white/20 active:cursor-grabbing"
       aria-label={`Drag to reorder ${BACKLOG_COLUMN_LABELS[id]} column`}
       {...attributes}
       {...listeners}
@@ -499,10 +508,34 @@ const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
 };
 
 function statusChip(status: string) {
-  if (status === "approved") return "bg-violet-100 text-violet-700";
-  if (status === "done") return "bg-emerald-100 text-emerald-700";
-  if (status === "inProgress") return "bg-blue-100 text-blue-700";
-  return "bg-amber-100 text-amber-700";
+  if (status === "approved") return "border border-violet-200/70 bg-violet-50 text-violet-700";
+  if (status === "done") return "border border-emerald-200/70 bg-emerald-50 text-emerald-700";
+  if (status === "inProgress") return "border border-blue-200/70 bg-blue-50 text-blue-700";
+  return "border border-amber-200/70 bg-amber-50 text-amber-700";
+}
+
+function statusDot(status: string) {
+  if (status === "approved") return "bg-violet-500";
+  if (status === "done") return "bg-emerald-500";
+  if (status === "inProgress") return "bg-blue-500";
+  return "bg-amber-400";
+}
+
+const LABEL_CHIP_PALETTES = [
+  "border-indigo-200/70 bg-indigo-50 text-indigo-700",
+  "border-violet-200/70 bg-violet-50 text-violet-700",
+  "border-sky-200/70 bg-sky-50 text-sky-700",
+  "border-emerald-200/70 bg-emerald-50 text-emerald-700",
+  "border-amber-200/70 bg-amber-50 text-amber-700",
+  "border-rose-200/70 bg-rose-50 text-rose-700",
+  "border-teal-200/70 bg-teal-50 text-teal-700",
+  "border-orange-200/70 bg-orange-50 text-orange-700",
+] as const;
+
+function labelChipClasses(label: string): string {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) & 0xffff;
+  return LABEL_CHIP_PALETTES[hash % LABEL_CHIP_PALETTES.length]!;
 }
 
 function sprintLabel(sprint: number | null) {
@@ -915,7 +948,7 @@ function BacklogTeamFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
           buttonClassName,
         )}
       >
@@ -1024,7 +1057,7 @@ function BacklogAssigneeFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
           buttonClassName,
         )}
       >
@@ -1130,7 +1163,7 @@ function BacklogLabelsFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
           buttonClassName,
         )}
       >
@@ -1232,7 +1265,7 @@ function MultiCheckboxFilter({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] outline-none shadow-sm transition hover:from-indigo-100 hover:to-violet-100",
+          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-indigo-200/60 bg-white px-2.5 text-[14px] outline-none shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60",
           buttonClassName,
         )}
       >
@@ -2218,7 +2251,7 @@ export function BacklogPlanningPanel({
         return (
           <div
             key={`${keyPrefix}-story-${row.storyId}`}
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
             data-backlog-zebra-row="true"
             data-backlog-zebra-kind="story"
             data-backlog-zebra-label={row.storyTitle}
@@ -2228,7 +2261,8 @@ export function BacklogPlanningPanel({
           >
             {renderBacklogCells({
               workItem: (
-                <div className="min-w-0" style={{ paddingLeft: indentPx }}>
+                <div className="relative min-w-0" style={{ paddingLeft: indentPx }}>
+                  <BacklogTreeConnector indentPx={indentPx} />
                   <div className="flex min-w-0 items-center gap-2 truncate text-left text-slate-800">
                     <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                       <UserStoryIcon />
@@ -2274,7 +2308,7 @@ export function BacklogPlanningPanel({
                 <span className="text-center text-[14px] tabular-nums text-slate-700">{row.storyEndDateLabel}</span>
               ),
               status: (
-            <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(row.storyStatus))}>
+            <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
                 <span className="flex items-center gap-1">
                   <select
@@ -2310,7 +2344,7 @@ export function BacklogPlanningPanel({
                     event.preventDefault();
                     beginStoryCellEdit(row.storyId, "status", row.storyStatus);
                   }}
-                  className="text-[16px] font-medium"
+                  className="font-semibold"
                 >
                   {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
                 </button>
@@ -2559,7 +2593,7 @@ export function BacklogPlanningPanel({
     return (
       <div key={folderId}>
         <div
-          className={cn("grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+          className={cn("grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
           style={{ gridTemplateColumns: tableGridTemplate }}
           data-backlog-zebra-row="true"
           data-backlog-zebra-kind="folder"
@@ -2567,16 +2601,19 @@ export function BacklogPlanningPanel({
         >
           {renderBacklogCells({
             workItem: (
-              <button
-                type="button"
-                onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
-                className="flex min-w-0 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
-                style={{ paddingLeft: indentPx }}
-              >
-                {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
-                <span className="truncate">{label}</span>
-                <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
-              </button>
+              <div className="relative min-w-0">
+                <BacklogTreeConnector indentPx={indentPx} />
+                <button
+                  type="button"
+                  onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
+                  className="flex w-full min-w-0 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
+                  style={{ paddingLeft: indentPx }}
+                >
+                  {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+                  <span className="truncate">{label}</span>
+                  <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
+                </button>
+              </div>
             ),
             year: <span className="text-center text-[16px] text-slate-400">-</span>,
             quarter: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -2656,7 +2693,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -2667,6 +2704,7 @@ export function BacklogPlanningPanel({
             {renderBacklogCells({
               workItem: (
                 <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx }}>
+                  <BacklogTreeConnector indentPx={epicIndentPx} />
                   <button
                     type="button"
                     onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
@@ -2747,7 +2785,7 @@ export function BacklogPlanningPanel({
                 </span>
               ),
               status: (
-                <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
                   {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
                 </span>
               ),
@@ -2865,7 +2903,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -2876,6 +2914,7 @@ export function BacklogPlanningPanel({
             {renderBacklogCells({
               workItem: (
                 <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx }}>
+                  <BacklogTreeConnector indentPx={initIndentPx} />
                   <button
                     type="button"
                     onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !isOpen }))}
@@ -2960,7 +2999,7 @@ export function BacklogPlanningPanel({
                 </button>
               ),
               status: (
-                <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeStatus))}>
+                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(initiativeStatus))}>
                   {workflowStatusLabel(initiativeStatus)}
                 </span>
               ),
@@ -3176,7 +3215,7 @@ export function BacklogPlanningPanel({
         return (
               <div key={initFolderId}>
                 <div
-                  className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+                  className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                   style={{
                     gridTemplateColumns: tableGridTemplate,
                   }}
@@ -3187,6 +3226,7 @@ export function BacklogPlanningPanel({
               {renderBacklogCells({
                 workItem: (
                   <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx }}>
+                    <BacklogTreeConnector indentPx={indentPx} />
                     <button
                       type="button"
                       onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [initFolderId]: !isInitOpen }))}
@@ -3281,7 +3321,7 @@ export function BacklogPlanningPanel({
                   </button>
                 ),
                 status: (
-                  <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiative.initiativeStatus))}>
+                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(initiative.initiativeStatus))}>
                     {workflowStatusLabel(initiative.initiativeStatus)}
                   </span>
                 ),
@@ -3363,7 +3403,7 @@ export function BacklogPlanningPanel({
                   return (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div
-                      className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+                      className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                       style={{
                         gridTemplateColumns: tableGridTemplate,
                       }}
@@ -3374,6 +3414,7 @@ export function BacklogPlanningPanel({
                       {renderBacklogCells({
                         workItem: (
                           <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
+                            <BacklogTreeConnector indentPx={indentPx + 34} />
                             <span className="inline-block h-7 w-7 shrink-0" />
                             <div
                               role="button"
@@ -3448,7 +3489,7 @@ export function BacklogPlanningPanel({
                             {formatBacklogPlanDate(standEpicGantt.end)}
                           </span>
                         ),
-                        status: <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip("todo"))}>To do</span>,
+                        status: <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip("todo"))}>To do</span>,
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
                         labels: <BacklogLabelsEmptyRowSlot />,
@@ -3941,25 +3982,25 @@ export function BacklogPlanningPanel({
   }, []);
 
   return (
-    <section className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-gradient-to-b from-white to-slate-50/60 p-4 shadow-xl ring-1 ring-slate-200/80">
-      <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex size-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600 ring-1 ring-slate-200">
-            <ListTodo className="size-4" strokeWidth={2} aria-hidden />
+    <section className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+      <div className="mb-5 flex shrink-0 items-center justify-between gap-3 pb-1 pt-2">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
+            <ListTodo className="size-4.5" strokeWidth={2} aria-hidden />
           </span>
-          <h2 className="text-[24px] font-semibold tracking-tight text-slate-900">Backlog</h2>
+          <h2 className="text-[21px] font-bold tracking-tight text-slate-900">Backlog</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => toggleWorkItemBadgeFilter("initiative")}
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "initiative"}
             title="Show only initiatives in the table (click again for all work items)"
             className={cn(
-              "rounded-full px-3.5 py-1.5 text-[14px] font-semibold ring-1 transition",
+              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "initiative"
-                ? "bg-slate-800 text-white ring-slate-700 shadow-sm"
-                : "bg-slate-100 text-slate-700 ring-slate-200 hover:bg-slate-200/90",
+                ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm"
+                : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
             )}
           >
             {summaryInitiativeCount} initiatives
@@ -3970,10 +4011,10 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "epic"}
             title="Show only epics in the table (click again for all work items)"
             className={cn(
-              "rounded-full px-3.5 py-1.5 text-[14px] font-semibold ring-1 transition",
+              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "epic"
-                ? "bg-blue-700 text-white ring-blue-800 shadow-sm"
-                : "bg-blue-100 text-blue-700 ring-blue-200/80 hover:bg-blue-200/90",
+                ? "bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-200 text-yellow-950 ring-yellow-300/75 shadow-sm"
+                : "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200",
             )}
           >
             {summaryEpicCount} epics
@@ -3984,10 +4025,10 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "story"}
             title="Show only user stories in the table (click again for all work items)"
             className={cn(
-              "rounded-full px-3.5 py-1.5 text-[14px] font-semibold ring-1 transition",
+              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "story"
-                ? "bg-violet-700 text-white ring-violet-800 shadow-sm"
-                : "bg-violet-100 text-violet-700 ring-violet-200/80 hover:bg-violet-200/90",
+                ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm"
+                : "bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-sky-100 hover:via-blue-200 hover:to-blue-200",
             )}
           >
             {summaryStoryCount} stories
@@ -3995,9 +4036,9 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative z-20 mb-6 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-100 via-slate-50 to-white px-4 pb-5 pt-6 [contain:inline-size]">
+      <div className="relative z-20 mb-4 max-w-full shrink-0 rounded-xl border border-slate-200 bg-slate-100 px-4 pb-6 pt-6 shadow-[0_4px_16px_rgba(0,0,0,0.05),0_1px_3px_rgba(0,0,0,0.03)] [contain:inline-size]">
         <div
-          className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-2.5 gap-y-7 sm:gap-y-8"
+          className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
           style={{ gridTemplateColumns: "auto auto repeat(10, minmax(0, 1fr)) auto" }}
         >
           <div className="relative col-span-13 col-start-1 row-start-1 min-w-0">
@@ -4011,7 +4052,7 @@ export function BacklogPlanningPanel({
               onBlur={() => {
                 window.setTimeout(() => setShowSearchSuggestions(false), 120);
               }}
-              className="h-9 w-full min-w-0 rounded-lg bg-white/95 pl-9 pr-3 text-[14px] text-slate-700 outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] transition focus:ring-2 focus:ring-blue-200/70"
+              className="h-9 w-full min-w-0 rounded-lg border border-slate-200/80 bg-white pl-9 pr-3 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 transition hover:border-slate-300 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200/50"
             />
             {showSearchSuggestions && searchSuggestions.length > 0 ? (
               <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
@@ -4041,10 +4082,10 @@ export function BacklogPlanningPanel({
               onClick={() => setPresetMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={presetMenuOpen}
-              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-1.5 text-[13px] text-slate-700 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 sm:px-2"
+              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-indigo-200/60 bg-white px-1.5 text-[12px] text-slate-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60 sm:px-2"
             >
-              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-700">
-                <Bookmark className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-600">
+                <Bookmark className="size-3 shrink-0 text-indigo-400" strokeWidth={2} aria-hidden />
                 <span>Filters</span>
               </span>
               <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{presetSearch}</span>
@@ -4081,7 +4122,7 @@ export function BacklogPlanningPanel({
                 ) : (
                   <div className="max-h-56 overflow-y-auto p-1">
                     {savedFilterPresets.map((preset) => (
-                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg hover:bg-slate-50">
+                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg hover:!bg-indigo-50/40">
                         <button
                           type="button"
                           className="min-w-0 flex-1 truncate px-3 py-2 text-left text-[13px] text-slate-800"
@@ -4119,12 +4160,12 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-1.5 text-[13px] text-slate-700 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 sm:px-2"
+              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-indigo-200/60 bg-white px-1.5 text-[12px] text-slate-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/60 sm:px-2"
               aria-haspopup="listbox"
               aria-expanded={viewPresetMenuOpen}
             >
-              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-700">
-                <LayoutGrid className="size-3.5 shrink-0 text-sky-600/90" strokeWidth={2} aria-hidden />
+              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-600">
+                <LayoutGrid className="size-3 shrink-0 text-sky-500" strokeWidth={2} aria-hidden />
                 <span>Views</span>
               </span>
               <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{viewPresetSearch}</span>
@@ -4148,7 +4189,7 @@ export function BacklogPlanningPanel({
                 ) : (
                   <div className="max-h-56 overflow-y-auto p-1">
                     {savedViewPresets.map((preset) => (
-                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg pr-1 hover:bg-slate-50">
+                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg pr-1 hover:!bg-indigo-50/40">
                         <button
                           type="button"
                           className="min-w-0 flex-1 truncate px-3 py-2 text-left text-[13px] text-slate-800"
@@ -4185,13 +4226,13 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[30px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[13px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100 sm:px-2.5 sm:text-[14px]"
+              className="flex h-[30px] w-full min-w-0 items-center justify-between rounded-lg border border-indigo-200/70 bg-indigo-50 px-2 text-[12px] transition hover:bg-indigo-100/80 sm:px-2.5"
             >
-              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-700">
-                <Layers3 className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-indigo-700">
+                <Layers3 className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2} aria-hidden />
                 Group By
               </span>
-              <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{groupSummaryLabel}</span>
+              <span className="ml-1 min-w-0 truncate font-medium text-indigo-600/80">{groupSummaryLabel}</span>
             </button>
             {groupMenuOpen ? (
               <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg bg-white p-2 shadow-lg">
@@ -4215,9 +4256,9 @@ export function BacklogPlanningPanel({
             ) : null}
           </div>
           <div className="col-start-2 row-start-2 flex min-w-0 w-full items-center justify-center gap-1.5">
-            <div className="h-6 w-px shrink-0 bg-indigo-200/80" aria-hidden />
-            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:text-[12px]">
-              <Filter className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
+            <div className="h-5 w-px shrink-0 bg-slate-300/70" aria-hidden />
+            <span className="inline-flex min-w-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              <Filter className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
               <span className="truncate">Filters</span>
             </span>
           </div>
@@ -4299,7 +4340,7 @@ export function BacklogPlanningPanel({
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 text-slate-700 shadow-sm transition hover:from-indigo-100 hover:to-violet-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
+              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-indigo-200/60 bg-white text-slate-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label="Clear all filters"
             >
               <Eraser className="size-3.5" strokeWidth={2} />
@@ -4341,9 +4382,9 @@ export function BacklogPlanningPanel({
         </div>
       ) : null}
 
-      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md bg-white">
+      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/60 bg-white">
         <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]">
-        <div className="w-max min-w-full text-[15px] leading-snug text-slate-800">
+        <div className="w-max min-w-full text-[13px] leading-snug text-slate-700">
         <>
         {showTableHeaderRow ? (
           <div className="sticky top-0 z-10 min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)] relative">
@@ -4351,7 +4392,7 @@ export function BacklogPlanningPanel({
               <button
                 type="button"
                 onClick={() => setColumnsMenuOpen((open) => !open)}
-                className="inline-flex size-6 items-center justify-center rounded-md text-white/85 ring-1 ring-white/30 transition hover:bg-white/20 hover:text-white hover:ring-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                className="inline-flex size-6 items-center justify-center rounded-md bg-white/15 text-white ring-1 ring-white/50 transition hover:bg-white/30 hover:ring-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 aria-label="Table columns and layout"
                 title="Table columns and layout"
                 aria-expanded={columnsMenuOpen}
@@ -4390,7 +4431,7 @@ export function BacklogPlanningPanel({
                       return (
                         <div key={key} className={cellClass}>
                           <span className="flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-1.5 truncate pl-7">
+                            <span className="flex items-center gap-1.5 truncate pl-10">
                               <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
                             </span>
                             <span
@@ -4460,7 +4501,7 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div
-                    className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+                    className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                     style={{
                       gridTemplateColumns: tableGridTemplate,
                     }}
@@ -4552,7 +4593,7 @@ export function BacklogPlanningPanel({
                                     initiativeId: initiative.id,
                                   })
                                 }
-                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
                               >
                                 <Zap className="size-3.5 text-blue-600" strokeWidth={1.9} />
                                 Add initiative
@@ -4567,7 +4608,7 @@ export function BacklogPlanningPanel({
                                     initiativeId: initiative.id,
                                   })
                                 }
-                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
                               >
                                 <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                                 Add epic
@@ -4582,7 +4623,7 @@ export function BacklogPlanningPanel({
                                     initiativeId: initiative.id,
                                   })
                                 }
-                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
                               >
                                 <UserStoryIcon />
                                 Add user story
@@ -4613,7 +4654,7 @@ export function BacklogPlanningPanel({
                         </button>
                       ),
                       status: (
-                        <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(initiativeWorkflowStatus))}>
+                        <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
                           {workflowStatusLabel(initiativeWorkflowStatus)}
                         </span>
                       ),
@@ -4816,7 +4857,7 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div
-                            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:bg-slate-50")}
+                            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             data-backlog-zebra-row="true"
                             data-backlog-zebra-kind="epic"
@@ -4906,7 +4947,7 @@ export function BacklogPlanningPanel({
                                               initiativeId: initiative.id,
                                             })
                                           }
-                                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
                                         >
                                           <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                                           Add epic
@@ -4921,7 +4962,7 @@ export function BacklogPlanningPanel({
                                               epicId: epic.id,
                                             })
                                           }
-                                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
                                         >
                                           <UserStoryIcon />
                                           Add user story
@@ -4952,7 +4993,7 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 status: (
-                                  <span className={cn("w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium", statusChip(epicWorkflowStatus))}>
+                                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
                                     {workflowStatusLabel(epicWorkflowStatus)}
                                   </span>
                                 ),
@@ -5093,7 +5134,7 @@ export function BacklogPlanningPanel({
                                 {(epic.userStories ?? []).map((story) => (
                                   <div
                                     key={story.id}
-                                    className={cn("min-w-full w-max border-b border-slate-200/80 hover:bg-slate-50")}
+                                    className={cn("min-w-full w-max border-b border-slate-200/80 hover:!bg-indigo-50/40")}
                                     data-backlog-zebra-row="true"
                                     data-backlog-zebra-kind="story"
                                     data-backlog-zebra-label={story.title}
@@ -5181,7 +5222,7 @@ export function BacklogPlanningPanel({
                                                 epicId: epic.id,
                                               })
                                             }
-                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:bg-slate-50"
+                                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
                                           >
                                             <UserStoryIcon />
                                             Add user story
@@ -5214,7 +5255,7 @@ export function BacklogPlanningPanel({
                                       status: (
                                     <span
                                       className={cn(
-                                        "w-fit justify-self-center rounded px-2 py-0.5 text-[16px] font-medium",
+                                        "inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[12px] font-semibold tracking-wide",
                                         statusChip(story.status),
                                       )}
                                     >
@@ -5249,7 +5290,7 @@ export function BacklogPlanningPanel({
                                             event.preventDefault();
                                             beginStoryCellEdit(story.id, "status", story.status);
                                           }}
-                                          className="text-[16px] font-medium"
+                                          className="inline-flex items-center gap-1.5 font-semibold"
                                         >
                                           {workflowStatusLabel(story.status as WorkflowStatus)}
                                         </button>
