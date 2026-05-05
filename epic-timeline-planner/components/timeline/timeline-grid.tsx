@@ -1597,7 +1597,7 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex h-7 max-w-full shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[11px] font-bold leading-none tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:text-[12px] lg:px-2.5";
+    "inline-flex h-7 max-w-full shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[12px] font-bold leading-none tracking-[0.015em] ring-1 transition sm:gap-1 sm:px-2 sm:text-[13px] lg:px-2.5";
   const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/30`;
   const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm hover:from-indigo-200 hover:via-indigo-300 hover:to-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40`;
   const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400/30`;
@@ -3090,7 +3090,6 @@ export function TimelineGrid({
                             id={row.epic.id}
                             title={row.epic.title}
                             icon={row.epic.icon}
-                            hideIcon
                             compact
                             color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
                             progressPercent={completionPercent}
@@ -3162,14 +3161,14 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-b from-slate-50 from-[8%] via-white via-45% to-indigo-50/40 to-[100%] py-2.5 shadow-none ring-0",
+          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 py-2.5 shadow-none ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
         {hasBreadcrumbs ? (
           <div
             className={cn(
-              "relative z-30 inline-flex shrink-0 items-center gap-1 rounded-lg border-0 bg-white/85 py-0.5 pl-1.5 pr-1 shadow-none ring-0 backdrop-blur-sm outline-none",
+              "relative z-30 inline-flex shrink-0 items-center gap-1 rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 py-0.5 pl-1.5 pr-1 shadow-none ring-0 outline-none",
               useRoadmapGanttChipTrack &&
                 "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 pr-1",
             )}

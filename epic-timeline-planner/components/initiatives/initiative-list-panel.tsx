@@ -923,7 +923,7 @@ function InitiativeTreeCard({
       style={{
         borderLeftColor: initiative.color,
         borderLeftWidth: 4,
-        background: `linear-gradient(160deg, #cffafe 0%, #ecfeff 55%, #ffffff 100%)`,
+        background: `#f0feff`,
       }}
     >
       <div className="flex items-start gap-3">
