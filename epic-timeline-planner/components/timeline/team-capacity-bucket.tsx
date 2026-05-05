@@ -142,7 +142,7 @@ export function TeamEpicCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "group relative min-h-[5rem] shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm transition hover:border-slate-300 hover:shadow-md",
+        "group/card relative min-h-[5rem] shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm transition hover:border-slate-300 hover:shadow-md",
         isDragging && "opacity-60 shadow-lg",
       )}
       style={{
@@ -153,7 +153,7 @@ export function TeamEpicCard({
       <button
         type="button"
         onClick={() => onRemoveEpicFromCapacity(epicId)}
-        className="absolute right-2 top-2 z-30 inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+        className="absolute right-0 top-0 z-30 inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover/card:opacity-100 group-focus-within/card:opacity-100 focus-visible:opacity-100"
         aria-label="Remove epic from team capacity bucket"
         title="Clear team assignment"
       >
@@ -204,8 +204,8 @@ export function TeamEpicCard({
           </div>
         </div>
         <div className="relative z-10 flex w-full min-w-0 shrink-0 flex-col items-start gap-1 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:ml-auto @min-[22rem]:w-auto @min-[22rem]:justify-self-end @min-[22rem]:pt-6">
-          <div className="grid w-full max-w-[9.5rem] grid-cols-[3.5rem_3.5rem] items-center gap-x-1.5 @min-[22rem]:max-w-none">
-            <span className="text-right text-[11px] font-semibold text-slate-600">Σ Stories Estimation</span>
+          <div className="flex w-full flex-nowrap items-center justify-between gap-1.5">
+            <span className="whitespace-nowrap text-[11px] font-semibold text-slate-600">Σ Stories Estimation</span>
             <span
               title="Sum of child user story estimates — edit estimates on each story"
               aria-label="Sum of child story estimate days (read-only)"
@@ -214,8 +214,8 @@ export function TeamEpicCard({
               {Math.round(childStoryEstimateDays)}
             </span>
           </div>
-          <label className="grid w-full max-w-[9.5rem] grid-cols-[3.5rem_3.5rem] items-center gap-x-1.5 text-[11px] font-semibold text-slate-600 @min-[22rem]:max-w-none">
-            <span className="text-right">Est days</span>
+          <label className="flex w-full flex-nowrap items-center justify-between gap-1.5 text-[11px] font-semibold text-slate-600">
+            <span className="whitespace-nowrap">Est days</span>
             <input
               type="number"
               min={0}
