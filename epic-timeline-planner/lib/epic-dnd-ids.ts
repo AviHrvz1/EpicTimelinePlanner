@@ -212,6 +212,7 @@ export function parseMonthTeamSlotDropId(
 }
 
 const SPRINT_CAPACITY_BUCKET_PREFIX = "capacity:";
+const SPRINT_CAPACITY_SLOT_PREFIX = "sprint-cap-slot:";
 const MONTH_TEAM_CAPACITY_BUCKET_PREFIX = "month-capacity:";
 const QUARTER_TEAM_CAPACITY_BUCKET_PREFIX = "quarter-capacity:";
 
@@ -283,6 +284,35 @@ export function parseSprintCapacityBucketDropId(
   const member = decodeURIComponent(parts[2] ?? "");
   if (!teamKey || !member) return null;
   return { yearSprint, teamKey, member };
+}
+
+/** Drop slot for reordering stories within a sprint capacity bucket. Index 0 = top of visual list. */
+export function sprintCapacitySlotDropId(yearSprint: number, teamKey: string, member: string, index: number): string {
+  return `${SPRINT_CAPACITY_SLOT_PREFIX}${yearSprint}:${encodeURIComponent(teamKey)}:${encodeURIComponent(member)}:${index}`;
+}
+
+export function parseSprintCapacitySlotDropId(
+  overId: string,
+): { yearSprint: number; teamKey: string; member: string; index: number } | null {
+  if (!overId.startsWith(SPRINT_CAPACITY_SLOT_PREFIX)) return null;
+  const rest = overId.slice(SPRINT_CAPACITY_SLOT_PREFIX.length);
+  const lastColon = rest.lastIndexOf(":");
+  if (lastColon <= 0) return null;
+  const index = Number(rest.slice(lastColon + 1));
+  const head = rest.slice(0, lastColon);
+  const parts = head.split(":");
+  if (parts.length !== 3) return null;
+  const yearSprint = Number(parts[0]);
+  if (!Number.isFinite(yearSprint) || yearSprint < 1 || yearSprint > 48) return null;
+  if (!Number.isFinite(index) || index < 0) return null;
+  try {
+    const teamKey = decodeURIComponent(parts[1] ?? "");
+    const member = decodeURIComponent(parts[2] ?? "");
+    if (!member) return null;
+    return { yearSprint, teamKey, member, index };
+  } catch {
+    return null;
+  }
 }
 
 export function monthTeamCapacityBucketDropId(year: number, month: number, teamId: string): string {

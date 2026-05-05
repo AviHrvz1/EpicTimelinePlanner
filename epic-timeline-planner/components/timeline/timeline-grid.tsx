@@ -884,6 +884,13 @@ const QUARTER_PROGRESS_STEPS: Record<string, number> = {
   Q3: 3,
   Q4: 4,
 };
+
+const QUARTER_ORDINAL_LABELS = {
+  Q1: <>1<sup className="text-[0.6em] font-semibold">st</sup> Quarter</>,
+  Q2: <>2<sup className="text-[0.6em] font-semibold">nd</sup> Quarter</>,
+  Q3: <>3<sup className="text-[0.6em] font-semibold">rd</sup> Quarter</>,
+  Q4: <>4<sup className="text-[0.6em] font-semibold">th</sup> Quarter</>,
+};
 const FULL_MONTHS = [
   "January",
   "February",
@@ -2884,14 +2891,19 @@ export function TimelineGrid({
     sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
   const focusedQuarterDisplayName = useMemo(() => {
     if (!focusedQuarter) return "Quarter";
-    const shortQuarterMatch = focusedQuarter.label.match(/^Q([1-4])$/i);
-    if (shortQuarterMatch) return `Quarter-${shortQuarterMatch[1]}`;
-    return focusedQuarter.label;
+    const ordinals: Record<string, string> = { Q1: "1st Quarter", Q2: "2nd Quarter", Q3: "3rd Quarter", Q4: "4th Quarter" };
+    return ordinals[focusedQuarter.label] ?? focusedQuarter.label;
   }, [focusedQuarter]);
   const monthInsightsLabel =
     activeMonth != null ? `${FULL_MONTHS[activeMonth - 1]}-Insights` : "Month-Insights";
   const quarterInsightsLabel = focusedQuarter ? `${focusedQuarterDisplayName} Insights` : "Quarter Insights";
   const quarterCapacityLabel = focusedQuarter ? `${focusedQuarterDisplayName} Capacity` : "Quarter Capacity";
+  const quarterInsightsNode = focusedQuarter
+    ? <>{QUARTER_ORDINAL_LABELS[focusedQuarter.label] ?? focusedQuarterDisplayName} Insights</>
+    : <>Quarter Insights</>;
+  const quarterCapacityNode = focusedQuarter
+    ? <>{QUARTER_ORDINAL_LABELS[focusedQuarter.label] ?? focusedQuarterDisplayName} Capacity</>
+    : <>Quarter Capacity</>;
   const sprintInsightsLabel = (() => {
     const sprintNumber = activeSprint ?? activeYearSprintForMonthDrill;
     return sprintNumber != null ? `Sprint ${sprintNumber} Insights` : "Sprint Insights";
@@ -3903,7 +3915,7 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                {quarterInsightsLabel}
+                {quarterInsightsNode}
               </span>
             </button>
             <button
@@ -3927,7 +3939,7 @@ export function TimelineGrid({
                   isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
-                {quarterCapacityLabel}
+                {quarterCapacityNode}
               </span>
             </button>
           </div>
@@ -4911,7 +4923,7 @@ export function TimelineGrid({
                         style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
                       >
                         <QuarterYearProgressIcon quarterLabel={quarter.label} />
-                        <span>{focusedQuarter ? quarter.label : `Quarter ${quarter.label.replace("Q", "")}`}</span>
+                        <span>{focusedQuarter ? quarter.label : (QUARTER_ORDINAL_LABELS[quarter.label] ?? quarter.label)}</span>
                       </button>
                     ))}
                   </div>

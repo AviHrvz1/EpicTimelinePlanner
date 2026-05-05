@@ -20,6 +20,7 @@ import {
   Eraser,
   User,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import Image from "next/image";
@@ -1860,7 +1861,9 @@ export function InitiativeListPanel({
     if (!q) return monthPanelEpicsFiltered;
     return monthPanelEpicsFiltered.filter(
       ({ epic, initiative }) =>
-        epic.title.toLowerCase().includes(q) || initiative.title.toLowerCase().includes(q),
+        epic.title.toLowerCase().includes(q) ||
+        initiative.title.toLowerCase().includes(q) ||
+        (epic.userStories ?? []).some((s) => s.title.toLowerCase().includes(q)),
     );
   }, [monthPanelEpicsFiltered, epicSearch]);
 
@@ -2130,11 +2133,21 @@ export function InitiativeListPanel({
                 window.setTimeout(() => setEpicSearchFocused(false), 80);
               }}
               placeholder="Search epic..."
-              className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-[15px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
+              className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-9 text-[15px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
               aria-label="Search epics in selected month"
               aria-autocomplete="list"
               aria-expanded={epicSearchFocused && epicSearchSuggestionsFiltered.length > 0}
             />
+            {epicSearch ? (
+              <button
+                type="button"
+                onClick={() => setEpicSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition hover:text-slate-600"
+                aria-label="Clear search"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            ) : null}
             {epicSearchFocused && epicSearchSuggestionsFiltered.length > 0 ? (
               <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-300 bg-white p-1.5 ring-1 ring-slate-200/90">
                 {epicSearchSuggestionsFiltered.map((entry) => (

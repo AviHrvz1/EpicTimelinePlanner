@@ -42,6 +42,7 @@ import {
   parseSprintCapacityBucketDropId,
   parseSprintCapacityColumnDragId,
   parseSprintCapacityColumnDropId,
+  parseSprintCapacitySlotDropId,
 } from "@/lib/epic-dnd-ids";
 import {
   clientXLeadingEdgeFromDragEnd,
@@ -73,6 +74,7 @@ import {
   assignStoryToMember,
   assigneeMatchRosterForSprintTeam,
   emptySprintCapacityBoard,
+  moveStoryInMemberBucket,
   orderedSprintCapacityMembers,
   reorderSprintCapacityPeopleOrder,
   sanitizeSprintCapacityBoard,
@@ -2940,6 +2942,21 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         return;
       }
 
+      const sprintSlot = parseSprintCapacitySlotDropId(overId);
+      if (sprintSlot && storyId) {
+        if (sprintSlot.yearSprint !== activeYearSprint) return;
+        const dropTeamId = sprintSlot.teamKey?.trim() ? sprintSlot.teamKey.trim() : null;
+        const boardKey = sprintCapacityBoardKey(selectedYear, sprintSlot.yearSprint, dropTeamId);
+        setSprintCapacityByKey((prev) => {
+          const board = prev[boardKey];
+          if (!board) return prev;
+          const targetList = (board.assignments[sprintSlot.member] ?? []).filter((id) => id !== storyId);
+          const insertIndex = Math.max(0, targetList.length - sprintSlot.index);
+          return { ...prev, [boardKey]: moveStoryInMemberBucket(board, storyId, sprintSlot.member, insertIndex) };
+        });
+        return;
+      }
+
       /** Gantt month / half-month cells (same targets as epic plan drops). */
       let storyPlanMonth: number | null = null;
       let storyPlanLane: 1 | 2 | null = null;
@@ -4975,6 +4992,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }}
         onSave={async (storyId, payload) => {
           try {
+            if (payload.assignee === null) {
+              stripStoryFromPersistedCapacityAssignments(storyId);
+            }
             await updateStoryDetails(storyId, payload);
             toast.success("Story details updated");
           } catch {

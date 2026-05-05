@@ -144,6 +144,28 @@ export function emptySprintCapacityBoard(members: string[]): SprintCapacityBoard
   return { capacities, assignments };
 }
 
+/** Move a story to a specific position within a member's bucket. insertIndex is in the original (non-reversed) array. */
+export function moveStoryInMemberBucket(
+  board: SprintCapacityBoard,
+  storyId: string,
+  member: string,
+  insertIndex: number,
+): SprintCapacityBoard {
+  const next: SprintCapacityBoard = {
+    ...board,
+    capacities: { ...board.capacities },
+    assignments: {},
+  };
+  for (const [name, ids] of Object.entries(board.assignments)) {
+    next.assignments[name] = ids.filter((id) => id !== storyId);
+  }
+  const list = next.assignments[member] ?? [];
+  const clamped = Math.max(0, Math.min(insertIndex, list.length));
+  next.assignments[member] = [...list.slice(0, clamped), storyId, ...list.slice(clamped)];
+  if (next.capacities[member] == null) next.capacities[member] = 6;
+  return next;
+}
+
 export function assignStoryToMember(board: SprintCapacityBoard, storyId: string, member: string): SprintCapacityBoard {
   const next: SprintCapacityBoard = {
     ...board,
@@ -386,3 +408,4 @@ export function syncCapacityAssignmentsWithKanban(
     ...(board.columnOrder?.length ? { columnOrder: board.columnOrder } : {}),
   };
 }
+

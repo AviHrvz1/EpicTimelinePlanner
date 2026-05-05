@@ -978,13 +978,26 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Assignee</p>
-              <AssigneeCombobox
-                value={assignee}
-                onChange={setAssignee}
-                suggestions={assigneeNameSuggestions}
-                placeholder="Type or pick a name"
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
-              />
+              <div className="relative flex min-w-0 items-center">
+                <AssigneeCombobox
+                  value={assignee}
+                  onChange={setAssignee}
+                  suggestions={assigneeNameSuggestions}
+                  placeholder="Type or pick a name"
+                  className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-1.5 text-[13px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                />
+                {assignee ? (
+                  <button
+                    type="button"
+                    onClick={() => setAssignee("")}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition hover:text-slate-600"
+                    aria-label="Clear assignee"
+                    tabIndex={-1}
+                  >
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-sm font-normal text-slate-700">Team</p>

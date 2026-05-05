@@ -368,7 +368,7 @@ export function TeamCapacityBucket({
               value={capacity}
               onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
               className={cn(
-                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 shadow-sm",
+                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />

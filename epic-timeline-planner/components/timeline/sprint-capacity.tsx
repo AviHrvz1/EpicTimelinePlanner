@@ -20,6 +20,7 @@ import {
   sprintCapacityBucketDropId,
   sprintCapacityColumnDragId,
   sprintCapacityColumnDropId,
+  sprintCapacitySlotDropId,
   storyBoardDraggableId,
 } from "@/lib/epic-dnd-ids";
 import {
@@ -210,16 +211,19 @@ function CapacityStoryCard({
           >
             ::
           </button>
-          <button
-            type="button"
-            className="min-w-0 flex-1 truncate pr-[calc(0.375rem+1.5rem+0.25rem)] text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
-            onClick={() => onOpenStory(card.id)}
-          >
-            <span className="mr-1.5 inline-flex align-middle text-slate-600">
-              <UserStoryIcon className="size-3.5" />
-            </span>
-            {card.title}
-          </button>
+          <div className="min-w-0 flex-1 pr-[calc(0.375rem+1.5rem+0.25rem)]">
+            <button
+              type="button"
+              className="w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
+              onClick={() => onOpenStory(card.id)}
+            >
+              <span className="mr-1.5 inline-flex align-middle text-slate-600">
+                <UserStoryIcon className="size-3.5" />
+              </span>
+              {card.title}
+            </button>
+            <p className="mt-0.5 truncate text-[11px] leading-snug text-slate-500">{card.epicTitle}</p>
+          </div>
         </div>
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div
@@ -253,6 +257,32 @@ function CapacityStoryCard({
         </div>
       </div>
     </article>
+  );
+}
+
+function StoryDropSlot({
+  yearSprint,
+  teamKey,
+  member,
+  index,
+}: {
+  yearSprint: number;
+  teamKey: string;
+  member: string;
+  index: number;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: sprintCapacitySlotDropId(yearSprint, teamKey, member, index),
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "my-0.5 min-h-2.5 w-full shrink-0 rounded-md py-0.5 transition",
+        isOver ? "min-h-4 bg-indigo-400/45 ring-1 ring-indigo-300/50" : "bg-transparent",
+      )}
+      aria-hidden
+    />
   );
 }
 
@@ -483,28 +513,40 @@ function CapacityBucket({
             alt="Capacity bucket"
             className="pointer-events-none absolute top-1 left-1/2 hidden h-[88%] w-[98%] -translate-x-1/2 object-contain opacity-30"
           />
-          {/* Scroll: flex column + mt-auto on list so short stacks sit on the bucket floor; flex-col-reverse = first story lowest, next above. */}
           <div
             className={cn(
               "capacity-bucket-scroll relative z-20 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden",
               bucketScrollMaxClass,
             )}
           >
-            <div className="mt-auto flex w-full min-w-0 flex-col-reverse gap-2 pb-0.5">
+            <div className="mt-auto flex w-full min-w-0 flex-col gap-2 pb-0.5">
               {cards.length === 0 ? (
-                <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
-                  Drop story here
-                </p>
+                <>
+                  <StoryDropSlot yearSprint={yearSprint} teamKey={teamKey} member={member} index={0} />
+                  <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
+                    Drop story here
+                  </p>
+                </>
               ) : (
-                cards.map((card) => (
-                  <CapacityStoryCard
-                    key={card.id}
-                    card={card}
-                    onEstimateChange={onEstimateChange}
-                    onUnscheduleStory={onUnscheduleStory}
-                    onOpenStory={onOpenStory}
-                  />
-                ))
+                <>
+                  <StoryDropSlot yearSprint={yearSprint} teamKey={teamKey} member={member} index={0} />
+                  {[...cards].reverse().map((card, visualIdx) => (
+                    <div key={card.id}>
+                      <CapacityStoryCard
+                        card={card}
+                        onEstimateChange={onEstimateChange}
+                        onUnscheduleStory={onUnscheduleStory}
+                        onOpenStory={onOpenStory}
+                      />
+                      <StoryDropSlot
+                        yearSprint={yearSprint}
+                        teamKey={teamKey}
+                        member={member}
+                        index={visualIdx + 1}
+                      />
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           </div>
