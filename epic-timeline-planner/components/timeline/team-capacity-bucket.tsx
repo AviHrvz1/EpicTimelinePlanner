@@ -205,7 +205,7 @@ export function TeamEpicCard({
         </div>
         <div className="relative z-10 flex w-full min-w-0 shrink-0 flex-col items-start gap-1 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:ml-auto @min-[22rem]:w-auto @min-[22rem]:justify-self-end @min-[22rem]:pt-6">
           <div className="grid w-full max-w-[9.5rem] grid-cols-[3.5rem_3.5rem] items-center gap-x-1.5 @min-[22rem]:max-w-none">
-            <span className="text-right text-[11px] font-semibold text-slate-600">Σ Child</span>
+            <span className="text-right text-[11px] font-semibold text-slate-600">Σ Stories Estimation</span>
             <span
               title="Sum of child user story estimates — edit estimates on each story"
               aria-label="Sum of child story estimate days (read-only)"
@@ -375,116 +375,79 @@ export function TeamCapacityBucket({
             ) : null}
           </div>
         </div>
-        <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
-          <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
-            Capacity
-            <input
-              type="number"
-              min={0}
-              max={capacityInputMax}
-              step={1}
-              value={capacity}
-              onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
-              className={cn(
-                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 shadow-sm",
-                CAPACITY_DAYS_INPUT_NO_SPIN,
-              )}
-            />
-            <span className="text-[11px] font-semibold text-slate-600">Days</span>
-          </label>
-          <div className="flex min-w-0 shrink items-center justify-end gap-1.5">
-            {/* Rollups alone scroll horizontally so overflow does not clip the info tooltip (above the button). */}
-            <div className="min-w-0 max-w-full overflow-x-auto overflow-y-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div
-                className="flex w-max min-w-0 flex-nowrap items-center justify-end gap-x-2 text-[13px] font-semibold leading-snug text-slate-600"
-                role="status"
-                aria-live="polite"
-              >
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
-                    childSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
-                  )}
-                >
-                  Σ Child{" "}
-                  <span
-                    className={cn("tabular-nums", childSumOverCapacity ? "text-rose-950" : "text-slate-800")}
-                  >
-                    {Math.round(sumChildStoryEstimates)}
-                  </span>
-                  <span className={cn("ml-1", childSumOverCapacity && "text-rose-950")}>Days</span>
-                  {childSumOverCapacity ? (
-                    <RollupOverCapWarn
-                      tooltipId={rollupWarnChildId}
-                      ariaLabel="Σ Child exceeds team capacity — details"
-                    >
-                      <span className="font-semibold text-rose-800">Over capacity</span>
-                      <span className="mt-0.5 block text-slate-600">
-                        Σ Child totals {Math.round(sumChildStoryEstimates)} Days but team Capacity is {capacity} Days.
-                        Reduce story estimates, raise Capacity, or move epics.
-                      </span>
-                    </RollupOverCapWarn>
-                  ) : null}
-                </span>
-                <span className="shrink-0 text-slate-300" aria-hidden>
-                  ·
-                </span>
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
-                    estSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
-                  )}
-                >
-                  Σ Est{" "}
-                  <span className={cn("tabular-nums", estSumOverCapacity ? "text-rose-950" : "text-slate-800")}>
-                    {Math.round(sumOriginalEstimates)}
-                  </span>
-                  <span className={cn("ml-1", estSumOverCapacity && "text-rose-950")}>Days</span>
-                  {estSumOverCapacity ? (
-                    <RollupOverCapWarn
-                      tooltipId={rollupWarnEstId}
-                      ariaLabel="Σ Est exceeds team capacity — details"
-                    >
-                      <span className="font-semibold text-rose-800">Over capacity</span>
-                      <span className="mt-0.5 block text-slate-600">
-                        Σ Est (planned load) is {Math.round(sumOriginalEstimates)} Days but team Capacity is {capacity} Days.
-                        Lower Est days on epics, raise Capacity, or remove epics.
-                      </span>
-                    </RollupOverCapWarn>
-                  ) : null}
-                </span>
-              </div>
-            </div>
-            <span className="group/rollupinfo relative inline-flex shrink-0">
-              <button
-                type="button"
-                className="rounded p-0.5 text-slate-400 outline-none transition hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-indigo-300"
-                aria-label="About Σ Child and Σ Est rollups"
-                aria-describedby={rollupInfoTooltipId}
-              >
-                <Info className="size-4" aria-hidden />
-              </button>
-              <span
-                id={rollupInfoTooltipId}
-                role="tooltip"
+        <div className="flex min-w-0 flex-col gap-1.5">
+          {/* Row 1: capacity input (left) + Σ Stories Estimation (right) */}
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
+              Available Team Capacity
+              <input
+                type="number"
+                min={0}
+                max={capacityInputMax}
+                step={1}
+                value={capacity}
+                onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
                 className={cn(
-                  CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
-                  "group-hover/rollupinfo:opacity-100 group-focus-within/rollupinfo:opacity-100",
+                  "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 shadow-sm",
+                  CAPACITY_DAYS_INPUT_NO_SPIN,
                 )}
-              >
-                <span className="block font-semibold text-slate-800">Σ Child and Σ Est</span>
-                <span className="mt-1.5 block">
-                  <strong className="text-slate-800">Σ Child</strong> — sum of all user-story estimate days for epics in
-                  this team bucket (same as adding each epic&apos;s Σ Child on the cards).
-                </span>
-                <span className="mt-1 block">
-                  <strong className="text-slate-800">Σ Est</strong> — sum of each epic&apos;s <em>Est days</em> in this
-                  bucket. Use <strong className="text-slate-800">Est days</strong> / <strong className="text-slate-800">Σ Child</strong> above to pick which one drives the gauge and totals.
-                </span>
-                <span className="mt-1 block text-slate-600">
-                  Either figure turns red when it is greater than Capacity (Days).
-                </span>
+              />
+              <span className="text-[11px] font-semibold text-slate-600">Days</span>
+            </label>
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
+                childSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
+              )}
+              role="status"
+              aria-live="polite"
+            >
+              Σ Stories Estimation{" "}
+              <span className={cn("tabular-nums", childSumOverCapacity ? "text-rose-950" : "text-slate-800")}>
+                {Math.round(sumChildStoryEstimates)}
               </span>
+              <span className={cn("ml-1", childSumOverCapacity && "text-rose-950")}>Days</span>
+              {childSumOverCapacity ? (
+                <RollupOverCapWarn
+                  tooltipId={rollupWarnChildId}
+                  ariaLabel="Σ Stories Estimation exceeds team capacity — details"
+                >
+                  <span className="font-semibold text-rose-800">Over capacity</span>
+                  <span className="mt-0.5 block text-slate-600">
+                    Σ Stories Estimation totals {Math.round(sumChildStoryEstimates)} Days but team capacity is {capacity} Days.
+                    Reduce story estimates, raise capacity, or move epics.
+                  </span>
+                </RollupOverCapWarn>
+              ) : null}
+            </span>
+          </div>
+          {/* Row 2: Σ Epic Estimations (right) + info button */}
+          <div className="flex items-center justify-end gap-1.5">
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
+                estSumOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
+              )}
+              role="status"
+              aria-live="polite"
+            >
+              Σ Epic Estimations{" "}
+              <span className={cn("tabular-nums", estSumOverCapacity ? "text-rose-950" : "text-slate-800")}>
+                {Math.round(sumOriginalEstimates)}
+              </span>
+              <span className={cn("ml-1", estSumOverCapacity && "text-rose-950")}>Days</span>
+              {estSumOverCapacity ? (
+                <RollupOverCapWarn
+                  tooltipId={rollupWarnEstId}
+                  ariaLabel="Σ Epic Estimations exceeds team capacity — details"
+                >
+                  <span className="font-semibold text-rose-800">Over capacity</span>
+                  <span className="mt-0.5 block text-slate-600">
+                    Σ Epic Estimations is {Math.round(sumOriginalEstimates)} Days but team capacity is {capacity} Days.
+                    Lower epic estimates, raise capacity, or remove epics.
+                  </span>
+                </RollupOverCapWarn>
+              ) : null}
             </span>
           </div>
         </div>
