@@ -127,7 +127,7 @@ export function InitiativeFormDialog({
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
-  const [dialogWidthVw, setDialogWidthVw] = useState(75);
+  const [dialogWidthVw, setDialogWidthVw] = useState(68);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(180);
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
@@ -194,7 +194,7 @@ export function InitiativeFormDialog({
     if (open) {
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
-      setDialogWidthVw(75);
+      setDialogWidthVw(68);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(180);
       setActivityOpen(false);
@@ -504,7 +504,7 @@ export function InitiativeFormDialog({
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
+    const fallbackWidth = (window.innerWidth * dialogWidthVw) / 100;
     const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
 
     function onPointerMove(moveEvent: PointerEvent) {
@@ -530,7 +530,7 @@ export function InitiativeFormDialog({
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
+    const fallbackWidth = (window.innerWidth * dialogWidthVw) / 100;
     const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
     const startOffsetX = dialogOffset.x;
 
@@ -619,7 +619,7 @@ export function InitiativeFormDialog({
         style={
           anchored
             ? (surfaceRect ? planningDetailPanelAnchorStyle(surfaceRect) : undefined)
-            : { width: `min(${dialogWidthVw}vw, 1320px)`, maxWidth: `min(${dialogWidthVw}vw, 1320px)` }
+            : { width: `${dialogWidthVw}vw`, maxWidth: "99.5vw" }
         }
       >
         <div

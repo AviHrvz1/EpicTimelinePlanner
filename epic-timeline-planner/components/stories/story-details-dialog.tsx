@@ -174,7 +174,7 @@ export function StoryDetailsDialog({
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [saving, setSaving] = useState(false);
   const [commenting, setCommenting] = useState(false);
-  const [dialogWidthVw, setDialogWidthVw] = useState(75);
+  const [dialogWidthVw, setDialogWidthVw] = useState(60);
   const [activityOpen, setActivityOpen] = useState(true);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(280);
@@ -393,7 +393,7 @@ export function StoryDetailsDialog({
 
   useEffect(() => {
     if (open) {
-      setDialogWidthVw(75);
+      setDialogWidthVw(60);
       setActivityOpen(true);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(280);
@@ -599,7 +599,7 @@ export function StoryDetailsDialog({
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
+    const fallbackWidth = (window.innerWidth * dialogWidthVw) / 100;
     const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
 
     function onPointerMove(moveEvent: PointerEvent) {
@@ -625,7 +625,7 @@ export function StoryDetailsDialog({
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const fallbackWidth = Math.min((window.innerWidth * dialogWidthVw) / 100, 1320);
+    const fallbackWidth = (window.innerWidth * dialogWidthVw) / 100;
     const startWidth = dialogShellRef.current?.getBoundingClientRect().width ?? fallbackWidth;
     const startOffsetX = dialogOffset.x;
 
@@ -652,7 +652,7 @@ export function StoryDetailsDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-[1px]",
+        "fixed inset-0 z-[80] bg-slate-900/30 backdrop-blur-[1px]",
         !anchored && "flex items-stretch justify-end p-0",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
@@ -672,7 +672,7 @@ export function StoryDetailsDialog({
             ? surfaceRect
               ? planningDetailPanelAnchorStyle(surfaceRect)
               : undefined
-            : { width: `min(${dialogWidthVw}vw, 1320px)`, maxWidth: `min(${dialogWidthVw}vw, 1320px)` }
+            : { width: `${dialogWidthVw}vw`, maxWidth: "99.5vw" }
         }
       >
         <div

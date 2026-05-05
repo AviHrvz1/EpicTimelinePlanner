@@ -7,7 +7,7 @@ export function EditRowIconButton({ label, onClick }: { label: string; onClick: 
     <span
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();

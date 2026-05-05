@@ -199,7 +199,7 @@ export function EpicFormDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [epicInsightsPanelOpen, setEpicInsightsPanelOpen] = useState(false);
-  const [dialogWidthVw, setDialogWidthVw] = useState(56);
+  const [dialogWidthVw, setDialogWidthVw] = useState(64);
   const [epicInsightsPanelOffset, setEpicInsightsPanelOffset] = useState({ x: 0, y: 0 });
   const [epicInsightsPanelWidthPx, setEpicInsightsPanelWidthPx] = useState(560);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
@@ -299,7 +299,7 @@ export function EpicFormDialog({
     if (open) {
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
-      setDialogWidthVw(56);
+      setDialogWidthVw(64);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(220);
       setActivityOpen(false);

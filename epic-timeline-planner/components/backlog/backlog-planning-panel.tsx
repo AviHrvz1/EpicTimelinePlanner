@@ -16,6 +16,7 @@ import {
   Layers3,
   LayoutGrid,
   ListTodo,
+  Lock,
   Plus,
   Save,
   Search,
@@ -176,8 +177,8 @@ function BacklogLabelsChipPanel({
         title={title}
         onMouseDown={onMouseDownBeginEdit}
         className={cn(
-          "w-full min-w-0 rounded-lg border border-dashed border-slate-200/90 bg-slate-50/70 px-2 py-1.5 text-[13px] text-slate-400 transition",
-          "hover:border-slate-300 hover:bg-slate-100/80 hover:text-slate-500",
+          "w-full min-w-0 bg-transparent px-2 py-1.5 text-[13px] text-transparent transition",
+          "hover:rounded-lg hover:border hover:border-dashed hover:border-slate-300 hover:bg-slate-100/80 hover:text-slate-400",
           focusRing,
         )}
       >
@@ -211,14 +212,7 @@ function BacklogLabelsChipPanel({
 }
 
 function BacklogLabelsEmptyRowSlot() {
-  return (
-    <span
-      className="inline-flex min-h-[2rem] w-full min-w-0 max-w-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50/40 px-2 py-1 text-[14px] text-slate-400"
-      aria-hidden
-    >
-      —
-    </span>
-  );
+  return <span className="inline-block w-full min-w-0" aria-hidden />;
 }
 
 const BACKLOG_READONLY_AUTO_SUM_DAYS = {
@@ -404,7 +398,7 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
 ]);
 
 function backlogCellClassName(key: BacklogColumnKey): string {
-  if (key === "workItem") return "relative min-w-0 pl-4";
+  if (key === "workItem") return "group/workitem relative min-w-0 pl-4";
   if (key === "progress") return "min-w-0";
   /** `justify-self-center` would size the item to max-content and let long text spill out of the column. */
   if (key === "labels") return "flex min-w-0 w-full max-w-full justify-center overflow-hidden text-center";
@@ -1858,12 +1852,55 @@ export function BacklogPlanningPanel({
     [visibleColumnKeys.length],
   );
 
-  function renderBacklogCells(cells: Record<BacklogColumnKey, ReactNode>) {
-    return visibleColumnKeys.map((key) => (
-      <div key={key} className={backlogCellClassName(key)}>
-        {cells[key]}
-      </div>
-    ));
+  type CellIconHint = { kind: "edit"; onEdit: () => void } | { kind: "lock" };
+
+  function renderBacklogCells(
+    cells: Record<BacklogColumnKey, ReactNode>,
+    iconHints?: Partial<Record<BacklogColumnKey, CellIconHint>>,
+  ) {
+    return visibleColumnKeys.map((key) => {
+      const hint = iconHints?.[key];
+
+      if (!hint) {
+        return (
+          <div key={key} className={backlogCellClassName(key)}>
+            {cells[key]}
+          </div>
+        );
+      }
+
+      // Hint present: stretch to fill the column and use flex so the icon sits at the far right.
+      // Override justify-self-center (which shrinks the cell to content width) with justify-self-stretch.
+      const isCentered = CENTER_ALIGNED_BACKLOG_COLUMNS.has(key);
+      const stretchClass =
+        key === "workItem" ? "relative min-w-0 pl-4"
+        : key === "progress" ? "min-w-0"
+        : key === "labels" ? "min-w-0 w-full max-w-full overflow-hidden"
+        : "min-w-0"; // no justify-self-center — grid default is stretch
+
+      return (
+        <div key={key} className={cn(stretchClass, "group/cell flex items-center gap-0.5 pr-1")}>
+          <div className={cn("min-w-0 flex-1 flex items-center overflow-hidden", isCentered && "justify-center")}>
+            {cells[key]}
+          </div>
+          {hint.kind === "edit" ? (
+            <span
+              className="shrink-0 opacity-0 transition-opacity group-hover/cell:opacity-100"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <EditRowIconButton label="Edit" onClick={hint.onEdit} />
+            </span>
+          ) : (
+            <span
+              title="Read only"
+              className="pointer-events-none shrink-0 opacity-0 transition-opacity group-hover/cell:opacity-100"
+            >
+              <Lock className="size-3.5 text-slate-300" />
+            </span>
+          )}
+        </div>
+      );
+    });
   }
   const groupedStoryRows = useMemo(() => {
     return fullyFiltered.flatMap((initiative) =>
@@ -2209,8 +2246,14 @@ export function BacklogPlanningPanel({
                       </span>
                     ) : (
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
-                        <span className="truncate">{row.storyTitle}</span>
-                        <span className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                        <button
+                          type="button"
+                          className="min-w-0 truncate text-left hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+                          onClick={() => onOpenStory(row.storyId)}
+                        >
+                          {row.storyTitle}
+                        </button>
+                        <span className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100">
                           <EditRowIconButton
                             label="Edit user story title"
                             onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
@@ -2473,7 +2516,7 @@ export function BacklogPlanningPanel({
               progress: (
             <button
               type="button"
-              onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+              onClick={() => {}}
               className={backlogReadonlyProgressButtonClass}
             >
               <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
@@ -2485,6 +2528,20 @@ export function BacklogPlanningPanel({
               </div>
             </button>
               ),
+            }, {
+              status: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "status", row.storyStatus) },
+              sprint: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
+              assignee: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
+              labels: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "labels", formatStoryLabelsForEditInput(row.storyLabels)) },
+              estDays: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays)) },
+              daysLeft: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft)) },
+              year: { kind: "lock" },
+              quarter: { kind: "lock" },
+              month: { kind: "lock" },
+              startDate: { kind: "lock" },
+              endDate: { kind: "lock" },
+              epicOriginalEst: { kind: "lock" },
+              progress: { kind: "lock" },
             })}
           </div>
         );
@@ -2559,7 +2616,7 @@ export function BacklogPlanningPanel({
       return (
         <button
           type="button"
-          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+          onClick={() => {}}
           className={backlogReadonlyProgressButtonClass}
         >
           <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
@@ -2644,7 +2701,7 @@ export function BacklogPlanningPanel({
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                         <span className="truncate">{epicTitle}</span>
                         <span
-                          className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                          className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                           onMouseDown={(event) => event.stopPropagation()}
                         >
                           <EditRowIconButton
@@ -2666,7 +2723,7 @@ export function BacklogPlanningPanel({
                         epicId,
                       });
                     }}
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                     title="Add user story"
                   >
                     <Plus className="size-3.5 text-slate-600" />
@@ -2738,7 +2795,7 @@ export function BacklogPlanningPanel({
               estDays: (
                 <button
                   type="button"
-                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  onClick={() => {}}
                   className={backlogReadonlyAutoSumButtonClass}
                 >
                   Σ {estimated}d
@@ -2752,13 +2809,26 @@ export function BacklogPlanningPanel({
               daysLeft: (
                 <button
                   type="button"
-                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  onClick={() => {}}
                   className={backlogReadonlyAutoSumButtonClass}
                 >
                   Σ {left}d
                 </button>
               ),
               progress: renderCompletionCell(epicRows),
+            }, {
+              assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "epic", id: epicId, value: epicAssignee === "Unassigned" ? "" : epicAssignee }) },
+              year: { kind: "lock" },
+              quarter: { kind: "lock" },
+              month: { kind: "lock" },
+              startDate: { kind: "lock" },
+              endDate: { kind: "lock" },
+              status: { kind: "lock" },
+              sprint: { kind: "lock" },
+              estDays: { kind: "lock" },
+              epicOriginalEst: { kind: "lock" },
+              daysLeft: { kind: "lock" },
+              progress: { kind: "lock" },
             })}
           </div>
           {createSelection?.anchorKey === `group-epic:${epicId}` ? (
@@ -2840,7 +2910,7 @@ export function BacklogPlanningPanel({
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                         <span className="truncate">{initiativeTitle}</span>
                         <span
-                          className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                          className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                           onMouseDown={(event) => event.stopPropagation()}
                         >
                           <EditRowIconButton
@@ -2875,7 +2945,7 @@ export function BacklogPlanningPanel({
               startDate: (
                 <button
                   type="button"
-                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                  onClick={() => {}}
                   className={backlogReadonlyInitiativeDateButtonClass}
                 >
                   {formatBacklogPlanDate(initGanttRange.start)}
@@ -2884,7 +2954,7 @@ export function BacklogPlanningPanel({
               endDate: (
                 <button
                   type="button"
-                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                  onClick={() => {}}
                   className={backlogReadonlyInitiativeDateButtonClass}
                 >
                   {formatBacklogPlanDate(initGanttRange.end)}
@@ -2946,7 +3016,7 @@ export function BacklogPlanningPanel({
               estDays: (
                 <button
                   type="button"
-                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  onClick={() => {}}
                   className={backlogReadonlyAutoSumButtonClass}
                 >
                   Σ {estimated}d
@@ -2956,13 +3026,26 @@ export function BacklogPlanningPanel({
               daysLeft: (
                 <button
                   type="button"
-                  onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                  onClick={() => {}}
                   className={backlogReadonlyAutoSumButtonClass}
                 >
                   Σ {left}d
                 </button>
               ),
               progress: renderCompletionCell(initiativeRows),
+            }, {
+              assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "initiative", id: initiativeId, value: initiativeAssignee === "Unassigned" ? "" : initiativeAssignee }) },
+              year: { kind: "lock" },
+              quarter: { kind: "lock" },
+              month: { kind: "lock" },
+              startDate: { kind: "lock" },
+              endDate: { kind: "lock" },
+              status: { kind: "lock" },
+              sprint: { kind: "lock" },
+              estDays: { kind: "lock" },
+              epicOriginalEst: { kind: "lock" },
+              daysLeft: { kind: "lock" },
+              progress: { kind: "lock" },
             })}
           </div>
           {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
@@ -2994,7 +3077,7 @@ export function BacklogPlanningPanel({
             </form>
           ) : null}
           {isOpen ? (
-            <div className="ml-2 border-l border-slate-300/70 bg-slate-50/50 pl-3">
+            <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
               {(() => {
                 const byEpic = new Map<string, typeof groupedStoryRows>();
                 for (const r of initiativeRows) {
@@ -3142,7 +3225,7 @@ export function BacklogPlanningPanel({
                         <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                           <span className="truncate">{initiative.initiativeTitle}</span>
                           <span
-                            className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                            className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                             onMouseDown={(event) => event.stopPropagation()}
                           >
                             <EditRowIconButton
@@ -3183,7 +3266,7 @@ export function BacklogPlanningPanel({
                 startDate: (
                   <button
                     type="button"
-                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                    onClick={() => {}}
                     className={backlogReadonlyInitiativeDateButtonClass}
                   >
                     {formatBacklogPlanDate(standInitGantt.start)}
@@ -3192,7 +3275,7 @@ export function BacklogPlanningPanel({
                 endDate: (
                   <button
                     type="button"
-                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                    onClick={() => {}}
                     className={backlogReadonlyInitiativeDateButtonClass}
                   >
                     {formatBacklogPlanDate(standInitGantt.end)}
@@ -3209,7 +3292,7 @@ export function BacklogPlanningPanel({
                 estDays: (
                   <button
                     type="button"
-                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                    onClick={() => {}}
                     className={backlogReadonlyAutoSumButtonClass}
                   >
                     Σ 0d
@@ -3219,7 +3302,7 @@ export function BacklogPlanningPanel({
                 daysLeft: (
                   <button
                     type="button"
-                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                    onClick={() => {}}
                     className={backlogReadonlyAutoSumButtonClass}
                   >
                     Σ 0d
@@ -3228,7 +3311,7 @@ export function BacklogPlanningPanel({
                 progress: (
                   <button
                     type="button"
-                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                    onClick={() => {}}
                     className={backlogReadonlyProgressButtonClass}
                   >
                     <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
@@ -3238,7 +3321,19 @@ export function BacklogPlanningPanel({
                     <div className="h-1.5 overflow-hidden rounded-full bg-slate-200" />
                   </button>
                 ),
-              })}
+              }, {
+                year: { kind: "lock" },
+                quarter: { kind: "lock" },
+                month: { kind: "lock" },
+                startDate: { kind: "lock" },
+                endDate: { kind: "lock" },
+                status: { kind: "lock" },
+                sprint: { kind: "lock" },
+                estDays: { kind: "lock" },
+                epicOriginalEst: { kind: "lock" },
+                daysLeft: { kind: "lock" },
+                progress: { kind: "lock" },
+              } as Partial<Record<BacklogColumnKey, CellIconHint>>)}
             </div>
             {createSelection?.anchorKey === `group-standalone-initiative:${initiative.initiativeId}` ? (
               <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
@@ -3258,7 +3353,7 @@ export function BacklogPlanningPanel({
               </form>
             ) : null}
             {isInitOpen ? (
-              <div className="ml-2 border-l border-slate-300/70 bg-slate-50/50 pl-3">
+              <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
                 {initiative.epics.map((epic) => {
                   const standEpicModel = standInitModel?.epics?.find((e) => e.id === epic.epicId);
                   const standPlanYear = Number(initiative.initiativeYear);
@@ -3310,7 +3405,7 @@ export function BacklogPlanningPanel({
                                 <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                                   <span className="truncate">{epic.epicTitle}</span>
                                   <span
-                                    className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                    className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                                     onMouseDown={(event) => event.stopPropagation()}
                                   >
                                     <EditRowIconButton
@@ -3334,7 +3429,7 @@ export function BacklogPlanningPanel({
                                   epicId: epic.epicId,
                                 });
                               }}
-                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                               title="Add user story"
                             >
                               <Plus className="size-3.5 text-slate-600" />
@@ -3361,7 +3456,7 @@ export function BacklogPlanningPanel({
                         estDays: (
                           <button
                             type="button"
-                            onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                            onClick={() => {}}
                             className={backlogReadonlyAutoSumButtonClass}
                           >
                             Σ 0d
@@ -3375,7 +3470,7 @@ export function BacklogPlanningPanel({
                         daysLeft: (
                           <button
                             type="button"
-                            onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                            onClick={() => {}}
                             className={backlogReadonlyAutoSumButtonClass}
                           >
                             Σ 0d
@@ -3384,7 +3479,7 @@ export function BacklogPlanningPanel({
                         progress: (
                           <button
                             type="button"
-                            onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                            onClick={() => {}}
                             className={backlogReadonlyProgressButtonClass}
                           >
                             <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
@@ -4324,7 +4419,7 @@ export function BacklogPlanningPanel({
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[12px] font-semibold tracking-[0.04em] text-white uppercase"
+                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[13px] font-semibold tracking-[0.03em] text-white uppercase"
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {
@@ -4472,7 +4567,7 @@ export function BacklogPlanningPanel({
                               <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                                 <span className="truncate">{initiative.title}</span>
                                 <span
-                                  className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                  className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                                   onMouseDown={(event) => event.stopPropagation()}
                                 >
                                   <EditRowIconButton
@@ -4491,7 +4586,7 @@ export function BacklogPlanningPanel({
                               event.stopPropagation();
                               setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
                             }}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                             title="Add from this row"
                           >
                             <Plus className="size-3.5 text-slate-600" />
@@ -4553,7 +4648,7 @@ export function BacklogPlanningPanel({
                       startDate: (
                         <button
                           type="button"
-                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                          onClick={() => {}}
                           className={backlogReadonlyInitiativeDateButtonClass}
                         >
                           {formatBacklogPlanDate(flatInitGantt.start)}
@@ -4562,7 +4657,7 @@ export function BacklogPlanningPanel({
                       endDate: (
                         <button
                           type="button"
-                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_INITIATIVE_DATES })}
+                          onClick={() => {}}
                           className={backlogReadonlyInitiativeDateButtonClass}
                         >
                           {formatBacklogPlanDate(flatInitGantt.end)}
@@ -4616,7 +4711,7 @@ export function BacklogPlanningPanel({
                       estDays: (
                         <button
                           type="button"
-                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                          onClick={() => {}}
                           className={backlogReadonlyAutoSumButtonClass}
                         >
                           Σ {initiativeDays.estimated}d
@@ -4626,7 +4721,7 @@ export function BacklogPlanningPanel({
                       daysLeft: (
                         <button
                           type="button"
-                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                          onClick={() => {}}
                           className={backlogReadonlyAutoSumButtonClass}
                         >
                           Σ {initiativeDays.left}d
@@ -4635,7 +4730,7 @@ export function BacklogPlanningPanel({
                       progress: (
                         <button
                           type="button"
-                          onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                          onClick={() => {}}
                           className={backlogReadonlyProgressButtonClass}
                         >
                           <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
@@ -4698,7 +4793,7 @@ export function BacklogPlanningPanel({
                   ) : null}
 
                   {isInitOpen ? (
-                    <div className="ml-2 border-l border-slate-300/70 bg-slate-50/50 pl-3">
+                    <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
                       {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
                         <form
                           onSubmit={handleCreateSubmit}
@@ -4826,7 +4921,7 @@ export function BacklogPlanningPanel({
                                         <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-800">
                                           <span className="truncate">{epic.icon} {epic.title}</span>
                                           <span
-                                            className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                            className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                                             onMouseDown={(event) => event.stopPropagation()}
                                           >
                                             <EditRowIconButton
@@ -4845,7 +4940,7 @@ export function BacklogPlanningPanel({
                                         event.stopPropagation();
                                         setOpenCreateMenuKey((prev) => (prev === `epic:${epic.id}` ? null : `epic:${epic.id}`));
                                       }}
-                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                                       title="Add from this row"
                                     >
                                       <Plus className="size-3.5 text-slate-600" />
@@ -4955,7 +5050,7 @@ export function BacklogPlanningPanel({
                                 estDays: (
                                   <button
                                     type="button"
-                                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                                    onClick={() => {}}
                                     className={backlogReadonlyAutoSumButtonClass}
                                   >
                                     Σ {epicDays.estimated}d
@@ -4969,7 +5064,7 @@ export function BacklogPlanningPanel({
                                 daysLeft: (
                                   <button
                                     type="button"
-                                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_AUTO_SUM_DAYS })}
+                                    onClick={() => {}}
                                     className={backlogReadonlyAutoSumButtonClass}
                                   >
                                     Σ {epicDays.left}d
@@ -4978,7 +5073,7 @@ export function BacklogPlanningPanel({
                                 progress: (
                                   <button
                                     type="button"
-                                    onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                                    onClick={() => {}}
                                     className={backlogReadonlyProgressButtonClass}
                                   >
                                     <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
@@ -5100,7 +5195,7 @@ export function BacklogPlanningPanel({
                                               {story.title}
                                             </span>
                                             <span
-                                              className="ml-auto opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                                              className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                                               onMouseDown={(event) => event.stopPropagation()}
                                             >
                                               <EditRowIconButton
@@ -5120,7 +5215,7 @@ export function BacklogPlanningPanel({
                                           event.stopPropagation();
                                           setOpenCreateMenuKey((prev) => (prev === `story:${story.id}` ? null : `story:${story.id}`));
                                         }}
-                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover:opacity-100 focus-visible:opacity-100"
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                                         title="Add from this row"
                                       >
                                         <Plus className="size-3.5 text-slate-600" />
@@ -5409,7 +5504,7 @@ export function BacklogPlanningPanel({
                                       progress: (
                                     <button
                                       type="button"
-                                      onClick={() => setBacklogReadonlyNotice({ ...BACKLOG_READONLY_PROGRESS })}
+                                      onClick={() => {}}
                                       className={backlogReadonlyProgressButtonClass}
                                     >
                                       <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
