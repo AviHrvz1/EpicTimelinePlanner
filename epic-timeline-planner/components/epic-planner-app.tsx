@@ -1702,12 +1702,24 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   const removeEpicFromMonthTeamCapacity = useCallback(
     async (epicId: string) => {
-      if (activeTimelineMonth == null) return;
-      const boardKey = monthTeamBoardStorageKey(selectedYear, activeTimelineMonth);
-      setMonthTeamBoardByKey((prev) => {
-        const cur = prev[boardKey] ?? { queues: {} };
-        return { ...prev, [boardKey]: removeEpicFromMonthTeamBoardQueues(cur, epicId) };
-      });
+      if (activeTimelineMonth != null) {
+        const boardKey = monthTeamBoardStorageKey(selectedYear, activeTimelineMonth);
+        setMonthTeamBoardByKey((prev) => {
+          const cur = prev[boardKey] ?? { queues: {} };
+          return { ...prev, [boardKey]: removeEpicFromMonthTeamBoardQueues(cur, epicId) };
+        });
+      } else {
+        // Quarter / all-year view: remove from every month so the sync effect doesn't re-add the team.
+        setMonthTeamBoardByKey((prev) => {
+          const next = { ...prev };
+          for (let m = 1; m <= 12; m++) {
+            const key = monthTeamBoardStorageKey(selectedYear, m);
+            const cur = prev[key] ?? { queues: {} };
+            next[key] = removeEpicFromMonthTeamBoardQueues(cur, epicId);
+          }
+          return next;
+        });
+      }
       flushSync(() => {
         setInitiatives((prev) =>
           prev.map((i) => ({
@@ -2117,17 +2129,15 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
     const updates = [...desired.entries()];
 
-    flushSync(() => {
-      setInitiatives((prev) =>
-        prev.map((i) => ({
-          ...i,
-          epics: (i.epics ?? []).map((e) => {
-            const t = desired.get(e.id);
-            return t != null && e.team == null ? { ...e, team: t } : e;
-          }),
-        })),
-      );
-    });
+    setInitiatives((prev) =>
+      prev.map((i) => ({
+        ...i,
+        epics: (i.epics ?? []).map((e) => {
+          const t = desired.get(e.id);
+          return t != null && e.team == null ? { ...e, team: t } : e;
+        }),
+      })),
+    );
 
     void (async () => {
       for (const [epicId, teamId] of updates) {
@@ -2265,8 +2275,19 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     planStartMonth: number | null;
     planEndMonth: number | null;
   }) {
-    const request = editingEpic
-      ? fetch(`/api/epics/${editingEpic.id}`, {
+    const epicId = editingEpic?.id;
+    if (epicId && payload.team === null) {
+      setMonthTeamBoardByKey((prev) => {
+        const next = { ...prev };
+        for (let m = 1; m <= 12; m++) {
+          const key = monthTeamBoardStorageKey(selectedYear, m);
+          next[key] = removeEpicFromMonthTeamBoardQueues(prev[key] ?? { queues: {} }, epicId);
+        }
+        return next;
+      });
+    }
+    const request = epicId
+      ? fetch(`/api/epics/${epicId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -2600,6 +2621,23 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   }
 
   async function patchEpicTeamFromStoryDialog(epicId: string, team: string | null) {
+    if (team === null) {
+      setMonthTeamBoardByKey((prev) => {
+        const next = { ...prev };
+        for (let m = 1; m <= 12; m++) {
+          const key = monthTeamBoardStorageKey(selectedYear, m);
+          const cur = prev[key] ?? { queues: {} };
+          next[key] = removeEpicFromMonthTeamBoardQueues(cur, epicId);
+        }
+        return next;
+      });
+      setInitiatives((prev) =>
+        prev.map((i) => ({
+          ...i,
+          epics: (i.epics ?? []).map((e) => (e.id === epicId ? { ...e, team: null } : e)),
+        })),
+      );
+    }
     const response = await fetch(`/api/epics/${epicId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -2608,7 +2646,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     if (!response.ok) {
       throw new Error("Failed to update epic team");
     }
-    await refresh();
+    if (team !== null) {
+      await refresh();
+    }
   }
 
   async function addStoryComment(storyId: string, body: string) {

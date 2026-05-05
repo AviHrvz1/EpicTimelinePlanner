@@ -49,7 +49,7 @@ import {
   storyListDraggableId,
 } from "@/lib/epic-dnd-ids";
 import { MONTHS } from "@/lib/timeline";
-import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
+import { epicDeliveryTeamAssignmentChip, MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { InitiativeStatus } from "@/lib/generated/prisma";
@@ -614,9 +614,11 @@ function InitiativeTreeEpicRow({
   onCreateStoryQuick?: (epicId: string, title: string) => Promise<void>;
   storyProgressDetailsVisible: boolean;
 }) {
+  const epicTeamId = normalizedEpicTeamId(epic);
+  const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
-    disabled: !epicPlanDragEnabled,
+    disabled: !epicPlanDragEnabled || Boolean(epicTeamId),
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const completion = epicCompletionMeta(epic);
@@ -655,7 +657,7 @@ function InitiativeTreeEpicRow({
     >
       <div className="rounded-md transition-colors hover:bg-sky-50/70">
       <div className="flex min-w-0 items-center gap-1.5">
-        {epicPlanDragEnabled && !isEpicScheduledOnGantt ? (
+        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
           <button
             type="button"
             className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
@@ -710,6 +712,12 @@ function InitiativeTreeEpicRow({
                 {completion.total === 0 ? "No stories yet" : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
               </span>
               <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                {epicTeamChip ? (
+                  <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
+                    <Users className="size-2.5 shrink-0" aria-hidden />
+                    {epicTeamChip.label}
+                  </span>
+                ) : null}
                 <span
                   className={cn(
                     "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
@@ -1157,9 +1165,11 @@ function SprintEpicCard({
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
+  const epicTeamId = normalizedEpicTeamId(epic);
+  const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
-    disabled: !epicPlanDragEnabled,
+    disabled: !epicPlanDragEnabled || Boolean(epicTeamId),
   });
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
     id: backlogDropSlot ? epicBacklogSlotDropId(backlogDropSlot.month, backlogDropSlot.index) : `epic-card:${epic.id}`,
@@ -1222,7 +1232,7 @@ function SprintEpicCard({
       }}
     >
       <div className="flex min-w-0 items-start gap-1.5">
-        {epicPlanDragEnabled && !isEpicScheduledOnGantt ? (
+        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
           <button
             type="button"
             className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
@@ -1282,6 +1292,12 @@ function SprintEpicCard({
                       : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
                   </span>
                   <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                    {epicTeamChip ? (
+                      <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
+                        <Users className="size-2.5 shrink-0" aria-hidden />
+                        {epicTeamChip.label}
+                      </span>
+                    ) : null}
                     <span
                       className={cn(
                         "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",

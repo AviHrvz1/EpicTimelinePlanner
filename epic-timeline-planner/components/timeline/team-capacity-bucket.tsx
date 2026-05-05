@@ -182,25 +182,6 @@ export function TeamEpicCard({
               {title}
             </button>
             <p className="mt-0.5 text-[11px] leading-snug text-slate-500 @min-[22rem]:truncate">{initiativeTitle}</p>
-            {(planningLabel || executionStatusLabel) && (
-              <div className="mt-1 flex w-full flex-wrap justify-start gap-1.5">
-                {planningLabel ? (
-                  <span className="inline-flex items-center rounded-md border border-violet-200/90 bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-800">
-                    {planningLabel}
-                  </span>
-                ) : null}
-                {executionStatusLabel ? (
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-md border px-2 py-0.5 text-[10.5px] font-semibold",
-                      executionStatusClassName ?? "border-blue-200/90 bg-blue-50 text-blue-800",
-                    )}
-                  >
-                    {executionStatusLabel}
-                  </span>
-                ) : null}
-              </div>
-            )}
           </div>
         </div>
         <div className="relative z-10 flex w-full min-w-0 shrink-0 flex-col items-start gap-1 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:ml-auto @min-[22rem]:w-auto @min-[22rem]:justify-self-end @min-[22rem]:pt-6">
@@ -332,12 +313,12 @@ export function TeamCapacityBucket({
       <div className="mb-2 flex flex-col gap-2 pr-0.5">
         <div className="relative grid min-h-8 w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-x-1">
           <div className="min-w-0 justify-self-start" aria-hidden />
-          <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800">
-            <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
+          <p className="col-start-2 inline-flex min-w-0 max-w-[min(16rem,85vw)] items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[13px] font-bold text-slate-800 shadow-sm">
+            <Users className="size-3.5 shrink-0 text-indigo-500" aria-hidden />
             <span className="min-w-0 truncate">
               {teamLabelPrefix ? (
                 <>
-                  <span className="font-semibold text-slate-600">{teamLabelPrefix}</span> {team.label}
+                  <span className="font-semibold text-slate-500">{teamLabelPrefix}</span> {team.label}
                 </>
               ) : (
                 team.label
@@ -375,6 +356,7 @@ export function TeamCapacityBucket({
             ) : null}
           </div>
         </div>
+        <div className="border-t border-slate-200/80" />
         <div className="flex min-w-0 items-center">
           <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
             Available Team Capacity

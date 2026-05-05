@@ -483,13 +483,6 @@ function CapacityBucket({
             alt="Capacity bucket"
             className="pointer-events-none absolute top-1 left-1/2 hidden h-[88%] w-[98%] -translate-x-1/2 object-contain opacity-30"
           />
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] transition-all"
-            style={{
-              height: `${fillPct}%`,
-              background: bucketFill,
-            }}
-          />
           {/* Scroll: flex column + mt-auto on list so short stacks sit on the bucket floor; flex-col-reverse = first story lowest, next above. */}
           <div
             className={cn(
