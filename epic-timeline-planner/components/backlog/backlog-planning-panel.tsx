@@ -471,7 +471,7 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
     <button
       ref={setActivatorNodeRef}
       type="button"
-      className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none hover:bg-white/20 active:cursor-grabbing"
+      className="inline-flex h-5 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded outline-none opacity-0 transition-opacity group-hover/col:opacity-100 hover:bg-white/20 active:cursor-grabbing"
       aria-label={`Drag to reorder ${BACKLOG_COLUMN_LABELS[id]} column`}
       {...attributes}
       {...listeners}
@@ -480,7 +480,7 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
     </button>
   );
   return (
-    <div ref={setNodeRef} style={style} className={cn(className, "w-full min-w-0")}>
+    <div ref={setNodeRef} style={style} className={cn(className, "group/col w-full min-w-0")}>
       {/* pr-2.5 reserves the resize strip; overflow-hidden keeps label from painting past the column edge */}
       {centered ? (
         <span className="flex min-h-[1.25rem] w-full min-w-0 justify-center overflow-hidden pr-2.5">
@@ -948,7 +948,7 @@ function BacklogTeamFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -1057,7 +1057,7 @@ function BacklogAssigneeFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -1163,7 +1163,7 @@ function BacklogLabelsFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -1265,7 +1265,7 @@ function MultiCheckboxFilter({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[30px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
           buttonClassName,
         )}
       >
@@ -2553,7 +2553,7 @@ export function BacklogPlanningPanel({
               onClick={() => {}}
               className={backlogReadonlyProgressButtonClass}
             >
-              <div className="text-right text-[12px] tabular-nums text-slate-600">
+              <div className="text-right text-[13px] tabular-nums text-slate-600">
                 <span>{progress.percent}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -2655,7 +2655,7 @@ export function BacklogPlanningPanel({
           onClick={() => {}}
           className={backlogReadonlyProgressButtonClass}
         >
-          <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
+          <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
             <span>{total === 0 ? "No stories" : null}</span>
             <span>
               {finished}/{total} · {percent}%
@@ -3353,7 +3353,7 @@ export function BacklogPlanningPanel({
                     onClick={() => {}}
                     className={backlogReadonlyProgressButtonClass}
                   >
-                    <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
+                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                       <span>No stories</span>
                       <span>0/0 · 0%</span>
                     </div>
@@ -3522,7 +3522,7 @@ export function BacklogPlanningPanel({
                             onClick={() => {}}
                             className={backlogReadonlyProgressButtonClass}
                           >
-                            <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
+                            <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                               <span>No stories</span>
                               <span>0/0 · 0%</span>
                             </div>
@@ -3988,7 +3988,7 @@ export function BacklogPlanningPanel({
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
             <ListTodo className="size-4.5" strokeWidth={2} aria-hidden />
           </span>
-          <h2 className="text-[23px] font-bold tracking-tight text-slate-900">Backlog Workspace</h2>
+          <h2 className="text-[27px] font-bold tracking-tight text-slate-900">Backlog Workspace</h2>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -3997,7 +3997,7 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "initiative"}
             title="Show only initiatives in the table (click again for all work items)"
             className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-bold leading-none tracking-[0.015em] ring-1 transition",
+              "inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[15px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "initiative"
                 ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm"
                 : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
@@ -4011,7 +4011,7 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "epic"}
             title="Show only epics in the table (click again for all work items)"
             className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-bold leading-none tracking-[0.015em] ring-1 transition",
+              "inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[15px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "epic"
                 ? "bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-200 text-yellow-950 ring-yellow-300/75 shadow-sm"
                 : "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200",
@@ -4025,7 +4025,7 @@ export function BacklogPlanningPanel({
             aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "story"}
             title="Show only user stories in the table (click again for all work items)"
             className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-bold leading-none tracking-[0.015em] ring-1 transition",
+              "inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[15px] font-bold leading-none tracking-[0.015em] ring-1 transition",
               workItemFilter.length === 1 && workItemFilter[0] === "story"
                 ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm"
                 : "bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-sky-100 hover:via-blue-200 hover:to-blue-200",
@@ -4036,7 +4036,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative z-20 mb-5 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-6 pt-6 [contain:inline-size]">
+      <div className="relative z-20 mb-5 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [contain:inline-size] [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
           style={{ gridTemplateColumns: "auto auto repeat(10, minmax(0, 1fr)) auto" }}
@@ -4082,7 +4082,7 @@ export function BacklogPlanningPanel({
               onClick={() => setPresetMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={presetMenuOpen}
-              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
+              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-600">
                 <Bookmark className="size-3 shrink-0 text-indigo-400" strokeWidth={2} aria-hidden />
@@ -4160,7 +4160,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
+              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
               aria-haspopup="listbox"
               aria-expanded={viewPresetMenuOpen}
             >
@@ -4226,7 +4226,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[30px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 sm:px-2.5"
+              className="flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 sm:px-2.5"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-indigo-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2} aria-hidden />
@@ -4257,8 +4257,8 @@ export function BacklogPlanningPanel({
           </div>
           <div className="col-start-2 row-start-2 flex min-w-0 w-full items-center justify-center gap-1.5">
             <div className="h-5 w-px shrink-0 bg-slate-300/70" aria-hidden />
-            <span className="inline-flex min-w-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-              <Filter className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+            <span className="inline-flex min-w-0 items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-900">
+              <Filter className="size-3 shrink-0 text-slate-900" strokeWidth={2} aria-hidden />
               <span className="truncate">Filters</span>
             </span>
           </div>
@@ -4335,12 +4335,12 @@ export function BacklogPlanningPanel({
             />
           </div>
           <div className="col-start-13 row-start-2 flex min-w-0 justify-start">
-            <span className="group relative inline-flex h-[30px] w-[30px] shrink-0">
+            <span className="group relative inline-flex h-[34px] w-[34px] shrink-0">
             <button
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="relative z-0 inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label="Clear all filters"
             >
               <Eraser className="size-3.5" strokeWidth={2} />
@@ -4723,7 +4723,7 @@ export function BacklogPlanningPanel({
                           onClick={() => {}}
                           className={backlogReadonlyProgressButtonClass}
                         >
-                          <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
+                          <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                             <span>{initiativeProgress.total === 0 ? "No stories" : null}</span>
                             <span>
                               {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
@@ -5066,7 +5066,7 @@ export function BacklogPlanningPanel({
                                     onClick={() => {}}
                                     className={backlogReadonlyProgressButtonClass}
                                   >
-                                    <div className="flex items-center justify-between text-[12px] tabular-nums text-slate-600">
+                                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
                                       <span>{epicProgress.total === 0 ? "No stories" : null}</span>
                                       <span>
                                         {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
@@ -5497,7 +5497,7 @@ export function BacklogPlanningPanel({
                                       onClick={() => {}}
                                       className={backlogReadonlyProgressButtonClass}
                                     >
-                                      <div className="text-right text-[12px] tabular-nums text-slate-600">
+                                      <div className="text-right text-[13px] tabular-nums text-slate-600">
                                         <span>{progress.percent}%</span>
                                       </div>
                                       <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
