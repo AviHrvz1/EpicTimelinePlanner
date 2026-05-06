@@ -23,8 +23,8 @@ import {
   MessageSquare,
   Quote,
   Tag,
-  Target,
   Type,
+  Zap,
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
@@ -117,7 +117,7 @@ export function InitiativeFormDialog({
   const [assignee, setAssignee] = useState(initiative?.assignee ?? "");
   const [color, setColor] = useState(initiative?.color ?? "#3B82F6");
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(true);
   const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
@@ -129,7 +129,7 @@ export function InitiativeFormDialog({
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(68);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(180);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(220);
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
@@ -196,8 +196,8 @@ export function InitiativeFormDialog({
       setIsDraggingDialog(false);
       setDialogWidthVw(68);
       setDetailsPanelWidthPx(296);
-      setActivityPanelHeightPx(180);
-      setActivityOpen(false);
+      setActivityPanelHeightPx(220);
+      setActivityOpen(true);
       setDescriptionAccordionOpen(true);
       dragStartRef.current = null;
     }
@@ -487,7 +487,7 @@ export function InitiativeFormDialog({
     function onPointerMove(moveEvent: PointerEvent) {
       const delta = moveEvent.clientY - startY;
       const next = startHeight - delta;
-      setActivityPanelHeightPx(Math.max(160, Math.min(520, next)));
+      setActivityPanelHeightPx(Math.max(180, Math.min(560, next)));
     }
 
     function onPointerUp() {
@@ -658,7 +658,7 @@ export function InitiativeFormDialog({
               </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
               <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-slate-900">
-                <Target className="size-4 shrink-0 text-slate-600" aria-hidden />
+                <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} aria-hidden />
                 <span className="truncate">{title || (initiative ? "Initiative details" : "Create initiative")}</span>
               </span>
             </div>
@@ -1051,7 +1051,7 @@ export function InitiativeFormDialog({
                 </div>
               </div>
 
-              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 border-l-0 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
                   <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Details
@@ -1180,7 +1180,7 @@ export function InitiativeFormDialog({
               )}
               style={
                 activityOpen
-                  ? { height: `${hasChildren ? Math.max(160, Math.min(420, activityPanelHeightPx - 30)) : activityPanelHeightPx}px` }
+                  ? { height: `${hasChildren ? Math.max(180, Math.min(440, activityPanelHeightPx - 40)) : activityPanelHeightPx}px` }
                   : undefined
               }
             >
@@ -1190,7 +1190,7 @@ export function InitiativeFormDialog({
                 onClick={() => {
                   setActivityOpen((wasOpen) => {
                     if (!wasOpen) {
-                      setActivityPanelHeightPx((h) => Math.min(520, h + 96));
+                      setActivityPanelHeightPx((h) => Math.min(560, h + 96));
                     }
                     return !wasOpen;
                   });

@@ -190,7 +190,7 @@ export function EpicFormDialog({
   const [teamDraft, setTeamDraft] = useState("");
   const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(true);
   const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
@@ -302,7 +302,7 @@ export function EpicFormDialog({
       setDialogWidthVw(64);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(220);
-      setActivityOpen(false);
+      setActivityOpen(true);
       setDescriptionAccordionOpen(true);
       setEpicInsightsPanelOpen(false);
       setEpicInsightsPanelOffset({ x: 0, y: 0 });
@@ -1037,9 +1037,8 @@ export function EpicFormDialog({
                   onClick={() =>
                     setEpicInsightsPanelOpen((prev) => {
                       if (!prev) {
-                        const initialLeft = 0;
-                        const separatorX = getEpicDetailsSeparatorX();
-                        const initialWidth = Math.max(520, Math.min(Math.round(window.innerWidth * 0.96), separatorX - initialLeft));
+                        const initialWidth = Math.max(520, Math.min(Math.round(window.innerWidth * 0.80), window.innerWidth - 48));
+                        const initialLeft = Math.round((window.innerWidth - initialWidth) / 2);
                         setEpicInsightsPanelOffset({ x: initialLeft, y: 0 });
                         setEpicInsightsPanelWidthPx(initialWidth);
                       }
@@ -1661,7 +1660,7 @@ export function EpicFormDialog({
                 </div>
               </div>
 
-              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 border-l-0 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
                   <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Details
@@ -2004,20 +2003,20 @@ export function EpicFormDialog({
           left: epicInsightsPanelOffset.x,
           top: epicInsightsPanelOffset.y,
           width: epicInsightsPanelWidthPx,
-          height: `calc(100vh - ${epicInsightsPanelOffset.y}px)`,
+          height: `calc(80vh - ${epicInsightsPanelOffset.y}px)`,
           transform: epicInsightsPanelOpen
             ? "translateX(0)"
-            : "translateX(-140%)",
+            : "translateX(100vw)",
         }}
       >
         <div className="flex h-full min-h-0 flex-col">
           <div
-            className="flex cursor-move items-center justify-between border-b border-slate-200/90 px-4 py-3"
+            className="flex cursor-move items-center justify-between border-b border-slate-200/90 px-8 py-4"
             onPointerDown={beginEpicInsightsDrag}
           >
-            <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <BarChart3 className="size-4 text-indigo-600" aria-hidden />
-              Epic Insights · {`Q${epicInsightsQuarter}`}
+            <div className="inline-flex items-center gap-3 text-2xl font-bold text-slate-800">
+              <BarChart3 className="size-6 text-indigo-600" aria-hidden />
+              Epic Insights · {`Q${epicInsightsQuarter}`}{epic?.title ? <span className="text-slate-400 font-normal"> ({epic.title})</span> : null}
             </div>
             <Button
               type="button"
@@ -2029,7 +2028,7 @@ export function EpicFormDialog({
               <X className="size-4" />
             </Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-10 pt-4">
             {epic ? (
               <MonthAnalytics
                 initiatives={epicScopedInitiativesForInsights}
