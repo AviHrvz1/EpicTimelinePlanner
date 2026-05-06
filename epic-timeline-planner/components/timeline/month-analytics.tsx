@@ -24,6 +24,7 @@ import {
   Eraser,
   Folder,
   Layers,
+  Zap,
   ListTodo,
   PieChart as PieChartIcon,
   PlayCircle,
@@ -485,12 +486,14 @@ function collectPeriodStories(
   initiatives: InitiativeItem[],
   months: number[],
   filterEpicTeamId?: string | null,
+  filterInitiativeId?: string | null,
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
   const minMonth = Math.min(...months);
   const maxMonth = Math.max(...months);
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled") continue;
+    if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
     for (const epic of initiative.epics ?? []) {
       if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
@@ -507,12 +510,14 @@ function collectPeriodEpics(
   initiatives: InitiativeItem[],
   months: number[],
   filterEpicTeamId?: string | null,
+  filterInitiativeId?: string | null,
 ) {
   const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
   const minMonth = Math.min(...months);
   const maxMonth = Math.max(...months);
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled") continue;
+    if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
     for (const epic of initiative.epics ?? []) {
       if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
@@ -549,6 +554,7 @@ export function MonthAnalytics({
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
+  const [selectedInitiativeId, setSelectedInitiativeId] = useState<string>("all");
 
   const scopeMonths = useMemo(() => {
     const base = periodMonths != null && periodMonths.length > 0 ? periodMonths : [month];
@@ -560,13 +566,30 @@ export function MonthAnalytics({
   const isMultiPeriodInsights = scopeMonths.length > 1;
   // Keep status pie/drilldown consistent across Month, Quarter, and All Quarters insights.
   const isQuarterInsights = true;
-  const monthEpics = useMemo(
+  // Unfiltered epics for the initiative picker list
+  const allScopeEpics = useMemo(
     () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamId),
     [initiatives, scopeMonths, filterEpicTeamId],
   );
+  const scopeInitiativeOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const result: Array<{ id: string; title: string }> = [];
+    for (const { initiative } of allScopeEpics) {
+      if (!seen.has(initiative.id)) {
+        seen.add(initiative.id);
+        result.push({ id: initiative.id, title: initiative.title });
+      }
+    }
+    return result;
+  }, [allScopeEpics]);
+  const initiativeFilterId = selectedInitiativeId === "all" ? null : selectedInitiativeId;
+  const monthEpics = useMemo(
+    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId),
+    [initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId],
+  );
   const monthStories = useMemo(
-    () => collectPeriodStories(initiatives, scopeMonths, filterEpicTeamId),
-    [initiatives, scopeMonths, filterEpicTeamId],
+    () => collectPeriodStories(initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId),
+    [initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId],
   );
   const epicComboOptions = useMemo(
     () =>
@@ -590,6 +613,14 @@ export function MonthAnalytics({
     const selected = monthEpics.find(({ epic }) => epic.id === initialSelectedEpicId);
     setEpicInput(selected ? selected.epic.title : "");
   }, [initialSelectedEpicId, monthEpics]);
+  // Clear epic selection when the initiative filter changes and the epic is no longer in scope
+  useEffect(() => {
+    if (selectedEpicId === "all") return;
+    if (!monthEpics.some(({ epic }) => epic.id === selectedEpicId)) {
+      setSelectedEpicId("all");
+      setEpicInput("");
+    }
+  }, [monthEpics, selectedEpicId]);
   const filteredEpicOptions = useMemo(() => {
     if (showAllEpicSuggestions) return epicComboOptions;
     const query = epicInput.trim().toLowerCase();
@@ -643,18 +674,23 @@ export function MonthAnalytics({
     });
   };
   useEffect(() => {
-    if (selectedEpicId === "all") {
-      setEpicInput("");
+    if (selectedEpicId !== "all") {
+      const selected = epicComboOptions.find((opt) => opt.id === selectedEpicId);
+      if (!selected) {
+        setSelectedEpicId("all");
+        setEpicInput("");
+      } else {
+        setEpicInput(selected.label);
+      }
       return;
     }
-    const selected = epicComboOptions.find((opt) => opt.id === selectedEpicId);
-    if (!selected) {
-      setSelectedEpicId("all");
-      setEpicInput("");
+    if (selectedInitiativeId !== "all") {
+      const init = scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId);
+      setEpicInput(init?.title ?? "");
       return;
     }
-    setEpicInput(selected.label);
-  }, [selectedEpicId, epicComboOptions]);
+    setEpicInput("");
+  }, [selectedEpicId, selectedInitiativeId, epicComboOptions, scopeInitiativeOptions]);
 
   const analytics = useMemo(() => {
     const scopeStories =
@@ -839,6 +875,7 @@ export function MonthAnalytics({
     selectedEpicOption,
     selectedWorkloadStatuses,
     selectedShowUnassigned,
+    monthStories,
   ]);
 
   const pieLegendItems = useMemo(() => analytics.statusPie.filter((x) => x.value > 0), [analytics.statusPie]);
@@ -1463,7 +1500,7 @@ export function MonthAnalytics({
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
             <Folder className="size-4 text-slate-500" aria-hidden />
-            Epic Scope
+            Epic / Initiative Scope
           </label>
           <div className="relative min-w-[22rem] flex-1 max-w-[34rem]">
             <input
@@ -1491,27 +1528,29 @@ export function MonthAnalytics({
                 setShowAllEpicSuggestions(false);
                 if (!v.trim()) {
                   setSelectedEpicId("all");
+                  setSelectedInitiativeId("all");
                   return;
                 }
                 const exact = epicComboOptions.find((opt) => opt.label === v);
                 if (exact) setSelectedEpicId(exact.id);
               }}
-              placeholder="All Epics"
+              placeholder="All Epics & Initiatives"
               className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700"
-              aria-label="Filter month insights by epic across all charts"
+              aria-label="Filter insights by epic or initiative"
             />
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 setSelectedEpicId("all");
+                setSelectedInitiativeId("all");
                 setEpicInput("");
                 setIsEpicDropdownOpen(true);
                 setShowAllEpicSuggestions(true);
               }}
               className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Clear epic scope filter"
-              title="Clear filter (show all epics)"
+              aria-label="Clear scope filter"
+              title="Clear filter (show all)"
             >
               <Eraser className="size-3.5" aria-hidden />
             </button>
@@ -1526,12 +1565,21 @@ export function MonthAnalytics({
                 {filteredEpicGroups.length > 0 ? (
                   filteredEpicGroups.map((group) => (
                     <div key={group.initiativeId} className="mb-1 rounded-lg border border-slate-100 bg-slate-50/60 p-1">
-                      <div className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                        <span className="text-[12px] leading-none" aria-hidden>
-                          {group.initiativeIcon && group.initiativeIcon.trim().length > 0 ? group.initiativeIcon : "📁"}
-                        </span>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setSelectedInitiativeId(group.initiativeId);
+                          setSelectedEpicId("all");
+                          setEpicInput(group.initiativeTitle);
+                          setIsEpicDropdownOpen(false);
+                          setShowAllEpicSuggestions(false);
+                        }}
+                        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 transition hover:bg-indigo-50 hover:text-indigo-700"
+                      >
+                        <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
                         {group.initiativeTitle}
-                      </div>
+                      </button>
                       {group.epics.map((opt) => (
                         <button
                           key={opt.id}
