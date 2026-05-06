@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Info, Maximize2, Minimize2, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, Check, Info, Maximize2, Minimize2, Users, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
@@ -23,11 +23,11 @@ const TEAM_CAP_HEADER_ICON_BTN_CLASS =
   "inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300";
 
 export const rollupOverCapacityPill =
-  "inline-flex items-center gap-1.5 rounded-lg border border-rose-300/90 bg-gradient-to-br from-rose-50 to-rose-100 px-2.5 py-1 text-[11px] font-semibold leading-tight text-rose-700 ring-1 ring-rose-200/60";
+  "inline-flex items-center gap-1.5 rounded-lg border border-rose-300/90 bg-gradient-to-br from-rose-50 to-rose-100 px-2.5 py-1 text-[12px] font-semibold leading-tight text-rose-700 ring-1 ring-rose-200/60";
 
 /** White chip behind rollups when load is within capacity (pairs with {@link rollupOverCapacityPill}). */
 export const rollupNeutralPill =
-  "inline-flex items-center gap-1 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[11px] font-semibold leading-tight text-slate-600";
+  "inline-flex items-center gap-1 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[12px] font-semibold leading-tight text-slate-600";
 
 /** Portal + fixed positioning so the tooltip is not clipped by horizontal scroll or overflow parents. */
 export function RollupOverCapWarn({
@@ -137,6 +137,13 @@ export function TeamEpicCard({
   const { setNodeRef, attributes, listeners, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(epicId),
   });
+  const [draftEst, setDraftEst] = useState<number | null>(null);
+  const isEstDirty = draftEst !== null && draftEst !== originalEstimateDays;
+  const displayEst = draftEst !== null ? draftEst : originalEstimateDays;
+  function commitEst() {
+    if (draftEst !== null) { onOriginalEstimateChange(epicId, draftEst); setDraftEst(null); }
+  }
+  function cancelEst() { setDraftEst(null); }
 
   return (
     <article
@@ -186,7 +193,7 @@ export function TeamEpicCard({
         </div>
         <div className="relative z-10 flex w-full min-w-0 shrink-0 flex-col items-start gap-1 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:ml-auto @min-[22rem]:w-auto @min-[22rem]:justify-self-end @min-[22rem]:pt-6">
           <div className="flex w-full flex-nowrap items-center justify-between gap-1.5">
-            <span className="whitespace-nowrap text-[11px] font-semibold text-slate-600">Σ Stories Estimation</span>
+            <span className="whitespace-nowrap text-[12px] font-semibold text-slate-600">Σ Stories Estimation</span>
             <span
               title="Sum of child user story estimates — edit estimates on each story"
               aria-label="Sum of child story estimate days (read-only)"
@@ -195,22 +202,36 @@ export function TeamEpicCard({
               {Math.round(childStoryEstimateDays)}
             </span>
           </div>
-          <label className="flex w-full flex-nowrap items-center justify-between gap-1.5 text-[11px] font-semibold text-slate-600">
+          <div className="flex w-full flex-nowrap items-center justify-between gap-1.5 text-[11px] font-semibold text-slate-600">
             <span className="whitespace-nowrap">Est days</span>
-            <input
-              type="number"
-              min={0}
-              max={5000}
-              step={1}
-              value={originalEstimateDays}
-              onChange={(event) => onOriginalEstimateChange(epicId, Math.max(0, Number(event.target.value || 0)))}
-              className={cn(
-                "h-[1.375rem] w-[3.5rem] shrink-0 rounded-md border border-slate-200 bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100",
-                CAPACITY_DAYS_INPUT_NO_SPIN,
+            <div className="flex shrink-0 items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                max={5000}
+                step={1}
+                value={displayEst}
+                onChange={(event) => setDraftEst(Math.max(0, Number(event.target.value || 0)))}
+                onKeyDown={(e) => { if (e.key === "Enter") commitEst(); if (e.key === "Escape") cancelEst(); }}
+                className={cn(
+                  "h-[1.375rem] w-[3.5rem] shrink-0 rounded-md border bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100",
+                  isEstDirty ? "border-blue-300 focus:border-blue-400" : "border-slate-200 focus:border-blue-300",
+                  CAPACITY_DAYS_INPUT_NO_SPIN,
+                )}
+                aria-label="Original estimate days"
+              />
+              {isEstDirty && (
+                <>
+                  <button type="button" onClick={commitEst} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100" aria-label="Confirm" title="Confirm">
+                    <Check className="size-3" strokeWidth={2.5} />
+                  </button>
+                  <button type="button" onClick={cancelEst} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Cancel" title="Cancel">
+                    <X className="size-3" strokeWidth={2.5} />
+                  </button>
+                </>
               )}
-              aria-label="Original estimate days"
-            />
-          </label>
+            </div>
+          </div>
         </div>
       </div>
     </article>
@@ -285,6 +306,13 @@ export function TeamCapacityBucket({
   /** Dashed line: where this team’s Capacity sits on the period scale (days). */
   const markerPct = Math.max(0, Math.min(100, gaugeScaleMax > 0 ? (capacity / gaugeScaleMax) * 100 : 0));
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
+  const [draftCap, setDraftCap] = useState<number | null>(null);
+  const isCapDirty = draftCap !== null && draftCap !== capacity;
+  const displayCap = draftCap !== null ? draftCap : capacity;
+  function commitCap() {
+    if (draftCap !== null) { onCapacityChange(draftCap); setDraftCap(null); }
+  }
+  function cancelCap() { setDraftCap(null); }
   const gradientKey = team.id.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const stressPct = utilization;
   const fluidStops = capacityGaugeFluidStops(capacity > 0 ? stressPct / 100 : 0);
@@ -310,11 +338,11 @@ export function TeamCapacityBucket({
         "group @container min-h-0 min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
       )}
     >
-      <div className="mb-2 flex flex-col gap-2 pr-0.5">
+      <div className="-mt-1 mb-2 flex flex-col gap-2 pr-0.5 pb-1">
         <div className="relative grid min-h-8 w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-x-1">
           <div className="min-w-0 justify-self-start" aria-hidden />
-          <p className="col-start-2 inline-flex min-w-0 max-w-[min(16rem,85vw)] items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[13px] font-bold text-slate-800 shadow-sm">
-            <Users className="size-3.5 shrink-0 text-indigo-500" aria-hidden />
+          <p className="col-start-2 inline-flex min-w-0 max-w-[min(16rem,85vw)] items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[15px] font-bold text-slate-800">
+            <Users className="size-4 shrink-0 text-indigo-500" aria-hidden />
             <span className="min-w-0 truncate">
               {teamLabelPrefix ? (
                 <>
@@ -358,22 +386,34 @@ export function TeamCapacityBucket({
         </div>
         <div className="border-t border-slate-200/80" />
         <div className="flex min-w-0 items-center">
-          <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
+          <div className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-slate-600">
             Available Team Capacity
             <input
               type="number"
               min={0}
               max={capacityInputMax}
               step={1}
-              value={capacity}
-              onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
+              value={displayCap}
+              onChange={(event) => setDraftCap(Number(event.target.value || 0))}
+              onKeyDown={(e) => { if (e.key === "Enter") commitCap(); if (e.key === "Escape") cancelCap(); }}
               className={cn(
-                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800",
+                "h-5 w-10 shrink-0 rounded border bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 focus:outline-none focus:ring-1",
+                isCapDirty ? "border-blue-300 focus:border-blue-400 focus:ring-blue-100" : "border-slate-200/90 focus:border-blue-300 focus:ring-blue-100",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />
-            <span className="text-[11px] font-semibold text-slate-600">Days</span>
-          </label>
+            <span className="text-[13px] font-semibold text-slate-600">Days</span>
+            {isCapDirty && (
+              <>
+                <button type="button" onClick={commitCap} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100" aria-label="Confirm" title="Confirm">
+                  <Check className="size-3" strokeWidth={2.5} />
+                </button>
+                <button type="button" onClick={cancelCap} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Cancel" title="Cancel">
+                  <X className="size-3" strokeWidth={2.5} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -400,8 +440,18 @@ export function TeamCapacityBucket({
           >
             <div className="mt-auto flex w-full min-w-0 flex-col-reverse gap-2.5 pb-2 pt-1">
               {cards.length === 0 ? (
-                <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
-                  Drop epic here
+                <p
+                  className="flex items-center justify-center gap-2 rounded-xl p-4 text-center text-[12px] font-semibold tracking-wide text-slate-500"
+                  style={{
+                    background: "rgba(255,255,255,0.45)",
+                    border: "1px solid rgba(255,255,255,0.6)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    boxShadow: "0 2px 12px rgba(99,102,241,0.07), inset 0 1px 0 rgba(255,255,255,0.7)",
+                  }}
+                >
+                  Drop Epic here
+                  <ArrowDown className="size-3.5 text-slate-400" strokeWidth={2} aria-hidden />
                 </p>
               ) : (
                 cards.map((card) => (
@@ -419,8 +469,8 @@ export function TeamCapacityBucket({
         </div>
         <div className={cn("flex min-h-0 flex-col items-center p-2", bucketColumnShellClass)}>
           <div className="text-center">
-            <p className="text-[11px] font-semibold text-slate-600">Load</p>
-            <p className="text-[13px] font-bold text-slate-700">{Math.round(utilization)}%</p>
+            <p className="text-[12px] font-semibold text-slate-600">Load</p>
+            <p className="text-[15px] font-bold text-slate-700">{Math.round(utilization)}%</p>
           </div>
           <div className="flex flex-1 items-center py-1">
             <svg viewBox="0 0 84 292" className="h-full w-[4rem]" aria-label="Team capacity gauge">
@@ -476,7 +526,7 @@ export function TeamCapacityBucket({
               />
             </svg>
           </div>
-          <div className="text-center text-[11px] font-semibold text-slate-600">
+          <div className="text-center text-[12px] font-semibold text-slate-600">
             <p>{primaryLoad.toFixed(1)} Days</p>
             <p>/ {capacity.toFixed(1)} Days</p>
           </div>

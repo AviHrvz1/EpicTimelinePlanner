@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { GripVertical, Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
+import { ArrowDown, Check, GripVertical, Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
@@ -175,6 +175,19 @@ function CapacityStoryCard({
   onOpenStory: (storyId: string) => void;
 }) {
   const isUnassigned = card.assigneeLabel === "Unassigned";
+  const [draftDays, setDraftDays] = useState<number | null>(null);
+  const isDirty = draftDays !== null && draftDays !== card.estimatedDays;
+  const displayDays = draftDays !== null ? draftDays : card.estimatedDays;
+
+  function commitDraft() {
+    if (draftDays !== null) {
+      onEstimateChange(card.id, draftDays);
+      setDraftDays(null);
+    }
+  }
+  function cancelDraft() {
+    setDraftDays(null);
+  }
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: storyBoardDraggableId(card.id),
   });
@@ -239,20 +252,49 @@ function CapacityStoryCard({
             <span className="min-w-0 truncate">{card.assigneeLabel}</span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <span className="whitespace-nowrap text-right text-[11px] font-semibold text-slate-600">Est Days</span>
+            <span className="whitespace-nowrap text-right text-[12px] font-semibold text-slate-600">Est Days</span>
             <input
               type="number"
               min={0}
               max={20}
               step={1}
-              value={card.estimatedDays}
-              onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
+              value={displayDays}
+              onChange={(event) => setDraftDays(Number(event.target.value || 0))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitDraft();
+                if (e.key === "Escape") cancelDraft();
+              }}
               className={cn(
-                "h-5 w-10 shrink-0 rounded border border-slate-200 bg-white px-0.5 text-center text-[10px] font-semibold leading-none text-slate-800 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-100",
+                "h-5 w-10 shrink-0 rounded border bg-white px-0.5 text-center text-[10px] font-semibold leading-none text-slate-800 focus:outline-none focus:ring-1",
+                isDirty
+                  ? "border-blue-300 focus:border-blue-400 focus:ring-blue-100"
+                  : "border-slate-200 focus:border-blue-300 focus:ring-blue-100",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
               aria-label="Story Est Days"
             />
+            {isDirty && (
+              <>
+                <button
+                  type="button"
+                  onClick={commitDraft}
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100"
+                  aria-label="Confirm estimate"
+                  title="Confirm"
+                >
+                  <Check className="size-3" strokeWidth={2.5} />
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelDraft}
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Cancel estimate change"
+                  title="Cancel"
+                >
+                  <X className="size-3" strokeWidth={2.5} />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -323,6 +365,13 @@ function CapacityBucket({
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
+  const [draftCapacity, setDraftCapacity] = useState<number | null>(null);
+  const isCapacityDirty = draftCapacity !== null && draftCapacity !== capacity;
+  const displayCapacity = draftCapacity !== null ? draftCapacity : capacity;
+  function commitCapacity() {
+    if (draftCapacity !== null) { onCapacityChange(draftCapacity); setDraftCapacity(null); }
+  }
+  function cancelCapacity() { setDraftCapacity(null); }
   const memberGradientKey = member.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const svgKey = `scap-${memberGradientKey}-${teamKey.replace(/[^a-zA-Z0-9]+/g, "-")}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
   const sprintGaugeMaxDays = 10;
@@ -364,7 +413,7 @@ function CapacityBucket({
         "hover:border-indigo-300/70 hover:from-indigo-50/90 hover:via-indigo-100/55 hover:to-sky-100/70 hover:shadow-md hover:ring-indigo-200/55",
       )}
     >
-      <div className="mb-2 flex flex-col gap-2 pr-0.5">
+      <div className="-mt-1 mb-2 flex flex-col gap-4 pr-0.5">
         {/* 1fr | auto | 1fr keeps the person name centered; label sits in the left fringe only. */}
         <div className="relative grid min-h-8 w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-x-1">
           <div className="flex min-w-0 items-center justify-self-start self-center">
@@ -377,7 +426,7 @@ function CapacityBucket({
               </span>
             ) : null}
           </div>
-          <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-1.5 text-center text-[15px] font-bold text-slate-800">
+          <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-1.5 text-center text-[17px] font-bold text-slate-800">
             <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
             <span className="min-w-0 truncate">{memberTitle}</span>
           </p>
@@ -413,22 +462,51 @@ function CapacityBucket({
           </div>
         </div>
         <div className="flex min-h-6 min-w-0 flex-nowrap items-center justify-between gap-x-3">
-          <label className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-slate-600">
+          <div className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-slate-600">
             Capacity
             <input
               type="number"
               min={0}
               max={10}
               step={0.5}
-              value={capacity}
-              onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
+              value={displayCapacity}
+              onChange={(event) => setDraftCapacity(Number(event.target.value || 0))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitCapacity();
+                if (e.key === "Escape") cancelCapacity();
+              }}
               className={cn(
-                "h-5 w-10 shrink-0 rounded border border-slate-200/90 bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800",
+                "h-5 w-10 shrink-0 rounded border bg-white/90 px-1 py-0 text-center text-[11px] font-medium leading-none text-slate-800 focus:outline-none focus:ring-1",
+                isCapacityDirty
+                  ? "border-blue-300 focus:border-blue-400 focus:ring-blue-100"
+                  : "border-slate-200/90 focus:border-blue-300 focus:ring-blue-100",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />
-            <span className="text-[11px] font-semibold text-slate-600">Days</span>
-          </label>
+            <span className="text-[13px] font-semibold text-slate-600">Days</span>
+            {isCapacityDirty && (
+              <>
+                <button
+                  type="button"
+                  onClick={commitCapacity}
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100"
+                  aria-label="Confirm capacity"
+                  title="Confirm"
+                >
+                  <Check className="size-3" strokeWidth={2.5} />
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelCapacity}
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Cancel capacity change"
+                  title="Cancel"
+                >
+                  <X className="size-3" strokeWidth={2.5} />
+                </button>
+              </>
+            )}
+          </div>
           <div className="flex min-w-0 shrink items-center justify-end gap-1.5">
             <div className="min-w-0 max-w-full overflow-x-auto overflow-y-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div
@@ -523,8 +601,18 @@ function CapacityBucket({
               {cards.length === 0 ? (
                 <>
                   <StoryDropSlot yearSprint={yearSprint} teamKey={teamKey} member={member} index={0} />
-                  <p className="rounded-md bg-slate-50/90 p-3 text-center text-[12px] font-medium text-slate-500">
+                  <p
+                    className="flex items-center justify-center gap-2 rounded-xl p-4 text-center text-[12px] font-semibold tracking-wide text-slate-500"
+                    style={{
+                      background: "rgba(255,255,255,0.45)",
+                      border: "1px solid rgba(255,255,255,0.6)",
+                      backdropFilter: "blur(6px)",
+                      WebkitBackdropFilter: "blur(6px)",
+                      boxShadow: "0 2px 12px rgba(99,102,241,0.07), inset 0 1px 0 rgba(255,255,255,0.7)",
+                    }}
+                  >
                     Drop story here
+                    <ArrowDown className="size-3.5 text-slate-400" strokeWidth={2} aria-hidden />
                   </p>
                 </>
               ) : (
@@ -553,8 +641,8 @@ function CapacityBucket({
         </div>
         <div className={cn("flex min-h-0 flex-col items-center p-2", bucketColumnShellClass)}>
           <div className="text-center">
-            <p className="text-[11px] font-semibold text-slate-600">Load</p>
-            <p className="text-[13px] font-bold text-slate-700">
+            <p className="text-[12px] font-semibold text-slate-600">Load</p>
+            <p className="text-[15px] font-bold text-slate-700">
               {Math.round(utilization)}%
             </p>
           </div>
@@ -612,7 +700,7 @@ function CapacityBucket({
               />
             </svg>
           </div>
-          <div className="text-center text-[11px] font-semibold text-slate-600">
+          <div className="text-center text-[12px] font-semibold text-slate-600">
             <p>{assignedTotal.toFixed(1)} Days</p>
             <p>/ {capacity.toFixed(1)} Days</p>
           </div>
