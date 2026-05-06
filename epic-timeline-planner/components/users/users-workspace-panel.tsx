@@ -1402,11 +1402,11 @@ export function UsersWorkspacePanel() {
         </div>
       </header>
 
-      <div className="mb-5 shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-6 pt-6">
+      <div className="mb-5 shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
         <div ref={searchFieldWrapRef} className="relative min-w-0 w-full flex-1 lg:max-w-md">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-slate-400"
+            className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500"
             aria-hidden
           />
           <input
@@ -1416,7 +1416,7 @@ export function UsersWorkspacePanel() {
             onBlur={handleDirectorySearchBlur}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search name, email, team, or permission…"
-            className="relative z-[1] h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
             aria-label="Search users"
             aria-controls="users-directory-name-suggestions"
             aria-expanded={searchSuggestOpen && nameSuggestions.length > 0}
@@ -1450,14 +1450,15 @@ export function UsersWorkspacePanel() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="w-full min-w-[160px] max-w-[220px] shrink-0 sm:w-[200px]">
+          <div className="relative w-full min-w-[160px] max-w-[220px] shrink-0 sm:w-[200px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
             <AssigneeCombobox
               value={teamFilterInput}
               onChange={setTeamFilterInput}
               suggestions={teamFilterSuggestions}
               placeholder="All Teams"
               aria-label="Filter by team"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
               onSuggestionPick={(s) => {
                 const next = resolveTeamFilterQuery(s, rows, registeredTeamSlugs);
                 setTeamFilter(next);
@@ -1470,14 +1471,15 @@ export function UsersWorkspacePanel() {
               }}
             />
           </div>
-          <div className="w-full min-w-[160px] max-w-[220px] shrink-0 sm:w-[200px]">
+          <div className="relative w-full min-w-[160px] max-w-[220px] shrink-0 sm:w-[200px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
             <AssigneeCombobox
               value={permFilterInput}
               onChange={setPermFilterInput}
               suggestions={PERMISSION_FILTER_SUGGESTIONS}
               placeholder="All Permissions"
               aria-label="Filter by permission"
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
               onSuggestionPick={(s) => {
                 const next = resolvePermissionFilterQuery(s);
                 setPermissionFilter(next);

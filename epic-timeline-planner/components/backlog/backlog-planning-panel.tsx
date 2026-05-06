@@ -948,12 +948,12 @@ function BacklogTeamFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
           buttonClassName,
         )}
       >
-        <span className="shrink-0 font-semibold text-slate-700">Team: </span>
-        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-medium text-slate-500">Team: </span>
+        <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -1057,12 +1057,12 @@ function BacklogAssigneeFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
           buttonClassName,
         )}
       >
-        <span className="shrink-0 font-semibold text-slate-700">Assignee: </span>
-        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-medium text-slate-500">Assignee: </span>
+        <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -1163,12 +1163,12 @@ function BacklogLabelsFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
           buttonClassName,
         )}
       >
-        <span className="shrink-0 font-semibold text-slate-700">Labels: </span>
-        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-medium text-slate-500">Labels: </span>
+        <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -1265,12 +1265,12 @@ function MultiCheckboxFilter({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-[14px] outline-none transition hover:border-slate-300 hover:bg-slate-50",
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
           buttonClassName,
         )}
       >
-        <span className="shrink-0 font-semibold text-slate-700">{label}: </span>
-        <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{selectedLabel}</span>
+        <span className="shrink-0 font-medium text-slate-500">{label}: </span>
+        <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-56 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
@@ -4036,7 +4036,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
 
-      <div className="relative z-20 mb-5 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [contain:inline-size] [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
+      <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [contain:inline-size] [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
           style={{ gridTemplateColumns: "auto auto repeat(10, minmax(0, 1fr)) auto" }}
@@ -4052,7 +4052,7 @@ export function BacklogPlanningPanel({
               onBlur={() => {
                 window.setTimeout(() => setShowSearchSuggestions(false), 120);
               }}
-              className="h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[14px] text-slate-800 outline-none placeholder:text-slate-400 transition hover:border-slate-300 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className="h-9 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
             />
             {showSearchSuggestions && searchSuggestions.length > 0 ? (
               <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
@@ -4082,50 +4082,46 @@ export function BacklogPlanningPanel({
               onClick={() => setPresetMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={presetMenuOpen}
-              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
+              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[14px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
             >
-              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-600">
+              <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-500">
                 <Bookmark className="size-3 shrink-0 text-indigo-400" strokeWidth={2} aria-hidden />
                 <span>Filters</span>
               </span>
-              <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{presetSearch}</span>
+              <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{presetSearch}</span>
               <ChevronDown className={cn("size-3 shrink-0 text-slate-400 transition-transform", presetMenuOpen && "rotate-180")} aria-hidden />
             </button>
             {presetMenuOpen && (
               <div
                 id="backlog-saved-filter-listbox"
                 role="listbox"
-                className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-full min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 ring-1 ring-slate-100"
+                className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-[260px] overflow-hidden rounded-none border border-slate-200 bg-white shadow-xl shadow-slate-900/10"
               >
                 {/* Save current filter -- always first */}
-                <div className="p-1">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-indigo-700 transition hover:bg-indigo-50"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      setPresetMenuOpen(false);
-                      openSaveAsFilterDialog();
-                    }}
-                  >
-                    <Plus className="size-3.5 shrink-0" aria-hidden />
-                    Save current filter
-                  </button>
-                </div>
-                {savedFilterPresets.length > 0 && (
-                  <div className="border-t border-slate-100" />
-                )}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2.5 bg-slate-50 px-4 py-3 text-left text-[13px] font-semibold text-indigo-600 transition hover:bg-indigo-50"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setPresetMenuOpen(false);
+                    openSaveAsFilterDialog();
+                  }}
+                >
+                  <Plus className="size-3.5 shrink-0 text-indigo-500" aria-hidden />
+                  Save current filter
+                </button>
+                <div className="h-px bg-slate-200" />
                 {savedFilterPresets.length === 0 ? (
-                  <div className="px-3 py-2.5 text-[12px] leading-snug text-slate-400">
+                  <div className="px-4 py-3 text-[12px] leading-snug text-slate-400">
                     No saved filters yet. Click "Save current filter" to store your current search and facets.
                   </div>
                 ) : (
-                  <div className="max-h-56 overflow-y-auto p-1">
+                  <div className="max-h-56 overflow-y-auto">
                     {savedFilterPresets.map((preset) => (
-                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg hover:!bg-indigo-50/40">
+                      <div key={preset.id} className="flex items-center border-b border-slate-100 transition last:border-b-0 hover:bg-indigo-50/50">
                         <button
                           type="button"
-                          className="min-w-0 flex-1 truncate px-3 py-2 text-left text-[13px] text-slate-800"
+                          className="min-w-0 flex-1 truncate px-4 py-2.5 text-left text-[13px] text-slate-700"
                           onMouseDown={(event) => {
                             event.preventDefault();
                             applyBacklogFilterSnapshot(preset.snapshot);
@@ -4138,7 +4134,7 @@ export function BacklogPlanningPanel({
                         </button>
                         <button
                           type="button"
-                          className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200/80 hover:text-slate-700"
+                          className="mr-3 inline-flex size-6 shrink-0 items-center justify-center rounded text-slate-300 transition hover:bg-slate-100 hover:text-slate-600"
                           aria-label={`Delete saved filter ${preset.name}`}
                           title="Remove saved filter"
                           onMouseDown={(event) => {
@@ -4160,39 +4156,37 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
-              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[13px] text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 sm:px-2"
+              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[14px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
               aria-haspopup="listbox"
               aria-expanded={viewPresetMenuOpen}
             >
-              <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-slate-600">
+              <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-500">
                 <LayoutGrid className="size-3 shrink-0 text-sky-500" strokeWidth={2} aria-hidden />
                 <span>Views</span>
               </span>
-              <span className="ml-1 min-w-0 truncate font-medium text-slate-600">{viewPresetSearch}</span>
+              <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{viewPresetSearch}</span>
               <ChevronDown className={cn("size-3 shrink-0 text-slate-400 transition-transform", viewPresetMenuOpen && "rotate-180")} />
             </button>
             {viewPresetMenuOpen && (
-              <div className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-full min-w-[14rem] rounded-xl border border-slate-200/80 bg-white shadow-xl ring-1 ring-slate-900/5">
-                <div className="p-1">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium text-sky-700 hover:bg-sky-50"
-                    onMouseDown={() => { setViewPresetMenuOpen(false); openSaveViewDialog(); }}
-                  >
-                    <Plus className="size-3.5 shrink-0" />
-                    Save current view
-                  </button>
-                </div>
-                {savedViewPresets.length > 0 && <div className="border-t border-slate-100" />}
+              <div className="absolute left-0 top-[calc(100%+0.35rem)] z-30 w-[260px] overflow-hidden rounded-none border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2.5 bg-slate-50 px-4 py-3 text-left text-[13px] font-semibold text-sky-600 transition hover:bg-sky-50"
+                  onMouseDown={() => { setViewPresetMenuOpen(false); openSaveViewDialog(); }}
+                >
+                  <Plus className="size-3.5 shrink-0 text-sky-500" />
+                  Save current view
+                </button>
+                <div className="h-px bg-slate-200" />
                 {savedViewPresets.length === 0 ? (
-                  <div className="px-3 py-2.5 text-[12px] text-slate-400">No saved views yet...</div>
+                  <div className="px-4 py-3 text-[12px] text-slate-400">No saved views yet...</div>
                 ) : (
-                  <div className="max-h-56 overflow-y-auto p-1">
+                  <div className="max-h-56 overflow-y-auto">
                     {savedViewPresets.map((preset) => (
-                      <div key={preset.id} className="flex items-center gap-0.5 rounded-lg pr-1 hover:!bg-indigo-50/40">
+                      <div key={preset.id} className="flex items-center border-b border-slate-100 transition last:border-b-0 hover:bg-sky-50/50">
                         <button
                           type="button"
-                          className="min-w-0 flex-1 truncate px-3 py-2 text-left text-[13px] text-slate-800"
+                          className="min-w-0 flex-1 truncate px-4 py-2.5 text-left text-[13px] text-slate-700"
                           onMouseDown={() => {
                             applyBacklogViewSnapshot(preset.snapshot);
                             setViewPresetSearch(preset.name);
@@ -4204,7 +4198,7 @@ export function BacklogPlanningPanel({
                         </button>
                         <button
                           type="button"
-                          className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200/80 hover:text-slate-700"
+                          className="mr-3 inline-flex size-6 shrink-0 items-center justify-center rounded text-slate-300 transition hover:bg-slate-100 hover:text-slate-600"
                           aria-label={`Delete saved view ${preset.name}`}
                           title="Remove saved view"
                           onMouseDown={(event) => {
@@ -4226,7 +4220,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 sm:px-2.5"
+              className="flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] transition hover:from-indigo-100 hover:to-violet-100"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-indigo-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2} aria-hidden />
@@ -4257,8 +4251,8 @@ export function BacklogPlanningPanel({
           </div>
           <div className="col-start-2 row-start-2 flex min-w-0 w-full items-center justify-center gap-1.5">
             <div className="h-5 w-px shrink-0 bg-slate-300/70" aria-hidden />
-            <span className="inline-flex min-w-0 items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-900">
-              <Filter className="size-3 shrink-0 text-slate-900" strokeWidth={2} aria-hidden />
+            <span className="inline-flex min-w-0 items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Filter className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
               <span className="truncate">Filters</span>
             </span>
           </div>
@@ -4340,7 +4334,7 @@ export function BacklogPlanningPanel({
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="relative z-0 inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label="Clear all filters"
             >
               <Eraser className="size-3.5" strokeWidth={2} />
