@@ -24,6 +24,7 @@ import {
   Quote,
   Tag,
   Type,
+  UserRound,
   Zap,
   Underline as UnderlineIcon,
   X,
@@ -666,8 +667,7 @@ export function InitiativeFormDialog({
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
-                className="h-8 min-w-[100px] px-4 text-sm font-medium"
+                className="h-8 min-w-[100px] px-4 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800"
                 onClick={onClose}
               >
                 Cancel
@@ -675,7 +675,7 @@ export function InitiativeFormDialog({
               <Button
                 type="button"
                 size="sm"
-                className="h-8 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                className="h-8 min-w-[100px] gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
                 onClick={handleSave}
                 disabled={isSaving}
               >
@@ -690,7 +690,7 @@ export function InitiativeFormDialog({
               <div ref={splitLayoutRef} className="grid h-full min-h-0 gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
               <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
-                  <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+                  <p className="flex shrink-0 items-center gap-2 text-lg font-medium text-slate-600 transition-colors hover:text-indigo-600">
                     <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                     Title
                   </p>
@@ -701,12 +701,12 @@ export function InitiativeFormDialog({
                 </label>
 
                 <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border-0 bg-white py-2.5 shadow-none ring-0">
-                  <p className="text-sm font-normal text-slate-700">Year</p>
-                  <input readOnly value={initiativePlanningYear} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800" />
-                  <p className="text-sm font-normal text-slate-700">Quarter</p>
-                  <input readOnly value={initiativePlanningQuarter} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800" />
-                  <p className="text-sm font-normal text-slate-700">Month</p>
-                  <input readOnly value={initiativePlanningMonth} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800" />
+                  <p className="text-[15px] font-normal text-slate-700">Year</p>
+                  <input readOnly value={initiativePlanningYear} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
+                  <input readOnly value={initiativePlanningQuarter} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                  <p className="text-[15px] font-normal text-slate-700">Month</p>
+                  <input readOnly value={initiativePlanningMonth} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
                 </div>
 
                 <div className="mt-1 flex shrink-0 flex-col gap-1">
@@ -716,7 +716,7 @@ export function InitiativeFormDialog({
                     aria-expanded={descriptionAccordionOpen}
                     aria-controls="initiative-form-description-accordion-panel"
                     onClick={() => setDescriptionAccordionOpen((v) => !v)}
-                    className="flex w-full shrink-0 items-center gap-2 rounded-md py-1 text-left text-base font-medium text-slate-600 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
+                    className="-ml-1 flex w-full shrink-0 items-center gap-2 rounded-md py-1 text-left text-lg font-medium text-slate-600 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
                   >
                     {descriptionAccordionOpen ? (
                       <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1057,14 +1057,15 @@ export function InitiativeFormDialog({
                   Details
                 </h3>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Assignee</p>
-                  <div className="relative flex min-w-0 items-center">
+                  <p className="text-[15px] font-normal text-slate-700">Assignee</p>
+                  <div className="relative flex min-w-0 w-full items-center">
+                    <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                     <AssigneeCombobox
                       value={assignee}
                       onChange={setAssignee}
                       suggestions={assigneeNameSuggestions}
                       placeholder="Type or pick a name"
-                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-1.5 text-[13px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                     />
                     {assignee ? (
                       <button
@@ -1079,10 +1080,10 @@ export function InitiativeFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-sm font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-sm font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[13px] font-medium text-slate-700" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-[15px] font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700" /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Labels</p>
+                  <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
                     <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                       {labelsDraft.map((label) => (
@@ -1186,7 +1187,7 @@ export function InitiativeFormDialog({
             >
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+                className="group flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
                 onClick={() => {
                   setActivityOpen((wasOpen) => {
                     if (!wasOpen) {
@@ -1197,7 +1198,7 @@ export function InitiativeFormDialog({
                 }}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-lg font-normal text-slate-800">
+                <span className="flex items-center gap-2 text-xl font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden

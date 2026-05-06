@@ -23,11 +23,11 @@ import {
   ListTree,
   MessageSquare,
   Quote,
-  Save,
   Tag,
   Trash,
   Type,
   Underline as UnderlineIcon,
+  UserRound,
   X,
 } from "lucide-react";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -205,7 +205,7 @@ export function EpicFormDialog({
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(220);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(340);
   const [childStoryDrafts, setChildStoryDrafts] = useState<Record<string, ChildStoryDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
@@ -301,7 +301,7 @@ export function EpicFormDialog({
       setIsDraggingDialog(false);
       setDialogWidthVw(64);
       setDetailsPanelWidthPx(296);
-      setActivityPanelHeightPx(220);
+      setActivityPanelHeightPx(340);
       setActivityOpen(true);
       setDescriptionAccordionOpen(true);
       setEpicInsightsPanelOpen(false);
@@ -1076,11 +1076,10 @@ export function EpicFormDialog({
               <Button
                 type="button"
                 size="sm"
-                className="h-8 gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-700/20 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                className="h-8 min-w-[100px] border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
                 onClick={handleSave}
                 disabled={isSaving}
               >
-                <Save className="size-3.5" aria-hidden />
                 {isSaving ? "Saving…" : epic ? "Save" : "Create"}
               </Button>
               <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close epic details">
@@ -1098,7 +1097,7 @@ export function EpicFormDialog({
               >
               <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
-                  <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+                  <p className="flex shrink-0 items-center gap-2 text-lg font-medium text-slate-600 transition-colors hover:text-indigo-600">
                     <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                     Title
                   </p>
@@ -1119,14 +1118,14 @@ export function EpicFormDialog({
                 </label>
 
                 <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border-0 bg-white py-2.5 shadow-none ring-0">
-                  <p className="text-sm font-normal text-slate-700">Year</p>
+                  <p className="text-[15px] font-normal text-slate-700">Year</p>
                   <input
                     readOnly
                     value={planningYearDisplay}
                     title="Year comes from the parent initiative"
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"
                   />
-                  <p className="text-sm font-normal text-slate-700">Quarter</p>
+                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
                   <select
                     value={planQuarterDraft}
                     onChange={(event) => {
@@ -1138,7 +1137,7 @@ export function EpicFormDialog({
                         setPlanMonthDraft("");
                       }
                     }}
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"
                   >
                     <option value="">Not set</option>
                     <option value="Q1">Q1</option>
@@ -1146,7 +1145,7 @@ export function EpicFormDialog({
                     <option value="Q3">Q3</option>
                     <option value="Q4">Q4</option>
                   </select>
-                  <p className="text-sm font-normal text-slate-700">Month</p>
+                  <p className="text-[15px] font-normal text-slate-700">Month</p>
                   <select
                     value={planMonthDraft}
                     onChange={(event) => {
@@ -1158,7 +1157,7 @@ export function EpicFormDialog({
                         setPlanQuarterDraft(`Q${quarterNumFromMonth(idx + 1)}`);
                       }
                     }}
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-800"
+                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"
                   >
                     <option value="">Not set</option>
                     {allowedMonthNames.map((month) => (
@@ -1176,7 +1175,7 @@ export function EpicFormDialog({
                     aria-expanded={descriptionAccordionOpen}
                     aria-controls="epic-form-description-accordion-panel"
                     onClick={() => setDescriptionAccordionOpen((v) => !v)}
-                    className="flex w-full items-center gap-2 rounded-md py-1 text-left text-base font-medium text-slate-600 transition-colors hover:bg-slate-100/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
+                    className="-ml-1 flex w-full items-center gap-2 rounded-md py-1 text-left text-lg font-medium text-slate-600 transition-colors hover:bg-slate-100/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
                   >
                     {descriptionAccordionOpen ? (
                       <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1666,14 +1665,15 @@ export function EpicFormDialog({
                   Details
                 </h3>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Assignee</p>
-                  <div className="relative flex min-w-0 items-center">
+                  <p className="text-[15px] font-normal text-slate-700">Assignee</p>
+                  <div className="relative flex min-w-0 w-full items-center">
+                    <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                     <AssigneeCombobox
                       value={assignee}
                       onChange={setAssignee}
                       suggestions={assigneeNameSuggestions}
                       placeholder="Type or pick a name"
-                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-1.5 text-[13px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                     />
                     {assignee ? (
                       <button
@@ -1689,7 +1689,7 @@ export function EpicFormDialog({
                   </div>
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Parent</p>
+                  <p className="text-[15px] font-normal text-slate-700">Parent</p>
                   <InitiativeCombobox
                     valueId={initiativeId}
                     onValueChange={(next) => {
@@ -1709,11 +1709,11 @@ export function EpicFormDialog({
                     disabled={isSaving}
                     placeholder="Search, pick, or create an initiative"
                     aria-label="Parent initiative"
-                    className="h-7 w-full min-w-0 rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+                    className="h-7 w-full min-w-0 rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
                   />
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Team</p>
+                  <p className="text-[15px] font-normal text-slate-700">Team</p>
                   {showTeamSelect ? (
                     <TeamIdCombobox
                       teamId={teamDraft}
@@ -1721,14 +1721,14 @@ export function EpicFormDialog({
                       allowCustomTeam
                       extraTeamIds={directoryExtraTeamIds}
                       placeholder="Type or pick a team"
-                      className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+                      className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
                     />
                   ) : (
                     <div className="flex items-center gap-2">
                       <input
                         value={persistedTeamLabel}
                         readOnly
-                        className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-700"
+                        className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-700"
                       />
                       <Button
                         type="button"
@@ -1746,13 +1746,13 @@ export function EpicFormDialog({
                   )}
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Days Est</p>
+                  <p className="text-[15px] font-normal text-slate-700">Days Est</p>
                   <input
                     type="number"
                     min={0}
                     max={5000}
                     step={1}
-                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
                     placeholder="e.g. 40"
                     value={originalEstimateDaysDraft}
                     onChange={(event) => setOriginalEstimateDaysDraft(event.target.value)}
@@ -1760,7 +1760,7 @@ export function EpicFormDialog({
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <div className="inline-flex items-center gap-1">
-                    <p className="text-sm font-normal text-slate-700">Σ Child Est.</p>
+                    <p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p>
                     <span className="group relative inline-flex items-center">
                       <Info
                         className="size-3.5 text-slate-400"
@@ -1774,11 +1774,11 @@ export function EpicFormDialog({
                   <input
                     value={totalUserStoryEstimate}
                     readOnly
-                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] font-medium text-slate-700"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] font-medium text-slate-700"
                   />
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-sm font-normal text-slate-700">Labels</p>
+                  <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
                     <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                       {labelsDraft.map((label) => (
@@ -1862,7 +1862,7 @@ export function EpicFormDialog({
             </div>
             </div>
 
-          <div className="relative z-0 mt-3 shrink-0">
+          <div className="relative z-0 mt-0 shrink-0">
             {activityOpen ? (
               <div
                 className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
@@ -1888,7 +1888,7 @@ export function EpicFormDialog({
             >
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+                className="group flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
                 onClick={() => {
                   setActivityOpen((wasOpen) => {
                     if (!wasOpen) {
@@ -1899,7 +1899,7 @@ export function EpicFormDialog({
                 }}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-lg font-normal text-slate-800">
+                <span className="flex items-center gap-2 text-xl font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden

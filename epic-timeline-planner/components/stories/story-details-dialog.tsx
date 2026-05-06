@@ -31,6 +31,7 @@ import {
   Trash,
   Type,
   Underline as UnderlineIcon,
+  UserRound,
   X,
 } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
@@ -395,7 +396,7 @@ export function StoryDetailsDialog({
     if (open) {
       setDialogWidthVw(60);
       setActivityOpen(true);
-      setDetailsPanelWidthPx(296);
+      setDetailsPanelWidthPx(340);
       setActivityPanelHeightPx(280);
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
@@ -768,7 +769,7 @@ export function StoryDetailsDialog({
                 <Button
                   type="button"
                   size="sm"
-                  className="h-8 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                  className="h-8 min-w-[100px] gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
                   onClick={handleSave}
                   disabled={saving}
                 >
@@ -779,7 +780,7 @@ export function StoryDetailsDialog({
               <Button
                 type="button"
                 size="sm"
-                className="h-8 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                className="h-8 min-w-[100px] gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
                 onClick={handleSave}
                 disabled={saving}
               >
@@ -801,7 +802,7 @@ export function StoryDetailsDialog({
             >
           <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border-0 bg-white p-4">
             <label className="block shrink-0 space-y-1">
-              <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+              <p className="flex shrink-0 items-center gap-2 text-lg font-medium text-slate-600 transition-colors hover:text-indigo-600">
                 <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Title
               </p>
@@ -820,7 +821,7 @@ export function StoryDetailsDialog({
               </div>
             </label>
             <label className="mt-5 flex min-h-0 flex-1 flex-col gap-1">
-              <p className="flex shrink-0 items-center gap-2 text-base font-medium text-slate-600">
+              <p className="-ml-1 flex shrink-0 items-center gap-2 text-lg font-medium text-slate-600">
                 <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Description
               </p>
@@ -962,13 +963,13 @@ export function StoryDetailsDialog({
               Details
             </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Status</p>
+              <p className="text-[15px] font-normal text-slate-700">Status</p>
               <div className="flex h-7 items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2">
                 {(() => {
                   const Icon = statusMeta[status].Icon;
                   return <Icon className="size-3.5 shrink-0 text-slate-600" />;
                 })()}
-                <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-7 w-full bg-transparent text-[13px] font-medium text-slate-800 outline-none">
+                <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-7 w-full bg-transparent text-[14px] font-medium text-slate-800 outline-none">
                   <option value={StoryStatus.todo}>To Do</option>
                   <option value={StoryStatus.inProgress}>In Progress</option>
                   <option value={StoryStatus.done}>Done</option>
@@ -977,14 +978,15 @@ export function StoryDetailsDialog({
               </div>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Assignee</p>
-              <div className="relative flex min-w-0 items-center">
+              <p className="text-[15px] font-normal text-slate-700">Assignee</p>
+              <div className="relative flex min-w-0 w-full items-center">
+                <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                 <AssigneeCombobox
                   value={assignee}
                   onChange={setAssignee}
                   suggestions={assigneeNameSuggestions}
                   placeholder="Type or pick a name"
-                  className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-1.5 text-[13px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                  className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                 />
                 {assignee ? (
                   <button
@@ -1000,18 +1002,18 @@ export function StoryDetailsDialog({
               </div>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Team</p>
+              <p className="text-[15px] font-normal text-slate-700">Team</p>
               <TeamIdCombobox
                 teamId={epicTeamDraft}
                 onTeamIdChange={setEpicTeamDraft}
                 disabled={!epicId}
                 placeholder="Type or pick a team"
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
               />
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Sprint</p>
-              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-1.5 text-[13px] font-medium text-slate-800">
+              <p className="text-[15px] font-normal text-slate-700">Sprint</p>
+              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-1.5 text-[14px] font-medium text-slate-800">
                 <option value="">Not set</option>
                 {assignableSprints.map((n) => (
                   <option key={n} value={String(n)}>{`Sprint ${n}`}</option>
@@ -1019,28 +1021,28 @@ export function StoryDetailsDialog({
               </select>
             </label>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
-              <p className="text-sm font-normal text-slate-700">Estimated Days</p>
+              <p className="text-[15px] font-normal text-slate-700">Esti Days</p>
               <input
                 type="number"
                 min={0}
                 value={estimatedDays}
                 onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-0 text-[12px] leading-none text-slate-800"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
               />
             </div>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Est. Days left</p>
+              <p className="text-[15px] font-normal text-slate-700">Est. Days left</p>
               <input
                 type="number"
                 min={0}
                 value={daysLeft}
                 onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-5 w-full rounded-md border border-slate-300 bg-white px-1.5 py-0 text-[12px] leading-none text-slate-800"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
               />
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Priority</p>
-              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800">
+              <p className="text-[15px] font-normal text-slate-700">Priority</p>
+              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800">
                 <option value="">Not set</option>
                 <option value="P0">P0</option>
                 <option value="P1">P1</option>
@@ -1049,13 +1051,13 @@ export function StoryDetailsDialog({
               </select>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Parent</p>
+              <p className="text-[15px] font-normal text-slate-700">Parent</p>
               <span ref={parentSelectWrapRef} className="group relative min-w-0">
                 <select
                   value={epicId}
                   title=""
                   onChange={(event) => setEpicId(event.target.value)}
-                  className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800 disabled:bg-muted/40"
+                  className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
                   disabled={Boolean(lockParentEpicId)}
                 >
                   <option value="">Select epic</option>
@@ -1083,7 +1085,7 @@ export function StoryDetailsDialog({
               </span>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-sm font-normal text-slate-700">Labels</p>
+              <p className="text-[15px] font-normal text-slate-700">Labels</p>
               <div className="relative z-30">
                 <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
                   {labelsDraft.map((label) => (
@@ -1146,7 +1148,7 @@ export function StoryDetailsDialog({
                           role="option"
                           aria-selected={i === labelsAutocompleteIndex}
                           className={cn(
-                            "flex w-full px-3 py-2 text-left text-[13px] text-slate-800 hover:bg-slate-50",
+                            "flex w-full px-3 py-2 text-left text-[14px] text-slate-800 hover:bg-slate-50",
                             i === labelsAutocompleteIndex && "bg-indigo-50 text-indigo-900",
                           )}
                           onMouseEnter={() => setLabelsAutocompleteIndex(i)}
@@ -1190,11 +1192,11 @@ export function StoryDetailsDialog({
             <div className="flex w-full items-center justify-between gap-2 rounded-lg">
               <button
                 type="button"
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+                className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
                 onClick={() => setActivityOpen((open) => !open)}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-lg font-normal text-slate-800">
+                <span className="flex items-center gap-2 text-xl font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden

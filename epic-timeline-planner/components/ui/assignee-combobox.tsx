@@ -178,7 +178,7 @@ export function AssigneeCombobox({
       : null;
 
   return (
-    <div ref={wrapRef} className={cn("relative min-w-0")}>
+    <div ref={wrapRef} className={cn("relative min-w-0 w-full")}>
       <input
         ref={inputRef}
         id={inputId}
