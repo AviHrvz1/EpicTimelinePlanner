@@ -1601,10 +1601,10 @@ export function InitiativeListPanel({
 
   const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
     { value: "all", label: "All quarters", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
-    { value: "Q1", label: "Q1", icon: <QuarterProgressGlyph steps={1} /> },
-    { value: "Q2", label: "Q2", icon: <QuarterProgressGlyph steps={2} /> },
-    { value: "Q3", label: "Q3", icon: <QuarterProgressGlyph steps={3} /> },
-    { value: "Q4", label: "Q4", icon: <QuarterProgressGlyph steps={4} /> },
+    { value: "Q1", label: "1st Quarter", icon: <QuarterProgressGlyph steps={1} /> },
+    { value: "Q2", label: "2nd Quarter", icon: <QuarterProgressGlyph steps={2} /> },
+    { value: "Q3", label: "3rd Quarter", icon: <QuarterProgressGlyph steps={3} /> },
+    { value: "Q4", label: "4th Quarter", icon: <QuarterProgressGlyph steps={4} /> },
   ];
   const monthFilterOptions: IconFilterOption<"current">[] = [
     {

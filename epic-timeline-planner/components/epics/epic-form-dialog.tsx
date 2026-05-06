@@ -1004,7 +1004,7 @@ export function EpicFormDialog({
             />
           ) : null}
           <div
-            className="mb-4 flex cursor-move items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5"
+            className="mb-4 flex cursor-move items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-4"
             onPointerDown={beginDialogDrag}
           >
             <div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-slate-700">
