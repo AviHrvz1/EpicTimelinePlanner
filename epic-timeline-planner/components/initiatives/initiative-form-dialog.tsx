@@ -694,15 +694,6 @@ export function InitiativeFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border-0 bg-white py-2.5 shadow-none ring-0">
-                  <p className="text-[15px] font-normal text-slate-700">Year</p>
-                  <input readOnly value={initiativePlanningYear} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
-                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
-                  <input readOnly value={initiativePlanningQuarter} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
-                  <p className="text-[15px] font-normal text-slate-700">Month</p>
-                  <input readOnly value={initiativePlanningMonth} className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
-                </div>
-
                 <div className="mt-1 flex shrink-0 flex-col gap-1">
                   <button
                     type="button"
@@ -1076,6 +1067,18 @@ export function InitiativeFormDialog({
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-[15px] font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700" /></label>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Year</p>
+                  <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                </div>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
+                  <input readOnly value={initiativePlanningQuarter} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                </div>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Month</p>
+                  <input readOnly value={initiativePlanningMonth} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">

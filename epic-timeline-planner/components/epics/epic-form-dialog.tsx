@@ -1133,57 +1133,6 @@ export function EpicFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-3 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-md border-0 bg-white py-2.5 shadow-none ring-0">
-                  <p className="text-[15px] font-normal text-slate-700">Year</p>
-                  <input
-                    readOnly
-                    value={planningYearDisplay}
-                    title="Year comes from the parent initiative"
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"
-                  />
-                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
-                  <select
-                    value={planQuarterDraft}
-                    onChange={(event) => {
-                      const nextQ = event.target.value;
-                      setPlanQuarterDraft(nextQ);
-                      if (!planMonthDraft) return;
-                      const allowed = monthIndicesForQuarter(parseQuarterSelect(nextQ)).map((i) => MONTHS[i - 1]);
-                      if (!allowed.includes(planMonthDraft as (typeof MONTHS)[number])) {
-                        setPlanMonthDraft("");
-                      }
-                    }}
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"
-                  >
-                    <option value="">Not set</option>
-                    <option value="Q1">Q1</option>
-                    <option value="Q2">Q2</option>
-                    <option value="Q3">Q3</option>
-                    <option value="Q4">Q4</option>
-                  </select>
-                  <p className="text-[15px] font-normal text-slate-700">Month</p>
-                  <select
-                    value={planMonthDraft}
-                    onChange={(event) => {
-                      const name = event.target.value;
-                      setPlanMonthDraft(name);
-                      if (!name) return;
-                      const idx = MONTHS.indexOf(name as (typeof MONTHS)[number]);
-                      if (idx >= 0) {
-                        setPlanQuarterDraft(`Q${quarterNumFromMonth(idx + 1)}`);
-                      }
-                    }}
-                    className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"
-                  >
-                    <option value="">Not set</option>
-                    {allowedMonthNames.map((month) => (
-                      <option key={month} value={month}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 <div className="mt-1 flex shrink-0 flex-col gap-1">
                   <button
                     type="button"
@@ -1793,6 +1742,18 @@ export function EpicFormDialog({
                     className="h-6 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] font-medium text-slate-700"
                   />
                 </label>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Year</p>
+                  <input readOnly value={planningYearDisplay} title="Year comes from the parent initiative" className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                </div>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
+                  <select value={planQuarterDraft} onChange={(event) => { const nextQ = event.target.value; setPlanQuarterDraft(nextQ); if (!planMonthDraft) return; const allowed = monthIndicesForQuarter(parseQuarterSelect(nextQ)).map((i) => MONTHS[i - 1]); if (!allowed.includes(planMonthDraft as (typeof MONTHS)[number])) { setPlanMonthDraft(""); } }} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"><option value="">Not set</option><option value="Q1">Q1</option><option value="Q2">Q2</option><option value="Q3">Q3</option><option value="Q4">Q4</option></select>
+                </div>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Month</p>
+                  <select value={planMonthDraft} onChange={(event) => { const name = event.target.value; setPlanMonthDraft(name); if (!name) return; const idx = MONTHS.indexOf(name as (typeof MONTHS)[number]); if (idx >= 0) { setPlanQuarterDraft(`Q${quarterNumFromMonth(idx + 1)}`); } }} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"><option value="">Not set</option>{allowedMonthNames.map((month) => (<option key={month} value={month}>{month}</option>))}</select>
+                </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
