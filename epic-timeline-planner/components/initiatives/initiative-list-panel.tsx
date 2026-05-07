@@ -41,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { InitiativeCombobox } from "@/components/ui/initiative-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
-import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import {
   EPICS_UNPLAN_DROP_ID,
   backlogSlotDropId,
@@ -600,7 +600,6 @@ function InitiativeTreeEpicRow({
   isEpicOpen,
   onToggleEpic,
   planContextMonth,
-  hideScheduledIcon = false,
   epicPlanDragEnabled,
   onOpenEpic,
   onOpenStory,
@@ -661,26 +660,7 @@ function InitiativeTreeEpicRow({
       }}
     >
       <div className="rounded-md transition-colors hover:bg-sky-50/70">
-      <div className="flex min-w-0 items-center gap-1.5">
-        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
-          <button
-            type="button"
-            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-            aria-label="Drag epic"
-            {...listeners}
-            {...attributes}
-          >
-            <DragHandleIcon size="sm" />
-          </button>
-        ) : isEpicScheduledOnGantt && !hideScheduledIcon ? (
-          <span
-            className="inline-flex h-7 shrink-0 items-center rounded-md p-0.5 text-emerald-600"
-            title="Scheduled on Gantt"
-            aria-label="Scheduled on Gantt"
-          >
-            <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
-          </span>
-        ) : null}
+      <div className="flex min-w-0 items-center gap-0.5">
         <button
           type="button"
           onClick={onToggleEpic}
@@ -695,16 +675,28 @@ function InitiativeTreeEpicRow({
             )}
           />
         </button>
+        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+          <button
+            type="button"
+            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            aria-label="Drag epic"
+            {...listeners}
+            {...attributes}
+          >
+            <DragHandleIcon size="sm" />
+          </button>
+        ) : (
+          <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
+            <Folder className="size-3.5 text-slate-400" strokeWidth={2} />
+          </span>
+        )}
         <button
           type="button"
           onClick={() => onOpenEpic(epic, initiative)}
-          className="min-w-0 flex-1 rounded-md px-0.5 text-left font-normal hover:bg-white/90"
+          className="min-w-0 flex-1 rounded-md pl-1.5 pr-0 text-left font-normal hover:bg-white/90"
           aria-label={`Open epic ${epic.title}`}
         >
-          <div className="flex min-w-0 items-center gap-2.5 pl-0">
-            <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-              <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
-            </span>
+          <div className="flex min-w-0 items-center gap-0 pl-0">
             <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
               {epic.title}
             </p>
@@ -1130,7 +1122,6 @@ function SprintEpicCard({
   onCreateStoryQuick,
   backlogDropSlot,
   planContextMonth,
-  hideScheduledIcon = false,
   storyProgressDetailsVisible,
   isOpenControlled,
   onToggleControlled,
@@ -1221,26 +1212,7 @@ function SprintEpicCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="flex min-w-0 items-start gap-1.5">
-        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
-          <button
-            type="button"
-            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-            aria-label="Drag epic"
-            {...listeners}
-            {...attributes}
-          >
-            <DragHandleIcon size="sm" />
-          </button>
-        ) : isEpicScheduledOnGantt && !hideScheduledIcon ? (
-          <span
-            className="inline-flex h-7 shrink-0 items-center rounded-md p-0.5 text-emerald-600"
-            title="Scheduled on Gantt"
-            aria-label="Scheduled on Gantt"
-          >
-            <Image src="/scheduled-icon.png" alt="" width={16} height={16} className="size-4 object-contain" aria-hidden />
-          </span>
-        ) : null}
+      <div className="flex min-w-0 items-start gap-0.5">
         <button
           type="button"
           onClick={handleToggle}
@@ -1255,18 +1227,30 @@ function SprintEpicCard({
             )}
           />
         </button>
+        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+          <button
+            type="button"
+            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            aria-label="Drag epic"
+            {...listeners}
+            {...attributes}
+          >
+            <DragHandleIcon size="sm" />
+          </button>
+        ) : (
+          <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
+            <Folder className="size-3.5 text-slate-400" strokeWidth={2} />
+          </span>
+        )}
         <div className="min-w-0 flex-1 text-left">
           <button
             type="button"
             onClick={() => onOpenEpic(epic, initiative)}
-            className="w-full rounded-md px-0.5 text-left font-normal hover:bg-slate-50"
+            className="w-full rounded-md pl-1.5 pr-0 text-left font-normal hover:bg-slate-50"
             aria-label={`Open epic ${epic.title}`}
           >
-            <div className="flex w-full min-w-0 items-center gap-2.5">
-              <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-0">
-                <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                  <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-700 [&_svg]:text-slate-600" />
-                </span>
+            <div className="flex w-full min-w-0 items-center gap-0">
+              <div className="flex min-w-0 flex-1 items-center gap-0 pl-0">
                 <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
                   {epic.title}
                 </p>

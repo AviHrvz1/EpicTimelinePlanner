@@ -4801,7 +4801,6 @@ export function TimelineGrid({
                             onMonthPlanTabChange?.("epic-gantt");
                           }}
                         >
-                          <CalendarDays className="size-3.5 shrink-0 opacity-80 sm:size-4" aria-hidden />
                           <span>{FULL_MONTHS[month - 1]}</span>
                         </button>
                         <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:mt-3 sm:gap-2">
