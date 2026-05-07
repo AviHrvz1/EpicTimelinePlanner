@@ -844,7 +844,7 @@ export function StoryDetailsDialog({
                     onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("heading", { level: 2 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("heading", { level: 2 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <Heading2 className="size-3.5" />
@@ -855,7 +855,7 @@ export function StoryDetailsDialog({
                     onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <Heading3 className="size-3.5" />
@@ -876,7 +876,7 @@ export function StoryDetailsDialog({
                     }}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <LinkIcon className="size-3.5" />
@@ -887,7 +887,7 @@ export function StoryDetailsDialog({
                     onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <Italic className="size-3.5" />
@@ -898,7 +898,7 @@ export function StoryDetailsDialog({
                     onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <UnderlineIcon className="size-3.5" />
@@ -909,7 +909,7 @@ export function StoryDetailsDialog({
                     onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("bulletList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("bulletList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <List className="size-3.5" />
@@ -920,7 +920,7 @@ export function StoryDetailsDialog({
                     onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("orderedList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("orderedList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <ListOrdered className="size-3.5" />
