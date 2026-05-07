@@ -3939,15 +3939,6 @@ export function TimelineGrid({
               "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
-            onMouseEnter={() => {
-              console.log("[rail-nav] month rail mouseenter", {
-                activeMonth,
-                monthPlanTab,
-                activeSprint,
-                previousExpanded: isRailExpanded,
-              });
-              setIsRailExpanded(true);
-            }}
             onMouseLeave={() => {
               console.log("[rail-nav] month rail mouseleave", {
                 activeMonth,
@@ -3971,6 +3962,7 @@ export function TimelineGrid({
                     setActiveSprintTab("kanban");
                   }}
                   title="Sprint Board"
+                  onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -3998,6 +3990,7 @@ export function TimelineGrid({
                     setActiveSprintTab("status");
                   }}
                   title={sprintInsightsLabel}
+                  onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4024,6 +4017,7 @@ export function TimelineGrid({
                     onMonthPlanTabChange?.("sprint-capacity");
                   }}
                   title="Sprint Capacity"
+                  onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4050,6 +4044,7 @@ export function TimelineGrid({
                     onMonthPlanTabChange?.("sprint-retrospective");
                   }}
                   title="Sprint Retrospective"
+                  onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4077,6 +4072,7 @@ export function TimelineGrid({
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("epic-gantt")}
                   title="Epic Plan"
+                  onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4101,6 +4097,7 @@ export function TimelineGrid({
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-capacity")}
                   title="Team Capacity"
+                  onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4125,6 +4122,7 @@ export function TimelineGrid({
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-status")}
                   title={monthInsightsLabel}
+                  onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4156,14 +4154,6 @@ export function TimelineGrid({
               "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
-            onMouseEnter={() => {
-              console.log("[rail-nav] quarter rail mouseenter", {
-                focusedQuarterLabel,
-                quarterViewTab,
-                previousExpanded: isRailExpanded,
-              });
-              setIsRailExpanded(true);
-            }}
             onMouseLeave={() => {
               console.log("[rail-nav] quarter rail mouseleave", {
                 focusedQuarterLabel,
@@ -4177,6 +4167,7 @@ export function TimelineGrid({
               type="button"
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
+              onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
                 "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
@@ -4201,6 +4192,7 @@ export function TimelineGrid({
               type="button"
               onClick={() => setQuarterViewTab("insights")}
               title={quarterInsightsLabel}
+              onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
                 "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4225,6 +4217,7 @@ export function TimelineGrid({
               type="button"
               onClick={() => setQuarterViewTab("capacity")}
               title={quarterCapacityLabel}
+              onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
                 "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
@@ -4254,13 +4247,13 @@ export function TimelineGrid({
               "absolute left-0 top-0 inline-flex h-[calc(100vh-5rem)] flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
-            onMouseEnter={() => setIsRailExpanded(true)}
             onMouseLeave={() => setIsRailExpanded(false)}
           >
             <button
               type="button"
               onClick={() => setQuarterViewTab("gantt")}
               title="Gantt"
+              onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
                 "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
@@ -4285,6 +4278,7 @@ export function TimelineGrid({
               type="button"
               onClick={() => setQuarterViewTab("insights")}
               title="Portfolio Insights"
+              onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
                 "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
@@ -4309,6 +4303,7 @@ export function TimelineGrid({
               type="button"
               onClick={() => setQuarterViewTab("capacity")}
               title="Portfolio Capacity"
+              onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
                 "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
