@@ -4244,7 +4244,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex h-[calc(100vh-5rem)] flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-44" : "w-[3.25rem]",
             )}
             onMouseLeave={() => setIsRailExpanded(false)}

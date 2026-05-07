@@ -203,6 +203,7 @@ export function MonthTeamCapacityBoard({
   }
 
   return (
+    <div className="rounded-2xl border border-slate-300/60 bg-slate-200/60 p-4 shadow-sm">
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
         teamLabel={
@@ -284,6 +285,7 @@ export function MonthTeamCapacityBoard({
           );
         })}
       </div>
+    </div>
     </div>
   );
 }

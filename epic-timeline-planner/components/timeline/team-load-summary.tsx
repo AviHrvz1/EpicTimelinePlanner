@@ -58,7 +58,7 @@ export function TeamLoadSummary({
   const fillW = (thermometerPct / 100) * innerW;
 
   return (
-    <section className="rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-100/70 via-violet-50/40 to-slate-50 px-4 py-3 shadow-sm shadow-violet-900/[0.06]">
+    <section className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
       <div className="flex flex-nowrap items-center gap-2.5 sm:gap-3.5">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/60 bg-white/90 shadow-sm shadow-indigo-900/5">
@@ -144,7 +144,7 @@ export function TeamLoadSummary({
         </div>
       </div>
 
-      <div className="mt-3 border-t border-violet-200/50 pt-3">
+      <div className="mt-3 border-t border-slate-200/80 pt-3">
         <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold sm:text-[14px]">
           {sprintStoryCount != null && (
             <>
