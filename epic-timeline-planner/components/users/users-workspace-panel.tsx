@@ -687,9 +687,9 @@ function UsersTableRow({
                     row.team === "platform" && "bg-sky-50 text-sky-800 ring-sky-200/80",
                     row.team === "experience" && "bg-violet-50 text-violet-800 ring-violet-200/80",
                     row.team === "data" && "bg-amber-50 text-amber-900 ring-amber-200/80",
-                    row.team !== "platform" &&
-                      row.team !== "experience" &&
-                      row.team !== "data" &&
+                    row.team === "mobile" && "bg-emerald-50 text-emerald-800 ring-emerald-200/80",
+                    row.team === "growth" && "bg-rose-50 text-rose-800 ring-rose-200/80",
+                    !["platform", "experience", "data", "mobile", "growth"].includes(row.team) &&
                       "bg-slate-50 text-slate-800 ring-slate-200/80",
                   )}
                 >

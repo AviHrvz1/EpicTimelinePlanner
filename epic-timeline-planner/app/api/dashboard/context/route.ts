@@ -45,7 +45,7 @@ export async function GET() {
     }
   }
 
-  const teams = ["platform", "experience", "data"];
+  const teams = ["platform", "experience", "data", "mobile", "growth"];
 
   return NextResponse.json({
     teams,

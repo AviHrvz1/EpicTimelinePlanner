@@ -334,7 +334,7 @@ function SprintPicker({
 }
 
 function TeamPicker({ context, onSelect }: { context: WorkspaceContext | null; onSelect: (v: string) => void }) {
-  const teams = context?.teams ?? ["platform", "experience", "data"];
+  const teams = context?.teams ?? ["platform", "experience", "data", "mobile", "growth"];
   const options = ["All teams", ...teams];
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);

@@ -42,6 +42,24 @@ export const MONTH_TEAM_COLUMNS: MonthTeamDefinition[] = [
       "bg-amber-100/80 text-amber-950/90 ring-1 ring-amber-200/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]",
     priorityBadgeClass: "bg-amber-100/95 text-amber-950 ring-1 ring-amber-300/55",
   },
+  {
+    id: "mobile",
+    label: "Mobile",
+    subtitle: "iOS & Android apps",
+    tone: "border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white",
+    priorityHintClass:
+      "bg-emerald-100/75 text-emerald-950/90 ring-1 ring-emerald-200/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]",
+    priorityBadgeClass: "bg-emerald-100/95 text-emerald-900 ring-1 ring-emerald-300/55",
+  },
+  {
+    id: "growth",
+    label: "Growth",
+    subtitle: "Acquisition & retention",
+    tone: "border-rose-200/90 bg-gradient-to-b from-rose-50/90 to-white",
+    priorityHintClass:
+      "bg-rose-100/75 text-rose-950/90 ring-1 ring-rose-200/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]",
+    priorityBadgeClass: "bg-rose-100/95 text-rose-900 ring-1 ring-rose-300/55",
+  },
 ];
 
 export const MONTH_TEAM_IDS = MONTH_TEAM_COLUMNS.map((t) => t.id);

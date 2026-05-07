@@ -1627,6 +1627,8 @@ export function InitiativeListPanel({
               team.id === "platform" && "bg-sky-500",
               team.id === "experience" && "bg-violet-500",
               team.id === "data" && "bg-amber-500",
+              team.id === "mobile" && "bg-emerald-500",
+              team.id === "growth" && "bg-rose-500",
             )}
           />
         ),
