@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { X } from "lucide-react";
 
@@ -11,8 +12,42 @@ import {
 import { cn } from "@/lib/utils";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 
-const ganttBarTooltipClass =
-  "pointer-events-none absolute left-2 top-0 z-[200] -translate-y-[calc(100%+6px)] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover/bar:opacity-100";
+/** Portal tooltip that always renders above everything via fixed positioning. */
+function GanttBarTooltip({ label, anchorRef }: { label: string; anchorRef: React.RefObject<HTMLElement | null> }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+
+  const show = useCallback(() => {
+    if (!anchorRef.current) return;
+    const r = anchorRef.current.getBoundingClientRect();
+    setPos({ x: r.left + r.width / 2, y: r.top });
+  }, [anchorRef]);
+
+  const hide = useCallback(() => setPos(null), []);
+
+  useEffect(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    el.addEventListener("mouseenter", show);
+    el.addEventListener("mouseleave", hide);
+    return () => {
+      el.removeEventListener("mouseenter", show);
+      el.removeEventListener("mouseleave", hide);
+    };
+  }, [anchorRef, show, hide]);
+
+  if (!pos || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{ left: pos.x, top: pos.y - 6, transform: "translate(-50%, -100%)" }}
+      className="pointer-events-none fixed z-[99999] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm"
+    >
+      {label}
+    </div>,
+    document.body,
+  );
+}
 
 /** Fills DragOverlay bounds so the preview lines up with the real Gantt bar. */
 export function TimelineBarDragPreview({
@@ -88,19 +123,19 @@ export function InitiativeTimelineBar({
   progressRowPrefix,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
+  const barRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
+      ref={barRef}
       title={title}
       onClick={() => {
         if (isResizing) return;
         onClick?.();
       }}
-      className="group/bar relative z-20 space-y-0"
+      className="group/bar relative z-20 overflow-visible space-y-0"
     >
-      <div role="tooltip" className={ganttBarTooltipClass}>
-        {title}
-      </div>
+      <GanttBarTooltip label={title} anchorRef={barRef} />
       <div
         className={cn(
           "relative z-10 flex h-9 w-full min-w-0 items-center overflow-hidden rounded-md text-[14px] font-medium tracking-[0.01em] text-white",
@@ -211,10 +246,11 @@ export function EpicPlanTimelineBar({
     disabled: Boolean(isResizing),
     data: dragData,
   });
+  const barRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => { setNodeRef(node); (barRef as React.MutableRefObject<HTMLDivElement | null>).current = node; }}
       {...attributes}
       {...listeners}
       title={title}
@@ -234,9 +270,7 @@ export function EpicPlanTimelineBar({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div role="tooltip" className={ganttBarTooltipClass}>
-        {title}
-      </div>
+      <GanttBarTooltip label={title} anchorRef={barRef} />
       <div
         className={cn(
           "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-medium tracking-[0.01em] text-white active:cursor-grabbing",

@@ -13,11 +13,13 @@ import {
   ClipboardList,
   FileWarning,
   Flag,
+  Folder,
   Map as MapIcon,
   PieChart,
   Thermometer,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 import {
   Fragment,
@@ -319,7 +321,7 @@ function GanttLaneRow({
 
   return (
     <div
-      className={cn("relative min-w-0", emphasize ? "z-[25]" : "z-10")}
+      className={cn("relative min-w-0 hover:z-[9999]", emphasize ? "z-[25]" : "z-10")}
       data-gantt-lane-index={ganttLaneSortIndex}
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
@@ -911,7 +913,7 @@ function EpicGanttLaneRow({
       // Month view: absolute positioning with day precision
       <div ref={containerRef} className="relative min-w-0" style={{ height: "2.5rem" }}>
         <div
-          className={cn("absolute top-0.5 bottom-0.5", emphasize && "overflow-visible")}
+          className={cn("absolute top-0.5 bottom-0.5 overflow-visible")}
           style={{ left: `${effectivePos.leftPct}%`, width: `${effectivePos.widthPct}%` }}
         >
           <EpicPlanTimelineBar
@@ -1223,7 +1225,8 @@ function RoadmapYearSelect({
 }) {
   return (
     <label className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 shadow-none ring-1 ring-blue-200/75 outline-none select-none transition-colors hover:from-sky-100 hover:via-blue-200 hover:to-blue-200 focus-within:ring-2 focus-within:ring-blue-400/30 focus-within:ring-offset-0">
-      <span className="flex shrink-0 items-center border-r border-blue-200/80 px-1.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
+      <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
+        <MapIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
         Roadmap
       </span>
       <div className="relative flex items-center">
@@ -3569,14 +3572,6 @@ export function TimelineGrid({
                     ) : null}
                     <button
                       type="button"
-                      aria-pressed={showRoadmapProgress}
-                      onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                      className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-                    >
-                      Progress
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => {
                         setRoadmapBarMode("initiatives");
                         onSummaryStatusQuickFilterChange?.(null);
@@ -3588,6 +3583,7 @@ export function TimelineGrid({
                           : summaryChipInitiativesIdleClass,
                       )}
                     >
+                      <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                       <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
                       <span className="hidden xl:inline">Initiatives</span>
                       <span className="xl:hidden">Inits</span>
@@ -3605,11 +3601,18 @@ export function TimelineGrid({
                           : summaryChipEpicsIdleClass,
                       )}
                     >
+                      <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                       {("totalEpics" in summaryBadgesForScope
                         ? summaryBadgesForScope.totalEpics
                         : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
                       Epics
                     </button>
+                    <div className={summaryChipStoriesStaticClass}>
+                      <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                      <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+                      <span className="hidden xl:inline">User Stories</span>
+                      <span className="xl:hidden">Stories</span>
+                    </div>
                     <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
                       <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
                         <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
@@ -3630,11 +3633,6 @@ export function TimelineGrid({
                       <span className="hidden xl:inline">Epic Estimated</span>
                       <span className="xl:hidden">Estimated</span>
                     </button>
-                    <div className={summaryChipStoriesStaticClass}>
-                      <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-                      <span className="hidden xl:inline">User Stories</span>
-                      <span className="xl:hidden">Stories</span>
-                    </div>
                     {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
                       <button
                         type="button"
@@ -3644,10 +3642,20 @@ export function TimelineGrid({
                           showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass,
                         )}
                       >
+                        <CalendarDays className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                         <span className="hidden xl:inline">Sprints</span>
                         <span className="xl:hidden">Spr</span>
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      aria-pressed={showRoadmapProgress}
+                      onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
+                      className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
+                    >
+                      <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                      Progress
+                    </button>
                   </>
                 ) : null}
               </div>
@@ -3666,14 +3674,6 @@ export function TimelineGrid({
                   ) : null}
                   <button
                     type="button"
-                    aria-pressed={showRoadmapProgress}
-                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-                  >
-                    Progress
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => {
                       setRoadmapBarMode("initiatives");
                       onSummaryStatusQuickFilterChange?.(null);
@@ -3685,6 +3685,7 @@ export function TimelineGrid({
                         : summaryChipInitiativesIdleClass,
                     )}
                   >
+                    <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                     <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
                     <span className="hidden xl:inline">Initiatives</span>
                     <span className="xl:hidden">Inits</span>
@@ -3702,11 +3703,18 @@ export function TimelineGrid({
                         : summaryChipEpicsIdleClass,
                     )}
                   >
+                    <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                     {("totalEpics" in summaryBadgesForScope
                       ? summaryBadgesForScope.totalEpics
                       : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
                     Epics
                   </button>
+                  <div className={summaryChipStoriesStaticClass}>
+                    <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+                    <span className="hidden xl:inline">User Stories</span>
+                    <span className="xl:hidden">Stories</span>
+                  </div>
                   <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
                     <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
                       <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
@@ -3727,11 +3735,6 @@ export function TimelineGrid({
                     <span className="hidden xl:inline">Epic Estimated</span>
                     <span className="xl:hidden">Estimated</span>
                   </button>
-                  <div className={summaryChipStoriesStaticClass}>
-                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-                    <span className="hidden xl:inline">User Stories</span>
-                    <span className="xl:hidden">Stories</span>
-                  </div>
                   {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
                     <button
                       type="button"
@@ -3741,10 +3744,20 @@ export function TimelineGrid({
                         showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass,
                       )}
                     >
+                      <CalendarDays className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                       <span className="hidden xl:inline">Sprints</span>
                       <span className="xl:hidden">Spr</span>
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    aria-pressed={showRoadmapProgress}
+                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
+                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
+                  >
+                    <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                    Progress
+                  </button>
                 </>
               ) : null}
             </div>

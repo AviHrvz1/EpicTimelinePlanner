@@ -33,6 +33,7 @@ function snap(isoDate, status, sprint, estimatedDays, daysLeft, assignee) {
 }
 
 function epic(title, assignee, color, startMonth, endMonth, planSprint, stories, team, endSprint = 2, description = null, timelineRow = 0) {
+  const originalEstimateDays = stories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0);
   return {
     title, assignee, color,
     planYear: YEAR,
@@ -43,6 +44,7 @@ function epic(title, assignee, color, startMonth, endMonth, planSprint, stories,
     planEndSprint: endSprint,
     team,
     timelineRow,
+    originalEstimateDays: originalEstimateDays > 0 ? originalEstimateDays : null,
     ...(description ? { description } : {}),
     userStories: { create: stories },
   };
