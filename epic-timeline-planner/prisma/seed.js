@@ -32,7 +32,7 @@ function snap(isoDate, status, sprint, estimatedDays, daysLeft, assignee) {
   return { snapshotDate: new Date(isoDate), status, sprint, estimatedDays, daysLeft, assignee };
 }
 
-function epic(title, assignee, color, startMonth, endMonth, planSprint, stories, team, endSprint = 2, description = null) {
+function epic(title, assignee, color, startMonth, endMonth, planSprint, stories, team, endSprint = 2, description = null, timelineRow = 0) {
   return {
     title, assignee, color,
     planYear: YEAR,
@@ -42,6 +42,7 @@ function epic(title, assignee, color, startMonth, endMonth, planSprint, stories,
     planEndMonth: endMonth ?? startMonth,
     planEndSprint: endSprint,
     team,
+    timelineRow,
     ...(description ? { description } : {}),
     userStories: { create: stories },
   };
@@ -136,7 +137,7 @@ async function main() {
       timelineRow: 0,
       description: "Modernize our core infrastructure stack to support 10x growth over the next two years. Migrate to service mesh architecture using Envoy, implement database sharding for horizontal scalability, and upgrade Kubernetes clusters to the latest LTS release. This initiative unblocks all product teams from current infrastructure bottlenecks.",
       epics: [
-        epic("Service Mesh Migration", "Perry", "#0284c7", 1, 2, 1, [
+        epic("Service Mesh Migration", "Perry", "#0284c7", 1, 1, 1, [
           sw("Replace direct service calls with Envoy proxy", "Perry", 1, "done", 5, 0, 1,
             makeSnaps(1, "Perry", 5, "ahead"),
             "Instrument all inter-service HTTP calls to route through Envoy sidecars. Validate zero-regression on latency p99 before cutover."),
@@ -180,7 +181,7 @@ async function main() {
         ], "platform", 2,
           "Implement horizontal database sharding keyed on user_id to eliminate the write bottleneck on the monolithic users table and unlock sub-10ms query times at 100M rows."),
 
-        epic("Kubernetes Upgrade", "Poppy", "#075985", 3, 4, 2, [
+        epic("Kubernetes Upgrade", "Poppy", "#075985", 4, 4, 1, [
           sw("Upgrade control plane to Kubernetes v1.28", "Perry", 6, "done", 5, 0, 3,
             makeSnaps(6, "Perry", 5, "ahead"),
             "Upgrade all control-plane components (kube-apiserver, etcd, kube-scheduler, kube-controller-manager) to v1.28 in staging first, then production."),
@@ -218,7 +219,7 @@ async function main() {
       timelineRow: 1,
       description: "Complete visual and structural overhaul of the iOS and Android apps to address mounting user feedback on navigation confusion and visual inconsistency. Redesign navigation patterns, implement a shared design system, and add offline capabilities so the app remains usable in low-connectivity environments.",
       epics: [
-        epic("Navigation Overhaul", "Marcus", "#ea580c", 1, 2, 1, [
+        epic("Navigation Overhaul", "Marcus", "#ea580c", 1, 1, 1, [
           sw("Tab bar and bottom nav redesign", "Marcus", 1, "done", 5, 0, 1,
             makeSnaps(1, "Marcus", 5, "behind"),
             "Replace hamburger menu with persistent tab bar. Validate information architecture with 15 user interviews before implementing."),
@@ -237,7 +238,7 @@ async function main() {
         ], "mobile", 2,
           "Restructure navigation from hamburger-menu pattern to persistent tab bar with gesture support, eliminating the #1 UX complaint in app store reviews."),
 
-        epic("Design System v2", "Maya", "#c2410c", 2, 3, 1, [
+        epic("Design System v2", "Maya", "#c2410c", 2, 2, 1, [
           sw("Design token system (color, spacing, type)", "Marcus", 3, "done", 5, 0, 2,
             makeSnaps(3, "Marcus", 5, "behind"),
             "Define semantic token layers (global → alias → component) for color, spacing, radius, and typography. Publish as a shared package consumed by both iOS and Android."),
@@ -294,7 +295,7 @@ async function main() {
       timelineRow: 2,
       description: "Rebuild our data infrastructure around a modern streaming architecture and a cloud-native data lake. The current batch-pipeline approach adds 6-12 hours of data lag, blocks real-time product decisions, and creates costly operational overhead. Version 2.0 targets sub-minute data freshness, 10× query performance, and self-serve access for analysts.",
       epics: [
-        epic("Streaming Pipeline", "Alice", "#7c3aed", 2, 3, 1, [
+        epic("Streaming Pipeline", "Alice", "#7c3aed", 2, 2, 1, [
           sw("Kafka cluster setup and topic schema registry", "Alice", 3, "done", 5, 0, 2,
             makeSnaps(3, "Alice", 5, "behind"),
             "Provision a 3-broker Kafka cluster. Define Avro schemas for core event types and register in Confluent Schema Registry to enforce compatibility."),
@@ -313,7 +314,7 @@ async function main() {
         ], "data", 2,
           "Replace nightly batch ETL with real-time Kafka Streams pipelines, reducing data freshness from 8 hours to under 60 seconds for core product events."),
 
-        epic("Data Lake Redesign", "Aaron", "#6d28d9", 3, 4, 1, [
+        epic("Data Lake Redesign", "Aaron", "#6d28d9", 3, 3, 1, [
           sw("Iceberg table format migration", "Alice", 5, "done", 6, 0, 3,
             makeSnaps(5, "Alice", 6, "behind"),
             "Convert all 320 Parquet tables in S3 to Apache Iceberg format for ACID transactions, time-travel queries, and schema evolution support."),
@@ -367,7 +368,7 @@ async function main() {
       timelineRow: 3,
       description: "Build the first-generation growth infrastructure to accelerate user acquisition and reduce churn. The three pillars are a viral referral program (target: 15% of new sign-ups from referrals), a self-serve A/B testing platform (unblock 10 experiments per quarter), and data-driven retention campaigns triggered by engagement signals.",
       epics: [
-        epic("Referral Program", "Grace", "#059669", 3, 4, 1, [
+        epic("Referral Program", "Grace", "#059669", 3, 3, 1, [
           sw("Referral link generation and tracking", "Grace", 5, "done", 5, 0, 3,
             makeSnaps(5, "Grace", 5, "behind"),
             "Generate unique short-URLs per user backed by a referral attribution table. Track click, sign-up, and conversion events for attribution reporting."),
@@ -413,7 +414,7 @@ async function main() {
         ], "growth", 2,
           "Build a self-serve A/B testing platform that lets product teams run statistically rigorous experiments without data-engineering involvement, targeting 10+ concurrent experiments per quarter."),
 
-        epic("Retention Campaigns", "Gina", "#065f46", 5, 6, 1, [
+        epic("Retention Campaigns", "Gina", "#065f46", 6, 6, 1, [
           sw("Behavioral trigger engine (inactivity, churn signals)", "Griffin", 9, "inProgress",
             5, daysLeft9(5, "behind9"), 5,
             makeSnaps(9, "Griffin", 5, "behind9"),
@@ -466,7 +467,7 @@ async function main() {
         ], "experience", 2,
           "Create a personalised first-session experience with a role-based quiz, template gallery, and guided 3-step activation milestones to lift 7-day activation rate by 20pp."),
 
-        epic("Interactive Tutorial", "Erin", "#1d4ed8", 4, 5, 1, [
+        epic("Interactive Tutorial", "Erin", "#1d4ed8", 5, 5, 1, [
           sw("Contextual tooltip overlay system", "Elena", 7, "done", 5, 0, 4,
             makeSnaps(7, "Elena", 5, "steady"),
             "Build a tooltip system that attaches to any DOM element via data attributes. Supports sequential steps, branching (skip/back/next), and auto-positioning."),
@@ -490,7 +491,7 @@ async function main() {
         ], "experience", 2,
           "Build a fully interactive, step-by-step product tutorial that guides new users through core workflows and measures the impact on 7-day activation rate via a split test."),
 
-        epic("Activation Milestones", "Evan", "#1e40af", 5, 6, 1, [
+        epic("Activation Milestones", "Evan", "#1e40af", 6, 6, 1, [
           sw("Milestone tracking engine and progress API", "Erin", 9, "inProgress",
             5, daysLeft9(5, "steady9"), 5,
             makeSnaps(9, "Erin", 5, "steady9"),
@@ -548,7 +549,7 @@ async function main() {
         ], "platform", 2,
           "Modernise CI/CD by migrating to GitHub Actions, parallelising test execution, and optimising Docker layer caching to cut median build time from 24 to 8 minutes."),
 
-        epic("Self-serve Dev Portal", "Paige", "#4338ca", 5, 6, 1, [
+        epic("Self-serve Dev Portal", "Paige", "#4338ca", 6, 6, 1, [
           sw("Service catalogue with ownership and runbooks", "Paige", 9, "inProgress",
             5, daysLeft9(5, "ahead9"), 5,
             makeSnaps(9, "Paige", 5, "ahead9"),
@@ -566,7 +567,7 @@ async function main() {
         ], "platform", 2,
           "Build a Backstage-powered developer portal with self-service environment provisioning, service catalogue, and secrets management to reduce platform onboarding time from 3 days to 2 hours."),
 
-        epic("Observability Stack", "Poppy", "#3730a3", 6, 7, 1, [
+        epic("Observability Stack", "Poppy", "#3730a3", 7, 7, 1, [
           story("Distributed tracing with OpenTelemetry", "Paige", 11, "todo", 6, 6, 6,
             "Instrument all services with OpenTelemetry SDKs. Export traces to Jaeger with sampling at 10% production, 100% for error traces."),
           story("Centralised log aggregation (Loki + Grafana)", "Perry", 11, "todo", 5, 5, 6,
@@ -616,7 +617,7 @@ async function main() {
         ], "data", 2,
           "Build a real-time executive dashboard showing ARR, DAU, retention, and conversion KPIs with drill-down, cohort analysis, and scheduled delivery."),
 
-        epic("Self-serve Report Builder", "Aaron", "#be185d", 6, 7, 1, [
+        epic("Self-serve Report Builder", "Aaron", "#be185d", 7, 7, 1, [
           story("Drag-and-drop report canvas", "Alice", 11, "todo", 6, 6, 6,
             "Build a drag-and-drop canvas where analysts can place chart blocks, metric tiles, and filter controls. Save reports to the catalogue with tags."),
           story("SQL query editor with schema autocomplete", "Aaron", 11, "todo", 5, 5, 6,
@@ -630,7 +631,7 @@ async function main() {
         ], "data", 2,
           "Give analysts a self-serve SQL report builder with a drag-and-drop canvas, scheduled delivery, and versioning so they no longer block on the data team for custom analysis."),
 
-        epic("Predictive Analytics Module", "Aria", "#9d174d", 7, 8, 1, [
+        epic("Predictive Analytics Module", "Aria", "#9d174d", 8, 8, 1, [
           story("AutoML training pipeline for churn prediction", "Alice", 13, "todo", 6, 6, 7,
             "Build an AutoML pipeline using H2O.ai that trains a churn prediction model nightly on the last 90 days of user activity. Target AUC > 0.85."),
           story("Feature store for ML model inputs", "Aaron", 13, "todo", 5, 5, 7,
@@ -660,7 +661,7 @@ async function main() {
       timelineRow: 7,
       description: "Resolve critical performance regressions in the iOS and Android apps that are driving a 1.5-star average review score. Benchmark targets: cold-start time under 2 seconds (currently 5.4s), scroll frame rate at consistent 60fps, and 50% reduction in peak memory footprint. Users on mid-range devices are reporting frequent crashes due to OOM errors.",
       epics: [
-        epic("Startup Time Optimisation", "Marcus", "#0d9488", 5, 6, 1, [
+        epic("Startup Time Optimisation", "Marcus", "#0d9488", 5, 5, 1, [
           sw("App startup profiling and bottleneck analysis", "Marcus", 9, "inProgress",
             5, daysLeft9(5, "behind9"), 5,
             makeSnaps(9, "Marcus", 5, "behind9"),
@@ -678,7 +679,7 @@ async function main() {
         ], "mobile", 2,
           "Reduce app cold-start time from 5.4 seconds to under 2 seconds on mid-range devices through lazy loading, native image caching, and Android ART baseline profiles."),
 
-        epic("Memory Profiling & Leak Fixes", "Maya", "#0f766e", 6, 7, 1, [
+        epic("Memory Profiling & Leak Fixes", "Maya", "#0f766e", 6, 6, 1, [
           story("Heap dump analysis and leak identification", "Marcus", 11, "todo", 5, 5, 6,
             "Take heap dumps in both idle and active states on 5 device profiles. Use LeakCanary (Android) and Instruments Allocations (iOS) to identify retention cycles."),
           story("Image pipeline memory cap and eviction policy", "Maya", 11, "todo", 5, 5, 6,
@@ -692,7 +693,7 @@ async function main() {
         ], "mobile", 2,
           "Eliminate the top 3 memory leak patterns and implement an automated regression suite to cut OOM crashes by 80% and remove 1.5-star reviews citing battery drain."),
 
-        epic("Network Caching & Latency", "Miles", "#115e59", 6, 7, 2, [
+        epic("Network Caching & Latency", "Miles", "#115e59", 7, 7, 1, [
           story("HTTP response caching with ETag/If-Modified-Since", "Marcus", 12, "todo", 4, 4, 6,
             "Add ETag-based conditional request support to the mobile API gateway. Client caches valid responses and skips the network entirely for unchanged data."),
           story("Offline-first data fetching with stale-while-revalidate", "Maya", 12, "todo", 4, 4, 6,
@@ -735,7 +736,7 @@ async function main() {
         ], "platform", 2,
           "Migrate to Stripe v3 with SCA support, multi-currency checkout, and payment method vaulting to unblock enterprise sales in EU and UK markets."),
 
-        epic("Fraud Detection Engine", "Paige", "#b45309", 7, 8, 1, [
+        epic("Fraud Detection Engine", "Paige", "#b45309", 8, 8, 1, [
           story("ML fraud scoring model (XGBoost)", "Perry", 13, "todo", 6, 6, 7,
             "Train an XGBoost classifier on 18 months of transaction history. Feature set: velocity, device fingerprint, geolocation, historical chargeback rate. Target: F1 > 0.92."),
           story("Real-time transaction risk scoring API", "Paige", 13, "todo", 5, 5, 7,
@@ -749,7 +750,7 @@ async function main() {
         ], "platform", 2,
           "Replace rule-based fraud detection with an ML model (XGBoost, target F1 > 0.92) to cut the 35% false-positive rate and reduce chargeback losses by 70%."),
 
-        epic("Subscription Engine", "Poppy", "#92400e", 8, 9, 1, [
+        epic("Subscription Engine", "Poppy", "#92400e", 9, 9, 1, [
           story("Subscription plan management (create, update, cancel)", "Perry", 15, "todo", 5, 5, 8,
             "Build a subscription management API supporting tiered plans (Free, Pro, Enterprise). Handle upgrades, downgrades, and cancellations with prorated billing."),
           story("Annual billing discount and mid-cycle upgrades", "Paige", 15, "todo", 5, 5, 8,
@@ -792,7 +793,7 @@ async function main() {
         ], "data", 2,
           "Replace keyword search with a hybrid semantic + BM25 search engine backed by pgvector embeddings to improve search MRR@10 from 0.41 to over 0.70."),
 
-        epic("Recommendation Engine", "Aaron", "#7e22ce", 8, 9, 1, [
+        epic("Recommendation Engine", "Aaron", "#7e22ce", 9, 9, 1, [
           story("Collaborative filtering model for template suggestions", "Alice", 15, "todo", 6, 6, 8,
             "Train a matrix factorisation model on user-template interaction data. Recommend templates at project creation with a predicted engagement score."),
           story("Similar-story suggestions on story creation", "Aaron", 15, "todo", 5, 5, 8,
@@ -806,7 +807,7 @@ async function main() {
         ], "data", 2,
           "Build a personalised recommendation engine that suggests templates, auto-fills story estimates, and surfaces proactive insights to reduce manual decision-making."),
 
-        epic("Forecasting Assistant", "Aria", "#6b21a8", 9, 10, 1, [
+        epic("Forecasting Assistant", "Aria", "#6b21a8", 10, 10, 1, [
           story("Natural language query interface for KPI forecasting", "Alice", 17, "todo", 6, 6, 9,
             "Build a conversational interface where leaders can ask questions like 'When will we reach 1M DAU?' and receive a model-backed forecast with confidence intervals."),
           story("Time-series forecasting models (Prophet + N-BEATS)", "Aaron", 17, "todo", 5, 5, 9,
@@ -840,6 +841,14 @@ async function main() {
         epics: { create: init.epics },
       },
     });
+  }
+
+  // ─── sync epic timelineRows to match their parent initiative ─────────────
+  const createdInits = await prisma.initiative.findMany({ include: { epics: { select: { id: true } } } });
+  for (const init of createdInits) {
+    for (const ep of init.epics) {
+      await prisma.epic.update({ where: { id: ep.id }, data: { timelineRow: init.timelineRow } });
+    }
   }
 
   // ─── workspace users ────────────────────────────────────────────────────
