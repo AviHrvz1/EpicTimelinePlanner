@@ -924,7 +924,7 @@ function InitiativeTreeCard({
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="group/init">
-            <div className="flex min-w-0 items-start gap-2">
+            <div className="flex min-w-0 items-start gap-0.5">
               <button
                 type="button"
                 onClick={onToggle}
@@ -947,7 +947,7 @@ function InitiativeTreeCard({
                   aria-label={`Open initiative ${initiative.title}`}
                 >
                   <div className="flex w-full min-w-0 items-center gap-1">
-                    <div className="flex min-w-0 flex-1 items-center gap-1 pl-0">
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-0">
                       <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                         <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
                       </span>

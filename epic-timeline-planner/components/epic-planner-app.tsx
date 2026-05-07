@@ -4132,6 +4132,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 topMode === "roadmap" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
+              onMouseEnter={() => setIsModeRailExpanded(true)}
             >
               <MapIcon className="size-4" aria-hidden />
             </span>
@@ -4166,6 +4167,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 topMode === "backlog" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
+              onMouseEnter={() => setIsModeRailExpanded(true)}
             >
               <Archive className="size-4" aria-hidden />
             </span>
@@ -4200,6 +4202,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 topMode === "dashboard" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
+              onMouseEnter={() => setIsModeRailExpanded(true)}
             >
               <LayoutDashboard className="size-4" aria-hidden />
             </span>
@@ -4234,6 +4237,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 topMode === "users" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
               )}
               aria-hidden
+              onMouseEnter={() => setIsModeRailExpanded(true)}
             >
               <Users className="size-4" aria-hidden />
             </span>
@@ -4282,7 +4286,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               if (next instanceof Node && e.currentTarget.contains(next)) return;
               setIsModeRailExpanded(false);
             }}
-            onMouseEnter={() => setIsModeRailExpanded(true)}
           >
             <div
               className={cn(
