@@ -177,7 +177,7 @@ export function StoryDetailsDialog({
   const [commenting, setCommenting] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(60);
   const [activityOpen, setActivityOpen] = useState(true);
-  const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
+  const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(264);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(280);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
@@ -808,12 +808,6 @@ export function StoryDetailsDialog({
               </p>
               <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
                 <input
-                  value={icon}
-                  onChange={(event) => setIcon(event.target.value)}
-                  maxLength={2}
-                  className="w-12 border-r border-slate-200 bg-transparent px-2 py-2 text-center text-xl outline-none"
-                />
-                <input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   className="w-full bg-transparent px-3 py-2 text-base outline-none"
@@ -940,7 +934,7 @@ export function StoryDetailsDialog({
                 <div className="min-h-0 flex-1 overflow-y-auto rounded-md px-1 py-2">
                   <EditorContent
                     editor={descriptionEditor}
-                    className="focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none"
+                    className="focus:outline-none [&_.ProseMirror]:min-h-[calc(16.5rem+16px)] [&_.ProseMirror]:outline-none"
                   />
                 </div>
                 </div>
@@ -981,7 +975,7 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Assignee</p>
-              <div className="relative flex min-w-0 w-full items-center">
+              <div className="group/assignee relative flex min-w-0 w-full items-center">
                 <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                 <AssigneeCombobox
                   value={assignee}
@@ -994,7 +988,7 @@ export function StoryDetailsDialog({
                   <button
                     type="button"
                     onClick={() => setAssignee("")}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition hover:text-slate-600"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 opacity-0 transition-opacity hover:text-slate-600 group-hover/assignee:opacity-100"
                     aria-label="Clear assignee"
                     tabIndex={-1}
                   >
@@ -1005,13 +999,25 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Team</p>
-              <TeamIdCombobox
-                teamId={epicTeamDraft}
-                onTeamIdChange={setEpicTeamDraft}
-                disabled={!epicId}
-                placeholder="Type or pick a team"
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
-              />
+              <div className="group/team relative flex min-w-0 w-full items-center">
+                <TeamIdCombobox
+                  teamId={epicTeamDraft}
+                  onTeamIdChange={setEpicTeamDraft}
+                  disabled={!epicId}
+                  placeholder="Type or pick a team"
+                  className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
+                />
+                {epicTeamDraft && !(!epicId) ? (
+                  <button
+                    type="button"
+                    aria-label="Clear team"
+                    onClick={() => setEpicTeamDraft("")}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 flex size-4 items-center justify-center rounded-full text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover/team:opacity-100"
+                  >
+                    <X className="size-3" />
+                  </button>
+                ) : null}
+              </div>
             </label>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Sprint</p>

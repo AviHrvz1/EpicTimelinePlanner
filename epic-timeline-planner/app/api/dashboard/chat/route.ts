@@ -16,7 +16,7 @@ type CollectedParams = {
 
 const CHART_TYPES: ChartType[] = ["velocity", "burndown", "cfd", "workload", "quarter-status"];
 const NEEDS_SPRINT = new Set(["burndown", "cfd", "workload"]);
-const NEEDS_METRIC = new Set(["burndown", "cfd", "workload"]);
+const NEEDS_METRIC = new Set(["burndown", "workload"]);
 
 function nextStep(p: CollectedParams): Record<string, unknown> {
   if (!p.chartType) {
@@ -96,7 +96,7 @@ function buildChart(p: CollectedParams): Record<string, unknown> {
     }
     case "cfd":
       title = `${p.quarterStr} Sprint ${p.sprint} Flow${teamSuffix}`;
-      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, metric: p.metric ?? "daysLeft", ...(p.team ? { team: p.team } : {}) };
+      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, ...(p.team ? { team: p.team } : {}) };
       break;
     case "workload":
       title = `${p.quarterStr} Sprint ${p.sprint} Workload${teamSuffix}`;

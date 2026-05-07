@@ -57,7 +57,7 @@ const CFD_FLOW_SEGMENTS = [
  * Matches pie, burndown, cumulative flow, and caps workload list beside pie.
  */
 const SPRINT_CHART_BOX =
-  "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full border border-slate-200/80 bg-white/85 ring-1 ring-slate-100/80";
+  "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full bg-white/85";
 /** Same dimensions as {@link SPRINT_CHART_BOX} without border/ring (User Stories Status pie only). */
 const SPRINT_STATUS_PIE_BOX =
   "h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] w-full bg-white/85";

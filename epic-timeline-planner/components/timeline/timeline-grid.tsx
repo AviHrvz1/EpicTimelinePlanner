@@ -1225,7 +1225,7 @@ function RoadmapYearSelect({
 }) {
   return (
     <label className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 shadow-none ring-1 ring-blue-200/75 outline-none select-none transition-colors hover:from-sky-100 hover:via-blue-200 hover:to-blue-200 focus-within:ring-2 focus-within:ring-blue-400/30 focus-within:ring-offset-0">
-      <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
+      <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
         <MapIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
         Roadmap
       </span>

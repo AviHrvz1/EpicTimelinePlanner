@@ -154,7 +154,7 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
             </select>
           </div>
         </div>
-        <div className="h-60 rounded-lg border border-slate-200/80 bg-white/85 ring-1 ring-slate-100/80">
+        <div className="h-60 rounded-lg bg-white/85">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={burndownData} margin={{ top: 8, right: 20, left: 8, bottom: 12 }}>
               <CartesianGrid strokeDasharray="3 3" />

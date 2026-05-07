@@ -11,7 +11,6 @@ import {
   ChevronUp,
   ClipboardList,
   FileText,
-  Folder,
   Heading2,
   Heading3,
   History,
@@ -57,6 +56,7 @@ import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
+import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
 
 function quarterNumFromMonth(month: number): 1 | 2 | 3 | 4 {
   if (month <= 3) return 1;
@@ -1033,7 +1033,7 @@ export function EpicFormDialog({
               </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
               <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-slate-900">
-                <Folder className="size-4 shrink-0 text-slate-600" aria-hidden />
+                <EpicPlanBarIcon icon={icon} className="mr-0 [&_svg]:size-4 [&_svg]:text-slate-600" />
                 <span className="truncate">{title || (epic ? "Epic details" : "Create epic")}</span>
               </span>
               {epicInsightsPanelOpen && insightsScopeLabel ? (
@@ -1118,12 +1118,6 @@ export function EpicFormDialog({
                     Title
                   </p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
-                    <input
-                      className="w-12 border-r border-slate-200 bg-transparent px-2 py-2 text-center text-xl outline-none"
-                      maxLength={2}
-                      value={icon}
-                      onChange={(event) => setIcon(event.target.value)}
-                    />
                     <input
                       className="w-full bg-transparent px-3 py-2 text-base outline-none"
                       placeholder="Epic title"
@@ -1655,7 +1649,7 @@ export function EpicFormDialog({
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Team</p>
-                  {showTeamSelect ? (
+                  <div className="group/team relative flex min-w-0 w-full items-center">
                     <TeamIdCombobox
                       teamId={teamDraft}
                       onTeamIdChange={setTeamDraft}
@@ -1664,27 +1658,17 @@ export function EpicFormDialog({
                       placeholder="Type or pick a team"
                       className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
                     />
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={persistedTeamLabel}
-                        readOnly
-                        className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-700"
-                      />
-                      <Button
+                    {teamDraft ? (
+                      <button
                         type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-7 shrink-0 px-2 text-[12px]"
-                        onClick={() => {
-                          setForceTeamFieldEdit(true);
-                          setTeamDraft("");
-                        }}
+                        aria-label="Clear team"
+                        onClick={() => setTeamDraft("")}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 flex size-4 items-center justify-center rounded-full text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover/team:opacity-100"
                       >
-                        Clear
-                      </Button>
-                    </div>
-                  )}
+                        <X className="size-3" />
+                      </button>
+                    ) : null}
+                  </div>
                 </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Days Est</p>

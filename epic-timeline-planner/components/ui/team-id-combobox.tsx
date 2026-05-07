@@ -263,7 +263,7 @@ export function TeamIdCombobox({
       : null;
 
   return (
-    <div ref={wrapRef} className="relative min-w-0">
+    <div ref={wrapRef} className="relative min-w-0 w-full">
       <input
         ref={inputRef}
         id={inputIdProp}
