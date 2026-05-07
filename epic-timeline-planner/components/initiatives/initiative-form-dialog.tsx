@@ -1041,6 +1041,20 @@ export function InitiativeFormDialog({
                   <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-[15px] font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700" /></label>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Year</p>
+                  <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                </div>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
+                  <input readOnly value={initiativePlanningQuarter} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                </div>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Month</p>
+                  <input readOnly value={initiativePlanningMonth} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Assignee</p>
                   <div className="relative flex min-w-0 w-full items-center">
@@ -1065,20 +1079,6 @@ export function InitiativeFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-[15px] font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700" /></label>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Year</p>
-                  <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
-                </div>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
-                  <input readOnly value={initiativePlanningQuarter} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
-                </div>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Month</p>
-                  <input readOnly value={initiativePlanningMonth} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
-                </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">

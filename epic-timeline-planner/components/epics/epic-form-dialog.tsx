@@ -1630,30 +1630,6 @@ export function EpicFormDialog({
                   Details
                 </h3>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Assignee</p>
-                  <div className="relative flex min-w-0 w-full items-center">
-                    <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
-                    <AssigneeCombobox
-                      value={assignee}
-                      onChange={setAssignee}
-                      suggestions={assigneeNameSuggestions}
-                      placeholder="Type or pick a name"
-                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
-                    />
-                    {assignee ? (
-                      <button
-                        type="button"
-                        onClick={() => setAssignee("")}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition hover:text-slate-600"
-                        aria-label="Clear assignee"
-                        tabIndex={-1}
-                      >
-                        <X className="size-3.5" aria-hidden />
-                      </button>
-                    ) : null}
-                  </div>
-                </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Parent</p>
                   <InitiativeCombobox
                     valueId={initiativeId}
@@ -1754,6 +1730,30 @@ export function EpicFormDialog({
                   <p className="text-[15px] font-normal text-slate-700">Month</p>
                   <select value={planMonthDraft} onChange={(event) => { const name = event.target.value; setPlanMonthDraft(name); if (!name) return; const idx = MONTHS.indexOf(name as (typeof MONTHS)[number]); if (idx >= 0) { setPlanQuarterDraft(`Q${quarterNumFromMonth(idx + 1)}`); } }} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"><option value="">Not set</option>{allowedMonthNames.map((month) => (<option key={month} value={month}>{month}</option>))}</select>
                 </div>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Assignee</p>
+                  <div className="relative flex min-w-0 w-full items-center">
+                    <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+                    <AssigneeCombobox
+                      value={assignee}
+                      onChange={setAssignee}
+                      suggestions={assigneeNameSuggestions}
+                      placeholder="Type or pick a name"
+                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                    />
+                    {assignee ? (
+                      <button
+                        type="button"
+                        onClick={() => setAssignee("")}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition hover:text-slate-600"
+                        aria-label="Clear assignee"
+                        tabIndex={-1}
+                      >
+                        <X className="size-3.5" aria-hidden />
+                      </button>
+                    ) : null}
+                  </div>
+                </label>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
