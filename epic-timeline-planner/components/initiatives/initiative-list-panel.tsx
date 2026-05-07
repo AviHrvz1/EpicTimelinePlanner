@@ -2029,8 +2029,8 @@ export function InitiativeListPanel({
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-7 pb-4 pl-0 pr-4 shadow-xl ring-1 ring-black/8">
       <div className="z-10 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-4 pb-3">
-        <div className="min-w-0 pl-8">
-          <h2 className="inline-flex items-center gap-2 text-xl leading-8 font-bold tracking-tight text-slate-950">
+        <div className="min-w-0 pl-5">
+          <h2 className="inline-flex items-center gap-2 text-[20px] font-semibold leading-tight tracking-[-0.02em] text-slate-800">
             {epicPlanPanelMode ? (
               <>
                 <Folder className="size-6 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
@@ -2044,7 +2044,7 @@ export function InitiativeListPanel({
             )}
           </h2>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 -mr-1">
           {showNewButton ? (
             <Button
               size="sm"

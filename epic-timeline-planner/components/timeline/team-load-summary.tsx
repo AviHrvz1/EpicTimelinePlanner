@@ -16,6 +16,7 @@ export function TeamLoadSummary({
   loadBasis = "originalEstimate",
   onLoadBasisChange,
   sprintStoryCount,
+  className,
 }: {
   teamLabel: string;
   teamLabelSlot?: ReactNode;
@@ -28,6 +29,7 @@ export function TeamLoadSummary({
   onLoadBasisChange?: (basis: CapacityLoadBasis) => void;
   /** When provided, story count is shown inline with the capacity stats row. */
   sprintStoryCount?: number;
+  className?: string;
 }) {
   const overCapacity = totalAssigned > totalCapacity;
   const utilization = totalCapacity > 0 ? (totalAssigned / totalCapacity) * 100 : totalAssigned > 0 ? 200 : 0;
@@ -58,7 +60,7 @@ export function TeamLoadSummary({
   const fillW = (thermometerPct / 100) * innerW;
 
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
+    <section className={cn("rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm", className)}>
       <div className="flex flex-nowrap items-center gap-2.5 sm:gap-3.5">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/60 bg-white/90 shadow-sm shadow-indigo-900/5">
