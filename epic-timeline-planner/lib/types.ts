@@ -97,6 +97,8 @@ export type EpicItem = {
   planStartMonth: number | null;
   planEndMonth: number | null;
   planEndSprint: number | null;
+  planStartDay: number | null;
+  planEndDay: number | null;
   timelineRow: number;
   /** Order in initiative backlog / epic list. */
   backlogOrder?: number;

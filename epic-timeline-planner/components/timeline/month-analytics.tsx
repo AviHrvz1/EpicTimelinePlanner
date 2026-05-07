@@ -387,9 +387,11 @@ type MonthAnalyticsProps = {
   planYear: number;
   filterEpicTeamId?: string | null;
   initialSelectedEpicId?: string;
+  initialSelectedInitiativeId?: string;
   onOpenEpic?: (epicId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onOpenSprintKanban?: (yearSprint: number, teamId: string | null) => void;
+  onScopeChange?: (type: "epic" | "initiative" | null, id: string | null, title: string | null) => void;
 };
 
 function flowChartDayLabel(dayDate: Date): string {
@@ -538,9 +540,11 @@ export function MonthAnalytics({
   planYear,
   filterEpicTeamId = null,
   initialSelectedEpicId,
+  initialSelectedInitiativeId,
   onOpenEpic,
   onOpenStory,
   onOpenSprintKanban,
+  onScopeChange,
 }: MonthAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
@@ -554,7 +558,7 @@ export function MonthAnalytics({
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
-  const [selectedInitiativeId, setSelectedInitiativeId] = useState<string>("all");
+  const [selectedInitiativeId, setSelectedInitiativeId] = useState<string>(initialSelectedInitiativeId ?? "all");
 
   const scopeMonths = useMemo(() => {
     const base = periodMonths != null && periodMonths.length > 0 ? periodMonths : [month];
@@ -613,6 +617,12 @@ export function MonthAnalytics({
     const selected = monthEpics.find(({ epic }) => epic.id === initialSelectedEpicId);
     setEpicInput(selected ? selected.epic.title : "");
   }, [initialSelectedEpicId, monthEpics]);
+  useEffect(() => {
+    if (!initialSelectedInitiativeId) return;
+    setSelectedInitiativeId(initialSelectedInitiativeId);
+    const init = scopeInitiativeOptions.find((i) => i.id === initialSelectedInitiativeId);
+    if (init) setEpicInput(init.title);
+  }, [initialSelectedInitiativeId, scopeInitiativeOptions]);
   // Clear epic selection when the initiative filter changes and the epic is no longer in scope
   useEffect(() => {
     if (selectedEpicId === "all") return;
@@ -621,6 +631,18 @@ export function MonthAnalytics({
       setEpicInput("");
     }
   }, [monthEpics, selectedEpicId]);
+  useEffect(() => {
+    if (!onScopeChange) return;
+    if (selectedEpicId !== "all") {
+      const selected = epicComboOptions.find((opt) => opt.id === selectedEpicId);
+      onScopeChange("epic", selectedEpicId, selected?.label ?? null);
+    } else if (selectedInitiativeId !== "all") {
+      const init = scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId);
+      onScopeChange("initiative", selectedInitiativeId, init?.title ?? null);
+    } else {
+      onScopeChange(null, null, null);
+    }
+  }, [selectedEpicId, selectedInitiativeId, epicComboOptions, scopeInitiativeOptions, onScopeChange]);
   const filteredEpicOptions = useMemo(() => {
     if (showAllEpicSuggestions) return epicComboOptions;
     const query = epicInput.trim().toLowerCase();
@@ -1473,7 +1495,7 @@ export function MonthAnalytics({
   }, [workloadDrilldownAssignee, workloadDrilldownStories.length]);
 
   const legendRowClass =
-    "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[12px] font-medium text-slate-700";
+    "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[13px] font-medium text-slate-700";
   const sharedDrilldownScrollAreaClass =
     "h-full min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden bg-white pr-5 [&::-webkit-scrollbar]:hidden";
   /** Matches backlog / users directory soft zebra (#f4f7fc / white) */
@@ -1496,10 +1518,10 @@ export function MonthAnalytics({
 
   return (
     <section className="mb-2 flex flex-col gap-3.5">
-      <div className="-mt-1 rounded-xl bg-slate-100/70 px-2 py-2">
+      <div className="-mt-1 rounded-xl bg-slate-100/70 px-4 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
-            <Folder className="size-4 text-slate-500" aria-hidden />
+            <ChartNoAxesCombined className="size-4 text-slate-500" aria-hidden />
             Epic / Initiative Scope
           </label>
           <div className="relative min-w-[22rem] flex-1 max-w-[34rem]">
@@ -1787,7 +1809,7 @@ export function MonthAnalytics({
         ) : (
           <div
             className={cn(
-              "grid flex-1 lg:grid-cols-[minmax(0,1fr)_10.5rem] lg:items-stretch",
+              "grid flex-1 lg:grid-cols-[minmax(0,1fr)_12.5rem] lg:items-stretch",
               INSIGHTS_CHART_GRID_GAP,
               INSIGHTS_CONTENT_HEIGHT,
             )}
@@ -1852,7 +1874,7 @@ export function MonthAnalytics({
                 onClick={() => openStatusDrilldown("All")}
                 className={cn(
                   "mb-0.5 w-full rounded-md px-1 py-1 text-left font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                  isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                 )}
               >
                 <span className="inline-flex items-center gap-1.5">
@@ -1869,7 +1891,7 @@ export function MonthAnalytics({
                     onClick={() => openStatusDrilldown(slice.name)}
                     className={cn(
                       "mb-0.5 flex w-full items-center justify-between gap-1.5 rounded-md px-1 py-1 text-left text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-700",
-                      isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                     )}
                   >
                     <span className="inline-flex items-center gap-1.5 font-normal">
@@ -1879,7 +1901,7 @@ export function MonthAnalytics({
                       />
                       {slice.name}
                     </span>
-                    <span className={cn("font-semibold text-slate-500", isMultiPeriodInsights ? "text-[13px]" : "text-[12px]")}>
+                    <span className={cn("font-semibold text-slate-500", isMultiPeriodInsights ? "text-[14px]" : "text-[13px]")}>
                       {slice.value} <span className="text-slate-500">({pct}%)</span>
                     </span>
                   </button>
@@ -1952,7 +1974,7 @@ export function MonthAnalytics({
         </div>
         <div
           className={cn(
-            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch",
+            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CONTENT_HEIGHT,
           )}
@@ -2075,7 +2097,7 @@ export function MonthAnalytics({
                 onClick={showAllBurndownKeys}
                 className={cn(
                   "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
-                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                  isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                   allBurndownKeysSelected
                     ? "text-slate-900 hover:bg-slate-200/70"
                     : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
@@ -2095,7 +2117,7 @@ export function MonthAnalytics({
                     onClick={() => toggleBurndownKey(item.key)}
                     className={cn(
                       "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-                      isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                       on
                         ? "text-slate-900 hover:bg-slate-200/70"
                         : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
@@ -2110,7 +2132,7 @@ export function MonthAnalytics({
                 );
               })}
               {burndownFocusedEpicOption ? (
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[12px] text-slate-500">
                   Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
                 </p>
               ) : null}
@@ -2142,7 +2164,7 @@ export function MonthAnalytics({
       </article>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
         <div className={cn("flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW, isMultiPeriodInsights ? "mb-3" : "mb-2")}>
           <h3
@@ -2296,7 +2318,7 @@ export function MonthAnalytics({
         ) : null}
         {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
           <div className={cn("relative min-h-0 overflow-hidden", INSIGHTS_CHART_BAND)}>
-            <div className={cn("grid h-full min-h-0 md:grid-cols-[minmax(0,1fr)_6.25rem] md:items-stretch", INSIGHTS_CHART_GRID_GAP)}>
+            <div className={cn("grid h-full min-h-0 md:grid-cols-[minmax(0,1fr)_7.5rem] md:items-stretch", INSIGHTS_CHART_GRID_GAP)}>
             <div
               ref={workloadStoriesScrollRef}
               onScroll={updateWorkloadArrowState}
@@ -2353,7 +2375,7 @@ export function MonthAnalytics({
                 onClick={() => toggleWorkloadStatusFilter("all")}
                 className={cn(
                   "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
-                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                  isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                   workloadStatusFilters.includes("all")
                     ? "text-slate-900 hover:bg-slate-200/70"
                     : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
@@ -2373,7 +2395,7 @@ export function MonthAnalytics({
                     onClick={() => toggleWorkloadStatusFilter(s.key)}
                     className={cn(
                       "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-                      isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                       on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                     )}
                   >
@@ -2390,7 +2412,7 @@ export function MonthAnalytics({
                 onClick={() => toggleWorkloadStatusFilter("unassigned")}
                 className={cn(
                   "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-                  isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                  isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                   selectedShowUnassigned ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                 )}
               >
@@ -2466,7 +2488,7 @@ export function MonthAnalytics({
                           </span>
                         </span>
                       </div>
-                      <span className="shrink-0 text-[11px] tabular-nums text-slate-600">
+                      <span className="shrink-0 text-[12px] tabular-nums text-slate-600">
                         {row.estimatedTotal}d est · {row.daysLeftTotal}d left
                       </span>
                     </div>
@@ -2518,7 +2540,7 @@ export function MonthAnalytics({
         </h3>
         <div
           className={cn(
-            "grid md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch",
+            "grid md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CHART_BAND,
           )}
@@ -2583,7 +2605,7 @@ export function MonthAnalytics({
               onClick={showAllCfdKeys}
               className={cn(
                 "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
-                isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                 allCfdKeysSelected
                   ? "text-slate-900 hover:bg-slate-200/70"
                   : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
@@ -2603,7 +2625,7 @@ export function MonthAnalytics({
                   onClick={() => toggleCfdKey(key)}
                   className={cn(
                     "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-                    isMultiPeriodInsights ? "text-[13px]" : "text-[12px]",
+                    isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                     on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                   )}
                 >

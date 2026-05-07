@@ -378,6 +378,10 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
   };
 }
 
+/** Shared base for all status/tag chips in the middle panel — consistent height, size, and spacing. */
+const statusBadgeBase =
+  "inline-flex items-center rounded px-2 py-0.5 text-[12px] font-semibold leading-none tracking-[0.01em]";
+
 /** Left-panel initiative/epic cards: track grows to fill the row; summary stays on the same line (nowrap). */
 const leftPanelProgressTrackClass =
   "h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80";
@@ -712,27 +716,17 @@ function InitiativeTreeEpicRow({
               <span className="min-w-0 shrink-0 text-left">
                 {completion.total === 0 ? "No stories yet" : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
               </span>
-              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
                 {epicTeamChip ? (
                   <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
                     <Users className="size-2.5 shrink-0" aria-hidden />
                     {epicTeamChip.label}
                   </span>
                 ) : null}
-                <span
-                  className={cn(
-                    "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
-                    epicPlanStatus.className,
-                  )}
-                >
+                <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
                   {epicPlanStatus.label}
                 </span>
-                <span
-                  className={cn(
-                    "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
-                    epicExecutionStatus.className,
-                  )}
-                >
+                <span className={cn(statusBadgeBase, epicExecutionStatus.className)}>
                   {epicExecutionStatus.label}
                 </span>
               </div>
@@ -981,23 +975,18 @@ function InitiativeTreeCard({
                         ? "No epics"
                         : `${epics.length} epic${epics.length !== 1 ? "s" : ""}`}
                     </span>
-                    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
                       {initiative.status === "scheduled" && initiative.startMonth != null ? (
-                        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-violet-700 sm:px-2 sm:text-[11px]">
+                        <span className={cn(statusBadgeBase, "bg-violet-100 text-violet-700")}>
                           {quarterFromMonth(initiative.startMonth)}
                         </span>
                       ) : null}
                       {initiative.status === "scheduled" ? (
-                        <span className="rounded border border-emerald-200/90 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-emerald-800 sm:px-2 sm:text-[11px]">
+                        <span className={cn(statusBadgeBase, "border border-emerald-200/90 bg-emerald-50 text-emerald-800")}>
                           Scheduled
                         </span>
                       ) : null}
-                      <span
-                        className={cn(
-                          "px-1.5 py-0.5 text-[10px] font-semibold leading-tight tracking-[0.02em] sm:px-2 sm:text-[11px]",
-                          initiativeExecutionStatus.className,
-                        )}
-                      >
+                      <span className={cn(statusBadgeBase, initiativeExecutionStatus.className)}>
                         {initiativeExecutionStatus.label}
                       </span>
                     </div>
@@ -1292,27 +1281,17 @@ function SprintEpicCard({
                       ? "No stories yet"
                       : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
                   </span>
-                  <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1">
+                  <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
                     {epicTeamChip ? (
                       <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
                         <Users className="size-2.5 shrink-0" aria-hidden />
                         {epicTeamChip.label}
                       </span>
                     ) : null}
-                    <span
-                      className={cn(
-                        "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
-                        epicPlanStatus.className,
-                      )}
-                    >
+                    <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
                       {epicPlanStatus.label}
                     </span>
-                    <span
-                      className={cn(
-                        "px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.02em] sm:px-2 sm:text-[11px]",
-                        epicExecutionStatus.className,
-                      )}
-                    >
+                    <span className={cn(statusBadgeBase, epicExecutionStatus.className)}>
                       {epicExecutionStatus.label}
                     </span>
                   </div>

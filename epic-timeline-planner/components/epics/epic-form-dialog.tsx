@@ -155,6 +155,11 @@ type EpicFormDialogProps = {
   surfaceAnchorRef?: RefObject<HTMLElement | null>;
   /** Users directory — custom team slugs appear in the team combobox alongside delivery teams. */
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Insights scope pre-selection read from URL (epic or initiative id). */
+  initialInsightsScopeEpicId?: string | null;
+  initialInsightsScopeInitId?: string | null;
+  /** Called when the insights scope selection changes so the parent can persist to URL. */
+  onInsightsScopeChange?: (epicId: string | null, initId: string | null) => void;
 };
 
 export function EpicFormDialog({
@@ -175,6 +180,9 @@ export function EpicFormDialog({
   onAddComment,
   surfaceAnchorRef,
   workspaceDirectoryUsers = [],
+  initialInsightsScopeEpicId,
+  initialInsightsScopeInitId,
+  onInsightsScopeChange,
 }: EpicFormDialogProps) {
   const [title, setTitle] = useState(epic?.title ?? "");
   const [icon, setIcon] = useState(epic?.icon ?? "📁");
@@ -199,6 +207,7 @@ export function EpicFormDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [epicInsightsPanelOpen, setEpicInsightsPanelOpen] = useState(false);
+  const [insightsScopeLabel, setInsightsScopeLabel] = useState<string | null>(null);
   const [dialogWidthVw, setDialogWidthVw] = useState(64);
   const [epicInsightsPanelOffset, setEpicInsightsPanelOffset] = useState({ x: 0, y: 0 });
   const [epicInsightsPanelWidthPx, setEpicInsightsPanelWidthPx] = useState(560);
@@ -1028,6 +1037,15 @@ export function EpicFormDialog({
                 <Folder className="size-4 shrink-0 text-slate-600" aria-hidden />
                 <span className="truncate">{title || (epic ? "Epic details" : "Create epic")}</span>
               </span>
+              {epicInsightsPanelOpen && insightsScopeLabel ? (
+                <>
+                  <ChevronRight className="size-4 shrink-0 text-slate-400" />
+                  <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-indigo-700">
+                    <BarChart3 className="size-4 shrink-0 text-indigo-500" aria-hidden />
+                    <span className="truncate">{insightsScopeLabel}</span>
+                  </span>
+                </>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {epic ? (
@@ -2036,11 +2054,19 @@ export function EpicFormDialog({
                 periodMonths={epicInsightsMonths}
                 periodLabel={`Q${epicInsightsQuarter}`}
                 planYear={epicInsightsPlanYear}
-                initialSelectedEpicId={epic.id}
+                initialSelectedEpicId={initialInsightsScopeEpicId ?? epic.id}
+                initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
                 onOpenEpic={() => {
                   setEpicInsightsPanelOpen(false);
                 }}
                 onOpenStory={onOpenStory}
+                onScopeChange={(type, id, label) => {
+                  setInsightsScopeLabel(label);
+                  onInsightsScopeChange?.(
+                    type === "epic" ? id : null,
+                    type === "initiative" ? id : null,
+                  );
+                }}
               />
             ) : (
               <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">

@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { Archive, Map as MapIcon, PanelLeftOpen, Users } from "lucide-react";
+import { Archive, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Users } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
+import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-dialog";
 import { InitiativeListPanel } from "@/components/initiatives/initiative-list-panel";
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
@@ -960,7 +961,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       return {};
     }
   });
-  const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "users">("roadmap");
+  const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "dashboard" | "users">("roadmap");
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
@@ -1359,6 +1360,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const viewRaw = params.get("view");
     if (viewRaw === "users") setTopMode("users");
     else if (viewRaw === "backlog") setTopMode("backlog");
+    else if (viewRaw === "dashboard") setTopMode("dashboard");
     const q = params.get("quarter");
     if (q && QUARTERS.some((item) => item.label === q)) {
       setFocusedQuarterLabel(q);
@@ -1540,6 +1542,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const params = new URLSearchParams();
     if (topMode === "users") params.set("view", "users");
     else if (topMode === "backlog") params.set("view", "backlog");
+    else if (topMode === "dashboard") params.set("view", "dashboard");
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
     if (activeTimelineMonth == null && activeQuarterViewTab !== "gantt") params.set("quarterTab", activeQuarterViewTab);
     if (activeTimelineMonth != null) {
@@ -1614,6 +1617,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       const v = params.get("view");
       if (v === "users") setTopMode("users");
       else if (v === "backlog") setTopMode("backlog");
+      else if (v === "dashboard") setTopMode("dashboard");
       else setTopMode("roadmap");
     };
     window.addEventListener("popstate", onPopState);
@@ -2010,6 +2014,34 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     } catch {
       await refresh();
       toast.error("Failed to update estimate");
+    }
+  }, []);
+
+  const updateStoryDaysLeftFromCapacity = useCallback(async (storyId: string, daysLeft: number) => {
+    const nextDaysLeft = Math.max(0, Math.round(Number(daysLeft) || 0));
+    flushSync(() => {
+      setInitiatives((prev) =>
+        prev.map((init) => ({
+          ...init,
+          epics: (init.epics ?? []).map((epic) => ({
+            ...epic,
+            userStories: (epic.userStories ?? []).map((story) =>
+              story.id === storyId ? { ...story, daysLeft: nextDaysLeft } : story,
+            ),
+          })),
+        })),
+      );
+    });
+    try {
+      const response = await fetch(`/api/stories/${storyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daysLeft: nextDaysLeft }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch {
+      await refresh();
+      toast.error("Failed to update days left");
     }
   }, []);
 
@@ -4152,6 +4184,40 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
+            onClick={() => setTopMode("dashboard")}
+            aria-label="Dashboard"
+            className={cn(
+              "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
+              isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
+              topMode === "dashboard"
+                ? modeRailActiveClass
+                : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                topMode === "dashboard" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
+              )}
+              aria-hidden
+            >
+              <LayoutDashboard className="size-4" aria-hidden />
+            </span>
+            <span
+              className={cn(
+                modeRailLabelClass,
+                "overflow-hidden transition-[max-width,opacity,margin] duration-200",
+                isModeRailExpanded ? "ml-0 max-w-[12rem] opacity-100" : "ml-0 max-w-0 opacity-0",
+              )}
+              aria-hidden={!isModeRailExpanded}
+            >
+              Dashboard
+            </span>
+          </button>
+        </div>
+        <div className="group relative w-full overflow-visible">
+          <button
+            type="button"
             onClick={() => setTopMode("users")}
             aria-label="Users"
             className={cn(
@@ -4474,6 +4540,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 sprintCapacityColumnReorderEnabled={!isActiveSprintClosed}
                 onSprintCapacityChange={updateSprintCapacity}
                 onSprintCapacityStoryEstimateChange={updateStoryEstimateFromCapacity}
+                onSprintCapacityStoryDaysLeftChange={updateStoryDaysLeftFromCapacity}
                 onSprintKanbanStoryPatch={patchStoryFromKanban}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
                 onSprintCapacityStoryClearAssignee={clearStoryAssigneeFromSprintCapacity}
@@ -4763,6 +4830,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 onSprintModeChange={handleSprintModeChange}
               />
               </div>
+            </div>
+          ) : topMode === "dashboard" ? (
+            <div className="min-h-0 min-w-0 flex-1">
+              <DashboardPage initiatives={initiatives} planYear={selectedYear} />
             </div>
           ) : topMode === "users" ? (
             <div className="min-h-0 min-w-0 flex-1">

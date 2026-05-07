@@ -1403,8 +1403,10 @@ export function UsersWorkspacePanel() {
       </header>
 
       <div className="mb-5 shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
-        <div ref={searchFieldWrapRef} className="relative min-w-0 w-full flex-1 lg:max-w-md">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-3">
+        <div className="flex min-w-0 w-full flex-1 flex-col gap-1.5 lg:max-w-md">
+          <span className="pl-1 text-[15px] font-semibold text-slate-600">Search</span>
+          <div ref={searchFieldWrapRef} className="relative min-w-0 w-full">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500"
             aria-hidden
@@ -1448,9 +1450,12 @@ export function UsersWorkspacePanel() {
               ))}
             </div>
           ) : null}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full min-w-[160px] max-w-[220px] shrink-0 sm:w-[200px]">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex w-full min-w-[160px] max-w-[220px] shrink-0 flex-col gap-1.5 sm:w-[200px]">
+            <span className="pl-1 text-[15px] font-semibold text-slate-600">Team</span>
+            <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
             <AssigneeCombobox
               value={teamFilterInput}
@@ -1470,8 +1475,11 @@ export function UsersWorkspacePanel() {
                 setTeamFilterInput(teamFilterLabel(next));
               }}
             />
+            </div>
           </div>
-          <div className="relative w-full min-w-[160px] max-w-[220px] shrink-0 sm:w-[200px]">
+          <div className="flex w-full min-w-[160px] max-w-[220px] shrink-0 flex-col gap-1.5 sm:w-[200px]">
+            <span className="pl-1 text-[15px] font-semibold text-slate-600">Permission</span>
+            <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
             <AssigneeCombobox
               value={permFilterInput}
@@ -1491,8 +1499,11 @@ export function UsersWorkspacePanel() {
                 setPermFilterInput(permissionFilterLabel(next));
               }}
             />
+            </div>
           </div>
-          <div className="relative h-10 shrink-0" ref={userDirGroupMenuRef}>
+          <div className="flex shrink-0 flex-col gap-1.5" ref={userDirGroupMenuRef}>
+            <span className="pl-1 text-[15px] font-semibold text-slate-600">Group by</span>
+            <div className="relative">
             <button
               type="button"
               onClick={() => setUserDirGroupMenuOpen((prev) => !prev)}
@@ -1532,6 +1543,7 @@ export function UsersWorkspacePanel() {
                 })}
               </div>
             ) : null}
+            </div>
           </div>
         </div>
       </div>

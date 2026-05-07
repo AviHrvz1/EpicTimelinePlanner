@@ -19,6 +19,7 @@ const INITIATIVE_INCLUDE = {
         include: {
           comments: { orderBy: { createdAt: "desc" as const } },
           history: { orderBy: { createdAt: "desc" as const } },
+          snapshots: { orderBy: { snapshotDate: "asc" as const } },
         },
       },
     },

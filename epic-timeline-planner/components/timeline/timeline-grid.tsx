@@ -1099,6 +1099,7 @@ type TimelineGridProps = {
   sprintCapacityColumnReorderEnabled?: boolean;
   onSprintCapacityChange?: (member: string, days: number) => void;
   onSprintCapacityStoryEstimateChange?: (storyId: string, estimatedDays: number) => void;
+  onSprintCapacityStoryDaysLeftChange?: (storyId: string, daysLeft: number) => void;
   /** Capacity board X: clear assignee only (story stays on sprint). */
   onSprintCapacityStoryClearAssignee?: (storyId: string) => void;
   onSprintCapacityStoryUnschedule?: (storyId: string) => void;
@@ -1400,6 +1401,7 @@ export function TimelineGrid({
   sprintCapacityColumnReorderEnabled = true,
   onSprintCapacityChange,
   onSprintCapacityStoryEstimateChange,
+  onSprintCapacityStoryDaysLeftChange,
   onSprintCapacityStoryClearAssignee,
   onSprintCapacityStoryUnschedule,
   onRequestSprintKanbanStoryUnschedule,
@@ -4649,6 +4651,9 @@ export function TimelineGrid({
                   onCapacityChange={(member, days) => onSprintCapacityChange?.(member, days)}
                   onEstimateChange={(storyId, estimatedDays) =>
                     onSprintCapacityStoryEstimateChange?.(storyId, estimatedDays)
+                  }
+                  onDaysLeftChange={(storyId, daysLeft) =>
+                    onSprintCapacityStoryDaysLeftChange?.(storyId, daysLeft)
                   }
                   onUnscheduleStory={(storyId) =>
                     onSprintCapacityStoryClearAssignee

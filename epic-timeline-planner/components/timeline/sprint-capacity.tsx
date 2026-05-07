@@ -144,7 +144,9 @@ type CapacityStoryCardModel = {
   title: string;
   epicTitle: string;
   estimatedDays: number;
+  daysLeft: number | null;
   assigneeLabel: string;
+  status: "todo" | "inProgress" | "done" | "approved";
 };
 
 type SprintCapacityBoardProps = {
@@ -157,6 +159,7 @@ type SprintCapacityBoardProps = {
   columnReorderEnabled?: boolean;
   onCapacityChange: (member: string, days: number) => void;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
+  onDaysLeftChange: (storyId: string, daysLeft: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
   teamSelectorSlot?: ReactNode;
@@ -166,11 +169,13 @@ type SprintCapacityBoardProps = {
 function CapacityStoryCard({
   card,
   onEstimateChange,
+  onDaysLeftChange,
   onUnscheduleStory,
   onOpenStory,
 }: {
   card: CapacityStoryCardModel;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
+  onDaysLeftChange: (storyId: string, daysLeft: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
 }) {
@@ -178,6 +183,20 @@ function CapacityStoryCard({
   const [draftDays, setDraftDays] = useState<number | null>(null);
   const isDirty = draftDays !== null && draftDays !== card.estimatedDays;
   const displayDays = draftDays !== null ? draftDays : card.estimatedDays;
+
+  const [draftDaysLeft, setDraftDaysLeft] = useState<number | null>(null);
+  const isDirtyLeft = draftDaysLeft !== null && draftDaysLeft !== (card.daysLeft ?? 0);
+  const displayDaysLeft = draftDaysLeft !== null ? draftDaysLeft : (card.daysLeft ?? 0);
+
+  function commitDraftLeft() {
+    if (draftDaysLeft !== null) {
+      onDaysLeftChange(card.id, draftDaysLeft);
+      setDraftDaysLeft(null);
+    }
+  }
+  function cancelDraftLeft() {
+    setDraftDaysLeft(null);
+  }
 
   function commitDraft() {
     if (draftDays !== null) {
@@ -239,20 +258,46 @@ function CapacityStoryCard({
           </div>
         </div>
         <div className="flex min-w-0 items-center justify-between gap-2">
-          <div
-            className={cn(
-              "inline-flex max-w-full min-w-0 items-center gap-0.5 rounded border px-1 py-px text-[10px] font-medium leading-tight",
-              isUnassigned
-                ? "border-slate-200/70 bg-slate-50 text-slate-500"
-                : "border-emerald-200/80 bg-emerald-50 text-emerald-900",
-            )}
-            title={card.assigneeLabel}
-          >
-            <User className="size-2.5 shrink-0 opacity-80" aria-hidden />
-            <span className="min-w-0 truncate">{card.assigneeLabel}</span>
+          <div className="flex min-w-0 items-center gap-1">
+            <div
+              className={cn(
+                "inline-flex max-w-full min-w-0 items-center gap-0.5 rounded border px-1 py-px text-[10px] font-medium leading-tight",
+                isUnassigned
+                  ? "border-slate-200/70 bg-slate-50 text-slate-500"
+                  : "border-emerald-200/80 bg-emerald-50 text-emerald-900",
+              )}
+              title={card.assigneeLabel}
+            >
+              <User className="size-2.5 shrink-0 opacity-80" aria-hidden />
+              <span className="min-w-0 truncate">{card.assigneeLabel}</span>
+            </div>
+            <span
+              className={cn(
+                "shrink-0 rounded border px-1 py-px text-[10px] font-medium leading-tight",
+                card.status === "todo"       && "border-amber-200/80 bg-amber-50 text-amber-800",
+                card.status === "inProgress" && "border-blue-200/80 bg-blue-50 text-blue-800",
+                card.status === "done"       && "border-emerald-200/80 bg-emerald-50 text-emerald-800",
+                card.status === "approved"   && "border-violet-200/80 bg-violet-50 text-violet-800",
+              )}
+            >
+              {card.status === "todo" ? "To do" : card.status === "inProgress" ? "In progress" : card.status === "done" ? "Done" : "Approved"}
+            </span>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <span className="whitespace-nowrap text-right text-[12px] font-semibold text-slate-600">Est Days</span>
+          <div className="grid shrink-0 grid-cols-[auto_2.5rem] items-center gap-x-2 gap-y-1">
+              <span className="whitespace-nowrap text-[11px] font-medium text-slate-400">Est. Days left</span>
+              <input
+                type="number"
+                readOnly
+                tabIndex={-1}
+                value={card.daysLeft ?? 0}
+                onChange={() => {}}
+                className={cn(
+                  "h-5 w-10 rounded border border-slate-200/70 bg-slate-50 px-0.5 text-center text-[10px] font-semibold text-slate-400 pointer-events-none select-none focus:outline-none",
+                  CAPACITY_DAYS_INPUT_NO_SPIN,
+                )}
+                aria-label="Story Days Left"
+              />
+              <span className="whitespace-nowrap text-[12px] font-semibold text-slate-600">Est Days</span>
             <input
               type="number"
               min={0}
@@ -274,7 +319,7 @@ function CapacityStoryCard({
               aria-label="Story Est Days"
             />
             {isDirty && (
-              <>
+              <div className="col-span-2 flex justify-end gap-1">
                 <button
                   type="button"
                   onClick={commitDraft}
@@ -293,7 +338,7 @@ function CapacityStoryCard({
                 >
                   <X className="size-3" strokeWidth={2.5} />
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -336,6 +381,7 @@ function CapacityBucket({
   cards,
   onCapacityChange,
   onEstimateChange,
+  onDaysLeftChange,
   onUnscheduleStory,
   onOpenStory,
   panelExpandable = false,
@@ -353,6 +399,7 @@ function CapacityBucket({
   cards: CapacityStoryCardModel[];
   onCapacityChange: (days: number) => void;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
+  onDaysLeftChange: (storyId: string, daysLeft: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
   panelExpandable?: boolean;
@@ -623,6 +670,7 @@ function CapacityBucket({
                       <CapacityStoryCard
                         card={card}
                         onEstimateChange={onEstimateChange}
+                        onDaysLeftChange={onDaysLeftChange}
                         onUnscheduleStory={onUnscheduleStory}
                         onOpenStory={onOpenStory}
                       />
@@ -719,6 +767,7 @@ export function SprintCapacityBoard({
   columnReorderEnabled = true,
   onCapacityChange,
   onEstimateChange,
+  onDaysLeftChange,
   onUnscheduleStory,
   onOpenStory,
   teamSelectorSlot,
@@ -734,7 +783,9 @@ export function SprintCapacityBoard({
         title: row.story.title,
         epicTitle: row.epic.title,
         estimatedDays: Number(row.story.estimatedDays ?? 0),
+        daysLeft: row.story.daysLeft ?? null,
         assigneeLabel: storyAssigneeDisplayLabel(row.story),
+        status: row.story.status,
       } satisfies CapacityStoryCardModel,
     ]),
   );
@@ -840,6 +891,8 @@ export function SprintCapacityBoard({
     teamTotalAssigned += cards.reduce((sum, card) => sum + card.estimatedDays, 0);
   }
 
+  const sprintStoryCount = rows.length;
+
   return (
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
@@ -848,6 +901,7 @@ export function SprintCapacityBoard({
         gradientKey={`sprint-${gradientKey}`}
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
+        sprintStoryCount={sprintStoryCount}
       />
       {assigneeFilterOptions.length > 0 && selectedTeamId != null ? (
         <div className="shrink-0 px-0.5 py-0.5">
@@ -947,6 +1001,7 @@ export function SprintCapacityBoard({
                       cards={cards}
                       onCapacityChange={(days) => onCapacityChange(member, days)}
                       onEstimateChange={onEstimateChange}
+                      onDaysLeftChange={onDaysLeftChange}
                       onUnscheduleStory={onUnscheduleStory}
                       onOpenStory={onOpenStory}
                       panelExpandable={visibleMembers.length > 1}

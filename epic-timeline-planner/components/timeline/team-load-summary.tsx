@@ -15,6 +15,7 @@ export function TeamLoadSummary({
   totalCapacity,
   loadBasis = "originalEstimate",
   onLoadBasisChange,
+  sprintStoryCount,
 }: {
   teamLabel: string;
   teamLabelSlot?: ReactNode;
@@ -25,6 +26,8 @@ export function TeamLoadSummary({
   loadBasis?: CapacityLoadBasis;
   /** When set, shows Est days / Σ Child toggle for capacity surfaces. */
   onLoadBasisChange?: (basis: CapacityLoadBasis) => void;
+  /** When provided, story count is shown inline with the capacity stats row. */
+  sprintStoryCount?: number;
 }) {
   const overCapacity = totalAssigned > totalCapacity;
   const utilization = totalCapacity > 0 ? (totalAssigned / totalCapacity) * 100 : totalAssigned > 0 ? 200 : 0;
@@ -141,8 +144,16 @@ export function TeamLoadSummary({
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-slate-200/80 pt-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[13px] font-semibold sm:text-[14px]">
+      <div className="mt-3 border-t border-slate-200/80 pt-3">
+        <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold sm:text-[14px]">
+          {sprintStoryCount != null && (
+            <>
+              <span className="tabular-nums text-slate-800">
+                {sprintStoryCount} {sprintStoryCount === 1 ? "story" : "stories"}
+              </span>
+              <span className="text-slate-300/90">/</span>
+            </>
+          )}
           <span className="tabular-nums text-slate-800">{totalAssigned.toFixed(1)}d planned</span>
           <span className="text-slate-300/90">/</span>
           <span className="tabular-nums text-slate-600">{totalCapacity.toFixed(1)}d available</span>

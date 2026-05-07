@@ -171,45 +171,103 @@ function buildBurndown(
   const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
   const dayDates = sprintDayDates(planYear, month, yearSprint);
   const horizon = Math.max(1, dayDates.length);
+  const roundBurndown = (n: number) => (metric === "storyCount" ? Math.round(n) : Number(n.toFixed(1)));
+  const todayMs = startOfDay(new Date()).getTime();
 
-  let startValue = 0;
-  let actualRemaining = 0;
-  if (metric === "daysLeft") {
-    startValue = sprintStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
-    actualRemaining = sprintStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0);
-  } else {
-    startValue = sprintStories.length;
-    actualRemaining = sprintStories.filter((s) => s.status !== "done" && s.status !== "approved").length;
+  // Build per-story snapshot lookup: storyId → sorted [{dateMs, daysLeft, status}]
+  type SnapRow = { dateMs: number; daysLeft: number | null; status: StoryStatus };
+  const snapMap = new Map<string, SnapRow[]>();
+  for (const story of sprintStories) {
+    if (story.snapshots?.length) {
+      snapMap.set(
+        story.id,
+        [...story.snapshots]
+          .map((s) => ({
+            dateMs: startOfDay(new Date(s.snapshotDate)).getTime(),
+            daysLeft: s.daysLeft,
+            status: s.status,
+          }))
+          .sort((a, b) => a.dateMs - b.dateMs),
+      );
+    }
+  }
+  const hasSnapshots = snapMap.size > 0;
+
+  // Value for one story on a given day using its snapshots (most-recent-on-or-before)
+  function storyValueAtDay(story: UserStoryItem, dayMs: number): number {
+    const snaps = snapMap.get(story.id);
+    if (snaps?.length) {
+      let best: SnapRow | null = null;
+      for (const s of snaps) {
+        if (s.dateMs <= dayMs) best = s;
+        else break;
+      }
+      if (best) {
+        if (metric === "daysLeft") return Math.max(0, best.daysLeft ?? 0);
+        return best.status === StoryStatus.done || best.status === StoryStatus.approved ? 0 : 1;
+      }
+    }
+    // No snapshot: fall back to current story value
+    if (metric === "daysLeft") return Math.max(0, story.daysLeft ?? 0);
+    return story.status === StoryStatus.done || story.status === StoryStatus.approved ? 0 : 1;
   }
 
+  // Start value from day-1 snapshots (or estimated if no snapshots)
+  let startValue: number;
+  if (hasSnapshots && dayDates[0]) {
+    const day0Ms = startOfDay(dayDates[0]).getTime();
+    startValue = sprintStories.reduce((sum, s) => {
+      const snaps = snapMap.get(s.id);
+      const firstSnap = snaps?.find((sn) => sn.dateMs <= day0Ms);
+      if (firstSnap) {
+        return sum + (metric === "daysLeft" ? Math.max(0, firstSnap.daysLeft ?? 0) : 1);
+      }
+      return sum + (metric === "daysLeft" ? (s.estimatedDays ?? s.daysLeft ?? 1) : 1);
+    }, 0);
+  } else if (metric === "daysLeft") {
+    startValue = sprintStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
+  } else {
+    startValue = sprintStories.length;
+  }
+
+  // Fallback for non-snapshot path: interpolate from start to current
   const today1Based = sprintCalendarToday1Based(dayDates);
-  const roundBurndown = (n: number) => (metric === "storyCount" ? Math.round(n) : Number(n.toFixed(1)));
-  const todayStart = startOfDay(new Date()).getTime();
+  const currentActual = metric === "daysLeft"
+    ? sprintStories.reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0)
+    : sprintStories.filter((s) => s.status !== StoryStatus.done && s.status !== StoryStatus.approved).length;
 
   if (horizon === 1) {
     const cal = dayDates[0] ?? new Date(planYear, month - 1, 1);
-    return [
-      {
-        labelShort: flowChartDayLabel(cal),
-        ideal: roundBurndown(0),
-        actual: roundBurndown(actualRemaining),
-        isToday: startOfDay(cal).getTime() === todayStart,
-      },
-    ];
+    return [{
+      labelShort: flowChartDayLabel(cal),
+      ideal: roundBurndown(0),
+      actual: roundBurndown(hasSnapshots ? storyValueAtDay.length > 0 ? sprintStories.reduce((sum, s) => sum + storyValueAtDay(s, startOfDay(cal).getTime()), 0) : currentActual : currentActual),
+      isToday: startOfDay(cal).getTime() === todayMs,
+    }];
   }
 
   return dayDates.map((cal, idx) => {
     const dayIdx = idx + 1;
-    const ideal = startValue * (1 - idx / (horizon - 1));
-    const actual =
-      dayIdx <= today1Based
-        ? startValue - (startValue - actualRemaining) * ((dayIdx - 1) / Math.max(today1Based - 1, 1))
-        : null;
+    const dayMs = startOfDay(cal).getTime();
+    const ideal = roundBurndown(startValue * (1 - idx / (horizon - 1)));
+
+    let actual: number | null = null;
+    if (dayMs <= todayMs) {
+      if (hasSnapshots) {
+        actual = roundBurndown(sprintStories.reduce((sum, s) => sum + storyValueAtDay(s, dayMs), 0));
+      } else {
+        const interpolated = dayIdx <= today1Based
+          ? startValue - (startValue - currentActual) * ((dayIdx - 1) / Math.max(today1Based - 1, 1))
+          : null;
+        actual = interpolated == null ? null : roundBurndown(interpolated);
+      }
+    }
+
     return {
       labelShort: flowChartDayLabel(cal),
-      ideal: roundBurndown(ideal),
-      actual: actual == null ? null : roundBurndown(actual),
-      isToday: startOfDay(cal).getTime() === todayStart,
+      ideal,
+      actual,
+      isToday: dayMs === todayMs,
     };
   });
 }
@@ -652,19 +710,56 @@ function buildFlowTrend(
 
   const sprintFirstDay = dayDates[0];
   const sprintLastDay = dayDates[dayDates.length - 1];
-  const todayStart = startOfDay(new Date());
+  const todayMs = startOfDay(new Date()).getTime();
+  const pastDates = dayDates.filter((d) => startOfDay(d).getTime() <= todayMs);
+
+  // Build snapshot map same as burndown: storyId → sorted [{dateMs, status}]
+  type CfdSnapRow = { dateMs: number; status: StoryStatus };
+  const snapMap = new Map<string, CfdSnapRow[]>();
+  for (const story of sprintStories) {
+    if (story.snapshots?.length) {
+      snapMap.set(
+        story.id,
+        [...story.snapshots]
+          .map((s) => ({
+            dateMs: startOfDay(new Date(s.snapshotDate)).getTime(),
+            status: s.status,
+          }))
+          .sort((a, b) => a.dateMs - b.dateMs),
+      );
+    }
+  }
+  const hasSnapshots = snapMap.size > 0;
+
+  function storyStatusAtDay(story: UserStoryItem, dayMs: number): StoryStatus | null {
+    const snaps = snapMap.get(story.id);
+    if (snaps?.length) {
+      let best: CfdSnapRow | null = null;
+      for (const s of snaps) {
+        if (s.dateMs <= dayMs) best = s;
+        else break;
+      }
+      if (best) return best.status;
+    }
+    // No snapshot: fall back to synthetic history replay
+    if (!sprintFirstDay || !sprintLastDay) return null;
+    return statusAtEndOfDay(story, new Date(dayMs), sprintFirstDay, sprintLastDay);
+  }
 
   const flowSprintTrendData =
-    dayDates.length === 0
+    pastDates.length === 0
       ? []
-      : dayDates.map((dayDate, dayIndex) => {
+      : pastDates.map((dayDate, dayIndex) => {
           let todo = 0;
           let inProgress = 0;
           let done = 0;
           let approved = 0;
+          const dayMs = startOfDay(dayDate).getTime();
 
           for (const story of sprintStories) {
-            const st = statusAtEndOfDay(story, dayDate, sprintFirstDay, sprintLastDay);
+            const st = hasSnapshots
+              ? storyStatusAtDay(story, dayMs)
+              : statusAtEndOfDay(story, dayDate, sprintFirstDay, sprintLastDay);
             if (st == null) continue;
             if (st === StoryStatus.todo) todo += 1;
             else if (st === StoryStatus.inProgress) inProgress += 1;
@@ -675,7 +770,7 @@ function buildFlowTrend(
           return {
             dayInSprint: dayIndex + 1,
             labelShort: flowChartDayLabel(dayDate),
-            isToday: startOfDay(dayDate).getTime() === todayStart.getTime(),
+            isToday: dayMs === todayMs,
             todo,
             inProgress,
             done,

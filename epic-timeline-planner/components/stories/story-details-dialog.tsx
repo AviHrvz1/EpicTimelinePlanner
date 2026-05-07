@@ -1021,7 +1021,7 @@ export function StoryDetailsDialog({
               </select>
             </label>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
-              <p className="text-[15px] font-normal text-slate-700">Esti Days</p>
+              <p className="text-[15px] font-normal text-slate-700">Est. Days</p>
               <input
                 type="number"
                 min={0}

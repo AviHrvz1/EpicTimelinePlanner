@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon } from "lucide-react";
+import { Activity, ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon, User } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -759,7 +759,10 @@ export function SprintAnalytics({
                     className="block w-full rounded-md px-0.5 text-left transition hover:bg-sky-100/70"
                   >
                   <div className="flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="w-16 shrink-0 truncate font-medium">{item.assignee}</span>
+                    <span className="inline-flex w-20 shrink-0 items-center gap-1 truncate font-medium">
+                      <User className="size-3 shrink-0 text-slate-400" aria-hidden />
+                      {item.assignee}
+                    </span>
                     <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
                       <div
                         className="flex h-full min-w-0 overflow-hidden rounded-full shadow-sm ring-1 ring-slate-300/40"
@@ -849,7 +852,8 @@ export function SprintAnalytics({
               return (
                 <div key={row.assignee}>
                   <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="w-16 shrink-0 truncate font-medium" title={row.assignee}>
+                    <span className="inline-flex w-20 shrink-0 items-center gap-1 truncate font-medium" title={row.assignee}>
+                      <User className="size-3 shrink-0 text-slate-400" aria-hidden />
                       {row.assignee}
                     </span>
                     <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ring-slate-200/80">
