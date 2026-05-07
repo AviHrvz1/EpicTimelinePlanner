@@ -284,6 +284,21 @@ export function EpicPlanTimelineBar({
       }}
     >
       <GanttBarTooltip label={title} anchorRef={barRef} />
+      {onUnschedule ? (
+        <button
+          type="button"
+          aria-label="Unschedule epic"
+          title="Move epic to unscheduled backlog"
+          className="pointer-events-none absolute right-1 -top-1.5 z-[70] inline-flex size-4 items-center justify-center rounded-full bg-white opacity-0 shadow ring-1 ring-slate-300/80 transition duration-150 hover:bg-rose-50 hover:ring-rose-300 group-hover/bar:pointer-events-auto group-hover/bar:opacity-100"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onUnschedule();
+          }}
+        >
+          <X className="size-2.5 text-slate-500 hover:text-rose-500" strokeWidth={2.5} aria-hidden />
+        </button>
+      ) : null}
       <div
         className={cn(
           "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-medium tracking-[0.01em] active:cursor-grabbing",
@@ -296,26 +311,6 @@ export function EpicPlanTimelineBar({
         )}
         style={{ backgroundColor: color }}
       >
-        {onUnschedule ? (
-          <button
-            type="button"
-            aria-label="Unschedule epic"
-            title="Move epic to unscheduled backlog"
-            className={cn(
-              "pointer-events-none absolute right-2 top-0.5 z-[60] inline-flex size-4.5 items-center justify-center rounded-full opacity-0 ring-1 transition duration-150 group-hover/bar:pointer-events-auto group-hover/bar:opacity-100",
-              lightBg
-                ? "bg-black/10 text-slate-800 ring-black/20 hover:bg-black/20"
-                : "bg-white/20 text-white ring-white/40 hover:bg-white/30",
-            )}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onUnschedule();
-            }}
-          >
-            <X className="size-3" strokeWidth={2.5} aria-hidden />
-          </button>
-        ) : null}
         {emphasizeFlash ? (
           <div
             key={emphasizeTick}
