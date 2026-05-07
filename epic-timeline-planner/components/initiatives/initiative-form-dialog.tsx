@@ -40,6 +40,7 @@ import { ActivityCommentComposer } from "@/components/ui/activity-comment-compos
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
+import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
@@ -658,7 +659,7 @@ export function InitiativeFormDialog({
               </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
               <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-slate-900">
-                <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} aria-hidden />
+                <InitiativePlanBarIcon icon={icon} className="mr-0 [&_svg]:size-4 [&_svg]:text-blue-600" />
                 <span className="truncate">{title || (initiative ? "Initiative details" : "Create initiative")}</span>
               </span>
             </div>
