@@ -6,9 +6,9 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
-  AlertCircle,
   Bold,
   CalendarDays,
+  CheckCircle2,
   Heading2,
   Heading3,
   Italic,
@@ -21,7 +21,6 @@ import {
   Quote,
   Redo,
   Save,
-  Sparkles,
   ThumbsDown,
   ThumbsUp,
   Strikethrough,
@@ -62,12 +61,11 @@ function normalizeSectionHtml(raw: string | undefined | null) {
   return raw?.trim() ? raw : SECTION_TEMPLATE_HTML;
 }
 
-/** Keeps ProseMirror focused so block commands (headings, lists, quote) apply to the selection. */
 function toolbarPointerDown(e: MouseEvent) {
   e.preventDefault();
 }
 
-function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
+function RetroEditorToolbar({ editor, accentClass }: { editor: Editor | null; accentClass: string }) {
   const [, bump] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
@@ -82,211 +80,85 @@ function RetroEditorToolbar({ editor }: { editor: Editor | null }) {
   }, [editor]);
 
   if (!editor) {
-    return (
-      <div className="flex min-h-10 flex-wrap gap-1 rounded-lg bg-muted/20 px-2 py-1.5">
-        <span className="text-xs text-black">Loading editor…</span>
-      </div>
-    );
+    return <div className="flex min-h-9 flex-wrap gap-1 rounded-lg bg-white/20 px-2 py-1.5" />;
   }
 
-  const mkToggle = (isOn: boolean) =>
+  const btn = (active: boolean) =>
     cn(
-      "h-8 w-8 shrink-0 rounded-md border-0 p-0 shadow-none",
-      isOn
-        ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-        : "bg-slate-100 text-black hover:bg-slate-200/80",
+      "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border text-white transition-colors",
+      active ? "border-white/40 bg-white/25" : "border-transparent hover:bg-white/20",
     );
 
   return (
     <div
-      className="flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100/80 p-1"
+      className={cn("flex flex-wrap items-center gap-0.5 rounded-t-lg p-1.5", accentClass)}
       role="toolbar"
       aria-label="Formatting"
     >
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("bold"))}
-        disabled={!editor.can().toggleBold()}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        aria-pressed={editor.isActive("bold")}
-        title="Bold"
-      >
-        <Bold className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("italic"))}
-        disabled={!editor.can().toggleItalic()}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        aria-pressed={editor.isActive("italic")}
-        title="Italic"
-      >
-        <Italic className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("underline"))}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-        aria-pressed={editor.isActive("underline")}
-        title="Underline"
-      >
-        <UnderlineIcon className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("strike"))}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        aria-pressed={editor.isActive("strike")}
-        title="Strikethrough"
-      >
-        <Strikethrough className="size-4" />
-      </Button>
+      {[
+        { icon: Bold, active: editor.isActive("bold"), action: () => editor.chain().focus().toggleBold().run(), title: "Bold" },
+        { icon: Italic, active: editor.isActive("italic"), action: () => editor.chain().focus().toggleItalic().run(), title: "Italic" },
+        { icon: UnderlineIcon, active: editor.isActive("underline"), action: () => editor.chain().focus().toggleUnderline().run(), title: "Underline" },
+        { icon: Strikethrough, active: editor.isActive("strike"), action: () => editor.chain().focus().toggleStrike().run(), title: "Strikethrough" },
+      ].map(({ icon: Icon, active, action, title }) => (
+        <button key={title} type="button" onMouseDown={toolbarPointerDown} onClick={action} title={title} className={btn(active)}>
+          <Icon className="size-3.5" />
+        </button>
+      ))}
 
-      <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:inline" aria-hidden />
+      <span className="mx-1 h-4 w-px bg-white/30" aria-hidden />
 
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("heading", { level: 2 }))}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        aria-pressed={editor.isActive("heading", { level: 2 })}
-        title="Heading 2"
-      >
-        <Heading2 className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("heading", { level: 3 }))}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        aria-pressed={editor.isActive("heading", { level: 3 })}
-        title="Heading 3"
-      >
-        <Heading3 className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("bulletList"))}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        aria-pressed={editor.isActive("bulletList")}
-        title="Bullet list"
-      >
-        <List className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("orderedList"))}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        aria-pressed={editor.isActive("orderedList")}
-        title="Numbered list"
-      >
-        <ListOrdered className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("blockquote"))}
-        onMouseDown={toolbarPointerDown}
-        onClick={() => {
-          let ok = editor.chain().focus().toggleBlockquote().run();
-          if (!ok) {
-            // Fallback when current node context (e.g. inside list) blocks direct quote toggle.
-            ok = editor.chain().focus().clearNodes().toggleBlockquote().run();
-          }
-        }}
-        aria-pressed={editor.isActive("blockquote")}
-        title="Quote"
-      >
-        <Quote className="size-4" />
-      </Button>
+      {[
+        { icon: Heading2, active: editor.isActive("heading", { level: 2 }), action: () => editor.chain().focus().toggleHeading({ level: 2 }).run(), title: "H2" },
+        { icon: Heading3, active: editor.isActive("heading", { level: 3 }), action: () => editor.chain().focus().toggleHeading({ level: 3 }).run(), title: "H3" },
+        { icon: List, active: editor.isActive("bulletList"), action: () => editor.chain().focus().toggleBulletList().run(), title: "Bullet list" },
+        { icon: ListOrdered, active: editor.isActive("orderedList"), action: () => editor.chain().focus().toggleOrderedList().run(), title: "Numbered list" },
+        { icon: Quote, active: editor.isActive("blockquote"), action: () => { const ok = editor.chain().focus().toggleBlockquote().run(); if (!ok) editor.chain().focus().clearNodes().toggleBlockquote().run(); }, title: "Quote" },
+      ].map(({ icon: Icon, active, action, title }) => (
+        <button key={title} type="button" onMouseDown={toolbarPointerDown} onClick={action} title={title} className={btn(active)}>
+          <Icon className="size-3.5" />
+        </button>
+      ))}
 
-      <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:inline" aria-hidden />
+      <span className="mx-1 h-4 w-px bg-white/30" aria-hidden />
 
-      <Button
+      <button
         type="button"
-        size="sm"
-        variant="outline"
-        className={mkToggle(editor.isActive("link"))}
         onMouseDown={toolbarPointerDown}
         onClick={() => {
           const prev = editor.getAttributes("link").href as string | undefined;
           const url = window.prompt("Link URL", prev ?? "https://");
           if (url === null) return;
           const trimmed = url.trim();
-          if (trimmed === "") {
-            editor.chain().focus().extendMarkRange("link").unsetLink().run();
-            return;
-          }
+          if (trimmed === "") { editor.chain().focus().extendMarkRange("link").unsetLink().run(); return; }
           editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
         }}
-        aria-pressed={editor.isActive("link")}
         title="Link"
+        className={btn(editor.isActive("link"))}
       >
-        <LinkIcon className="size-4" />
-      </Button>
+        <LinkIcon className="size-3.5" />
+      </button>
 
-      <span className="mx-1 hidden h-6 w-px bg-slate-200 sm:inline" aria-hidden />
+      <span className="mx-1 h-4 w-px bg-white/30" aria-hidden />
 
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="h-8 w-8 shrink-0 rounded-md border-0 bg-slate-100 p-0 text-black shadow-none hover:bg-slate-200/80"
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().undo().run()}
-        disabled={!editor.can().undo()}
-        title="Undo"
-      >
-        <Undo className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="h-8 w-8 shrink-0 rounded-md border-0 bg-slate-100 p-0 text-black shadow-none hover:bg-slate-200/80"
-        onMouseDown={toolbarPointerDown}
-        onClick={() => editor.chain().focus().redo().run()}
-        disabled={!editor.can().redo()}
-        title="Redo"
-      >
-        <Redo className="size-4" />
-      </Button>
+      <button type="button" onMouseDown={toolbarPointerDown} onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo" className={btn(false)}>
+        <Undo className="size-3.5" />
+      </button>
+      <button type="button" onMouseDown={toolbarPointerDown} onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo" className={btn(false)}>
+        <Redo className="size-3.5" />
+      </button>
     </div>
   );
 }
 
 type RetroRichSectionProps = {
   title: string;
+  subtitle: string;
   titleIcon: LucideIcon;
-  titleAccentClass: string;
-  /** Overrides default `text-base` on the section header title row. */
-  headerTitleClassName?: string;
-  titleIconClassName?: string;
-  /** Background for the editor surface (gradient). */
-  editorSurfaceClassName?: string;
+  accentClass: string;
+  toolbarAccentClass: string;
+  editorBgClass: string;
+  badgeClass: string;
   placeholder: string;
   field: "wentWell" | "improve";
   initialDoc: SprintRetrospectiveDoc | null;
@@ -296,11 +168,12 @@ type RetroRichSectionProps = {
 
 function RetroRichSection({
   title,
+  subtitle,
   titleIcon: TitleIcon,
-  titleAccentClass,
-  headerTitleClassName,
-  titleIconClassName,
-  editorSurfaceClassName = "bg-gradient-to-b from-slate-50/90 via-white to-indigo-50/55",
+  accentClass,
+  toolbarAccentClass,
+  editorBgClass,
+  badgeClass,
   placeholder,
   field,
   initialDoc,
@@ -310,18 +183,12 @@ function RetroRichSection({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [2, 3] },
-        link: false,
-        underline: false,
-      }),
+      StarterKit.configure({ heading: { levels: [2, 3] }, link: false, underline: false }),
       Underline,
       Link.configure({
         openOnClick: false,
         autolink: true,
-        HTMLAttributes: {
-          class: "font-medium text-black underline decoration-black/40 underline-offset-2",
-        },
+        HTMLAttributes: { class: "font-medium underline underline-offset-2" },
       }),
       Placeholder.configure({ placeholder }),
     ],
@@ -329,60 +196,46 @@ function RetroRichSection({
     editorProps: {
       attributes: {
         class: cn(
-          "prose max-w-none min-h-[14rem] px-3 py-2.5 text-sm text-black outline-none",
-          "prose-headings:font-normal prose-headings:text-black prose-p:my-1 prose-p:text-black prose-li:text-black prose-ul:my-1 prose-ol:my-1",
-          // Make toolbar block formats visibly distinct in the retrospective editor.
-          "[&_h2]:my-2 [&_h2]:text-xl [&_h2]:font-normal [&_h2]:leading-snug",
-          "[&_h3]:my-1.5 [&_h3]:text-lg [&_h3]:font-normal [&_h3]:leading-snug",
-          "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6",
-          "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6",
-          "[&_li]:my-0.5",
-          "[&_blockquote]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-black",
-          "focus:outline-none [&_.ProseMirror]:min-h-[14rem] [&_.ProseMirror]:outline-none",
+          "prose max-w-none min-h-[13rem] px-4 py-3 text-sm outline-none",
+          "prose-headings:font-semibold prose-p:my-1 prose-li:my-0.5",
+          "[&_h2]:my-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:leading-snug",
+          "[&_h3]:my-1.5 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:leading-snug",
+          "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5",
+          "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5",
+          "[&_blockquote]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:opacity-70",
+          "focus:outline-none [&_.ProseMirror]:outline-none",
         ),
       },
     },
-    onUpdate: ({ editor: ed }) => {
-      onHtmlChange(ed.getHTML());
-    },
+    onUpdate: ({ editor: ed }) => { onHtmlChange(ed.getHTML()); },
   });
 
   useEffect(() => {
     if (!editor) return;
     const raw = field === "wentWell" ? initialDoc?.wentWellHtml : initialDoc?.improveHtml;
     const next = normalizeSectionHtml(raw);
-    const cur = editor.getHTML();
-    if (cur === next) return;
+    if (editor.getHTML() === next) return;
     editor.commands.setContent(next, { emitUpdate: false });
   }, [editor, initialDoc, field]);
 
   return (
-    <section
-      className={cn(
-        "rounded-xl bg-transparent p-3 transition-[box-shadow]",
-        editor?.isFocused && "ring-2 ring-ring/30 ring-offset-2 ring-offset-transparent",
-      )}
-    >
-      <div
-        className={cn(
-          "mb-2.5 flex items-center gap-2 rounded-lg px-3 py-2 font-normal",
-          headerTitleClassName ?? "text-base",
-          titleAccentClass,
-        )}
-      >
-        <TitleIcon className={cn("size-4 shrink-0 opacity-90", titleIconClassName)} aria-hidden />
-        <span>{title}</span>
+    <div className={cn("flex flex-col overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md", accentClass, editor?.isFocused && "ring-1 ring-offset-1")}>
+      <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+        <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl", badgeClass)}>
+          <TitleIcon className="size-4.5" aria-hidden />
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <p className="text-[15px] font-semibold leading-snug text-slate-800">{title}</p>
+          <p className="mt-0.5 text-[12px] text-slate-500">{subtitle}</p>
+        </div>
       </div>
-      <RetroEditorToolbar editor={editor} />
-      <div
-        className={cn(
-          "mt-2 overflow-hidden rounded-lg border border-slate-200",
-          editorSurfaceClassName,
-        )}
-      >
-        <EditorContent editor={editor} />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <RetroEditorToolbar editor={editor} accentClass={toolbarAccentClass} />
+        <div className={cn("min-h-0 flex-1", editorBgClass)}>
+          <EditorContent editor={editor} />
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -404,10 +257,7 @@ export function SprintRetrospectiveEditor({
   }, [initialDoc]);
 
   useEffect(() => {
-    if (!updatedAt) {
-      setSavedAtText(null);
-      return;
-    }
+    if (!updatedAt) { setSavedAtText(null); return; }
     setSavedAtText(new Date(updatedAt).toLocaleString());
   }, [updatedAt]);
 
@@ -415,27 +265,16 @@ export function SprintRetrospectiveEditor({
     const baseWentWell = normalizeSectionHtml(initialDoc?.wentWellHtml);
     const baseImprove = normalizeSectionHtml(initialDoc?.improveHtml);
     const baseActionItems = initialDoc?.actionItems ?? [];
-    return (
-      baseWentWell !== wentWellHtml ||
-      baseImprove !== improveHtml ||
-      JSON.stringify(baseActionItems) !== JSON.stringify(actionItems)
-    );
+    return baseWentWell !== wentWellHtml || baseImprove !== improveHtml || JSON.stringify(baseActionItems) !== JSON.stringify(actionItems);
   }, [initialDoc, wentWellHtml, improveHtml, actionItems]);
 
   function handleSave() {
-    onSave({
-      wentWellHtml,
-      improveHtml,
-      actionItems,
-    });
+    onSave({ wentWellHtml, improveHtml, actionItems });
     setSavedAtText(new Date().toLocaleString());
   }
 
   function addActionItem() {
-    setActionItems((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), title: "", owner: "", dueDate: "" },
-    ]);
+    setActionItems((prev) => [...prev, { id: crypto.randomUUID(), title: "", owner: "", dueDate: "" }]);
   }
 
   function updateActionItem(id: string, patch: Partial<SprintRetroActionItem>) {
@@ -447,137 +286,177 @@ export function SprintRetrospectiveEditor({
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col font-sans">
-      <div className="min-h-0 flex-1 overflow-y-auto py-5 pr-5 pb-5 pl-2 sm:py-7 sm:pr-7 sm:pb-7 sm:pl-3 md:py-8 md:pr-8 md:pb-8 md:pl-3">
-        <header className="mb-5 flex flex-wrap items-start gap-4 border-b border-slate-200/80 pb-4">
-          <div className="min-w-0 space-y-3">
-            <h3 className="flex items-center gap-2.5 font-sans text-xl font-normal tracking-tight text-black md:text-[1.3125rem] md:leading-snug">
-              <NotebookPen className="size-7 shrink-0 text-black md:size-8" aria-hidden />
-              <span>Sprint Retrospective</span>
-            </h3>
-            <p className="text-sm leading-relaxed text-slate-700">
-              {sprintLabel} — capture wins, improvements, and concrete next actions.
-            </p>
-          </div>
-        </header>
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50 font-sans">
+      <div className="min-h-0 flex-1 overflow-y-auto">
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <RetroRichSection
-          title="What went well?"
-          titleIcon={ThumbsUp}
-          titleAccentClass="bg-transparent text-black"
-          headerTitleClassName="text-[18px] md:text-[19px] md:leading-snug"
-          titleIconClassName="size-5 md:size-6"
-          editorSurfaceClassName="bg-transparent"
-          placeholder="Highlights, wins, and practices to repeat…"
-          field="wentWell"
-          initialDoc={initialDoc}
-          html={wentWellHtml}
-          onHtmlChange={setWentWellHtml}
-        />
-        <RetroRichSection
-          title="What did not go well?"
-          titleIcon={ThumbsDown}
-          titleAccentClass="bg-transparent text-black"
-          headerTitleClassName="text-[18px] md:text-[19px] md:leading-snug"
-          titleIconClassName="size-5 md:size-6"
-          editorSurfaceClassName="bg-transparent"
-          placeholder="Friction, misses, and risks to address…"
-          field="improve"
-          initialDoc={initialDoc}
-          html={improveHtml}
-          onHtmlChange={setImproveHtml}
-        />
-      </div>
-
-      <section className="mt-4 rounded-xl bg-transparent p-3">
-        <div className="mb-2.5 rounded-lg bg-white px-3 py-2 text-lg font-normal text-black sm:text-xl">
-          <span className="inline-flex items-center gap-2">
-            <ListChecks className="size-4 shrink-0 text-black sm:size-5" aria-hidden />
-            What's next?
-          </span>
-        </div>
-
-        <div className="space-y-2">
-          {actionItems.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-black">
-              No action items yet. Add one to assign owner and due date.
-            </p>
-          ) : (
-            actionItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col gap-2 rounded-lg bg-slate-50 p-2"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    value={item.title}
-                    onChange={(e) => updateActionItem(item.id, { title: e.target.value })}
-                    placeholder="Action item"
-                    className="h-9 min-w-0 flex-[4.2] rounded-md border-0 bg-white px-2.5 text-sm text-black shadow-none outline-none transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-slate-400/50"
-                  />
-                  <label className="flex h-9 min-w-0 flex-[0.55] items-center gap-2 rounded-md border-0 bg-white px-2.5">
-                    <User className="size-4 shrink-0 text-black" aria-hidden />
-                    <input
-                      value={item.owner}
-                      onChange={(e) => updateActionItem(item.id, { owner: e.target.value })}
-                      placeholder="Owner"
-                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-black outline-none placeholder:text-black/45"
-                    />
-                  </label>
-                  <label className="flex h-9 min-w-0 flex-[0.5] items-center gap-2 rounded-md border-0 bg-white px-2.5">
-                    <CalendarDays className="size-4 shrink-0 text-black" aria-hidden />
-                    <input
-                      type="date"
-                      value={item.dueDate}
-                      onChange={(e) => updateActionItem(item.id, { dueDate: e.target.value })}
-                      className="h-full min-w-0 flex-1 bg-transparent text-sm text-black outline-none"
-                    />
-                  </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeActionItem(item.id)}
-                    className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    title="Remove action item"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+        {/* Hero header */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-white px-6 py-7 sm:px-8 sm:py-8 border-b border-slate-200">
+          <div className="relative flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-slate-200/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                <NotebookPen className="size-3" aria-hidden />
+                Sprint Retrospective
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">{sprintLabel}</h2>
+              <p className="mt-1.5 text-sm text-slate-400">Reflect · Learn · Improve</p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex gap-2">
+                <div className="flex flex-col items-center rounded-xl bg-emerald-50 px-5 py-3 text-center ring-1 ring-emerald-200 shadow-sm">
+                  <ThumbsUp className="mb-1 size-5 text-emerald-500" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Wins</span>
+                </div>
+                <div className="flex flex-col items-center rounded-xl bg-rose-50 px-5 py-3 text-center ring-1 ring-rose-200 shadow-sm">
+                  <ThumbsDown className="mb-1 size-5 text-rose-500" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Improve</span>
+                </div>
+                <div className="flex flex-col items-center rounded-xl bg-sky-50 px-5 py-3 text-center ring-1 ring-sky-200 shadow-sm">
+                  <CheckCircle2 className="mb-1 size-5 text-sky-500" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Actions</span>
+                  <span className="text-sm font-bold text-sky-800">{actionItems.length || "—"}</span>
                 </div>
               </div>
-            ))
-          )}
+            </div>
+          </div>
         </div>
 
-        <div className="mt-3 flex justify-start pl-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={addActionItem}
-            className="h-8 min-w-[100px] shrink-0 gap-1.5 px-4 text-sm font-medium"
-          >
-            <Plus className="size-4" strokeWidth={2.25} aria-hidden />
-            Add
-          </Button>
+        <div className="px-5 py-6 sm:px-7 sm:py-7">
+
+          {/* Two-column retro sections */}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <RetroRichSection
+              title="What went well?"
+              subtitle="Highlights, wins, and practices to repeat"
+              titleIcon={ThumbsUp}
+              accentClass="border-emerald-200 bg-white"
+              toolbarAccentClass="bg-emerald-600"
+              editorBgClass="bg-white"
+              badgeClass="bg-emerald-100 text-emerald-700"
+              placeholder="Describe what went well this sprint…"
+              field="wentWell"
+              initialDoc={initialDoc}
+              html={wentWellHtml}
+              onHtmlChange={setWentWellHtml}
+            />
+            <RetroRichSection
+              title="What could be improved?"
+              subtitle="Friction, misses, and risks to address"
+              titleIcon={ThumbsDown}
+              accentClass="border-rose-200 bg-white"
+              toolbarAccentClass="bg-rose-500"
+              editorBgClass="bg-white"
+              badgeClass="bg-rose-100 text-rose-600"
+              placeholder="Describe what needs improvement…"
+              field="improve"
+              initialDoc={initialDoc}
+              html={improveHtml}
+              onHtmlChange={setImproveHtml}
+            />
+          </div>
+
+          {/* Action items */}
+          <div className="mt-5 overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm">
+            <div className="flex items-center gap-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-5 py-3.5">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 ring-1 ring-violet-200">
+                <ListChecks className="size-4 text-violet-600" aria-hidden />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-slate-800">Action Items</p>
+                <p className="text-[11px] text-slate-400">Assign owners and due dates to follow through</p>
+              </div>
+              {actionItems.length > 0 && (
+                <span className="ml-auto inline-flex size-6 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200">
+                  {actionItems.length}
+                </span>
+              )}
+            </div>
+
+            <div className="p-4">
+              {actionItems.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-8 text-center">
+                  <ListChecks className="size-8 text-slate-300" />
+                  <p className="text-sm font-medium text-slate-500">No action items yet</p>
+                  <p className="text-xs text-slate-400">Add one to track owners and due dates</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {actionItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="group flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2 transition-colors hover:border-violet-200 hover:bg-violet-50/30"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-600">
+                        {idx + 1}
+                      </span>
+                      <input
+                        value={item.title}
+                        onChange={(e) => updateActionItem(item.id, { title: e.target.value })}
+                        placeholder="Describe the action…"
+                        className="h-8 min-w-0 flex-[3] rounded-lg border border-transparent bg-white px-2.5 text-sm text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-violet-300 focus:ring-1 focus:ring-violet-200/60"
+                      />
+                      <label className="flex h-8 min-w-[7rem] flex-1 items-center gap-1.5 rounded-lg border border-transparent bg-white px-2.5 shadow-sm focus-within:border-violet-300 focus-within:ring-1 focus-within:ring-violet-200/60">
+                        <User className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                        <input
+                          value={item.owner}
+                          onChange={(e) => updateActionItem(item.id, { owner: e.target.value })}
+                          placeholder="Owner"
+                          className="h-full min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                        />
+                      </label>
+                      <label className="flex h-8 min-w-[8rem] items-center gap-1.5 rounded-lg border border-transparent bg-white px-2.5 shadow-sm focus-within:border-violet-300 focus-within:ring-1 focus-within:ring-violet-200/60">
+                        <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                        <input
+                          type="date"
+                          value={item.dueDate}
+                          onChange={(e) => updateActionItem(item.id, { dueDate: e.target.value })}
+                          className="h-full min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => removeActionItem(item.id)}
+                        className="flex size-7 shrink-0 items-center justify-center rounded-lg text-slate-300 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-500 group-hover:opacity-100"
+                        title="Remove"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={addActionItem}
+                className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-violet-200 text-sm font-medium text-violet-500 transition-colors hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700"
+              >
+                <Plus className="size-4" strokeWidth={2.25} />
+                Add action item
+              </button>
+            </div>
+          </div>
+
         </div>
-      </section>
       </div>
 
-      <footer className="shrink-0 border-t border-slate-100 bg-white px-5 py-4 sm:px-7">
+      {/* Footer */}
+      <footer className="shrink-0 border-t border-slate-200/80 bg-white px-5 py-3.5 sm:px-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-600">
-            {savedAtText ? `Last saved: ${savedAtText}` : "Not saved yet for this sprint."}
+          <p className="text-xs text-slate-400">
+            {savedAtText ? (
+              <span>Last saved: <span className="font-medium text-slate-600">{savedAtText}</span></span>
+            ) : (
+              "Not saved yet for this sprint."
+            )}
           </p>
           <Button
             type="button"
             size="sm"
             onClick={handleSave}
             disabled={!dirty}
-            className="h-8 min-w-[100px] shrink-0 gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+            className="h-8 min-w-[100px] shrink-0 gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40"
           >
-            <Save className="size-4" data-icon="inline-start" />
+            <Save className="size-3.5" />
             Save
           </Button>
         </div>
