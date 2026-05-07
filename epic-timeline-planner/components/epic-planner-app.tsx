@@ -4282,6 +4282,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
               if (next instanceof Node && e.currentTarget.contains(next)) return;
               setIsModeRailExpanded(false);
             }}
+            onMouseEnter={() => setIsModeRailExpanded(true)}
           >
             <div
               className={cn(
@@ -4290,7 +4291,6 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   ? "z-50 w-[244px] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.22)] ring-1 ring-slate-200/70"
                   : "z-30 w-[58px]",
               )}
-              onMouseEnter={() => setIsModeRailExpanded(true)}
               onMouseLeave={() => setIsModeRailExpanded(false)}
             >
               <div
