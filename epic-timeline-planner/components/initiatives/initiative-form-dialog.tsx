@@ -686,7 +686,7 @@ export function InitiativeFormDialog({
               <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
                   <p className="flex shrink-0 items-center gap-2 text-base font-normal text-slate-800">
-                    <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
+                    <InitiativePlanBarIcon icon={icon} className="mr-0 [&_svg]:size-4 [&_svg]:text-blue-600" />
                     Title
                   </p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
