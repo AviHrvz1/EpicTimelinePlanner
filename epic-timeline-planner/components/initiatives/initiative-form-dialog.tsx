@@ -686,11 +686,10 @@ export function InitiativeFormDialog({
               <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
                   <p className="flex shrink-0 items-center gap-2 text-base font-normal text-slate-800">
-                    <InitiativePlanBarIcon icon={icon} className="mr-0 [&_svg]:size-4 [&_svg]:text-blue-600" />
+                    <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                     Title
                   </p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
-                    <input value={icon} onChange={(event) => setIcon(event.target.value)} maxLength={2} placeholder="⚡" className="w-12 border-r border-slate-200 bg-transparent px-2 py-2 text-center text-xl outline-none" />
                     <input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full bg-transparent px-3 py-2 text-base outline-none" placeholder="Initiative title" />
                   </div>
                 </label>
