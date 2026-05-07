@@ -149,8 +149,8 @@ export function TeamEpicCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "group/card relative min-h-[5rem] shrink-0 rounded-lg border border-slate-200/90 bg-white px-2.5 py-1.5 shadow-sm transition hover:border-slate-300 hover:shadow-md",
-        isDragging && "opacity-60 shadow-lg",
+        "group/card relative min-h-[3.25rem] rounded-lg border border-slate-200/80 bg-white py-2 pl-2 pr-2 shadow-sm transition-colors hover:border-slate-300/70 hover:bg-slate-50/80",
+        isDragging && "opacity-60",
       )}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
@@ -160,77 +160,95 @@ export function TeamEpicCard({
       <button
         type="button"
         onClick={() => onRemoveEpicFromCapacity(epicId)}
-        className="absolute right-0 top-0 z-30 inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover/card:opacity-100 group-focus-within/card:opacity-100 focus-visible:opacity-100"
+        className="absolute right-1.5 top-1.5 z-50 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition hover:bg-slate-100 hover:text-slate-700 group-hover/card:opacity-100 group-focus-within/card:opacity-100 focus-visible:opacity-100"
         aria-label="Remove epic from team capacity bucket"
         title="Clear team assignment"
       >
         <X className="size-3.5" aria-hidden />
       </button>
-      <div className="flex flex-col gap-2 @min-[22rem]:grid @min-[22rem]:grid-cols-[auto_minmax(0,1fr)_minmax(9.5rem,auto)] @min-[22rem]:items-start @min-[22rem]:gap-x-2 @min-[22rem]:gap-y-0">
-        <div className="flex min-w-0 items-start gap-2 @min-[22rem]:contents">
+      <div className="flex w-full min-w-0 flex-col gap-2.5">
+        {/* Title row */}
+        <div className="flex min-w-0 items-center gap-1.5">
           <button
             type="button"
-            className="mt-0.5 shrink-0 cursor-grab rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 transition hover:bg-slate-100 active:cursor-grabbing"
+            className="shrink-0 cursor-grab rounded border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 transition-colors hover:bg-slate-100 active:cursor-grabbing"
             aria-label="Drag epic card"
             {...attributes}
             {...listeners}
           >
             ::
           </button>
-          <div className="min-w-0 flex-1 pr-10">
+          <div className="min-w-0 flex-1 pr-[calc(0.375rem+1.5rem+0.25rem)]">
             <button
               type="button"
               onClick={() => onOpenEpic(epicId)}
-              className="block w-full text-left text-[13px] font-semibold leading-snug text-slate-900 transition hover:text-blue-700 @min-[22rem]:truncate"
+              className="w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
             >
               <span className="mr-1.5 inline-flex align-middle text-slate-600">
                 <EpicPlanBarIcon icon={icon} className="mr-0 text-slate-600 [&_svg]:text-slate-500" />
               </span>
               {title}
             </button>
-            <p className="mt-0.5 text-[11px] leading-snug text-slate-500 @min-[22rem]:truncate">{initiativeTitle}</p>
+            <p className="mt-0.5 truncate text-[11px] leading-snug text-slate-500">{initiativeTitle}</p>
           </div>
         </div>
-        <div className="relative z-10 flex w-full min-w-0 shrink-0 flex-col items-start gap-1 pt-0 @min-[22rem]:col-start-3 @min-[22rem]:row-start-1 @min-[22rem]:ml-auto @min-[22rem]:w-auto @min-[22rem]:justify-self-end @min-[22rem]:pt-6">
-          <div className="flex w-full flex-nowrap items-center justify-between gap-1.5">
-            <span className="whitespace-nowrap text-[12px] font-semibold text-slate-600">Σ Stories Estimation</span>
-            <span
-              title="Sum of child user story estimates — edit estimates on each story"
-              aria-label="Sum of child story estimate days (read-only)"
-              className="inline-flex h-[1.375rem] w-[3.5rem] shrink-0 cursor-default items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-center text-[11px] font-semibold text-slate-700 tabular-nums"
-            >
-              {Math.round(childStoryEstimateDays)}
-            </span>
+        {/* Bottom row: badges + estimates */}
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1">
+            {executionStatusLabel ? (
+              <span className={cn("shrink-0 rounded border px-1 py-px text-[10px] font-medium leading-tight", executionStatusClassName)}>
+                {executionStatusLabel}
+              </span>
+            ) : null}
+            {planningLabel ? (
+              <span className="shrink-0 rounded border border-slate-200/70 bg-slate-50 px-1 py-px text-[10px] font-medium leading-tight text-slate-500">
+                {planningLabel}
+              </span>
+            ) : null}
           </div>
-          <div className="flex w-full flex-nowrap items-center justify-between gap-1.5 text-[11px] font-semibold text-slate-600">
-            <span className="whitespace-nowrap">Est days</span>
-            <div className="flex shrink-0 items-center gap-1">
-              <input
-                type="number"
-                min={0}
-                max={5000}
-                step={1}
-                value={displayEst}
-                onChange={(event) => setDraftEst(Math.max(0, Number(event.target.value || 0)))}
-                onKeyDown={(e) => { if (e.key === "Enter") commitEst(); if (e.key === "Escape") cancelEst(); }}
-                className={cn(
-                  "h-[1.375rem] w-[3.5rem] shrink-0 rounded-md border bg-white px-1.5 text-center text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100",
-                  isEstDirty ? "border-blue-300 focus:border-blue-400" : "border-slate-200 focus:border-blue-300",
-                  CAPACITY_DAYS_INPUT_NO_SPIN,
-                )}
-                aria-label="Original estimate days"
-              />
-              {isEstDirty && (
-                <>
-                  <button type="button" onClick={commitEst} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100" aria-label="Confirm" title="Confirm">
-                    <Check className="size-3" strokeWidth={2.5} />
-                  </button>
-                  <button type="button" onClick={cancelEst} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Cancel" title="Cancel">
-                    <X className="size-3" strokeWidth={2.5} />
-                  </button>
-                </>
+          <div className="grid shrink-0 grid-cols-[auto_2.5rem] items-center gap-x-2 gap-y-1">
+            <span className="whitespace-nowrap text-[11px] font-medium text-slate-400">Σ Stories</span>
+            <input
+              type="number"
+              readOnly
+              tabIndex={-1}
+              value={Math.round(childStoryEstimateDays)}
+              onChange={() => {}}
+              title="Sum of child story estimates (read-only)"
+              aria-label="Sum of child story estimate days (read-only)"
+              className={cn(
+                "h-5 w-10 rounded border border-slate-200/70 bg-slate-50 px-0.5 text-center text-[10px] font-semibold text-slate-400 pointer-events-none select-none focus:outline-none",
+                CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
-            </div>
+            />
+            <span className="whitespace-nowrap text-[12px] font-semibold text-slate-600">Est Days</span>
+            <input
+              type="number"
+              min={0}
+              max={5000}
+              step={1}
+              value={displayEst}
+              onChange={(event) => setDraftEst(Math.max(0, Number(event.target.value || 0)))}
+              onKeyDown={(e) => { if (e.key === "Enter") commitEst(); if (e.key === "Escape") cancelEst(); }}
+              className={cn(
+                "h-5 w-10 shrink-0 rounded border bg-white px-0.5 text-center text-[10px] font-semibold leading-none text-slate-800 focus:outline-none focus:ring-1",
+                isEstDirty
+                  ? "border-blue-300 focus:border-blue-400 focus:ring-blue-100"
+                  : "border-slate-200 focus:border-blue-300 focus:ring-blue-100",
+                CAPACITY_DAYS_INPUT_NO_SPIN,
+              )}
+              aria-label="Original estimate days"
+            />
+            {isEstDirty && (
+              <div className="col-span-2 flex justify-end gap-1">
+                <button type="button" onClick={commitEst} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100" aria-label="Confirm" title="Confirm">
+                  <Check className="size-3" strokeWidth={2.5} />
+                </button>
+                <button type="button" onClick={cancelEst} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" aria-label="Cancel" title="Cancel">
+                  <X className="size-3" strokeWidth={2.5} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -335,14 +353,17 @@ export function TeamCapacityBucket({
   return (
     <section
       className={cn(
-        "group @container min-h-0 min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
+        "group @container min-h-0 min-w-0 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm",
+        "transition-[border-color,box-shadow] duration-200 ease-out hover:border-slate-300/70 hover:shadow-md",
       )}
     >
       <div className="-mt-1 mb-2 flex flex-col gap-2 pr-0.5 pb-1">
         <div className="relative grid min-h-8 w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-x-1">
           <div className="min-w-0 justify-self-start" aria-hidden />
-          <p className="col-start-2 inline-flex min-w-0 max-w-[min(16rem,85vw)] items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[15px] font-bold text-slate-800">
-            <Users className="size-4 shrink-0 text-indigo-500" aria-hidden />
+          <p className="col-start-2 inline-flex min-w-0 max-w-[min(16rem,85vw)] items-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[15px] font-bold text-slate-800">
+            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+              <Users className="size-3.5" aria-hidden />
+            </span>
             <span className="min-w-0 truncate">
               {teamLabelPrefix ? (
                 <>
@@ -421,9 +442,10 @@ export function TeamCapacityBucket({
         <div
           ref={setNodeRef}
           className={cn(
-            "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border-0 bg-white p-2 transition",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300/60 bg-slate-200/60 p-2",
+            "transition-[background-color,box-shadow,border-color] duration-200 ease-out",
             bucketColumnShellClass,
-            isOver && "ring-2 ring-primary/25",
+            isOver && "border-violet-300/70 bg-violet-100/50 ring-1 ring-violet-200/50",
           )}
         >
           {/* Bucket SVG hidden for now — remove `hidden` from className to show again */}
@@ -440,18 +462,9 @@ export function TeamCapacityBucket({
           >
             <div className="mt-auto flex w-full min-w-0 flex-col-reverse gap-2.5 pb-2 pt-1">
               {cards.length === 0 ? (
-                <p
-                  className="flex items-center justify-center gap-2 rounded-xl p-4 text-center text-[12px] font-semibold tracking-wide text-slate-500"
-                  style={{
-                    background: "rgba(255,255,255,0.45)",
-                    border: "1px solid rgba(255,255,255,0.6)",
-                    backdropFilter: "blur(6px)",
-                    WebkitBackdropFilter: "blur(6px)",
-                    boxShadow: "0 2px 12px rgba(99,102,241,0.07), inset 0 1px 0 rgba(255,255,255,0.7)",
-                  }}
-                >
+                <p className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300/70 bg-white/70 p-4 text-center text-[12px] font-medium tracking-wide text-slate-400">
                   Drop Epic here
-                  <ArrowDown className="size-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                  <ArrowDown className="size-3.5 text-slate-300" strokeWidth={2} aria-hidden />
                 </p>
               ) : (
                 cards.map((card) => (
@@ -467,9 +480,9 @@ export function TeamCapacityBucket({
             </div>
           </div>
         </div>
-        <div className={cn("flex min-h-0 flex-col items-center p-2", bucketColumnShellClass)}>
+        <div className={cn("flex min-h-0 flex-col items-center rounded-xl bg-slate-50/80 p-2", bucketColumnShellClass)}>
           <div className="text-center">
-            <p className="text-[12px] font-semibold text-slate-600">Load</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Load</p>
             <p className="text-[15px] font-bold text-slate-700">{Math.round(utilization)}%</p>
           </div>
           <div className="flex flex-1 items-center py-1">
@@ -526,9 +539,9 @@ export function TeamCapacityBucket({
               />
             </svg>
           </div>
-          <div className="text-center text-[12px] font-semibold text-slate-600">
-            <p>{primaryLoad.toFixed(1)} Days</p>
-            <p>/ {capacity.toFixed(1)} Days</p>
+          <div className="text-center text-[11px] text-slate-500">
+            <p className="font-semibold text-slate-700">{primaryLoad.toFixed(1)}d</p>
+            <p className="text-slate-400">/ {capacity.toFixed(1)}d</p>
           </div>
         </div>
       </div>

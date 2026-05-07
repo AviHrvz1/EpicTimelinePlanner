@@ -215,7 +215,7 @@ function CapacityStoryCard({
     <article
       ref={setNodeRef}
       className={cn(
-        "group/storycap relative min-h-[3.25rem] rounded-lg border border-indigo-100/90 bg-indigo-50 py-2 pl-2 pr-2 shadow-sm transition-colors hover:bg-indigo-100/70",
+        "group/storycap relative min-h-[3.25rem] rounded-lg border border-slate-200/80 bg-white py-2 pl-2 pr-2 shadow-sm transition-colors hover:border-slate-300/70 hover:bg-slate-50/80",
         isDragging && "opacity-60",
       )}
       style={{
@@ -236,7 +236,7 @@ function CapacityStoryCard({
         <div className="flex min-w-0 items-center gap-1.5">
           <button
             type="button"
-            className="shrink-0 cursor-grab rounded border border-indigo-100/90 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 transition-colors hover:bg-indigo-100/70 active:cursor-grabbing"
+            className="shrink-0 cursor-grab rounded border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 transition-colors hover:bg-slate-100 active:cursor-grabbing"
             aria-label="Drag story to another person or unschedule"
             {...attributes}
             {...listeners}
@@ -366,7 +366,7 @@ function StoryDropSlot({
       ref={setNodeRef}
       className={cn(
         "my-0.5 min-h-2.5 w-full shrink-0 rounded-md py-0.5 transition",
-        isOver ? "min-h-4 bg-indigo-400/45 ring-1 ring-indigo-300/50" : "bg-transparent",
+        isOver ? "min-h-4 bg-violet-100/70 ring-1 ring-violet-300/50" : "bg-transparent",
       )}
       aria-hidden
     />
@@ -455,9 +455,9 @@ function CapacityBucket({
   return (
     <section
       className={cn(
-        "group @container relative min-h-0 min-w-0 rounded-2xl border border-slate-200/85 bg-gradient-to-br from-slate-50/95 via-indigo-50/45 to-sky-100/55 p-3 shadow-sm ring-1 ring-indigo-100/40",
-        "transition-[border-color,box-shadow,background-color,filter] duration-200 ease-out",
-        "hover:border-indigo-300/70 hover:from-indigo-50/90 hover:via-indigo-100/55 hover:to-sky-100/70 hover:shadow-md hover:ring-indigo-200/55",
+        "group @container relative min-h-0 min-w-0 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm",
+        "transition-[border-color,box-shadow] duration-200 ease-out",
+        "hover:border-slate-300/70 hover:shadow-md",
       )}
     >
       <div className="-mt-1 mb-2 flex flex-col gap-4 pr-0.5">
@@ -466,15 +466,17 @@ function CapacityBucket({
           <div className="flex min-w-0 items-center justify-self-start self-center">
             {teamFilterLabel ? (
               <span
-                className="inline-flex max-w-[5.25rem] items-center rounded-sm bg-sky-100/90 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-sky-900/85 ring-1 ring-sky-200/70"
+                className="inline-flex max-w-[5.25rem] items-center rounded-sm bg-violet-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-violet-700 ring-1 ring-violet-200/70"
                 title={teamFilterLabel}
               >
                 <span className="truncate">{teamFilterLabel}</span>
               </span>
             ) : null}
           </div>
-          <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-1.5 text-center text-[17px] font-bold text-slate-800">
-            <Users className="size-4 shrink-0 text-indigo-600/90" aria-hidden />
+          <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-2 text-center text-[17px] font-bold text-slate-800">
+            <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+              <Users className="size-3.5" aria-hidden />
+            </span>
             <span className="min-w-0 truncate">{memberTitle}</span>
           </p>
           <div className="relative min-h-8 min-w-0 justify-self-stretch self-center">
@@ -625,11 +627,10 @@ function CapacityBucket({
         <div
           ref={setNodeRef}
           className={cn(
-            "relative flex min-h-0 flex-col overflow-hidden rounded-2xl border-0 bg-white p-2",
-            "transition-[background-color,box-shadow] duration-200 ease-out",
-            "hover:bg-sky-50/40 hover:shadow-inner",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300/60 bg-slate-200/60 p-2",
+            "transition-[background-color,box-shadow,border-color] duration-200 ease-out",
             bucketColumnShellClass,
-            isOver && "bg-sky-50/50 ring-2 ring-primary/25 shadow-inner",
+            isOver && "border-violet-300/70 bg-violet-100/50 ring-1 ring-violet-200/50",
           )}
         >
           {/* Bucket SVG hidden for now — remove `hidden` from className to show again */}
@@ -648,18 +649,9 @@ function CapacityBucket({
               {cards.length === 0 ? (
                 <>
                   <StoryDropSlot yearSprint={yearSprint} teamKey={teamKey} member={member} index={0} />
-                  <p
-                    className="flex items-center justify-center gap-2 rounded-xl p-4 text-center text-[12px] font-semibold tracking-wide text-slate-500"
-                    style={{
-                      background: "rgba(255,255,255,0.45)",
-                      border: "1px solid rgba(255,255,255,0.6)",
-                      backdropFilter: "blur(6px)",
-                      WebkitBackdropFilter: "blur(6px)",
-                      boxShadow: "0 2px 12px rgba(99,102,241,0.07), inset 0 1px 0 rgba(255,255,255,0.7)",
-                    }}
-                  >
+                  <p className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 bg-white/70 p-4 text-center text-[12px] font-medium tracking-wide text-slate-400">
                     Drop story here
-                    <ArrowDown className="size-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                    <ArrowDown className="size-3.5 text-slate-300" strokeWidth={2} aria-hidden />
                   </p>
                 </>
               ) : (
@@ -687,9 +679,9 @@ function CapacityBucket({
             </div>
           </div>
         </div>
-        <div className={cn("flex min-h-0 flex-col items-center p-2", bucketColumnShellClass)}>
+        <div className={cn("flex min-h-0 flex-col items-center rounded-xl bg-slate-50/80 p-2", bucketColumnShellClass)}>
           <div className="text-center">
-            <p className="text-[12px] font-semibold text-slate-600">Load</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Load</p>
             <p className="text-[15px] font-bold text-slate-700">
               {Math.round(utilization)}%
             </p>
@@ -748,9 +740,9 @@ function CapacityBucket({
               />
             </svg>
           </div>
-          <div className="text-center text-[12px] font-semibold text-slate-600">
-            <p>{assignedTotal.toFixed(1)} Days</p>
-            <p>/ {capacity.toFixed(1)} Days</p>
+          <div className="text-center text-[11px] text-slate-500">
+            <p className="font-semibold text-slate-700">{assignedTotal.toFixed(1)}d</p>
+            <p className="text-slate-400">/ {capacity.toFixed(1)}d</p>
           </div>
         </div>
       </div>
@@ -905,7 +897,7 @@ export function SprintCapacityBoard({
       />
       {assigneeFilterOptions.length > 0 && selectedTeamId != null ? (
         <div className="shrink-0 px-0.5 py-0.5">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             People in this sprint
           </p>
           <div
@@ -922,8 +914,8 @@ export function SprintCapacityBoard({
               className={cn(
                 "relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold tracking-[0.02em] ring-1 transition",
                 allCapacityAssigneesSelected
-                  ? "bg-sky-600 text-white ring-sky-700"
-                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-100",
+                  ? "bg-violet-600 text-white ring-violet-700"
+                  : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50",
               )}
             >
               <Users className="size-[15px]" strokeWidth={2.25} aria-hidden />
@@ -941,8 +933,8 @@ export function SprintCapacityBoard({
                     "relative inline-flex h-9 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
                     assigneeFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-9 justify-center px-0",
                     on
-                      ? "bg-sky-600 text-white ring-sky-700"
-                      : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-100",
+                      ? "bg-violet-600 text-white ring-violet-700"
+                      : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-50",
                   )}
                   title={name}
                   style={{
