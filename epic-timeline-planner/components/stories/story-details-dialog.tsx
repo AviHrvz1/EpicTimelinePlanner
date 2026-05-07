@@ -931,7 +931,7 @@ export function StoryDetailsDialog({
                     onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
-                      descriptionEditor?.isActive("blockquote") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
+                      descriptionEditor?.isActive("blockquote") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <Quote className="size-3.5" />

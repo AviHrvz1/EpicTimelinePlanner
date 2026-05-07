@@ -41,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { InitiativeCombobox } from "@/components/ui/initiative-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
-import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import {
   EPICS_UNPLAN_DROP_ID,
   backlogSlotDropId,
@@ -650,7 +650,7 @@ function InitiativeTreeEpicRow({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-md py-2.5 pl-0.5 pr-0.5 font-sans",
+        "rounded-md py-1 pl-0.5 pr-0.5 font-sans",
         isDragging && "opacity-60",
       )}
       style={{
@@ -687,7 +687,7 @@ function InitiativeTreeEpicRow({
           </button>
         ) : (
           <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-            <Folder className="size-3.5 text-slate-400" strokeWidth={2} />
+            <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
           </span>
         )}
         <button
@@ -1239,7 +1239,7 @@ function SprintEpicCard({
           </button>
         ) : (
           <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-            <Folder className="size-3.5 text-slate-400" strokeWidth={2} />
+            <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
           </span>
         )}
         <div className="min-w-0 flex-1 text-left">
