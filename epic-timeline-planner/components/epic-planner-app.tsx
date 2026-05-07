@@ -142,6 +142,30 @@ type DndDropInspectorPayload = {
   steps: string[];
 };
 
+type EpicDayDebug = {
+  at: string;
+  epicId: string;
+  startDay: number;
+  endDay: number;
+  epicFound: boolean;
+  initiativeTitle: string | null;
+  before: {
+    title: string;
+    planSprint: number | null | undefined;
+    planEndSprint: number | null | undefined;
+    planStartMonth: number | null | undefined;
+    planEndMonth: number | null | undefined;
+    planStartDay: number | null | undefined;
+    planEndDay: number | null | undefined;
+  } | null;
+  selectedYear: number;
+  focusedQuarterLabel: string | null;
+  /** What epicBarDayInsetPct would return for the updated epic (span=1, startS computed from planSprint/planStartMonth) */
+  insetComputed: { left: string; right: string; startS: number; endS: number } | null;
+  /** What quarterBarAbsoluteDayPct would return for the updated epic */
+  absComputed: { left: string; right: string } | "null (span!=1 or no days)" | null;
+};
+
 /** Drag outcomes that completed normally — do not pop the debug panel (it reads like an error). */
 const DND_DROP_INSPECTOR_SUPPRESS_BRANCHES = new Set<string>([
   "epic:gantt-month-placed",
@@ -774,6 +798,32 @@ function buildStoryRefMaps(initiatives: InitiativeItem[]): {
   return { byId, idByRef };
 }
 
+function buildInitiativeRefMaps(initiatives: InitiativeItem[]): {
+  byId: Record<string, string>;
+  idByRef: Record<string, string>;
+} {
+  const byId: Record<string, string> = {};
+  const idByRef: Record<string, string> = {};
+  [...initiatives]
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.title.localeCompare(b.title))
+    .forEach((initiative, idx) => {
+      const ref = String(idx + 1).padStart(2, "0");
+      byId[initiative.id] = ref;
+      idByRef[ref] = initiative.id;
+    });
+  return { byId, idByRef };
+}
+
+function resolveInitiativeIdFromUrlParam(param: string, maps: ReturnType<typeof buildInitiativeRefMaps>): string {
+  const raw = param.trim();
+  if (!raw) return raw;
+  const direct = maps.idByRef[raw];
+  if (direct) return direct;
+  const stripped = raw.replace(/^INIT-/i, "");
+  const padded = stripped.padStart(2, "0");
+  return maps.idByRef[stripped] ?? maps.idByRef[padded] ?? raw;
+}
+
 function buildEpicRefMaps(initiatives: InitiativeItem[]): {
   byId: Record<string, string>;
   idByRef: Record<string, string>;
@@ -828,6 +878,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [epicDialogOpen, setEpicDialogOpen] = useState(false);
   const [editingEpic, setEditingEpic] = useState<EpicItem | undefined>(undefined);
   const [editingEpicInitiativeId, setEditingEpicInitiativeId] = useState<string | null>(null);
+  const [insightsScopeEpicId, setInsightsScopeEpicId] = useState<string | null>(null);
+  const [insightsScopeInitId, setInsightsScopeInitId] = useState<string | null>(null);
   const [focusedQuarterLabel, setFocusedQuarterLabel] = useState<string | null>(null);
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
@@ -844,6 +896,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
   const [workspaceDirectoryUsers, setWorkspaceDirectoryUsers] = useState<SprintWorkspaceDirectoryUser[]>([]);
   /** Last drag-end snapshot for debugging drops (story Kanban, plan cells, etc.). */
   const [dndDropInspector, setDndDropInspector] = useState<DndDropInspectorPayload | null>(null);
+  const [epicDayDebug, setEpicDayDebug] = useState<EpicDayDebug | null>(null);
   const [monthTeamBoardByKey, setMonthTeamBoardByKey] = useState<Record<string, MonthTeamBoardPersisted>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -1276,6 +1329,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   const storyRefMaps = useMemo(() => buildStoryRefMaps(initiatives), [initiatives]);
   const epicRefMaps = useMemo(() => buildEpicRefMaps(initiatives), [initiatives]);
+  const initiativeRefMaps = useMemo(() => buildInitiativeRefMaps(initiatives), [initiatives]);
 
   const currentEditingInitiative = useMemo(() => {
     if (!editingInitiative) return undefined;
@@ -1414,8 +1468,33 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       const initialMaps = buildStoryRefMaps(initialInitiatives);
       setSelectedStoryId(resolveStoryIdFromUrlParam(storyRef, initialMaps));
     }
+    const iScopeEpicParam = params.get("iScopeEpicId");
+    if (iScopeEpicParam) {
+      const initialEpicMaps = buildEpicRefMaps(initialInitiatives);
+      setInsightsScopeEpicId(resolveEpicIdFromUrlParam(iScopeEpicParam, initialEpicMaps));
+    }
+    const iScopeInitParam = params.get("iScopeInitId");
+    if (iScopeInitParam) {
+      const initialInitMaps = buildInitiativeRefMaps(initialInitiatives);
+      setInsightsScopeInitId(resolveInitiativeIdFromUrlParam(iScopeInitParam, initialInitMaps));
+    }
     setIsUrlHydrated(true);
   }, [initialInitiatives]);
+
+  // Clear insights scope when the user navigates away from an insights surface.
+  // Gate on isUrlHydrated so the initial URL hydration (which sets activeQuarterViewTab)
+  // completes before this effect can wipe the scope that was just read from the URL.
+  useEffect(() => {
+    if (!isUrlHydrated) return;
+    const inInsights =
+      activeQuarterViewTab === "insights" ||
+      activeMonthPlanTab === "month-status" ||
+      epicDialogOpen;
+    if (!inInsights) {
+      setInsightsScopeEpicId(null);
+      setInsightsScopeInitId(null);
+    }
+  }, [isUrlHydrated, activeQuarterViewTab, activeMonthPlanTab, epicDialogOpen]);
 
   const prevTimelineMonthRef = useRef<number | null | "init">("init");
   useEffect(() => {
@@ -1514,6 +1593,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       const epicRef = epicRefMaps.byId[editingEpic.id];
       params.set("epic", epicRef ? `EPIC-${epicRef}` : editingEpic.id);
     }
+    if (insightsScopeEpicId) {
+      const ref = epicRefMaps.byId[insightsScopeEpicId];
+      params.set("iScopeEpicId", ref ? `EPIC-${ref}` : insightsScopeEpicId);
+    } else if (insightsScopeInitId) {
+      const ref = initiativeRefMaps.byId[insightsScopeInitId];
+      params.set("iScopeInitId", ref ? `INIT-${ref}` : insightsScopeInitId);
+    }
     if (selectedStoryId) params.set("story", storyRefMaps.byId[selectedStoryId] ?? selectedStoryId);
     const next = params.toString();
     const target = next ? `${pathname}?${next}` : pathname;
@@ -1535,6 +1621,9 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     epicDialogOpen,
     editingEpic?.id,
     epicRefMaps.byId,
+    initiativeRefMaps.byId,
+    insightsScopeEpicId,
+    insightsScopeInitId,
     selectedStoryId,
     storyRefMaps.byId,
     router,
@@ -2493,7 +2582,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   async function patchEpicQuarterPlan(
     epicId: string,
-    payload: { planSprint: number; planEndSprint: number; planStartMonth: number; planEndMonth: number; timelineRow?: number },
+    payload: { planSprint: number; planEndSprint: number; planStartMonth: number; planEndMonth: number; timelineRow?: number; planStartDay?: null; planEndDay?: null },
   ) {
     const response = await fetch(`/api/epics/${epicId}`, {
       method: "PATCH",
@@ -4369,6 +4458,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 currentYear={selectedYear}
                 showRoadmapProgress={showRoadmapProgress}
                 onShowRoadmapProgressChange={setShowRoadmapProgress}
+                initialInsightsScopeEpicId={insightsScopeEpicId}
+                initialInsightsScopeInitId={insightsScopeInitId}
+                onInsightsScopeChange={(epicId, initId) => {
+                  setInsightsScopeEpicId(epicId);
+                  setInsightsScopeInitId(initId);
+                }}
                 summaryBadges={roadmapSummary}
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 summaryStatusQuickFilter={panelStatusQuickFilter}
@@ -4624,6 +4719,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                             planStartMonth: range.startMonth,
                             planEndMonth: range.endMonth,
                             timelineRow: nextTimelineRow,
+                            planStartDay: null,
+                            planEndDay: null,
                           }
                         : epic,
                     ),
@@ -4636,6 +4733,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                       planStartMonth: range.startMonth,
                       planEndMonth: range.endMonth,
                       timelineRow: nextTimelineRow,
+                      planStartDay: null,
+                      planEndDay: null,
                     });
                     await persistEpicTimelineRowPatches(before, after);
                     toast.success("Approved", {
@@ -4643,6 +4742,109 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                     });
                   } catch (err) {
                     console.error("[onResizeEpicPlanRange]", err);
+                    await refresh();
+                    const description = err instanceof Error ? err.message : undefined;
+                    toast.error("Failed to resize epic", description ? { description } : undefined);
+                  }
+                }}
+                onMonthEpicDayRangeChange={async (epicId, startDay, endDay) => {
+                  const initiative = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === epicId));
+                  const epic = initiative ? (initiative.epics ?? []).find((e) => e.id === epicId) : undefined;
+                  const monthName = epic?.planStartMonth != null
+                    ? new Date(selectedYear, epic.planStartMonth - 1, 1).toLocaleString("default", { month: "long" })
+                    : null;
+                  // --- debug capture ---
+                  (() => {
+                    const dim = (m: number) => new Date(selectedYear, m, 0).getDate();
+                    const updatedEpic = epic ? { ...epic, planStartDay: startDay, planEndDay: endDay } : null;
+                    let insetComputed: EpicDayDebug["insetComputed"] = null;
+                    let absComputed: EpicDayDebug["absComputed"] = null;
+                    if (updatedEpic && updatedEpic.planStartMonth && updatedEpic.planEndMonth) {
+                      const startMonth = updatedEpic.planStartMonth;
+                      const endMonth = updatedEpic.planEndMonth;
+                      const startLane = (updatedEpic.planSprint === 2 ? 2 : 1) as 1 | 2;
+                      const endLane = (updatedEpic.planEndSprint === 1 ? 1 : 2) as 1 | 2;
+                      const startS = globalSprintFromMonthLane(startMonth, startLane);
+                      const endS = globalSprintFromMonthLane(endMonth, endLane);
+                      const span = endS - startS + 1;
+                      const sFirst = startLane === 1 ? 1 : 16;
+                      const sLast = startLane === 1 ? 15 : dim(startMonth);
+                      const dStart = sLast - sFirst + 1;
+                      const aStart = startDay >= sFirst && startDay <= sLast ? startDay : sFirst;
+                      const eFirst = endLane === 1 ? 1 : 16;
+                      const eLast = endLane === 1 ? 15 : dim(endMonth);
+                      const dEnd = eLast - eFirst + 1;
+                      const aEnd = endDay >= eFirst && endDay <= eLast ? endDay : eLast;
+                      const lPct = (Math.max(0, aStart - sFirst) / dStart / span) * 100;
+                      const rPct = (Math.max(0, eLast - aEnd) / dEnd / span) * 100;
+                      insetComputed = {
+                        left: lPct > 0.1 ? `${lPct.toFixed(2)}%` : "",
+                        right: rPct > 0.1 ? `${rPct.toFixed(2)}%` : "",
+                        startS,
+                        endS,
+                      };
+                      if (span === 1) {
+                        const lane = startLane;
+                        const spFirst = lane === 1 ? 1 : 16;
+                        const spLast = lane === 1 ? 15 : dim(startMonth);
+                        const days = spLast - spFirst + 1;
+                        const sd = startDay >= spFirst && startDay <= spLast ? startDay : spFirst;
+                        const ed = endDay >= spFirst && endDay <= spLast ? endDay : spLast;
+                        const leftPct = Math.max(0, ((sd - spFirst) / days) * 100);
+                        const rightPct = Math.max(0, ((spLast - ed) / days) * 100);
+                        absComputed = { left: `${leftPct.toFixed(2)}%`, right: `${rightPct.toFixed(2)}%` };
+                      } else {
+                        absComputed = "null (span!=1 or no days)";
+                      }
+                    }
+                    setEpicDayDebug({
+                      at: new Date().toISOString(),
+                      epicId,
+                      startDay,
+                      endDay,
+                      epicFound: Boolean(epic),
+                      initiativeTitle: initiative?.title ?? null,
+                      before: epic ? {
+                        title: epic.title,
+                        planSprint: epic.planSprint,
+                        planEndSprint: epic.planEndSprint,
+                        planStartMonth: epic.planStartMonth,
+                        planEndMonth: epic.planEndMonth,
+                        planStartDay: epic.planStartDay,
+                        planEndDay: epic.planEndDay,
+                      } : null,
+                      selectedYear,
+                      focusedQuarterLabel,
+                      insetComputed,
+                      absComputed,
+                    });
+                  })();
+                  // --- end debug ---
+                  // Derive sprint-level fields from the day values so year/quarter gantts update correctly.
+                  const newPlanSprint = startDay <= 15 ? 1 : 2;
+                  const newPlanEndSprint = endDay <= 15 ? 1 : 2;
+                  setInitiatives((prev) =>
+                    prev.map((initiative) => ({
+                      ...initiative,
+                      epics: (initiative.epics ?? []).map((e) =>
+                        e.id === epicId
+                          ? { ...e, planStartDay: startDay, planEndDay: endDay, planSprint: newPlanSprint, planEndSprint: newPlanEndSprint }
+                          : e,
+                      ),
+                    })),
+                  );
+                  try {
+                    const response = await fetch(`/api/epics/${epicId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ planStartDay: startDay, planEndDay: endDay, planSprint: newPlanSprint, planEndSprint: newPlanEndSprint }),
+                    });
+                    if (!response.ok) throw new Error(`Save failed (${response.status})`);
+                    toast.success("Epic updated", {
+                      description: `Day ${startDay} → Day ${endDay}${monthName ? ` · ${monthName}` : ""}`,
+                    });
+                  } catch (err) {
+                    console.error("[onMonthEpicDayRangeChange]", err);
                     await refresh();
                     const description = err instanceof Error ? err.message : undefined;
                     toast.error("Failed to resize epic", description ? { description } : undefined);
@@ -4842,6 +5044,61 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             </div>
           </div>
         ) : null}
+        {epicDayDebug ? (
+          <div
+            className="pointer-events-auto fixed bottom-4 left-4 z-[100] flex max-h-[min(480px,80vh)] w-[min(100vw-2rem,460px)] flex-col rounded-lg border border-sky-200/80 bg-sky-50/95 text-slate-900 shadow-xl ring-1 ring-sky-900/10 backdrop-blur-sm"
+            role="dialog"
+            aria-label="Epic day-range debug"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sky-200/90 px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-sky-900/80">
+                  Month drag debug
+                </div>
+                <div className="truncate font-mono text-[11px] text-slate-500">{epicDayDebug.at}</div>
+              </div>
+              <div className="flex shrink-0 gap-1.5">
+                <Button
+                  type="button" variant="outline" size="sm"
+                  className="h-7 border-sky-300 bg-white px-2 text-[11px] text-slate-800 hover:bg-sky-100/80"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(JSON.stringify(epicDayDebug, null, 2));
+                    toast.message("Copied debug JSON");
+                  }}
+                >Copy</Button>
+                <Button
+                  type="button" variant="outline" size="sm"
+                  className="h-7 border-sky-300 bg-white px-2 text-[11px] text-slate-800 hover:bg-sky-100/80"
+                  onClick={() => setEpicDayDebug(null)}
+                >Dismiss</Button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 text-[11px] leading-snug">
+              <div className="rounded border border-sky-100 bg-white/80 p-2 font-mono text-[10px] text-slate-700 space-y-0.5">
+                <div><span className="text-slate-400">epicFound</span> <span className={epicDayDebug.epicFound ? "text-emerald-700" : "text-red-600 font-bold"}>{String(epicDayDebug.epicFound)}</span></div>
+                <div><span className="text-slate-400">epic</span> {epicDayDebug.before?.title ?? "—"}</div>
+                <div><span className="text-slate-400">initiative</span> {epicDayDebug.initiativeTitle ?? "—"}</div>
+                <div><span className="text-slate-400">drag → startDay</span> {epicDayDebug.startDay} <span className="text-slate-400">endDay</span> {epicDayDebug.endDay}</div>
+              </div>
+              <div className="rounded border border-sky-100 bg-white/80 p-2 font-mono text-[10px] text-slate-700 space-y-0.5">
+                <div className="font-semibold text-slate-500 mb-1">Before (epic state)</div>
+                <div><span className="text-slate-400">planStartMonth</span> {String(epicDayDebug.before?.planStartMonth ?? "—")} <span className="text-slate-400">planEndMonth</span> {String(epicDayDebug.before?.planEndMonth ?? "—")}</div>
+                <div><span className="text-slate-400">planSprint</span> {String(epicDayDebug.before?.planSprint ?? "—")} <span className="text-slate-400">planEndSprint</span> {String(epicDayDebug.before?.planEndSprint ?? "—")}</div>
+                <div><span className="text-slate-400">planStartDay</span> {String(epicDayDebug.before?.planStartDay ?? "null")} <span className="text-slate-400">planEndDay</span> {String(epicDayDebug.before?.planEndDay ?? "null")}</div>
+              </div>
+              <div className="rounded border border-sky-100 bg-white/80 p-2 font-mono text-[10px] text-slate-700 space-y-0.5">
+                <div className="font-semibold text-slate-500 mb-1">Computed (year={epicDayDebug.selectedYear} quarter={epicDayDebug.focusedQuarterLabel ?? "all"})</div>
+                {epicDayDebug.insetComputed ? (
+                  <>
+                    <div><span className="text-slate-400">startS</span> {epicDayDebug.insetComputed.startS} <span className="text-slate-400">endS</span> {epicDayDebug.insetComputed.endS}</div>
+                    <div><span className="text-slate-400">inset.left</span> "{epicDayDebug.insetComputed.left || "empty"}" <span className="text-slate-400">inset.right</span> "{epicDayDebug.insetComputed.right || "empty"}"</div>
+                    <div><span className="text-slate-400">absPos</span> {typeof epicDayDebug.absComputed === "string" ? epicDayDebug.absComputed : epicDayDebug.absComputed ? `left=${epicDayDebug.absComputed.left} right=${epicDayDebug.absComputed.right}` : "null"}</div>
+                  </>
+                ) : <div className="text-red-500">insetComputed is null — planStartMonth or planEndMonth missing</div>}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </main>
       <InitiativeFormDialog
         open={initiativeDialogOpen}
@@ -4950,6 +5207,8 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         onExitComplete={() => {
           setEditingEpic(undefined);
           setEditingEpicInitiativeId(null);
+          setInsightsScopeEpicId(null);
+          setInsightsScopeInitId(null);
         }}
         onSubmit={handleUpsertEpic}
         storyRefById={storyRefMaps.byId}
@@ -4963,6 +5222,12 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }}
         workspaceDirectoryUsers={workspaceDirectoryUsers}
         surfaceAnchorRef={planningRightSurfaceRef}
+        initialInsightsScopeEpicId={insightsScopeEpicId}
+        initialInsightsScopeInitId={insightsScopeInitId}
+        onInsightsScopeChange={(epicId, initId) => {
+          setInsightsScopeEpicId(epicId);
+          setInsightsScopeInitId(initId);
+        }}
       />
       <StoryDetailsDialog
         open={storyDialogOpen}

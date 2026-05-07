@@ -397,8 +397,10 @@ type EpicGanttLaneRowProps = {
   initiative: InitiativeItem;
   gridStyle: CSSProperties;
   month?: number | null;
+  planYear?: number | null;
   onOpenEpic: (epicId: string) => void;
   onUnscheduleEpic?: (epicId: string) => void;
+  onDayRangeChange?: (epicId: string, startDay: number, endDay: number) => void;
   ganttLaneSortIndex: number;
   emphasize?: boolean;
   emphasizeTick?: number;
@@ -644,13 +646,166 @@ function GanttTodayMarker({
   );
 }
 
+/**
+ * For the single-quarter gantt: when a bar occupies exactly one sprint column and has day
+ * precision set, return absolute left/right % values so the bar can be absolutely positioned
+ * inside its cell. Returns null when there are no day offsets or the epic spans multiple sprints.
+ */
+function quarterBarAbsoluteDayPct(
+  epic: EpicItem,
+  startS: number,
+  span: number,
+  planYear: number,
+): { left: string; right: string } | null {
+  if (span !== 1) return null;
+  if (epic.planStartDay == null && epic.planEndDay == null) return null;
+  const lane = (((startS - 1) % 2) + 1) as 1 | 2;
+  const month = epic.planStartMonth;
+  if (!month) return null;
+  const dim = daysInMonth(planYear, month);
+  const sprintFirst = lane === 1 ? 1 : 16;
+  const sprintLast = lane === 1 ? 15 : dim;
+  const days = sprintLast - sprintFirst + 1;
+  const rawStart = epic.planStartDay;
+  const rawEnd = epic.planEndDay;
+  const startDay =
+    rawStart != null && rawStart >= sprintFirst && rawStart <= sprintLast ? rawStart : sprintFirst;
+  const endDay =
+    rawEnd != null && rawEnd >= sprintFirst && rawEnd <= sprintLast ? rawEnd : sprintLast;
+  const leftPct = Math.max(0, ((startDay - sprintFirst) / days) * 100);
+  const rightPct = Math.max(0, ((sprintLast - endDay) / days) * 100);
+  return {
+    left: `${leftPct.toFixed(2)}%`,
+    right: `${rightPct.toFixed(2)}%`,
+  };
+}
+
+/**
+ * Compute paddingLeft/paddingRight (as % strings) for year/quarter Gantt bar wrappers
+ * so that day-precision start/end day fields shift the bar slightly within its sprint column.
+ * Percentages are relative to the full gridColumn span width.
+ */
+function epicBarDayInsetPct(
+  epic: EpicItem,
+  startS: number,
+  endS: number,
+  span: number,
+  planYear: number,
+): { left: string; right: string } {
+  const startLane = ((startS - 1) % 2) + 1 as 1 | 2;
+  const endLane = ((endS - 1) % 2) + 1 as 1 | 2;
+  const startMonth = epic.planStartMonth;
+  const endMonth = epic.planEndMonth;
+  if (!startMonth || !endMonth) return { left: "", right: "" };
+
+  const startSprintFirst = startLane === 1 ? 1 : 16;
+  const startSprintLast = startLane === 1 ? 15 : daysInMonth(planYear, startMonth);
+  const daysStart = startSprintLast - startSprintFirst + 1;
+  const rawStart = epic.planStartDay;
+  const actualStart =
+    rawStart != null && rawStart >= startSprintFirst && rawStart <= startSprintLast
+      ? rawStart
+      : startSprintFirst;
+  const leftPct = (Math.max(0, actualStart - startSprintFirst) / daysStart / span) * 100;
+
+  const endSprintFirst = endLane === 1 ? 1 : 16;
+  const endSprintLast = endLane === 1 ? 15 : daysInMonth(planYear, endMonth);
+  const daysEnd = endSprintLast - endSprintFirst + 1;
+  const rawEnd = epic.planEndDay;
+  const actualEnd =
+    rawEnd != null && rawEnd >= endSprintFirst && rawEnd <= endSprintLast ? rawEnd : endSprintLast;
+  const rightPct = (Math.max(0, endSprintLast - actualEnd) / daysEnd / span) * 100;
+
+  return {
+    left: leftPct > 0.1 ? `${leftPct.toFixed(2)}%` : "",
+    right: rightPct > 0.1 ? `${rightPct.toFixed(2)}%` : "",
+  };
+}
+
+/**
+ * Map a day (1-based) to a left-edge % of the month container.
+ * The container is split into two equal 50% halves: sprint 1 (days 1–15) and sprint 2 (days 16–dim).
+ * This keeps day 16 always at exactly 50% regardless of how many days the month has.
+ */
+function dayToLeftPct(day: number, dim: number): number {
+  const s2days = dim - 15;
+  if (day <= 15) return ((day - 1) / 15) * 50;
+  return 50 + ((day - 16) / s2days) * 50;
+}
+
+/** Right edge % of a day (= left edge of the next day, or 100% at month end). */
+function dayToRightPct(day: number, dim: number): number {
+  const s2days = dim - 15;
+  if (day <= 15) return (day / 15) * 50;
+  return 50 + ((day - 15) / s2days) * 50;
+}
+
+/**
+ * Invert dayToLeftPct: given a % position, return the nearest start-day.
+ * Used when dragging the left handle.
+ */
+function pctToStartDay(pct: number, dim: number): number {
+  const s2days = dim - 15;
+  if (pct <= 50) return Math.max(1, Math.min(15, Math.floor((pct / 50) * 15) + 1));
+  return Math.max(16, Math.min(dim, Math.floor(((pct - 50) / 50) * s2days) + 16));
+}
+
+/**
+ * Invert dayToRightPct: given a % position, return the nearest end-day.
+ * Used when dragging the right handle.
+ */
+function pctToEndDay(pct: number, dim: number): number {
+  const s2days = dim - 15;
+  if (pct <= 50) return Math.max(1, Math.min(15, Math.round((pct / 50) * 15)));
+  return Math.max(15, Math.min(dim, Math.floor(((pct - 50) / 50) * s2days) + 15));
+}
+
+/** Compute left% and width% for a month bar with day precision. */
+function monthBarDayPercents(
+  epic: EpicItem,
+  month: number,
+  planYear: number,
+): { leftPct: number; widthPct: number } {
+  const dim = daysInMonth(planYear, month);
+  const startMonth = epic.planStartMonth ?? month;
+  const endMonth = epic.planEndMonth ?? month;
+
+  // Determine start day within this month
+  let startDay: number;
+  if (month > startMonth) {
+    startDay = 1;
+  } else if (epic.planStartDay != null) {
+    startDay = Math.max(1, Math.min(epic.planStartDay, dim));
+  } else {
+    startDay = epic.planSprint === 2 ? 16 : 1;
+  }
+
+  // Determine end day within this month
+  let endDay: number;
+  if (month < endMonth) {
+    endDay = dim;
+  } else if (epic.planEndDay != null) {
+    endDay = Math.max(1, Math.min(epic.planEndDay, dim));
+  } else {
+    endDay = epic.planEndSprint === 1 ? 15 : dim;
+  }
+
+  if (endDay < startDay) endDay = startDay;
+
+  const leftPct = dayToLeftPct(startDay, dim);
+  const widthPct = Math.max(dayToRightPct(endDay, dim) - leftPct, 50 / 15);
+  return { leftPct, widthPct };
+}
+
 function EpicGanttLaneRow({
   epic,
   initiative,
   gridStyle,
   month = null,
+  planYear,
   onOpenEpic,
   onUnscheduleEpic,
+  onDayRangeChange,
   ganttLaneSortIndex,
   emphasize = false,
   emphasizeTick = 0,
@@ -661,54 +816,166 @@ function EpicGanttLaneRow({
   const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
   const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
   const barColor = epic.color?.trim() ? epic.color : initiative.color;
-  const sprintGridStyle =
-    month != null
-      ? ({ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } satisfies CSSProperties)
-      : gridStyle;
-  let barGridColumn = "1 / span 1";
-  if (month != null && epic.planStartMonth != null && epic.planEndMonth != null) {
-    const startLane = epic.planSprint === 2 ? 2 : 1;
-    const endLane = epic.planEndSprint === 1 ? 1 : 2;
-    let monthStartLane = 1;
-    let monthEndLane = 2;
-    if (month === epic.planStartMonth && month === epic.planEndMonth) {
-      monthStartLane = startLane;
-      monthEndLane = endLane;
-    } else if (month === epic.planStartMonth) {
-      monthStartLane = startLane;
-      monthEndLane = 2;
-    } else if (month === epic.planEndMonth) {
-      monthStartLane = 1;
-      monthEndLane = endLane;
-    }
-    const span = Math.max(1, monthEndLane - monthStartLane + 1);
-    barGridColumn = `${monthStartLane} / span ${span}`;
-  }
 
-  const laneBody = (
-    <div className="relative grid min-w-0 gap-2" style={sprintGridStyle}>
-      <div
-        className={cn("relative z-20 min-w-0 pt-0.5 pb-0.5", emphasize && "overflow-visible")}
-        style={{ gridColumn: barGridColumn, gridRow: 1 }}
-      >
-        <EpicPlanTimelineBar
-          id={epic.id}
-          title={epic.title}
-          icon={epic.icon}
-          color={barColor}
-          progressPercent={completionPercent}
-          progressLabel={
-            totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
-          }
-          emphasizeFlash={emphasize}
-          emphasizeTick={emphasizeTick}
-          showProgress={showProgress}
-          onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
-          onClick={() => onOpenEpic(epic.id)}
-        />
-      </div>
-    </div>
+  // Drag-resize state for month view
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    side: "left" | "right";
+    startX: number;
+    origStartDay: number;
+    origEndDay: number;
+    dim: number;
+  } | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ leftPct: number; widthPct: number } | null>(null);
+
+  const isMonthView = month != null && epic.planStartMonth != null && epic.planEndMonth != null;
+
+  // Derive bar position
+  const barPos =
+    isMonthView && planYear != null
+      ? monthBarDayPercents(epic, month!, planYear)
+      : null;
+
+  const effectivePos = dragOffset ?? barPos;
+
+  const computeDays = useCallback(
+    (drag: NonNullable<typeof dragRef.current>, clientX: number) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      const pct = rect
+        ? Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100))
+        : 50;
+      let newStartDay = drag.origStartDay;
+      let newEndDay = drag.origEndDay;
+      if (drag.side === "left") {
+        newStartDay = Math.min(pctToStartDay(pct, drag.dim), drag.origEndDay);
+      } else {
+        newEndDay = Math.max(drag.origStartDay, pctToEndDay(pct, drag.dim));
+      }
+      return { newStartDay, newEndDay };
+    },
+    [],
   );
+
+  const startPointerDown = useCallback(
+    (side: "left" | "right") => (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!isMonthView || planYear == null || !onDayRangeChange) return;
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const dim = daysInMonth(planYear, month!);
+      const startMonth = epic.planStartMonth ?? month!;
+      const endMonth = epic.planEndMonth ?? month!;
+      const origStartDay =
+        month! > startMonth ? 1 : (epic.planStartDay ?? (epic.planSprint === 2 ? 16 : 1));
+      const origEndDay =
+        month! < endMonth ? dim : (epic.planEndDay ?? (epic.planEndSprint === 1 ? 15 : dim));
+      dragRef.current = { side, startX: e.clientX, origStartDay, origEndDay, dim };
+    },
+    [isMonthView, planYear, month, epic, onDayRangeChange],
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const { newStartDay, newEndDay } = computeDays(drag, e.clientX);
+      const leftPct = dayToLeftPct(newStartDay, drag.dim);
+      const rightPct = dayToRightPct(newEndDay, drag.dim);
+      const widthPct = Math.max(rightPct - leftPct, 50 / 15);
+      setDragOffset({ leftPct, widthPct });
+    },
+    [computeDays],
+  );
+
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (!drag || !onDayRangeChange) return;
+      dragRef.current = null;
+      const { newStartDay, newEndDay } = computeDays(drag, e.clientX);
+      setDragOffset(null);
+      const startMonth = epic.planStartMonth ?? month!;
+      const endMonth = epic.planEndMonth ?? month!;
+      const canResizeStart = month! <= startMonth;
+      const canResizeEnd = month! >= endMonth;
+      if (drag.side === "left" && canResizeStart) {
+        onDayRangeChange(epic.id, newStartDay, drag.origEndDay);
+      } else if (drag.side === "right" && canResizeEnd) {
+        onDayRangeChange(epic.id, drag.origStartDay, newEndDay);
+      }
+    },
+    [computeDays, month, epic, onDayRangeChange],
+  );
+
+  const laneBody =
+    isMonthView && effectivePos != null ? (
+      // Month view: absolute positioning with day precision
+      <div ref={containerRef} className="relative min-w-0" style={{ height: "2.5rem" }}>
+        <div
+          className={cn("absolute top-0.5 bottom-0.5", emphasize && "overflow-visible")}
+          style={{ left: `${effectivePos.leftPct}%`, width: `${effectivePos.widthPct}%` }}
+        >
+          <EpicPlanTimelineBar
+            id={epic.id}
+            title={epic.title}
+            icon={epic.icon}
+            color={barColor}
+            progressPercent={completionPercent}
+            progressLabel={
+              totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+            }
+            emphasizeFlash={emphasize}
+            emphasizeTick={emphasizeTick}
+            showProgress={showProgress}
+            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
+            onClick={() => onOpenEpic(epic.id)}
+          />
+          {/* Left resize handle */}
+          {onDayRangeChange && (epic.planStartMonth == null || month! <= epic.planStartMonth) ? (
+            <div
+              className="pointer-events-auto absolute inset-y-0.5 z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 left-0 cursor-ew-resize"
+              onPointerDown={startPointerDown("left")}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : null}
+          {/* Right resize handle */}
+          {onDayRangeChange && (epic.planEndMonth == null || month! >= epic.planEndMonth) ? (
+            <div
+              className="pointer-events-auto absolute inset-y-0.5 z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 right-0 cursor-ew-resize"
+              onPointerDown={startPointerDown("right")}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : null}
+        </div>
+      </div>
+    ) : (
+      // Year / quarter view: original grid layout
+      <div className="relative grid min-w-0 gap-2" style={gridStyle}>
+        <div
+          className={cn("relative z-20 min-w-0 pt-0.5 pb-0.5", emphasize && "overflow-visible")}
+          style={{ gridColumn: "1 / span 1", gridRow: 1 }}
+        >
+          <EpicPlanTimelineBar
+            id={epic.id}
+            title={epic.title}
+            icon={epic.icon}
+            color={barColor}
+            progressPercent={completionPercent}
+            progressLabel={
+              totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+            }
+            emphasizeFlash={emphasize}
+            emphasizeTick={emphasizeTick}
+            showProgress={showProgress}
+            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
+            onClick={() => onOpenEpic(epic.id)}
+          />
+        </div>
+      </div>
+    );
 
   return (
     <div
@@ -718,7 +985,8 @@ function EpicGanttLaneRow({
     >
       {month != null ? (
         <>
-          <GanttLaneSprintBackdrop columnCount={2} />
+          {/* gap-0 overrides gap-2 so the sprint halves each occupy exactly 50% — aligns with absolute % bar positions */}
+          <GanttLaneSprintBackdrop columnCount={2} className="gap-0" />
           <div className="relative z-[1]">{laneBody}</div>
         </>
       ) : (
@@ -863,6 +1131,8 @@ type TimelineGridProps = {
   onOpenStory?: (storyId: string) => void;
   onResizeInitiativeRange?: (initiativeId: string, range: InitiativeScheduleRangePatch) => void;
   onResizeEpicPlanRange?: (epicId: string, range: InitiativeScheduleRangePatch) => void;
+  /** Month plan: fired when user drags a resize handle to set day-precision start/end. */
+  onMonthEpicDayRangeChange?: (epicId: string, startDay: number, endDay: number) => void;
   /** Pulse a scheduled initiative bar on the Gantt (e.g. after expanding it in the left panel). */
   ganttEmphasis?: { initiativeId: string; tick: number } | null;
   /** Pulse an epic bar after it is dropped onto the month plan from the left panel. */
@@ -876,6 +1146,12 @@ type TimelineGridProps = {
   /** Toggled by the Roadmap header “Progress” chip; shows Gantt bar progress rows and left-panel story progress. */
   showRoadmapProgress: boolean;
   onShowRoadmapProgressChange: (next: boolean) => void;
+  /** Pre-selected epic in the insights scope picker (from URL on first load). */
+  initialInsightsScopeEpicId?: string | null;
+  /** Pre-selected initiative in the insights scope picker (from URL on first load). */
+  initialInsightsScopeInitId?: string | null;
+  /** Fired when the user selects an epic or initiative in any insights scope picker. */
+  onInsightsScopeChange?: (epicId: string | null, initId: string | null) => void;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -1133,6 +1409,10 @@ export function TimelineGrid({
   onSaveSprintRetrospective,
   showRoadmapProgress,
   onShowRoadmapProgressChange,
+  initialInsightsScopeEpicId,
+  initialInsightsScopeInitId,
+  onInsightsScopeChange,
+  onMonthEpicDayRangeChange,
 }: TimelineGridProps) {
   const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
@@ -3088,6 +3368,7 @@ export function TimelineGrid({
                             : 0;
                       const resizeEdgeClass =
                         "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                      const yearInset = epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
                       return (
                         <div
                           key={`year-epic-${row.epic.id}`}
@@ -3098,45 +3379,50 @@ export function TimelineGrid({
                           className={cn("relative min-w-0 rounded-lg pt-0.5 pb-1", rz ? "z-0 opacity-70" : "z-20")}
                           style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                         >
-                          <EpicPlanTimelineBar
-                            id={row.epic.id}
-                            title={row.epic.title}
-                            icon={row.epic.icon}
-                            compact
-                            color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
-                            progressPercent={completionPercent}
-                            progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
-                            isResizing={Boolean(rz)}
-                            emphasizeFlash={emphasizeFlash}
-                            emphasizeTick={emphasizeTick}
-                            showProgress={showRoadmapProgress}
-                            onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
-                            onClick={() => onOpenEpic(row.epic.id)}
-                          />
-                          {onResizeEpicPlanRange ? (
-                            <>
-                              <div
-                                role="slider"
-                                aria-label="Resize epic start (sprint step)"
-                                title="Drag to change epic start sprint"
-                                className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  handleEpicResizePointerDown(row.epic.id, "left", e);
-                                }}
-                              />
-                              <div
-                                role="slider"
-                                aria-label="Resize epic end (sprint step)"
-                                title="Drag to change epic end sprint"
-                                className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  handleEpicResizePointerDown(row.epic.id, "right", e);
-                                }}
-                              />
-                            </>
-                          ) : null}
+                          <div
+                            className="relative"
+                            style={{ marginLeft: yearInset?.left || undefined, marginRight: yearInset?.right || undefined }}
+                          >
+                            <EpicPlanTimelineBar
+                              id={row.epic.id}
+                              title={row.epic.title}
+                              icon={row.epic.icon}
+                              compact
+                              color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
+                              progressPercent={completionPercent}
+                              progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                              isResizing={Boolean(rz)}
+                              emphasizeFlash={emphasizeFlash}
+                              emphasizeTick={emphasizeTick}
+                              showProgress={showRoadmapProgress}
+                              onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
+                              onClick={() => onOpenEpic(row.epic.id)}
+                            />
+                            {onResizeEpicPlanRange ? (
+                              <>
+                                <div
+                                  role="slider"
+                                  aria-label="Resize epic start (sprint step)"
+                                  title="Drag to change epic start sprint"
+                                  className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    handleEpicResizePointerDown(row.epic.id, "left", e);
+                                  }}
+                                />
+                                <div
+                                  role="slider"
+                                  aria-label="Resize epic end (sprint step)"
+                                  title="Drag to change epic end sprint"
+                                  className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    handleEpicResizePointerDown(row.epic.id, "right", e);
+                                  }}
+                                />
+                              </>
+                            ) : null}
+                          </div>
                         </div>
                       );
                     })}
@@ -4247,8 +4533,10 @@ export function TimelineGrid({
                                   initiative={initiative}
                                   gridStyle={epicMonthGridStyle}
                                   month={activeMonth}
+                                  planYear={currentYear}
                                   onOpenEpic={onOpenEpic}
                                   onUnscheduleEpic={onUnscheduleEpic}
+                                  onDayRangeChange={onMonthEpicDayRangeChange}
                                   ganttLaneSortIndex={rowIndex}
                                   emphasize={emphasize}
                                   emphasizeTick={emphasizeTick}
@@ -4429,6 +4717,9 @@ export function TimelineGrid({
                   onOpenSprintKanban={(yearSprint, teamId) =>
                     onEnterSprintStoryBoard?.(yearSprint, sprintStoryBoardEpicTeamFilter(teamId))
                   }
+                  initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
+                  initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
+                  onScopeChange={(type, id) => onInsightsScopeChange?.(type === "epic" ? id : null, type === "initiative" ? id : null)}
                 />
               </div>
             ) : (
@@ -4711,6 +5002,8 @@ export function TimelineGrid({
                                     : 0;
                               const resizeEdgeClass =
                                 "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                              const qDayAbs = quarterBarAbsoluteDayPct(row.epic, row.startS, span, currentYear);
+                              const qInset = qDayAbs ? null : epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
                               return (
                                 <div
                                   key={`q-epic-${row.epic.id}`}
@@ -4719,46 +5012,57 @@ export function TimelineGrid({
                                     else barElsRef.current.delete(row.epic.id);
                                   }}
                                   className={cn("relative min-w-0 rounded-lg pt-0.5 pb-0", rz ? "z-0 opacity-70" : "z-20")}
-                                  style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
+                                  style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1, minHeight: qDayAbs ? "2.5rem" : undefined }}
                                 >
-                                  <EpicPlanTimelineBar
-                                    id={row.epic.id}
-                                    title={row.epic.title}
-                                    icon={row.epic.icon}
-                                    color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
-                                    progressPercent={completionPercent}
-                                    progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
-                                    isResizing={Boolean(rz)}
-                                    emphasizeFlash={emphasizeFlash}
-                                    emphasizeTick={emphasizeTick}
-                                    showProgress={showRoadmapProgress}
-                                    onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
-                                    onClick={() => onOpenEpic(row.epic.id)}
-                                  />
-                                  {onResizeEpicPlanRange ? (
-                                    <>
-                                      <div
-                                        role="slider"
-                                        aria-label="Resize epic start (sprint step)"
-                                        title="Drag to change epic start sprint"
-                                        className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
-                                        onPointerDown={(e) => {
-                                          e.stopPropagation();
-                                          handleEpicResizePointerDown(row.epic.id, "left", e);
-                                        }}
-                                      />
-                                      <div
-                                        role="slider"
-                                        aria-label="Resize epic end (sprint step)"
-                                        title="Drag to change epic end sprint"
-                                        className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
-                                        onPointerDown={(e) => {
-                                          e.stopPropagation();
-                                          handleEpicResizePointerDown(row.epic.id, "right", e);
-                                        }}
-                                      />
-                                    </>
-                                  ) : null}
+                                  {/* day-precision: absolute positioning for single-sprint bars, margin inset for multi-sprint.
+                                      Handles live INSIDE this inner wrapper so they track the visual bar edges. */}
+                                  <div
+                                    className={qDayAbs ? "absolute top-0.5 bottom-0.5" : "relative"}
+                                    style={
+                                      qDayAbs
+                                        ? { left: qDayAbs.left, right: qDayAbs.right }
+                                        : { marginLeft: qInset?.left || undefined, marginRight: qInset?.right || undefined }
+                                    }
+                                  >
+                                    <EpicPlanTimelineBar
+                                      id={row.epic.id}
+                                      title={row.epic.title}
+                                      icon={row.epic.icon}
+                                      color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
+                                      progressPercent={completionPercent}
+                                      progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                                      isResizing={Boolean(rz)}
+                                      emphasizeFlash={emphasizeFlash}
+                                      emphasizeTick={emphasizeTick}
+                                      showProgress={showRoadmapProgress}
+                                      onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
+                                      onClick={() => onOpenEpic(row.epic.id)}
+                                    />
+                                    {onResizeEpicPlanRange ? (
+                                      <>
+                                        <div
+                                          role="slider"
+                                          aria-label="Resize epic start (sprint step)"
+                                          title="Drag to change epic start sprint"
+                                          className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                                          onPointerDown={(e) => {
+                                            e.stopPropagation();
+                                            handleEpicResizePointerDown(row.epic.id, "left", e);
+                                          }}
+                                        />
+                                        <div
+                                          role="slider"
+                                          aria-label="Resize epic end (sprint step)"
+                                          title="Drag to change epic end sprint"
+                                          className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                                          onPointerDown={(e) => {
+                                            e.stopPropagation();
+                                            handleEpicResizePointerDown(row.epic.id, "right", e);
+                                          }}
+                                        />
+                                      </>
+                                    ) : null}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -4798,6 +5102,9 @@ export function TimelineGrid({
             onOpenSprintKanban={(yearSprint, teamId) =>
               onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
             }
+            initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
+            initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
+            onScopeChange={(type, id) => onInsightsScopeChange?.(type === "epic" ? id : null, type === "initiative" ? id : null)}
           />
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
           <MonthAnalytics
@@ -4811,6 +5118,9 @@ export function TimelineGrid({
             onOpenSprintKanban={(yearSprint, teamId) =>
               onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
             }
+            initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
+            initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
+            onScopeChange={(type, id) => onInsightsScopeChange?.(type === "epic" ? id : null, type === "initiative" ? id : null)}
           />
         ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard
