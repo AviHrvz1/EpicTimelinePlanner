@@ -648,12 +648,6 @@ export function InitiativeFormDialog({
           ) : null}
           <div className="mb-4 flex cursor-move items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-4" onPointerDown={beginDialogDrag}>
             <div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-slate-700">
-              <span
-                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-slate-100 text-[12px] leading-none text-slate-700 ring-1 ring-slate-200"
-                aria-hidden
-              >
-                {(icon || initiative?.icon || "⚡").trim() || "⚡"}
-              </span>
               <span className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 py-0.5 text-blue-700 underline decoration-blue-300 underline-offset-2">
                 {initiative ? (displayIds.byInitiativeId.get(initiative.id) ?? "Initiative") : "Initiative"}
               </span>
