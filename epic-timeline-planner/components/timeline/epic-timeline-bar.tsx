@@ -12,6 +12,15 @@ import {
 import { cn } from "@/lib/utils";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 
+function isLightColor(hex: string): boolean {
+  const h = hex.replace("#", "");
+  if (h.length < 6) return false;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.58;
+}
+
 /** Portal tooltip that always renders above everything via fixed positioning. */
 function GanttBarTooltip({ label, anchorRef }: { label: string; anchorRef: React.RefObject<HTMLElement | null> }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
@@ -62,13 +71,14 @@ export function TimelineBarDragPreview({
   progressLabel?: string;
 }) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
+  const lightBg = isLightColor(color);
   return (
     <div className="flex h-full w-full flex-col space-y-0">
       <div
-        className="relative z-10 flex h-8 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em] text-white shadow-lg ring-1 ring-black/15"
+        className={cn("relative z-10 flex h-8 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em] shadow-lg ring-1 ring-black/15", lightBg ? "text-slate-900" : "text-white")}
         style={{ backgroundColor: color }}
       >
-        <span className="relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased [text-shadow:0_1px_1px_rgba(0,0,0,0.22)]">
+        <span className={cn("relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased", lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]")}>
           {title}
         </span>
       </div>
@@ -123,6 +133,7 @@ export function InitiativeTimelineBar({
   progressRowPrefix,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
+  const lightBg = isLightColor(color);
   const barRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -138,7 +149,8 @@ export function InitiativeTimelineBar({
       <GanttBarTooltip label={title} anchorRef={barRef} />
       <div
         className={cn(
-          "relative z-10 flex h-8 w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em] text-white",
+          "relative z-10 flex h-8 w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em]",
+          lightBg ? "text-slate-900" : "text-white",
           emphasizeFlash
             ? "ring-1 ring-white/20"
             : "shadow-lg ring-1 ring-black/15",
@@ -158,10 +170,10 @@ export function InitiativeTimelineBar({
             "relative z-10 flex min-w-0 flex-1 items-center gap-1 px-3 text-left antialiased",
             emphasizeFlash
               ? "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]"
-              : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]",
+              : lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]",
           )}
         >
-          <InitiativePlanBarIcon icon={icon} className="mr-0 text-[12px] [&_svg]:size-3.5 [&_svg]:text-blue-200/95" />
+          <InitiativePlanBarIcon icon={icon} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-blue-200/95")} />
           <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
@@ -234,6 +246,7 @@ export function EpicPlanTimelineBar({
   teamAssignmentChip = null,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
+  const lightBg = isLightColor(color);
   const dragData = {
     kind: "gantt-timeline-bar",
     title,
@@ -273,7 +286,8 @@ export function EpicPlanTimelineBar({
       <GanttBarTooltip label={title} anchorRef={barRef} />
       <div
         className={cn(
-          "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-medium tracking-[0.01em] text-white active:cursor-grabbing",
+          "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-medium tracking-[0.01em] active:cursor-grabbing",
+          lightBg ? "text-slate-900" : "text-white",
           compact ? "h-7 text-[13px]" : "h-8 text-[13px]",
           emphasizeFlash
             ? "ring-1 ring-white/20"
@@ -287,7 +301,12 @@ export function EpicPlanTimelineBar({
             type="button"
             aria-label="Unschedule epic"
             title="Move epic to unscheduled backlog"
-            className="pointer-events-none absolute right-2 top-0.5 z-[60] inline-flex size-4.5 items-center justify-center rounded-full bg-white/20 text-white opacity-0 ring-1 ring-white/40 transition duration-150 group-hover/bar:pointer-events-auto group-hover/bar:opacity-100 hover:bg-white/30"
+            className={cn(
+              "pointer-events-none absolute right-2 top-0.5 z-[60] inline-flex size-4.5 items-center justify-center rounded-full opacity-0 ring-1 transition duration-150 group-hover/bar:pointer-events-auto group-hover/bar:opacity-100",
+              lightBg
+                ? "bg-black/10 text-slate-800 ring-black/20 hover:bg-black/20"
+                : "bg-white/20 text-white ring-white/40 hover:bg-white/30",
+            )}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
@@ -310,11 +329,11 @@ export function EpicPlanTimelineBar({
             compact ? "px-2" : "px-3",
             emphasizeFlash
               ? "[text-shadow:0_1px_3px_rgba(0,0,0,0.32)]"
-              : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]",
+              : lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]",
           )}
         >
           {!hideIcon ? (
-            <EpicPlanBarIcon icon={icon} className="mr-0 text-[12px] [&_svg]:size-3.5 [&_svg]:text-white/95" />
+            <EpicPlanBarIcon icon={icon} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-white/95")} />
           ) : null}
           <span className="min-w-0 flex-1 truncate">{title}</span>
           {teamAssignmentChip ? (
