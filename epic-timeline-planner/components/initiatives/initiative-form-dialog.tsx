@@ -694,7 +694,7 @@ export function InitiativeFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-1 flex shrink-0 flex-col gap-1">
+                <div className="mt-4 flex shrink-0 flex-col gap-1">
                   <button
                     type="button"
                     id="initiative-form-description-accordion-trigger"

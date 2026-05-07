@@ -1133,7 +1133,7 @@ export function EpicFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-1 flex shrink-0 flex-col gap-1">
+                <div className="mt-4 flex shrink-0 flex-col gap-1">
                   <button
                     type="button"
                     id="epic-form-description-accordion-trigger"
