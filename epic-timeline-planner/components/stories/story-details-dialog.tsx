@@ -802,7 +802,7 @@ export function StoryDetailsDialog({
             >
           <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border-0 bg-white p-4">
             <label className="block shrink-0 space-y-1">
-              <p className="flex shrink-0 items-center gap-2 text-lg font-medium text-slate-600 transition-colors hover:text-indigo-600">
+              <p className="flex shrink-0 items-center gap-2 text-base font-normal text-slate-800 transition-colors hover:text-indigo-600">
                 <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Title
               </p>
@@ -821,18 +821,19 @@ export function StoryDetailsDialog({
               </div>
             </label>
             <label className="mt-5 flex min-h-0 flex-1 flex-col gap-1">
-              <p className="-ml-1 flex shrink-0 items-center gap-2 text-lg font-medium text-slate-600">
+              <p className="-ml-1 flex shrink-0 items-center gap-2 text-base font-normal text-slate-800">
                 <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Description
               </p>
-                <div className="flex shrink-0 flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1">
+                <div className="flex flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                   <button
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleBold().run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
                     )}
                   >
                     <Bold className="size-3.5" />
@@ -842,8 +843,8 @@ export function StoryDetailsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("heading", { level: 2 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <Heading2 className="size-3.5" />
@@ -853,8 +854,8 @@ export function StoryDetailsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <Heading3 className="size-3.5" />
@@ -874,8 +875,8 @@ export function StoryDetailsDialog({
                       descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
                     }}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <LinkIcon className="size-3.5" />
@@ -885,8 +886,8 @@ export function StoryDetailsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <Italic className="size-3.5" />
@@ -896,8 +897,8 @@ export function StoryDetailsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <UnderlineIcon className="size-3.5" />
@@ -907,8 +908,8 @@ export function StoryDetailsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("bulletList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <List className="size-3.5" />
@@ -918,8 +919,8 @@ export function StoryDetailsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("orderedList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <ListOrdered className="size-3.5" />
@@ -929,18 +930,19 @@ export function StoryDetailsDialog({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()}
                     className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-                      descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+                      "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+                      descriptionEditor?.isActive("blockquote") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20,
                     )}
                   >
                     <Quote className="size-3.5" />
                   </button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-200 bg-white px-3 py-2">
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-md px-1 py-2">
                   <EditorContent
                     editor={descriptionEditor}
                     className="focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none"
                   />
+                </div>
                 </div>
             </label>
           </section>
@@ -1196,7 +1198,7 @@ export function StoryDetailsDialog({
                 onClick={() => setActivityOpen((open) => !open)}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-xl font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
+                <span className="flex items-center gap-2 text-base font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden

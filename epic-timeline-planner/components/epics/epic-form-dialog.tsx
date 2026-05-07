@@ -198,7 +198,7 @@ export function EpicFormDialog({
   const [teamDraft, setTeamDraft] = useState("");
   const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
-  const [activityOpen, setActivityOpen] = useState(true);
+  const [activityOpen, setActivityOpen] = useState(() => (epic?.userStories?.length ?? 0) === 0);
   const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
@@ -286,6 +286,7 @@ export function EpicFormDialog({
     setForceTeamFieldEdit(false);
     setTeamDraft(epic?.team ? normalizeWorkspaceUserTeam(epic.team) : "");
     setActivityTab("comments");
+    setActivityOpen((epic?.userStories?.length ?? 0) === 0);
     if (epic?.id) {
       const raw = window.localStorage.getItem(`epic-labels:${epic.id}`) ?? "";
       setLabelsDraft(
@@ -311,7 +312,7 @@ export function EpicFormDialog({
       setDialogWidthVw(64);
       setDetailsPanelWidthPx(296);
       setActivityPanelHeightPx(340);
-      setActivityOpen(true);
+      setActivityOpen((epic?.userStories?.length ?? 0) === 0);
       setDescriptionAccordionOpen(true);
       setEpicInsightsPanelOpen(false);
       setEpicInsightsPanelOffset({ x: 0, y: 0 });
@@ -323,10 +324,8 @@ export function EpicFormDialog({
   }, [open]);
   useEffect(() => {
     if (!descriptionEditor) return;
-    const next = description?.trim() ? description : "<p></p>";
-    if (descriptionEditor.getHTML() !== next) {
-      descriptionEditor.commands.setContent(next, { emitUpdate: false });
-    }
+    const next = epic?.description?.trim() ? epic.description : "<p></p>";
+    descriptionEditor.commands.setContent(next, { emitUpdate: false });
   }, [descriptionEditor, epic?.id, open]);
 
   const initiativeOptions = useMemo(
@@ -1084,11 +1083,10 @@ export function EpicFormDialog({
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
-                className="h-8 gap-1.5 px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+                variant="outline"
+                className="h-8 min-w-[100px] px-4 text-sm font-medium"
                 onClick={onClose}
               >
-                <X className="size-3.5" aria-hidden />
                 Cancel
               </Button>
               <Button
@@ -1115,7 +1113,7 @@ export function EpicFormDialog({
               >
               <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
-                  <p className="flex shrink-0 items-center gap-2 text-lg font-medium text-slate-600 transition-colors hover:text-indigo-600">
+                  <p className="flex shrink-0 items-center gap-2 text-base font-normal text-slate-800">
                     <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                     Title
                   </p>
@@ -1193,7 +1191,7 @@ export function EpicFormDialog({
                     aria-expanded={descriptionAccordionOpen}
                     aria-controls="epic-form-description-accordion-panel"
                     onClick={() => setDescriptionAccordionOpen((v) => !v)}
-                    className="-ml-1 flex w-full items-center gap-2 rounded-md py-1 text-left text-lg font-medium text-slate-600 transition-colors hover:bg-slate-100/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
+                    className="-ml-1 flex w-full items-center gap-2 rounded-md py-1 text-left text-base font-normal text-slate-800 transition-colors hover:bg-slate-100/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
                   >
                     {descriptionAccordionOpen ? (
                       <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1208,20 +1206,20 @@ export function EpicFormDialog({
                     role="region"
                     aria-labelledby="epic-form-description-accordion-trigger"
                     hidden={!descriptionAccordionOpen}
-                    className="flex flex-col gap-1"
+                    className="flex flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200"
                   >
-                    <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1">
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Bold className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Italic className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><UnderlineIcon className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><List className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><ListOrdered className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Quote className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading2 className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><Heading3 className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700", descriptionEditor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white")}><LinkIcon className="size-3.5" /></button>
+                    <div className="flex flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Italic className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><UnderlineIcon className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bulletList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><List className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("orderedList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><ListOrdered className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("blockquote") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Quote className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading2 className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading3 className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><LinkIcon className="size-3.5" /></button>
                     </div>
-                    <div className="min-h-[14rem] rounded-md border bg-background px-3 py-2">
+                    <div className="min-h-[14rem] rounded-md px-1 py-2">
                       <EditorContent
                         editor={descriptionEditor}
                         className="focus:outline-none [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:outline-none"
@@ -1917,7 +1915,7 @@ export function EpicFormDialog({
                 }}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-xl font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
+                <span className="flex items-center gap-2 text-base font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
                     className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden
