@@ -3515,7 +3515,7 @@ export function TimelineGrid({
                               onClick={() => onOpenEpic(row.epic.id)}
                             />
                             {showGanttTeamChips && row.epic.team ? (
-                              <div className="mt-1 flex px-0.5">
+                              <div className={cn("flex px-0.5", showRoadmapProgress ? "mt-1" : "-mt-3")}>
                                 {(() => {
                                   const chip = epicDeliveryTeamAssignmentChip(row.epic.team);
                                   return (
