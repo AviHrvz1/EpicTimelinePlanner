@@ -85,7 +85,7 @@ export function epicDeliveryTeamAssignmentChip(teamId: string | null | undefined
       team?.priorityBadgeClass ?? "border-slate-200 bg-slate-100 text-slate-800 ring-slate-300/55";
     return {
       label: known,
-      className: `inline-flex max-w-[7rem] shrink-0 truncate rounded px-2 py-0.5 text-[12px] font-semibold leading-none ring-1 ${pill}`,
+      className: `inline-flex max-w-[7rem] shrink-0 truncate rounded px-2 py-0.5 text-[12px] font-medium leading-none ring-1 ${pill}`,
     };
   }
   const raw = teamId?.trim();
@@ -93,13 +93,13 @@ export function epicDeliveryTeamAssignmentChip(teamId: string | null | undefined
     return {
       label: raw,
       className:
-        "inline-flex max-w-[7rem] shrink-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-semibold leading-none text-slate-700 ring-1 ring-slate-200/80",
+        "inline-flex max-w-[7rem] shrink-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-medium leading-none text-slate-700 ring-1 ring-slate-200/80",
     };
   }
   return {
     label: "Unassigned",
     className:
-      "inline-flex max-w-[6rem] shrink-0 truncate rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[12px] font-semibold leading-none text-slate-500 ring-1 ring-slate-200/80",
+      "inline-flex max-w-[6rem] shrink-0 truncate rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[12px] font-medium leading-none text-slate-500 ring-1 ring-slate-200/80",
   };
 }
 

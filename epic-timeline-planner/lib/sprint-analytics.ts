@@ -1,6 +1,7 @@
 import { StoryStatus } from "@/lib/generated/prisma";
 import { epicOriginalEstimateDays, epicStoryEstimateDaysSum, type EstimateSource } from "@/lib/epic-estimates";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
+import { teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import {
   assigneeMatchRosterForSprintTeam,
   orderedSprintCapacityMembers,
@@ -382,7 +383,7 @@ function buildWorkloadByTeam(
       const teamId = epic.team ?? null;
       if (filterTeamIds?.length && !filterTeamIds.includes(teamId ?? "")) continue;
       const teamKey = teamId ?? "__unassigned__";
-      const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? "Unassigned";
+      const teamLabel = teamId ? teamLabelForWorkspaceUser(teamId) : "Unassigned";
       for (const story of epic.userStories ?? []) {
         if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
         const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: emptyStatus(), daysLeftTotal: 0, estimatedTotal: 0, openCount: 0 };

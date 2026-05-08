@@ -776,7 +776,7 @@ export function SprintAnalytics({
         ) : null}
         {!workloadDrilldownAssignee ? <div className={`min-h-0 flex-1 space-y-2.5 ${workloadView === "stories" ? "overflow-hidden" : WORKLOAD_LIST_MAX}`}>
           {(() => {
-            const teamMode = (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
+            const teamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
             if (workloadView === "stories") {
               const barData = teamMode
                 ? analytics.workloadByTeam.map((t) => ({
