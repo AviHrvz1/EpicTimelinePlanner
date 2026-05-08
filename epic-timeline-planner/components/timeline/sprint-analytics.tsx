@@ -5,8 +5,11 @@ import { Activity, AlertTriangle, ArrowLeft, ChartNoAxesCombined, ChevronDown, C
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   Pie,
@@ -753,103 +756,41 @@ export function SprintAnalytics({
         ) : null}
         {!workloadDrilldownAssignee ? <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
           {workloadView === "stories" ? (
-            <div className="relative min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] flex-1">
-              <div className="grid min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] gap-2 md:grid-cols-[minmax(0,1fr)_8.5rem] md:items-stretch">
-                <div className="min-h-0 max-h-[clamp(11.5rem,21vh,15.5rem)] space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden">
-                  {visibleWorkloadByAssignee.length > 0 ? (
-                    visibleWorkloadByAssignee.map((item) => {
-                const { storiesByStatus: st } = item;
-                const storyTotal = item.selectedStoryCount;
-                const barWidthPct = Math.max(
-                  12,
-                  Math.min(100, (storyTotal / analytics.workloadMaxStoryTotal) * 100),
-                );
-                const ariaPieces = WORKLOAD_BAR_SEGMENTS.filter((s) => selectedWorkloadStatuses.includes(s.key) && st[s.key] > 0)
-                  .map((s) => `${s.label} ${st[s.key]}`)
-                  .join(", ");
-                return (
-                  <button
-                    key={item.assignee}
-                    type="button"
-                    onClick={() => setWorkloadDrilldownAssignee(item.assignee)}
-                    className="block w-full rounded-md px-0.5 text-left transition hover:bg-sky-100/70"
+            <div className="min-h-0">
+              {analytics.workloadByAssignee.length > 0 ? (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart
+                    data={analytics.workloadByAssignee.map((item) => ({
+                      name: item.assignee.split(/\s+/)[0],
+                      fullName: item.assignee,
+                      "To do": item.storiesByStatus.todo,
+                      "In progress": item.storiesByStatus.inProgress,
+                      "Done": item.storiesByStatus.done,
+                      "Approved": item.storiesByStatus.approved,
+                    }))}
+                    barCategoryGap="30%"
+                    barGap={2}
+                    margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
                   >
-                  <div className="flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="inline-flex w-20 shrink-0 items-center gap-1 truncate font-medium">
-                      <User className="size-3 shrink-0 text-slate-400" aria-hidden />
-                      {item.assignee}
-                    </span>
-                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
-                      <div
-                        className="flex h-full min-w-0 overflow-hidden rounded-full shadow-sm ring-1 ring-slate-300/40"
-                        style={{ width: `${barWidthPct}%` }}
-                        role="img"
-                        aria-label={`${item.assignee}: ${ariaPieces || "no stories"}`}
-                      >
-                        {WORKLOAD_BAR_SEGMENTS.map(({ key, label, color }) => {
-                          if (!selectedWorkloadStatuses.includes(key)) return null;
-                          const n = st[key];
-                          if (n <= 0) return null;
-                          return (
-                            <div
-                              key={key}
-                              className="h-full min-w-px"
-                              style={{ flexGrow: n, flexBasis: 0, backgroundColor: color }}
-                              title={`${label}: ${n}`}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <span className="shrink-0 tabular-nums text-slate-600">
-                      {storyTotal} stories
-                    </span>
-                    </div>
-                  </button>
-                );
-                    })
-                  ) : (
-                    <p className="text-[12px] text-slate-500">No open workload found for this sprint.</p>
-                  )}
-                </div>
-                <div className="space-y-1.5 pr-0.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleWorkloadStatusFilter("all")}
-                    className={cn(
-                      "mb-1 w-full rounded-md px-1 py-1 text-left text-[13px] font-normal transition",
-                      workloadStatusFilters.includes("all")
-                        ? "text-slate-900 hover:bg-slate-200/70"
-                        : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-                    )}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <Activity className="size-3.5" aria-hidden />
-                      All
-                    </span>
-                  </button>
-                  {WORKLOAD_BAR_SEGMENTS.map((s) => {
-                    const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
-                    return (
-                      <button
-                        key={s.key}
-                        type="button"
-                        onClick={() => toggleWorkloadStatusFilter(s.key)}
-                        className={cn(
-                          "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[13px] font-normal transition",
-                          on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
-                        )}
-                      >
-                        <span
-                          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: s.color, opacity: on ? 1 : 0.35 }}
-                        />
-                        <span>{s.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
+                      formatter={(value: number, name: string) => [value, name]}
+                      labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
+                    />
+                    <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13, paddingTop: 6 }} />
+                    {WORKLOAD_BAR_SEGMENTS.map((s) => (
+                      <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
+                        label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: (v: number) => v > 0 ? v : "" }}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-[12px] text-slate-500">No workload found for this sprint.</p>
+              )}
             </div>
           ) : analytics.workloadByAssignee.length > 0 ? (
             <div className="space-y-2">
