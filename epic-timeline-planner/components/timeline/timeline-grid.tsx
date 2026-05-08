@@ -578,10 +578,10 @@ function GanttTodayMarker({
           style={{ left: `${x}%` }}
         >
           {showLine ? (
-            <div className="absolute left-1/2 top-[88px] bottom-0 w-px -translate-x-1/2 bg-emerald-500/95" />
+            <div className="absolute left-1/2 top-[75px] bottom-0 w-px -translate-x-1/2 bg-emerald-500/95" />
           ) : null}
           {showArrow ? (
-            <div className="absolute top-[81px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
+            <div className="absolute top-[68px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
           ) : null}
         </div>
       </div>
@@ -1119,7 +1119,8 @@ type TimelineGridProps = {
   /** Users directory — merged into sprint Kanban / capacity / insights assignee rosters by team. */
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   sprintRetrospective?: (SprintRetrospectiveDoc & { updatedAt: string }) | null;
-  onSaveSprintRetrospective?: (doc: SprintRetrospectiveDoc) => void;
+  sprintRetrospectiveByTeam?: Record<string, SprintRetrospectiveDoc & { updatedAt: string }>;
+  onSaveSprintRetrospective?: (doc: SprintRetrospectiveDoc, teamId?: string) => void;
   onFocusedQuarterChange: (quarterLabel: string | null) => void;
   /**
    * When the user clicks the year breadcrumb (back to year / all-quarters scope), clear month + sprint
@@ -1416,6 +1417,7 @@ export function TimelineGrid({
   onSprintKanbanStoryPatch,
   workspaceDirectoryUsers = [],
   sprintRetrospective = null,
+  sprintRetrospectiveByTeam = {},
   onSaveSprintRetrospective,
   showRoadmapProgress,
   onShowRoadmapProgressChange,
@@ -1457,6 +1459,7 @@ export function TimelineGrid({
     }
   }, [capacityLoadBasis]);
   const [showYearSprintChips, setShowYearSprintChips] = useState(false);
+  const [showGanttTeamChips, setShowGanttTeamChips] = useState(true);
   /** When true, year or quarter roadmap Gantt uses fixed sprint column width (column threshold via ResizeObserver). */
   const [yearRoadmapHScroll, setYearRoadmapHScroll] = useState(false);
   /** When true, right panel is narrower than {@link RIGHT_PANEL_MIN_CONTENT_PX} — outer horizontal scroll for full chrome + body. */
@@ -1931,6 +1934,8 @@ export function TimelineGrid({
   const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-indigo-200 text-indigo-900 ring-indigo-400/70 shadow-sm hover:bg-indigo-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50`;
   const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-green-100 text-green-800 ring-green-300/80 hover:bg-green-200/80 hover:text-green-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/40`;
   const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-green-200 text-green-900 ring-green-400/70 shadow-sm hover:bg-green-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50`;
+  const summaryChipTeamsIdleClass = `${summaryChipBaseClass} border-0 bg-slate-100 text-slate-700 ring-slate-300/80 hover:bg-slate-200/80 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40`;
+  const summaryChipTeamsOnClass = `${summaryChipBaseClass} border-0 bg-slate-200 text-slate-900 ring-slate-400/70 shadow-sm hover:bg-slate-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50`;
   const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-sky-100 text-sky-800 ring-sky-300/80 hover:bg-sky-200/80 hover:text-sky-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40`;
   const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-blue-100 text-blue-800 ring-blue-300/80 hover:bg-blue-200/80 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40`;
   const summaryChipStoriesStaticClass = summaryChipStoriesClass;
@@ -3509,6 +3514,19 @@ export function TimelineGrid({
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
                             />
+                            {showGanttTeamChips && row.epic.team ? (
+                              <div className="mt-1 flex px-0.5">
+                                {(() => {
+                                  const chip = epicDeliveryTeamAssignmentChip(row.epic.team);
+                                  return (
+                                    <span className={chip.className} title={chip.label}>
+                                      <Users className="mr-1 inline-block size-2.5 shrink-0 opacity-70" aria-hidden />
+                                      {chip.label}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            ) : null}
                             {onResizeEpicPlanRange ? (
                               <>
                                 <div
@@ -3616,19 +3634,31 @@ export function TimelineGrid({
             {showSprintTeamPicker ? (
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
-                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
-                  <div className="relative z-40" ref={sprintTeamMenuRef}>
+                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
+                  <span className="text-[12px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <div className="group/trigger relative z-40" ref={sprintTeamMenuRef}>
                     <button
                       type="button"
                       onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-6 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter sprint views by team"
                       aria-expanded={isSprintTeamMenuOpen}
                     >
                       <span className="truncate">{sprintFilterTeamLabel}</span>
                       <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
+                    {sprintFilterTeamIds.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-label="Clear team filter"
+                        title="Clear team filter"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setSprintFilterTeamIds([]); onSprintStoryBoardTeamChange?.(null); }}
+                        className="pointer-events-none absolute inset-y-0 right-0 hidden items-center justify-center rounded-r-md px-1.5 text-slate-400 group-hover/trigger:pointer-events-auto group-hover/trigger:flex hover:text-rose-500"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : null}
                     {isSprintTeamMenuOpen ? (
                       <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                         <div className="px-1 pb-1">
@@ -3638,7 +3668,7 @@ export function TimelineGrid({
                             value={sprintTeamSearch}
                             onChange={(e) => setSprintTeamSearch(e.target.value)}
                             placeholder="Search teams…"
-                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
                         {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => {
@@ -3663,7 +3693,7 @@ export function TimelineGrid({
                                 }
                               }}
                               className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
                                 checked && !isAll && "bg-slate-50",
                               )}
                             >
@@ -3684,19 +3714,31 @@ export function TimelineGrid({
             {showGanttTeamPicker ? (
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
-                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
-                  <div className="relative z-40" ref={ganttTeamMenuRef}>
+                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
+                  <span className="text-[12px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <div className="group/trigger relative z-40" ref={ganttTeamMenuRef}>
                     <button
                       type="button"
                       onClick={() => setIsGanttTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-6 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter Gantt by team"
                       aria-expanded={isGanttTeamMenuOpen}
                     >
                       <span className="truncate">{ganttTeamLabel}</span>
                       <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
+                    {ganttTeamIds.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-label="Clear team filter"
+                        title="Clear team filter"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setGanttTeamIds([]); }}
+                        className="pointer-events-none absolute inset-y-0 right-0 hidden items-center justify-center rounded-r-md px-1.5 text-slate-400 group-hover/trigger:pointer-events-auto group-hover/trigger:flex hover:text-rose-500"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : null}
                     {isGanttTeamMenuOpen ? (
                       <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                         <div className="px-1 pb-1">
@@ -3706,7 +3748,7 @@ export function TimelineGrid({
                             value={ganttTeamSearch}
                             onChange={(e) => setGanttTeamSearch(e.target.value)}
                             placeholder="Search teams…"
-                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
                         {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(ganttTeamSearch.toLowerCase())).map((option) => {
@@ -3726,7 +3768,7 @@ export function TimelineGrid({
                                 }
                               }}
                               className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
                                 checked && !isAll && "bg-slate-50",
                               )}
                             >
@@ -3747,19 +3789,31 @@ export function TimelineGrid({
             {showInsightsTeamPicker ? (
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
-                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
-                  <div className="relative z-40" ref={insightsTeamMenuRef}>
+                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
+                  <span className="text-[12px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <div className="group/trigger relative z-40" ref={insightsTeamMenuRef}>
                     <button
                       type="button"
                       onClick={() => setIsInsightsTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-6 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter insights by team"
                       aria-expanded={isInsightsTeamMenuOpen}
                     >
                       <span className="truncate">{insightsTeamLabel}</span>
                       <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
+                    {insightsTeamIds.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-label="Clear team filter"
+                        title="Clear team filter"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setInsightsTeamIds([]); }}
+                        className="pointer-events-none absolute inset-y-0 right-0 hidden items-center justify-center rounded-r-md px-1.5 text-slate-400 group-hover/trigger:pointer-events-auto group-hover/trigger:flex hover:text-rose-500"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : null}
                     {isInsightsTeamMenuOpen ? (
                       <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                         <div className="px-1 pb-1">
@@ -3769,7 +3823,7 @@ export function TimelineGrid({
                             value={insightsTeamSearch}
                             onChange={(e) => setInsightsTeamSearch(e.target.value)}
                             placeholder="Search teams…"
-                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
                         {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(insightsTeamSearch.toLowerCase())).map((option) => {
@@ -3789,7 +3843,7 @@ export function TimelineGrid({
                                 }
                               }}
                               className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
                                 checked && !isAll && "bg-slate-50",
                               )}
                             >
@@ -3910,6 +3964,17 @@ export function TimelineGrid({
                       <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                       Progress
                     </button>
+                    {showGanttTeamPicker ? (
+                      <button
+                        type="button"
+                        aria-pressed={showGanttTeamChips}
+                        onClick={() => setShowGanttTeamChips((prev) => !prev)}
+                        className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+                      >
+                        <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                        Teams
+                      </button>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -4012,6 +4077,17 @@ export function TimelineGrid({
                     <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                     Progress
                   </button>
+                  {showGanttTeamPicker ? (
+                    <button
+                      type="button"
+                      aria-pressed={showGanttTeamChips}
+                      onClick={() => setShowGanttTeamChips((prev) => !prev)}
+                      className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+                    >
+                      <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                      Teams
+                    </button>
+                  ) : null}
                 </>
               ) : null}
             </div>
@@ -4089,14 +4165,6 @@ export function TimelineGrid({
                   ) : null}
                   <button
                     type="button"
-                    aria-pressed={showRoadmapProgress}
-                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-                  >
-                    Progress
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => {
                       setRoadmapBarMode("initiatives");
                       onSummaryStatusQuickFilterChange?.(null);
@@ -4108,6 +4176,7 @@ export function TimelineGrid({
                         : summaryChipInitiativesIdleClass,
                     )}
                   >
+                    <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                     <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
                     <span className="hidden sm:inline">Initiatives</span>
                     <span className="sm:hidden">Inits</span>
@@ -4125,11 +4194,18 @@ export function TimelineGrid({
                         : summaryChipEpicsIdleClass,
                     )}
                   >
+                    <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
                     {("totalEpics" in summaryBadgesForScope
                       ? summaryBadgesForScope.totalEpics
                       : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
                     Epics
                   </button>
+                  <div className={summaryChipStoriesStaticClass}>
+                    <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+                    <span className="hidden sm:inline">User Stories</span>
+                    <span className="sm:hidden">Stories</span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => openEstEpicsPanel()}
@@ -4154,11 +4230,26 @@ export function TimelineGrid({
                     <span className="hidden sm:inline">Epic Estimated</span>
                     <span className="sm:hidden">Estimated</span>
                   </button>
-                  <div className={summaryChipStoriesStaticClass}>
-                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-                    <span className="hidden sm:inline">User Stories</span>
-                    <span className="sm:hidden">Stories</span>
-                  </div>
+                  <button
+                    type="button"
+                    aria-pressed={showRoadmapProgress}
+                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
+                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
+                  >
+                    <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                    Progress
+                  </button>
+                  {monthPlanTab === "epic-gantt" ? (
+                    <button
+                      type="button"
+                      aria-pressed={showGanttTeamChips}
+                      onClick={() => setShowGanttTeamChips((prev) => !prev)}
+                      className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+                    >
+                      <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+                      Teams
+                    </button>
+                  ) : null}
                   {showSprintEndCountdown &&
                   activeYearSprintForMonthDrill != null &&
                   monthPlanTab !== "sprint-kanban" ? (
@@ -4640,6 +4731,7 @@ export function TimelineGrid({
           >
             {monthPlanTab === "epic-gantt" && activeMonth != null ? (
               <div className="relative flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
+                <YearRoadmapTodayLine leftPercent={monthEpicGanttTodayLeft} />
                 <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
                   <div className="col-span-2 mb-2">
@@ -4725,14 +4817,8 @@ export function TimelineGrid({
                   </div>
                 </div>
                 <MonthEpicDropArea month={activeMonth}>
-                  <div
-                    className={cn(
-                      "flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4",
-                      monthEpicGanttTodayLeft != null && "pt-5 sm:pt-6",
-                    )}
-                  >
+                  <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
                     <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
-                      <YearRoadmapTodayLine leftPercent={monthEpicGanttTodayLeft} />
                       {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
                         <p className="sr-only">
                           No initiatives are planned in {MONTHS[activeMonth - 1]} yet. Plan epics from the initiative list
@@ -4807,7 +4893,7 @@ export function TimelineGrid({
                                   emphasize={emphasize}
                                   emphasizeTick={emphasizeTick}
                                   showProgress={showRoadmapProgress}
-                                  teamAssignmentChip={epicDeliveryTeamAssignmentChip(epic.team)}
+                                  teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(epic.team) : null}
                                 />
                               </div>
                             );
@@ -4927,7 +5013,7 @@ export function TimelineGrid({
                   }
                   onOpenStory={onOpenStory ?? (() => {})}
                   teamSelectorSlot={
-                    <div className="relative inline-flex min-w-[12rem] max-w-[20rem] align-middle" ref={sprintTeamMenuRef}>
+                    <div className="group/trigger relative inline-flex min-w-[12rem] max-w-[20rem] align-middle" ref={sprintTeamMenuRef}>
                       <button
                         type="button"
                         onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
@@ -4938,6 +5024,18 @@ export function TimelineGrid({
                         <span className="truncate">{sprintFilterTeamLabel}</span>
                         <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                       </button>
+                      {sprintFilterTeamIds.length > 0 ? (
+                        <button
+                          type="button"
+                          aria-label="Clear team filter"
+                          title="Clear team filter"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.stopPropagation(); setSprintFilterTeamIds([]); onSprintStoryBoardTeamChange?.(null); }}
+                          className="pointer-events-none absolute inset-y-0 right-0 hidden items-center justify-center rounded-r-md px-1.5 text-slate-400 group-hover/trigger:pointer-events-auto group-hover/trigger:flex hover:text-rose-500"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      ) : null}
                       {isSprintTeamMenuOpen ? (
                         <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                           <div className="px-1 pb-1">
@@ -4947,7 +5045,7 @@ export function TimelineGrid({
                               value={sprintTeamSearch}
                               onChange={(e) => setSprintTeamSearch(e.target.value)}
                               placeholder="Search teams…"
-                              className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                              className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                             />
                           </div>
                           {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => {
@@ -4972,7 +5070,7 @@ export function TimelineGrid({
                                   }
                                 }}
                                 className={cn(
-                                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
                                   checked && !isAll && "bg-slate-50",
                                 )}
                               >
@@ -4991,13 +5089,31 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-retrospective" ? (
-              <div className="flex min-h-0 flex-1 flex-col py-3 pr-3 pl-2 sm:py-5 sm:pr-5 sm:pl-3">
-                <SprintRetrospectiveEditor
-                  sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
-                  initialDoc={sprintRetrospective}
-                  updatedAt={sprintRetrospective?.updatedAt ?? null}
-                  onSave={(doc) => onSaveSprintRetrospective?.(doc)}
-                />
+              <div className="flex min-h-0 flex-1 flex-col divide-y divide-slate-200/70 overflow-y-auto">
+                {sprintFilterTeamIds.length > 0 ? (
+                  sprintFilterTeamIds.map((teamId) => {
+                    const teamLabel = sprintTeamOptions.find((o) => o.value === teamId)?.label ?? teamId;
+                    const teamDoc = sprintRetrospectiveByTeam[teamId] ?? null;
+                    return (
+                      <div key={teamId} className="min-w-0 shrink-0">
+                        <SprintRetrospectiveEditor
+                          sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
+                          teamName={teamLabel}
+                          initialDoc={teamDoc}
+                          updatedAt={teamDoc?.updatedAt ?? null}
+                          onSave={(doc) => onSaveSprintRetrospective?.(doc, teamId)}
+                        />
+                      </div>
+                    );
+                  })
+                ) : (
+                  <SprintRetrospectiveEditor
+                    sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
+                    initialDoc={sprintRetrospective}
+                    updatedAt={sprintRetrospective?.updatedAt ?? null}
+                    onSave={(doc) => onSaveSprintRetrospective?.(doc)}
+                  />
+                )}
               </div>
             ) : monthPlanTab === "month-status" ? (
               <div className="p-3 sm:p-5">
@@ -5330,7 +5446,7 @@ export function TimelineGrid({
                                       showProgress={showRoadmapProgress}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
-                                      teamAssignmentChip={epicDeliveryTeamAssignmentChip(row.epic.team)}
+                                      teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
                                     />
                                     {onResizeEpicPlanRange ? (
                                       <>

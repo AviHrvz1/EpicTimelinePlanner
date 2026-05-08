@@ -52,6 +52,7 @@ export type SprintRetrospectiveDoc = {
 
 type SprintRetrospectiveEditorProps = {
   sprintLabel: string;
+  teamName?: string | null;
   initialDoc: SprintRetrospectiveDoc | null;
   updatedAt: string | null;
   onSave: (doc: SprintRetrospectiveDoc) => void;
@@ -241,6 +242,7 @@ function RetroRichSection({
 
 export function SprintRetrospectiveEditor({
   sprintLabel,
+  teamName,
   initialDoc,
   updatedAt,
   onSave,
@@ -297,7 +299,15 @@ export function SprintRetrospectiveEditor({
                 <NotebookPen className="size-3" aria-hidden />
                 Sprint Retrospective
               </div>
-              <h2 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">{sprintLabel}</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">
+                {sprintLabel}
+                {teamName ? (
+                  <span className="ml-2.5 inline-flex items-center gap-1 rounded-full bg-slate-200/80 px-2.5 py-0.5 text-sm font-semibold text-slate-600 align-middle">
+                    <User className="size-3.5 shrink-0" aria-hidden />
+                    {teamName}
+                  </span>
+                ) : null}
+              </h2>
               <p className="mt-1.5 text-sm text-slate-400">Reflect · Learn · Improve</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5">

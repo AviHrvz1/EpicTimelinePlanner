@@ -1952,12 +1952,27 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     return sprintRetrospectiveByKey[activeSprintRetrospectiveKey] ?? null;
   }, [activeSprintRetrospectiveKey, sprintRetrospectiveByKey]);
 
+  /** Per-team docs for the active sprint: keyed by teamId using `"year:sprint:teamId"` storage keys. */
+  const activeSprintRetrospectiveByTeam = useMemo((): Record<string, SprintRetrospectiveEntry> => {
+    if (!activeSprintRetrospectiveKey) return {};
+    const prefix = `${activeSprintRetrospectiveKey}:`;
+    const out: Record<string, SprintRetrospectiveEntry> = {};
+    for (const [key, value] of Object.entries(sprintRetrospectiveByKey)) {
+      if (key.startsWith(prefix)) {
+        const teamId = key.slice(prefix.length);
+        if (teamId) out[teamId] = value;
+      }
+    }
+    return out;
+  }, [activeSprintRetrospectiveKey, sprintRetrospectiveByKey]);
+
   const saveSprintRetrospective = useCallback(
-    (doc: SprintRetrospectiveDoc) => {
+    (doc: SprintRetrospectiveDoc, teamId?: string) => {
       if (!activeSprintRetrospectiveKey) return;
+      const key = teamId ? `${activeSprintRetrospectiveKey}:${teamId}` : activeSprintRetrospectiveKey;
       setSprintRetrospectiveByKey((prev) => ({
         ...prev,
-        [activeSprintRetrospectiveKey]: {
+        [key]: {
           wentWellHtml: doc.wentWellHtml,
           improveHtml: doc.improveHtml,
           actionItems: doc.actionItems,
@@ -4559,6 +4574,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   });
                 }}
                 sprintRetrospective={activeSprintRetrospective}
+                sprintRetrospectiveByTeam={activeSprintRetrospectiveByTeam}
                 onSaveSprintRetrospective={saveSprintRetrospective}
                 onEnterSprintStoryBoard={openSprintStoryBoard}
                 sprintStoryBoardTeamId={sprintStoryBoardTeamId}
