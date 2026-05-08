@@ -3604,7 +3604,8 @@ export function TimelineGrid({
                                   setSprintFilterTeamIds((prev) => {
                                     const next = prev.includes(option.value) ? prev.filter((id) => id !== option.value) : [...prev, option.value];
                                     if (next.length === 1) onSprintStoryBoardTeamChange?.(next[0]);
-                                    else onSprintStoryBoardTeamChange?.(null);
+                                    else if (next.length === 0) onSprintStoryBoardTeamChange?.(null);
+                                    // 2+ teams: don't call onSprintStoryBoardTeamChange to avoid resetting sprintFilterTeamIds via useEffect
                                     return next;
                                   });
                                 }
@@ -4848,7 +4849,8 @@ export function TimelineGrid({
                                     setSprintFilterTeamIds((prev) => {
                                       const next = prev.includes(option.value) ? prev.filter((id) => id !== option.value) : [...prev, option.value];
                                       if (next.length === 1) onSprintStoryBoardTeamChange?.(next[0]);
-                                      else onSprintStoryBoardTeamChange?.(null);
+                                      else if (next.length === 0) onSprintStoryBoardTeamChange?.(null);
+                                      // 2+ teams: don't call onSprintStoryBoardTeamChange to avoid resetting sprintFilterTeamIds via useEffect
                                       return next;
                                     });
                                   }
