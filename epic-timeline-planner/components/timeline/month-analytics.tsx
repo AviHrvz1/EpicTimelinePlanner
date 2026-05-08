@@ -26,6 +26,8 @@ import {
   Folder,
   Layers,
   User,
+  UserRound,
+  Users,
   Zap,
   ListTodo,
   PieChart as PieChartIcon,
@@ -90,28 +92,16 @@ function WorkloadXAxisTick({ x, y, payload, teamMode }: { x?: number; y?: number
   if (x == null || y == null) return null;
   const label = payload?.value ?? "";
   const rowY = y + 10;
+  const iconSize = 12;
   const estTextWidth = Math.min(label.length * 5.5, 70);
-  const iconWidth = teamMode ? 14 : 9;
-  const totalWidth = iconWidth + 3 + estTextWidth;
-  const startX = -totalWidth / 2;
-  const iconCenterX = startX + iconWidth / 2;
-  const textStartX = startX + iconWidth + 3;
+  const totalWidth = iconSize + 3 + estTextWidth;
+  const iconX = x - totalWidth / 2;
+  const textStartX = iconX + iconSize + 3;
+  const Icon = teamMode ? Users : UserRound;
   return (
-    <g transform={`translate(${x}, ${rowY})`}>
-      {teamMode ? (
-        <g fill="#94a3b8" transform={`translate(${iconCenterX}, 0)`}>
-          <circle cx={-3} cy={0} r={2.2} />
-          <path d="M-7 5 Q-7 2 -3 2 Q1 2 1 5" />
-          <circle cx={3} cy={0} r={2.2} />
-          <path d="M-1 5 Q-1 2 3 2 Q7 2 7 5" />
-        </g>
-      ) : (
-        <g fill="#94a3b8" transform={`translate(${iconCenterX}, 0)`}>
-          <circle cx={0} cy={0} r={2.4} />
-          <path d="M-4 5 Q-4 2 0 2 Q4 2 4 5" />
-        </g>
-      )}
-      <text x={textStartX} y={2} textAnchor="start" fill="#64748b" fontSize={11} dominantBaseline="middle">
+    <g>
+      <Icon x={iconX} y={rowY - iconSize / 2} width={iconSize} height={iconSize} color="#94a3b8" strokeWidth={2} />
+      <text x={textStartX} y={rowY + 1} textAnchor="start" fill="#64748b" fontSize={11} dominantBaseline="middle">
         {label}
       </text>
     </g>
