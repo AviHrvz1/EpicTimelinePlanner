@@ -784,15 +784,18 @@ export function SprintAnalytics({
                     <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
-                      formatter={(value: number, name: string) => [value, name]}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      formatter={((value: number, name: string) => [value, name]) as any}
                       labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
                     />
                     <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13, paddingTop: 6 }} />
                     {WORKLOAD_BAR_SEGMENTS.map((s) => (
                       <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
-                        label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: (v: number) => v > 0 ? v : "" }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
                         style={{ cursor: "pointer" }}
-                        onClick={(data: { fullName?: string }) => { if (data?.fullName) setWorkloadDrilldownAssignee(data.fullName); }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        onClick={((data: { fullName?: string }) => { if (data?.fullName) setWorkloadDrilldownAssignee(data.fullName); }) as any}
                       />
                     ))}
                   </BarChart>

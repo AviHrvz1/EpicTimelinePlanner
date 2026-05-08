@@ -14,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   Activity,
+  AlertTriangle,
   ArrowLeft,
   CheckCheck,
   CheckCircle2,
@@ -24,6 +25,7 @@ import {
   Eraser,
   Folder,
   Layers,
+  User,
   Zap,
   ListTodo,
   PieChart as PieChartIcon,
@@ -33,8 +35,11 @@ import {
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   Pie,
@@ -807,10 +812,10 @@ export function MonthAnalytics({
       else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
       else if (story.status === "done") row.storiesByStatus.done += 1;
       else if (story.status === "approved") row.storiesByStatus.approved += 1;
+      row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
       if (story.status === "todo" || story.status === "inProgress") {
         row.openCount += 1;
         row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
-        row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
       }
       byAssignee.set(assignee, row);
     }
@@ -2317,210 +2322,112 @@ export function MonthAnalytics({
           </div>
         ) : null}
         {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
-          <div className={cn("relative min-h-0 overflow-hidden", INSIGHTS_CHART_BAND)}>
-            <div className={cn("grid h-full min-h-0 md:grid-cols-[minmax(0,1fr)_7.5rem] md:items-stretch", INSIGHTS_CHART_GRID_GAP)}>
-            <div
-              ref={workloadStoriesScrollRef}
-              onScroll={updateWorkloadArrowState}
-              className={INSIGHTS_SCROLL_MAIN}
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            >
-              {analytics.workloadByAssignee.length > 0 ? (
-                analytics.workloadByAssignee.map((item) => {
-                const { storiesByStatus: st } = item;
-                const storyTotal = item.selectedStoryCount;
-                const barWidthPct = Math.max(12, Math.min(100, (storyTotal / analytics.workloadMaxStoryTotal) * 100));
-                return (
-                  <button
-                    key={item.assignee}
-                    type="button"
-                    onClick={() => setWorkloadDrilldownAssignee(item.assignee)}
-                    className="block w-full rounded-md px-1 py-0.5 text-left transition hover:bg-sky-100/70"
-                  >
-                  <div className="flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="w-16 shrink-0 truncate text-[13px] font-semibold">{item.assignee}</span>
-                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80">
-                      <div
-                        className="flex h-full min-w-0 overflow-hidden rounded-full shadow-sm ring-1 ring-slate-300/40"
-                        style={{ width: `${barWidthPct}%` }}
-                      >
-                        {WORKLOAD_BAR_SEGMENTS.map(({ key, color }) => {
-                          if (!selectedWorkloadStatuses.includes(key)) return null;
-                          const n = st[key];
-                          if (n <= 0) return null;
-                          return (
-                            <div
-                              key={key}
-                              className="h-full min-w-px"
-                              style={{ flexGrow: n, flexBasis: 0, backgroundColor: color }}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <span className="shrink-0 tabular-nums text-slate-600">
-                      {item.selectedStoryCount} stories
-                    </span>
-                    </div>
-                  </button>
-                );
-                })
-              ) : (
-                <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
-              )}
-            </div>
-            <div className={INSIGHTS_SCROLL_SIDE}>
-              <button
-                type="button"
-                onClick={() => toggleWorkloadStatusFilter("all")}
-                className={cn(
-                  "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
-                  isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                  workloadStatusFilters.includes("all")
-                    ? "text-slate-900 hover:bg-slate-200/70"
-                    : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-                )}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Layers className="size-3.5" aria-hidden />
-                  All
-                </span>
-              </button>
-              {WORKLOAD_BAR_SEGMENTS.map((s) => {
-                const on = workloadStatusFilters.includes("all") || workloadStatusFilters.includes(s.key);
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => toggleWorkloadStatusFilter(s.key)}
-                    className={cn(
-                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                      on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
-                    )}
-                  >
-                    <span
-                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: s.color, opacity: on ? 1 : 0.35 }}
+          <div className={cn("min-h-0", INSIGHTS_CHART_BAND)}>
+            {analytics.workloadByAssignee.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={analytics.workloadByAssignee.map((item) => ({
+                    name: item.assignee.split(/\s+/)[0],
+                    fullName: item.assignee,
+                    "To do": item.storiesByStatus.todo,
+                    "In progress": item.storiesByStatus.inProgress,
+                    "Done": item.storiesByStatus.done,
+                    "Approved": item.storiesByStatus.approved,
+                  }))}
+                  barCategoryGap="15%"
+                  barGap={2}
+                  margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
+                  style={{ cursor: "pointer" }}
+                  onClick={(data) => {
+                    const label = data?.activeLabel as string | undefined;
+                    if (!label) return;
+                    const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
+                    if (match) setWorkloadDrilldownAssignee(match.assignee);
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={((value: number, name: string) => [value, name]) as any}
+                    labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
+                  />
+                  <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13, paddingTop: 6 }} />
+                  {WORKLOAD_BAR_SEGMENTS.map((s) => (
+                    <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
+                      style={{ cursor: "pointer" }}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      onClick={((data: { fullName?: string }) => { if (data?.fullName) setWorkloadDrilldownAssignee(data.fullName); }) as any}
                     />
-                    <span className="font-normal">{s.label}</span>
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => toggleWorkloadStatusFilter("unassigned")}
-                className={cn(
-                  "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-                  isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                  selectedShowUnassigned ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
-                )}
-              >
-                <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: STATUS_COLORS.Unscheduled, opacity: selectedShowUnassigned ? 1 : 0.35 }}
-                />
-                <span className="font-normal">Unassigned</span>
-              </button>
-            </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => scrollWorkloadStoriesBy(-96)}
-              className={cn(
-                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                canScrollWorkloadUp && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll up workload list"
-            >
-              <ChevronUp className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollWorkloadStoriesBy(96)}
-              className={cn(
-                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                canScrollWorkloadDown && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll down workload list"
-            >
-              <ChevronDown className="size-3.5" />
-            </button>
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
+            )}
           </div>
         ) : (
-          <div className={cn("relative overflow-hidden", INSIGHTS_CHART_BAND)}>
-            <div
-              ref={monthLoadScrollRef}
-              onScroll={updateMonthLoadArrowState}
-              className={cn(INSIGHTS_SCROLL_MAIN, "overscroll-contain")}
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            >
-              {analytics.workloadCapacityByAssignee.length > 0 ? (
-                analytics.workloadCapacityByAssignee.map((row) => {
-                const pct = row.utilizationPct;
-                const barW = analytics.monthDaysLeft > 0 ? Math.min(pct, 100) : row.daysLeftTotal > 0 ? 100 : 0;
-                const pctRounded = Math.round(pct);
+          <div className={cn("overflow-y-auto overflow-x-hidden space-y-2 [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
+            {analytics.workloadByAssignee.length > 0 ? (
+              analytics.workloadByAssignee.map((row) => {
+                const monthDaysLeft = analytics.monthDaysLeft;
+                const estTotal = row.estimatedTotal;
+                const daysLeft = row.daysLeftTotal;
+                const doneDays = Math.max(0, estTotal - daysLeft);
+                const donePct = estTotal > 0 ? Math.round((doneDays / estTotal) * 100) : 100;
+                const atRisk = monthDaysLeft > 0 && daysLeft > monthDaysLeft;
+                const initials = row.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
                 return (
                   <button
                     key={row.assignee}
                     type="button"
                     onClick={() => setWorkloadDrilldownAssignee(row.assignee)}
-                    className="block w-full rounded-md px-1 py-0.5 text-left transition hover:bg-sky-100/70"
+                    className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
                   >
-                    <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
-                      <span className="w-16 shrink-0 truncate text-[13px] font-semibold">{row.assignee}</span>
-                      <div className="relative h-4 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ring-slate-200/80">
-                        <div
-                          className={cn("h-full rounded-full transition-colors", row.isOverCapacity ? "bg-rose-500" : "bg-emerald-500")}
-                          style={{ width: `${barW}%` }}
-                          role="presentation"
-                        />
-                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-1">
-                          <span
-                            className={cn(
-                              "rounded-md px-1.5 py-[1px] text-[10px] font-semibold tabular-nums",
-                              row.isOverCapacity
-                                ? "bg-white/20 text-white ring-1 ring-white/25"
-                                : "bg-slate-50/90 text-slate-700 ring-1 ring-slate-200/80",
-                            )}
-                          >
-                            {analytics.monthDaysLeft > 0 ? `${pctRounded}%` : "Month ended"}
-                          </span>
-                        </span>
-                      </div>
-                      <span className="shrink-0 text-[12px] tabular-nums text-slate-600">
-                        {row.estimatedTotal}d est · {row.daysLeftTotal}d left
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+                        {initials || <User className="size-3" />}
                       </span>
+                      <div className="w-3/4 min-w-0">
+                        <div className="flex items-center justify-between gap-1.5 mb-1">
+                          <span className="truncate text-[12px] font-semibold text-slate-800">{row.assignee}</span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {atRisk && (
+                              <span
+                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
+                                title={`${daysLeft}d of work left but only ${monthDaysLeft}d remain in the month`}
+                              >
+                                <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
+                                {daysLeft - monthDaysLeft}d over
+                              </span>
+                            )}
+                            <span className="text-[11px] tabular-nums text-slate-500">{daysLeft}d left · {estTotal}d est</span>
+                          </div>
+                        </div>
+                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                          <div
+                            className={cn(
+                              "absolute inset-y-0 left-0 rounded-full transition-all",
+                              atRisk ? "bg-amber-400" : daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400",
+                            )}
+                            style={{ width: `${donePct}%` }}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">
+                            {donePct}%
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </button>
                 );
-                })
-              ) : (
-                <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => scrollMonthLoadBy(-96)}
-              className={cn(
-                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                canScrollMonthLoadUp && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll up month load list"
-            >
-              <ChevronUp className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollMonthLoadBy(96)}
-              className={cn(
-                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                canScrollMonthLoadDown && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll down month load list"
-            >
-              <ChevronDown className="size-3.5" />
-            </button>
+              })
+            ) : (
+              <p className="text-[12px] text-slate-500">No workload found for this month.</p>
+            )}
           </div>
         )) : null}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">
