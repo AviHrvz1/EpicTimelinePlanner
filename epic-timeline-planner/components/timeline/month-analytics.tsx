@@ -608,6 +608,9 @@ export function MonthAnalytics({
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
+  const [workloadDrilldownIsTeam, setWorkloadDrilldownIsTeam] = useState(false);
+  const [monthLoadDrilldownAssignee, setMonthLoadDrilldownAssignee] = useState<string | null>(null);
+  const [monthLoadDrilldownIsTeam, setMonthLoadDrilldownIsTeam] = useState(false);
   const [selectedInitiativeId, setSelectedInitiativeId] = useState<string>(initialSelectedInitiativeId ?? "all");
 
   const scopeMonths = useMemo(() => {
@@ -1064,14 +1067,6 @@ export function MonthAnalytics({
     updateStatusDrilldownArrowState();
   }, [statusDrilldownFilter, statusDrilldownRowCount, statusChartShowsEpics]);
   const statusPanelTitle = statusChartShowsEpics ? "Epic Progress" : "User Story Progress";
-  const workloadDrilldownStories = useMemo(() => {
-    if (workloadDrilldownAssignee == null) return [];
-    return scopedStories
-      .filter((story) => story.sprint != null)
-      .filter((story) => (story.assignee?.trim() || "Unassigned") === workloadDrilldownAssignee)
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [workloadDrilldownAssignee, scopedStories]);
-  const workloadDrilldownEmptyRows = Math.max(0, tableTargetRows - workloadDrilldownStories.length);
   const scopedStoryDisplayIds = useMemo(() => {
     const rows = initiatives
       .flatMap((initiative) => initiative.epics ?? [])
@@ -1119,6 +1114,30 @@ export function MonthAnalytics({
     }
     return map;
   }, [initiatives]);
+  const workloadDrilldownStories = useMemo(() => {
+    if (workloadDrilldownAssignee == null) return [];
+    return scopedStories
+      .filter((story) => story.sprint != null)
+      .filter((story) =>
+        workloadDrilldownIsTeam
+          ? (epicTeamByStoryId.get(story.id) ?? "") === workloadDrilldownAssignee
+          : (story.assignee?.trim() || "Unassigned") === workloadDrilldownAssignee,
+      )
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [workloadDrilldownAssignee, workloadDrilldownIsTeam, scopedStories, epicTeamByStoryId]);
+  const workloadDrilldownEmptyRows = Math.max(0, tableTargetRows - workloadDrilldownStories.length);
+  const monthLoadDrilldownStories = useMemo(() => {
+    if (monthLoadDrilldownAssignee == null) return [];
+    return scopedStories
+      .filter((story) => story.sprint != null)
+      .filter((story) =>
+        monthLoadDrilldownIsTeam
+          ? (epicTeamByStoryId.get(story.id) ?? "") === monthLoadDrilldownAssignee
+          : (story.assignee?.trim() || "Unassigned") === monthLoadDrilldownAssignee,
+      )
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [monthLoadDrilldownAssignee, monthLoadDrilldownIsTeam, scopedStories, epicTeamByStoryId]);
+  const monthLoadDrilldownEmptyRows = Math.max(0, tableTargetRows - monthLoadDrilldownStories.length);
   const teamByAssigneeFallback = useMemo(() => {
     const counts = new Map<string, Map<string, number>>();
     for (const story of scopedStories) {
@@ -1760,8 +1779,11 @@ export function MonthAnalytics({
     workloadStoriesScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   };
   const workloadDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
+  const monthLoadDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollWorkloadDrilldownUp, setCanScrollWorkloadDrilldownUp] = useState(false);
   const [canScrollWorkloadDrilldownDown, setCanScrollWorkloadDrilldownDown] = useState(false);
+  const [canScrollMonthLoadDrilldownUp, setCanScrollMonthLoadDrilldownUp] = useState(false);
+  const [canScrollMonthLoadDrilldownDown, setCanScrollMonthLoadDrilldownDown] = useState(false);
   const updateWorkloadDrilldownArrowState = () => {
     const node = workloadDrilldownScrollRef.current;
     if (!node) {
@@ -1775,6 +1797,16 @@ export function MonthAnalytics({
   };
   const scrollWorkloadDrilldownBy = (delta: number) => {
     workloadDrilldownScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+  };
+  const updateMonthLoadDrilldownArrowState = () => {
+    const node = monthLoadDrilldownScrollRef.current;
+    if (!node) { setCanScrollMonthLoadDrilldownUp(false); setCanScrollMonthLoadDrilldownDown(false); return; }
+    const epsilon = 2;
+    setCanScrollMonthLoadDrilldownUp(node.scrollTop > epsilon);
+    setCanScrollMonthLoadDrilldownDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
+  };
+  const scrollMonthLoadDrilldownBy = (delta: number) => {
+    monthLoadDrilldownScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   };
   const monthLoadScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollMonthLoadUp, setCanScrollMonthLoadUp] = useState(false);
@@ -1817,6 +1849,10 @@ export function MonthAnalytics({
     }
     updateWorkloadDrilldownArrowState();
   }, [workloadDrilldownAssignee, workloadDrilldownStories.length]);
+  useEffect(() => {
+    if (!monthLoadDrilldownAssignee) { setCanScrollMonthLoadDrilldownUp(false); setCanScrollMonthLoadDrilldownDown(false); return; }
+    updateMonthLoadDrilldownArrowState();
+  }, [monthLoadDrilldownAssignee, monthLoadDrilldownStories.length]);
 
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[13px] font-medium text-slate-700";
@@ -2476,7 +2512,7 @@ export function MonthAnalytics({
           {workloadDrilldownAssignee ? (
             <button
               type="button"
-              onClick={() => setWorkloadDrilldownAssignee(null)}
+              onClick={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               aria-label="Back to workload chart"
               title="Back to workload chart"
@@ -2642,12 +2678,17 @@ export function MonthAnalytics({
                       barCategoryGap="15%"
                       barGap={2}
                       margin={{ top: 4, right: 4, bottom: 0, left: 8 }}
-                      style={{ cursor: teamMode ? "default" : "pointer" }}
-                      onClick={teamMode ? undefined : (data) => {
+                      style={{ cursor: "pointer" }}
+                      onClick={(data) => {
                         const label = data?.activeLabel as string | undefined;
                         if (!label) return;
-                        const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
-                        if (match) setWorkloadDrilldownAssignee(match.assignee);
+                        if (teamMode) {
+                          const match = analytics.workloadByTeam.find((t) => t.teamLabel === label);
+                          if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); }
+                        } else {
+                          const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
+                          if (match) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(match.assignee); }
+                        }
                       }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -2665,8 +2706,10 @@ export function MonthAnalytics({
                         <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
-                          style={{ cursor: teamMode ? "default" : "pointer" }}
-                          onClick={teamMode ? undefined : ((data: { fullName?: string }) => { if (data?.fullName) setWorkloadDrilldownAssignee(data.fullName); }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
+                          style={{ cursor: "pointer" }}
+                          onClick={teamMode
+                            ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
+                            : ((data: { fullName?: string }) => { if (data?.fullName) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(data.fullName); } }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
                         />
                       ))}
                     </BarChart>
@@ -2686,7 +2729,7 @@ export function MonthAnalytics({
                 initials: t.teamLabel.slice(0, 2).toUpperCase(),
                 daysLeft: t.daysLeftTotal,
                 estTotal: t.estimatedTotal,
-                onRowClick: undefined as (() => void) | undefined,
+                onRowClick: () => { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(t.teamId ?? ""); },
               }))
             : analytics.workloadByAssignee.map((row) => ({
                 key: row.assignee,
@@ -2694,7 +2737,7 @@ export function MonthAnalytics({
                 initials: row.assignee.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join(""),
                 daysLeft: row.daysLeftTotal,
                 estTotal: row.estimatedTotal,
-                onRowClick: () => setWorkloadDrilldownAssignee(row.assignee),
+                onRowClick: () => { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(row.assignee); },
               }));
           if (loadRows.length === 0) return <p className="text-[12px] text-slate-500">No workload found for this month.</p>;
           return (
@@ -2708,7 +2751,7 @@ export function MonthAnalytics({
                     key={row.key}
                     type="button"
                     onClick={row.onRowClick}
-                    className={cn("w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition", row.onRowClick ? "hover:bg-slate-50" : "cursor-default")}
+                    className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
                   >
                     <div className="flex items-center gap-2">
                       <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
@@ -2901,7 +2944,7 @@ export function MonthAnalytics({
                   initials: t.teamLabel.slice(0, 2).toUpperCase(),
                   daysLeft: t.daysLeftTotal,
                   estTotal: t.estimatedTotal,
-                  onRowClick: undefined as (() => void) | undefined,
+                  onRowClick: () => { setMonthLoadDrilldownIsTeam(true); setMonthLoadDrilldownAssignee(t.teamId ?? ""); },
                 }))
               : analytics.workloadByAssignee.map((row) => ({
                   key: row.assignee,
@@ -2909,9 +2952,9 @@ export function MonthAnalytics({
                   initials: row.assignee.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join(""),
                   daysLeft: row.daysLeftTotal,
                   estTotal: row.estimatedTotal,
-                  onRowClick: () => setWorkloadDrilldownAssignee(row.assignee),
+                  onRowClick: () => { setMonthLoadDrilldownIsTeam(false); setMonthLoadDrilldownAssignee(row.assignee); },
                 }));
-            if (loadRows.length === 0 && !workloadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
+            if (loadRows.length === 0 && !monthLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
               <div className="flex min-h-0 flex-col lg:col-span-1">
                 <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
@@ -2919,10 +2962,10 @@ export function MonthAnalytics({
                     <Users className="size-4 text-slate-600" />
                     Month Load
                   </h3>
-                  {workloadDrilldownAssignee && (
+                  {monthLoadDrilldownAssignee && (
                     <button
                       type="button"
-                      onClick={() => setWorkloadDrilldownAssignee(null)}
+                      onClick={() => { setMonthLoadDrilldownAssignee(null); setMonthLoadDrilldownIsTeam(false); }}
                       className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                       aria-label="Back to month load"
                       title="Back to month load"
@@ -2931,12 +2974,12 @@ export function MonthAnalytics({
                     </button>
                   )}
                 </div>
-                {workloadDrilldownAssignee ? (
+                {monthLoadDrilldownAssignee ? (
                   <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
                     <div className="relative h-full min-h-0 min-w-0">
                       <div
-                        ref={workloadDrilldownScrollRef}
-                        onScroll={updateWorkloadDrilldownArrowState}
+                        ref={monthLoadDrilldownScrollRef}
+                        onScroll={updateMonthLoadDrilldownArrowState}
                         className={sharedDrilldownScrollAreaClass}
                         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                       >
@@ -2952,7 +2995,7 @@ export function MonthAnalytics({
                             </tr>
                           </thead>
                           <tbody>
-                            {workloadDrilldownStories.map((story) => {
+                            {monthLoadDrilldownStories.map((story) => {
                               const statusLabel = story.status === "todo" ? "To do" : story.status === "inProgress" ? "In progress" : story.status === "done" ? "Done" : "Approved";
                               return (
                                 <tr key={story.id} className={drilldownTableRowZebra}>
@@ -2972,7 +3015,7 @@ export function MonthAnalytics({
                                 </tr>
                               );
                             })}
-                            {workloadDrilldownEmptyRows > 0 && Array.from({ length: workloadDrilldownEmptyRows }).map((_, i) => (
+                            {monthLoadDrilldownEmptyRows > 0 && Array.from({ length: monthLoadDrilldownEmptyRows }).map((_, i) => (
                               <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
                                 <td colSpan={5} className="px-3 py-0.5 text-[13px]">{" "}</td>
                               </tr>
@@ -2980,8 +3023,8 @@ export function MonthAnalytics({
                           </tbody>
                         </table>
                       </div>
-                      <button type="button" onClick={() => scrollWorkloadDrilldownBy(-96)} className={cn(sharedDrilldownArrowClass, "top-0", canScrollWorkloadDrilldownUp && "bg-slate-200/70 text-slate-800")} aria-label="Scroll up"><ChevronUp className="size-3.5" /></button>
-                      <button type="button" onClick={() => scrollWorkloadDrilldownBy(96)} className={cn(sharedDrilldownArrowClass, "bottom-0", canScrollWorkloadDrilldownDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down"><ChevronDown className="size-3.5" /></button>
+                      <button type="button" onClick={() => scrollMonthLoadDrilldownBy(-96)} className={cn(sharedDrilldownArrowClass, "top-0", canScrollMonthLoadDrilldownUp && "bg-slate-200/70 text-slate-800")} aria-label="Scroll up"><ChevronUp className="size-3.5" /></button>
+                      <button type="button" onClick={() => scrollMonthLoadDrilldownBy(96)} className={cn(sharedDrilldownArrowClass, "bottom-0", canScrollMonthLoadDrilldownDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down"><ChevronDown className="size-3.5" /></button>
                     </div>
                   </div>
                 ) : (
@@ -3001,7 +3044,7 @@ export function MonthAnalytics({
                         key={row.key}
                         type="button"
                         onClick={row.onRowClick}
-                        className={cn("w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition", row.onRowClick ? "hover:bg-slate-50" : "cursor-default")}
+                        className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
                       >
                         <div className="flex items-center gap-2">
                           <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
