@@ -2741,7 +2741,7 @@ export function MonthAnalytics({
               }));
           if (loadRows.length === 0) return <p className="text-[12px] text-slate-500">No workload found for this month.</p>;
           return (
-            <div className={cn("overflow-y-auto overflow-x-hidden space-y-2 [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
+            <div className={cn("overflow-y-auto overflow-x-hidden space-y-1 [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
               {loadRows.map((row) => {
                 const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                 const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
@@ -2751,29 +2751,29 @@ export function MonthAnalytics({
                     key={row.key}
                     type="button"
                     onClick={row.onRowClick}
-                    className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
+                    className="w-full rounded-lg bg-white px-2 py-1 text-left transition hover:bg-slate-50"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
-                        {row.initials || <User className="size-3" />}
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">
+                        {row.initials || <User className="size-2.5" />}
                       </span>
                       <div className="w-3/4 min-w-0">
-                        <div className="flex items-center justify-between gap-1.5 mb-1">
-                          <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className="truncate text-[11px] font-semibold text-slate-800">{row.label}</span>
                           <div className="flex shrink-0 items-center gap-1">
                             {atRisk && (
                               <span
-                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
+                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
                                 title={`${row.daysLeft}d of work left but only ${monthDaysLeft}d remain in the month`}
                               >
                                 <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
                                 {row.daysLeft - monthDaysLeft}d over
                               </span>
                             )}
-                            <span className="text-[11px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
+                            <span className="text-[10px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
                           </div>
                         </div>
-                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                        <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
                           <div
                             className={cn(
                               "absolute inset-y-0 left-0 rounded-full transition-all",
@@ -2781,9 +2781,6 @@ export function MonthAnalytics({
                             )}
                             style={{ width: `${donePct}%` }}
                           />
-                          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">
-                            {donePct}%
-                          </span>
                         </div>
                       </div>
                     </div>
@@ -3032,7 +3029,7 @@ export function MonthAnalytics({
                   <div
                     ref={monthLoadScrollRef}
                     onScroll={updateMonthLoadArrowState}
-                    className="h-full space-y-2 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
+                    className="h-full space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
                     style={{ scrollbarWidth: "none" }}
                   >
                   {loadRows.map((row) => {
@@ -3044,29 +3041,29 @@ export function MonthAnalytics({
                         key={row.key}
                         type="button"
                         onClick={row.onRowClick}
-                        className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
+                        className="w-full rounded-lg bg-white px-2 py-1 text-left transition hover:bg-slate-50"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
-                            {row.initials || <User className="size-3" />}
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">
+                            {row.initials || <User className="size-2.5" />}
                           </span>
                           <div className="w-3/4 min-w-0">
-                            <div className="flex items-center justify-between gap-1.5 mb-1">
-                              <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
+                            <div className="flex items-center justify-between gap-1 mb-0.5">
+                              <span className="truncate text-[11px] font-semibold text-slate-800">{row.label}</span>
                               <div className="flex shrink-0 items-center gap-1">
                                 {atRisk && (
                                   <span
-                                    className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
+                                    className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
                                     title={`${row.daysLeft}d of work left but only ${monthDaysLeft}d remain in the month`}
                                   >
                                     <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
                                     {row.daysLeft - monthDaysLeft}d over
                                   </span>
                                 )}
-                                <span className="text-[11px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
+                                <span className="text-[10px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
                               </div>
                             </div>
-                            <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                            <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
                               <div
                                 className={cn(
                                   "absolute inset-y-0 left-0 rounded-full transition-all",
@@ -3074,9 +3071,6 @@ export function MonthAnalytics({
                                 )}
                                 style={{ width: `${donePct}%` }}
                               />
-                              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">
-                                {donePct}%
-                              </span>
                             </div>
                           </div>
                         </div>

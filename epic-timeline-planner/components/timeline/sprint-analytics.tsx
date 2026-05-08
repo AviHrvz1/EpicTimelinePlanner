@@ -1105,7 +1105,7 @@ export function SprintAnalytics({
                     <div
                       ref={sprintLoadScrollRef}
                       onScroll={() => updateArrowState(sprintLoadScrollRef, setCanScrollSprintLoadUp, setCanScrollSprintLoadDown)}
-                      className="h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] overflow-y-auto overflow-x-hidden overscroll-contain space-y-2 pr-5"
+                      className="h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] overflow-y-auto overflow-x-hidden overscroll-contain space-y-1 pr-5"
                     >
                       {loadRows.map((row) => {
                         const doneDays = Math.max(0, row.estTotal - row.daysLeft);
@@ -1116,34 +1116,33 @@ export function SprintAnalytics({
                             key={row.key}
                             type="button"
                             onClick={row.onRowClick}
-                            className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
+                            className="w-full rounded-lg bg-white px-2 py-1 text-left transition hover:bg-slate-50"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
-                                {row.initials || <User className="size-3" />}
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">
+                                {row.initials || <User className="size-2.5" />}
                               </span>
                               <div className="w-3/4 min-w-0">
-                                <div className="flex items-center justify-between gap-1.5 mb-1">
-                                  <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
+                                <div className="flex items-center justify-between gap-1 mb-0.5">
+                                  <span className="truncate text-[11px] font-semibold text-slate-800">{row.label}</span>
                                   <div className="flex shrink-0 items-center gap-1">
                                     {atRisk && (
-                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80" title={`${row.daysLeft}d of work left but only ${sprintDaysLeft}d remain in the sprint`}>
+                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80" title={`${row.daysLeft}d of work left but only ${sprintDaysLeft}d remain in the sprint`}>
                                         <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
                                         {row.daysLeft - sprintDaysLeft}d over
                                       </span>
                                     )}
                                     {sprintEnded && row.daysLeft > 0 && (
-                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200/80">
+                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200/80">
                                         <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
                                         Ended
                                       </span>
                                     )}
-                                    <span className="text-[11px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
+                                    <span className="text-[10px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
                                   </div>
                                 </div>
-                                <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                                <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
                                   <div className={cn("absolute inset-y-0 left-0 rounded-full transition-all", atRisk ? "bg-amber-400" : row.daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400")} style={{ width: `${donePct}%` }} />
-                                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">{donePct}%</span>
                                 </div>
                               </div>
                             </div>
