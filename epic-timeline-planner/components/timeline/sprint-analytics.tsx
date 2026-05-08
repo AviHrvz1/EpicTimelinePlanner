@@ -1119,10 +1119,10 @@ export function SprintAnalytics({
                             className="w-full rounded-lg bg-white px-2 py-1 text-left transition hover:bg-slate-50"
                           >
                             <div className="flex items-center gap-1.5">
-                              <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">
-                                {row.initials || <User className="size-2.5" />}
+                              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+                                {row.initials || <User className="size-3" />}
                               </span>
-                              <div className="w-3/4 min-w-0">
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-1 mb-0.5">
                                   <span className="truncate text-[11px] font-semibold text-slate-800">{row.label}</span>
                                   <div className="flex shrink-0 items-center gap-1">
@@ -1138,7 +1138,7 @@ export function SprintAnalytics({
                                         Ended
                                       </span>
                                     )}
-                                    <span className="text-[10px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
+                                    <span className="text-[12px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
                                   </div>
                                 </div>
                                 <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
