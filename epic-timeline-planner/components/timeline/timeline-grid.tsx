@@ -3189,14 +3189,10 @@ export function TimelineGrid({
     sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
   const sprintFilterTeamLabel = sprintFilterTeamIds.length === 0
     ? "All Teams"
-    : sprintFilterTeamIds.length === 1
-      ? (sprintTeamOptions.find((o) => o.value === sprintFilterTeamIds[0])?.label ?? sprintFilterTeamIds[0])
-      : `${sprintFilterTeamIds.length} teams`;
+    : sprintFilterTeamIds.map((id) => sprintTeamOptions.find((o) => o.value === id)?.label ?? id).join(", ");
   const insightsTeamLabel = insightsTeamIds.length === 0
     ? "All Teams"
-    : insightsTeamIds.length === 1
-      ? (sprintTeamOptions.find((o) => o.value === insightsTeamIds[0])?.label ?? insightsTeamIds[0])
-      : `${insightsTeamIds.length} teams`;
+    : insightsTeamIds.map((id) => sprintTeamOptions.find((o) => o.value === id)?.label ?? id).join(", ");
   const focusedQuarterDisplayName = useMemo(() => {
     if (!focusedQuarter) return "Quarter";
     const ordinals: Record<string, string> = { Q1: "1st Quarter", Q2: "2nd Quarter", Q3: "3rd Quarter", Q4: "4th Quarter" };
