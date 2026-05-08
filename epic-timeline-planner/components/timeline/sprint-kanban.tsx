@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
+import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { assigneeMatchRosterForSprintTeam, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -264,6 +265,11 @@ function KanbanStoryCard({
           ) : null}
         </div>
         <div className="flex w-full flex-wrap items-center justify-end gap-1.5 pr-0">
+          {epic.team ? (
+            <span className="rounded-md bg-violet-50 px-2 py-1 text-[12px] font-medium text-violet-700">
+              {monthTeamLabelForId(epic.team) ?? epic.team}
+            </span>
+          ) : null}
           {editing === "assignee" && editable ? (
             <div ref={assigneeInputWrapRef} className="min-w-[7.5rem] max-w-[14rem] flex-1">
               <AssigneeCombobox
