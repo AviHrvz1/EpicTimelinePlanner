@@ -1,5 +1,6 @@
 import { StoryStatus } from "@/lib/generated/prisma";
 import { epicOriginalEstimateDays, epicStoryEstimateDaysSum, type EstimateSource } from "@/lib/epic-estimates";
+import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import {
   assigneeMatchRosterForSprintTeam,
   orderedSprintCapacityMembers,
@@ -44,6 +45,15 @@ export type WorkloadStoriesByStatus = {
   approved: number;
 };
 
+export type WorkloadTeamRow = {
+  teamId: string | null;
+  teamLabel: string;
+  storiesByStatus: WorkloadStoriesByStatus;
+  daysLeftTotal: number;
+  estimatedTotal: number;
+  openCount: number;
+};
+
 export type SprintAnalyticsData = {
   statusPie: Array<{ name: string; value: number }>;
   burndown: Array<{ labelShort: string; ideal: number; actual: number | null; isToday: boolean }>;
@@ -54,6 +64,8 @@ export type SprintAnalyticsData = {
     estimatedTotal: number;
     storiesByStatus: WorkloadStoriesByStatus;
   }>;
+  /** Team-level aggregation — only populated when filterEpicTeamId is null (All Teams). */
+  workloadByTeam: WorkloadTeamRow[];
   workloadMaxDays: number;
   /** Max total sprint stories (all statuses) among rows in workloadByAssignee — for bar length scale. */
   workloadMaxStoryTotal: number;
@@ -353,6 +365,39 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
     openStories: openStories.length,
     atRiskStories,
   };
+}
+
+function buildWorkloadByTeam(
+  initiatives: InitiativeItem[],
+  month: number,
+  yearSprint: number,
+): WorkloadTeamRow[] {
+  const emptyStatus = (): WorkloadStoriesByStatus => ({ todo: 0, inProgress: 0, done: 0, approved: 0 });
+  const byTeam = new Map<string, WorkloadTeamRow>();
+  for (const initiative of initiatives) {
+    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
+    if (initiative.endMonth < month || initiative.startMonth > month) continue;
+    for (const epic of initiative.epics ?? []) {
+      const teamId = epic.team ?? null;
+      const teamKey = teamId ?? "__unassigned__";
+      const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? "Unassigned";
+      for (const story of epic.userStories ?? []) {
+        if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
+        const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: emptyStatus(), daysLeftTotal: 0, estimatedTotal: 0, openCount: 0 };
+        if (story.status === "todo") row.storiesByStatus.todo += 1;
+        else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
+        else if (story.status === "done") row.storiesByStatus.done += 1;
+        else if (story.status === "approved") row.storiesByStatus.approved += 1;
+        row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+        if (story.status === "todo" || story.status === "inProgress") {
+          row.openCount += 1;
+          row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
+        }
+        byTeam.set(teamKey, row);
+      }
+    }
+  }
+  return [...byTeam.values()].sort((a, b) => a.teamLabel.localeCompare(b.teamLabel));
 }
 
 /**
@@ -814,6 +859,7 @@ export function buildSprintAnalytics(
   const stories = collectMonthStories(initiatives, month, filterEpicTeamId, estimateSource);
   const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamId);
   const workload = buildWorkloadByAssignee(workloadStories, month, yearSprint);
+  const workloadByTeam = !filterEpicTeamId ? buildWorkloadByTeam(initiatives, month, yearSprint) : [];
   const capacity = buildWorkloadCapacityByAssignee(
     stories,
     month,
@@ -829,6 +875,7 @@ export function buildSprintAnalytics(
     statusPie: buildStatusPie(stories, month, yearSprint),
     burndown: buildBurndown(stories, month, yearSprint, metric, planYear),
     ...workload,
+    workloadByTeam,
     ...capacity,
     ...flow,
     totalStories: stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint)).length,

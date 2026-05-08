@@ -56,6 +56,7 @@ import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint } from "@/lib/year-sprint";
 
 type BurndownMetric = "daysLeft" | "storyCount";
@@ -880,10 +881,42 @@ export function MonthAnalytics({
       };
     });
 
+    // Team-level aggregation — only when no team filter is active
+    type TeamRow = { teamId: string | null; teamLabel: string; storiesByStatus: { todo: number; inProgress: number; done: number; approved: number }; daysLeftTotal: number; estimatedTotal: number };
+    let workloadByTeam: TeamRow[] = [];
+    if (!filterEpicTeamId) {
+      const byTeam = new Map<string, TeamRow>();
+      for (const initiative of initiatives) {
+        if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
+        const overlaps = scopeMonths.some((m) => initiative.startMonth! <= m && initiative.endMonth! >= m);
+        if (!overlaps) continue;
+        for (const epic of initiative.epics ?? []) {
+          const teamId = epic.team ?? null;
+          const teamKey = teamId ?? "__unassigned__";
+          const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? "Unassigned";
+          for (const story of epic.userStories ?? []) {
+            if (story.sprint == null) continue;
+            const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: { todo: 0, inProgress: 0, done: 0, approved: 0 }, daysLeftTotal: 0, estimatedTotal: 0 };
+            if (story.status === "todo") row.storiesByStatus.todo += 1;
+            else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
+            else if (story.status === "done") row.storiesByStatus.done += 1;
+            else if (story.status === "approved") row.storiesByStatus.approved += 1;
+            row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+            if (story.status === "todo" || story.status === "inProgress") {
+              row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
+            }
+            byTeam.set(teamKey, row);
+          }
+        }
+      }
+      workloadByTeam = [...byTeam.values()].sort((a, b) => a.teamLabel.localeCompare(b.teamLabel));
+    }
+
     return {
       statusPie,
       burndown,
       workloadByAssignee,
+      workloadByTeam,
       workloadMaxStoryTotal,
       flowSprintTrendData,
       openStories: openStories.length,
@@ -2321,98 +2354,127 @@ export function MonthAnalytics({
             </div>
           </div>
         ) : null}
-        {!workloadDrilldownAssignee ? (workloadView === "stories" ? (
-          <div className={cn("min-h-0", INSIGHTS_CHART_BAND)}>
-            {analytics.workloadByAssignee.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={analytics.workloadByAssignee.map((item) => ({
-                    name: item.assignee.split(/\s+/)[0],
-                    fullName: item.assignee,
-                    "To do": item.storiesByStatus.todo,
-                    "In progress": item.storiesByStatus.inProgress,
-                    "Done": item.storiesByStatus.done,
-                    "Approved": item.storiesByStatus.approved,
-                  }))}
-                  barCategoryGap="15%"
-                  barGap={2}
-                  margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
-                  style={{ cursor: "pointer" }}
-                  onClick={(data) => {
-                    const label = data?.activeLabel as string | undefined;
-                    if (!label) return;
-                    const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
-                    if (match) setWorkloadDrilldownAssignee(match.assignee);
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                  <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={((value: number, name: string) => [value, name]) as any}
-                    labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
-                  />
-                  <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13, paddingTop: 6 }} />
-                  {WORKLOAD_BAR_SEGMENTS.map((s) => (
-                    <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
-                      style={{ cursor: "pointer" }}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      onClick={((data: { fullName?: string }) => { if (data?.fullName) setWorkloadDrilldownAssignee(data.fullName); }) as any}
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
-            )}
-          </div>
-        ) : (
-          <div className={cn("overflow-y-auto overflow-x-hidden space-y-2 [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
-            {analytics.workloadByAssignee.length > 0 ? (
-              analytics.workloadByAssignee.map((row) => {
-                const monthDaysLeft = analytics.monthDaysLeft;
-                const estTotal = row.estimatedTotal;
-                const daysLeft = row.daysLeftTotal;
-                const doneDays = Math.max(0, estTotal - daysLeft);
-                const donePct = estTotal > 0 ? Math.round((doneDays / estTotal) * 100) : 100;
-                const atRisk = monthDaysLeft > 0 && daysLeft > monthDaysLeft;
-                const initials = row.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
+        {!workloadDrilldownAssignee ? (() => {
+          const teamMode = !filterEpicTeamId && analytics.workloadByTeam.length > 0;
+          if (workloadView === "stories") {
+            const barData = teamMode
+              ? analytics.workloadByTeam.map((t) => ({
+                  name: t.teamLabel,
+                  fullName: t.teamLabel,
+                  "To do": t.storiesByStatus.todo,
+                  "In progress": t.storiesByStatus.inProgress,
+                  "Done": t.storiesByStatus.done,
+                  "Approved": t.storiesByStatus.approved,
+                }))
+              : analytics.workloadByAssignee.map((item) => ({
+                  name: item.assignee.split(/\s+/)[0],
+                  fullName: item.assignee,
+                  "To do": item.storiesByStatus.todo,
+                  "In progress": item.storiesByStatus.inProgress,
+                  "Done": item.storiesByStatus.done,
+                  "Approved": item.storiesByStatus.approved,
+                }));
+            return (
+              <div className={cn("min-h-0", INSIGHTS_CHART_BAND)}>
+                {barData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={barData}
+                      barCategoryGap="15%"
+                      barGap={2}
+                      margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
+                      style={{ cursor: teamMode ? "default" : "pointer" }}
+                      onClick={teamMode ? undefined : (data) => {
+                        const label = data?.activeLabel as string | undefined;
+                        if (!label) return;
+                        const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
+                        if (match) setWorkloadDrilldownAssignee(match.assignee);
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                      <Tooltip
+                        contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={((value: number, name: string) => [value, name]) as any}
+                        labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
+                      />
+                      <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13, paddingTop: 6 }} />
+                      {WORKLOAD_BAR_SEGMENTS.map((s) => (
+                        <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
+                          style={{ cursor: teamMode ? "default" : "pointer" }}
+                          onClick={teamMode ? undefined : ((data: { fullName?: string }) => { if (data?.fullName) setWorkloadDrilldownAssignee(data.fullName); }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
+                )}
+              </div>
+            );
+          }
+          // Month Load tab
+          const monthDaysLeft = analytics.monthDaysLeft;
+          const loadRows = teamMode
+            ? analytics.workloadByTeam.map((t) => ({
+                key: t.teamLabel,
+                label: t.teamLabel,
+                initials: t.teamLabel.slice(0, 2).toUpperCase(),
+                daysLeft: t.daysLeftTotal,
+                estTotal: t.estimatedTotal,
+                onRowClick: undefined as (() => void) | undefined,
+              }))
+            : analytics.workloadByAssignee.map((row) => ({
+                key: row.assignee,
+                label: row.assignee,
+                initials: row.assignee.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join(""),
+                daysLeft: row.daysLeftTotal,
+                estTotal: row.estimatedTotal,
+                onRowClick: () => setWorkloadDrilldownAssignee(row.assignee),
+              }));
+          if (loadRows.length === 0) return <p className="text-[12px] text-slate-500">No workload found for this month.</p>;
+          return (
+            <div className={cn("overflow-y-auto overflow-x-hidden space-y-2 [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
+              {loadRows.map((row) => {
+                const doneDays = Math.max(0, row.estTotal - row.daysLeft);
+                const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
+                const atRisk = monthDaysLeft > 0 && row.daysLeft > monthDaysLeft;
                 return (
                   <button
-                    key={row.assignee}
+                    key={row.key}
                     type="button"
-                    onClick={() => setWorkloadDrilldownAssignee(row.assignee)}
-                    className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
+                    onClick={row.onRowClick}
+                    className={cn("w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition", row.onRowClick ? "hover:bg-slate-50" : "cursor-default")}
                   >
                     <div className="flex items-center gap-2">
                       <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
-                        {initials || <User className="size-3" />}
+                        {row.initials || <User className="size-3" />}
                       </span>
                       <div className="w-3/4 min-w-0">
                         <div className="flex items-center justify-between gap-1.5 mb-1">
-                          <span className="truncate text-[12px] font-semibold text-slate-800">{row.assignee}</span>
+                          <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
                           <div className="flex shrink-0 items-center gap-1">
                             {atRisk && (
                               <span
                                 className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
-                                title={`${daysLeft}d of work left but only ${monthDaysLeft}d remain in the month`}
+                                title={`${row.daysLeft}d of work left but only ${monthDaysLeft}d remain in the month`}
                               >
                                 <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
-                                {daysLeft - monthDaysLeft}d over
+                                {row.daysLeft - monthDaysLeft}d over
                               </span>
                             )}
-                            <span className="text-[11px] tabular-nums text-slate-500">{daysLeft}d left · {estTotal}d est</span>
+                            <span className="text-[11px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
                           </div>
                         </div>
                         <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
                           <div
                             className={cn(
                               "absolute inset-y-0 left-0 rounded-full transition-all",
-                              atRisk ? "bg-amber-400" : daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400",
+                              atRisk ? "bg-amber-400" : row.daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400",
                             )}
                             style={{ width: `${donePct}%` }}
                           />
@@ -2424,12 +2486,10 @@ export function MonthAnalytics({
                     </div>
                   </button>
                 );
-              })
-            ) : (
-              <p className="text-[12px] text-slate-500">No workload found for this month.</p>
-            )}
-          </div>
-        )) : null}
+              })}
+            </div>
+          );
+        })() : null}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">
           {analytics.openStories} open stories, <span className="text-amber-700">{analytics.atRiskStories} at risk</span>.
         </p>
