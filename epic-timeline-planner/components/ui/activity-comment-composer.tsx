@@ -46,14 +46,15 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
 
   return (
     <div className="mt-2 space-y-1.5">
-      <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-white p-1">
+      <div className="flex flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+      <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
         <button
           type="button"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleBold().run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("bold") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <Bold className="size-3.5" />
@@ -63,8 +64,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleItalic().run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("italic") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <Italic className="size-3.5" />
@@ -74,8 +75,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleUnderline().run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("underline") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <UnderlineIcon className="size-3.5" />
@@ -85,8 +86,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("bulletList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("bulletList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <List className="size-3.5" />
@@ -96,8 +97,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleOrderedList().run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("orderedList") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("orderedList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <ListOrdered className="size-3.5" />
@@ -107,8 +108,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleBlockquote().run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("blockquote") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("blockquote") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <Quote className="size-3.5" />
@@ -118,8 +119,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("heading", { level: 2 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("heading", { level: 2 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <Heading2 className="size-3.5" />
@@ -129,8 +130,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("heading", { level: 3 }) ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <Heading3 className="size-3.5" />
@@ -150,15 +151,14 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
             editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
           }}
           className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded border text-slate-700",
-            editor?.isActive("link") ? "border-slate-400 bg-white" : "border-transparent hover:bg-white",
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
           )}
         >
           <LinkIcon className="size-3.5" />
         </button>
       </div>
-      <div className="rounded-md border border-slate-200 bg-white">
-        <EditorContent editor={editor} className="focus-within:outline-none [&_.ProseMirror]:outline-none" />
+      <EditorContent editor={editor} className="focus-within:outline-none [&_.ProseMirror]:outline-none" />
       </div>
       <div className="flex justify-end">
         <Button size="sm" variant="outline" type="button" onClick={() => void handleSubmit()} disabled={disabled}>

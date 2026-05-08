@@ -101,12 +101,14 @@ function piePercentLabel({
   midAngle,
   outerRadius,
   percent,
+  name,
 }: {
   cx?: number;
   cy?: number;
   midAngle?: number;
   outerRadius?: number;
   percent?: number;
+  name?: string;
 }) {
   if (
     cx == null ||
@@ -114,26 +116,40 @@ function piePercentLabel({
     midAngle == null ||
     outerRadius == null ||
     percent == null ||
-    percent <= 0
+    percent < 0.04
   ) {
     return null;
   }
   const RAD = Math.PI / 180;
-  const r = outerRadius + 6;
+  const r = outerRadius + 18;
   const x = cx + r * Math.cos(-midAngle * RAD);
   const y = cy + r * Math.sin(-midAngle * RAD);
+  const anchor = x > cx ? "start" : "end";
   return (
-    <text
-      x={x}
-      y={y}
-      fill="#475569"
-      textAnchor={x > cx ? "start" : "end"}
-      dominantBaseline="central"
-      fontSize={12}
-      fontWeight={600}
-    >
-      {`${Math.round(percent * 100)}%`}
-    </text>
+    <g>
+      <text
+        x={x}
+        y={y - 9}
+        fill="#334155"
+        textAnchor={anchor}
+        dominantBaseline="central"
+        fontSize={14}
+        fontWeight={700}
+      >
+        {`${Math.round(percent * 100)}%`}
+      </text>
+      <text
+        x={x}
+        y={y + 10}
+        fill="#64748b"
+        textAnchor={anchor}
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight={500}
+      >
+        {name ?? ""}
+      </text>
+    </g>
   );
 }
 
@@ -601,7 +617,7 @@ export function SprintAnalytics({
                     }}
                   />
                   <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
-                  <Line type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2} name="Actual" />
+                  <Line type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2} dot={false} connectNulls={false} name="Actual" />
                 </LineChart>
               </ResponsiveContainer>
             </div>

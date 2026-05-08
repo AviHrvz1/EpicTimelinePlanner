@@ -7,7 +7,7 @@ import {
   sprintCapacityAssigneeBucket,
   type SprintWorkspaceDirectoryUser,
 } from "@/lib/sprint-capacity";
-import { collectStoriesForSprintBoard, storyMatchesYearSprint } from "@/lib/sprint-plan";
+import { collectMonthScopeEpicsForSprintPanel, collectStoriesForSprintBoard, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 
 export type BurndownMetric = "daysLeft" | "storyCount";
@@ -85,28 +85,24 @@ function collectMonthStories(
   estimateSource: EstimateSource = "auto",
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
-  for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
-    for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
-      const stories = epic.userStories ?? [];
-      const storySum = epicStoryEstimateDaysSum(epic);
-      const useOriginal = estimateSource === "original" || (estimateSource === "auto" && storySum <= 0);
-      const perStoryOriginal = stories.length > 0 ? epicOriginalEstimateDays(epic) / stories.length : 0;
-      rows.push(
-        ...stories.map((story) => {
-          if (estimateSource === "stories") return story;
-          if (!useOriginal) return story;
-          const nextEst = Math.max(0, Math.round(perStoryOriginal));
-          return {
-            ...story,
-            estimatedDays: nextEst,
-            daysLeft: nextEst,
-          };
-        }),
-      );
-    }
+  const epicScope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamId);
+  for (const { epic } of epicScope) {
+    const stories = epic.userStories ?? [];
+    const storySum = epicStoryEstimateDaysSum(epic);
+    const useOriginal = estimateSource === "original" || (estimateSource === "auto" && storySum <= 0);
+    const perStoryOriginal = stories.length > 0 ? epicOriginalEstimateDays(epic) / stories.length : 0;
+    rows.push(
+      ...stories.map((story) => {
+        if (estimateSource === "stories") return story;
+        if (!useOriginal) return story;
+        const nextEst = Math.max(0, Math.round(perStoryOriginal));
+        return {
+          ...story,
+          estimatedDays: nextEst,
+          daysLeft: nextEst,
+        };
+      }),
+    );
   }
   return rows;
 }
@@ -306,7 +302,6 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
     byAssignee.set(assignee, row);
   }
   const workload = [...byAssignee.entries()]
-    .filter(([, v]) => v.openCount > 0)
     .map(([assignee, v]) => ({
       assignee,
       openCount: v.openCount,
