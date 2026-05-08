@@ -69,6 +69,32 @@ const PIE_LEGEND_CAP = "max-h-[clamp(14.75rem,30vh,19rem)] overflow-y-auto pr-1"
 const WORKLOAD_LIST_MAX =
   "max-h-[clamp(11.5rem,21vh,15.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain";
 
+function WorkloadXAxisTick({ x, y, payload, teamMode }: { x?: number; y?: number; payload?: { value: string }; teamMode: boolean }) {
+  if (x == null || y == null) return null;
+  const iconY = y + 5;
+  const textY = y + 18;
+  return (
+    <g>
+      {teamMode ? (
+        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+          <circle cx={-3} cy={0} r={2.2} />
+          <path d="M-7 5 Q-7 2 -3 2 Q1 2 1 5" />
+          <circle cx={3} cy={0} r={2.2} />
+          <path d="M-1 5 Q-1 2 3 2 Q7 2 7 5" />
+        </g>
+      ) : (
+        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+          <circle cx={0} cy={0} r={2.4} />
+          <path d="M-4 5 Q-4 2 0 2 Q4 2 4 5" />
+        </g>
+      )}
+      <text x={x} y={textY} textAnchor="middle" fill="#64748b" fontSize={11}>
+        {payload?.value}
+      </text>
+    </g>
+  );
+}
+
 function AnalyticsTooltipShell({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-lg border border-slate-200/80 bg-white/95 px-2.5 py-2 text-[12px] shadow-lg ring-1 ring-slate-100/70 backdrop-blur-sm">
@@ -794,7 +820,8 @@ export function SprintAnalytics({
                         }}
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={42} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
                         <Tooltip
                           contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}

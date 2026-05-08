@@ -86,6 +86,32 @@ const CFD_FLOW_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
 
+function WorkloadXAxisTick({ x, y, payload, teamMode }: { x?: number; y?: number; payload?: { value: string }; teamMode: boolean }) {
+  if (x == null || y == null) return null;
+  const iconY = y + 5;
+  const textY = y + 18;
+  return (
+    <g>
+      {teamMode ? (
+        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+          <circle cx={-3} cy={0} r={2.2} />
+          <path d="M-7 5 Q-7 2 -3 2 Q1 2 1 5" />
+          <circle cx={3} cy={0} r={2.2} />
+          <path d="M-1 5 Q-1 2 3 2 Q7 2 7 5" />
+        </g>
+      ) : (
+        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+          <circle cx={0} cy={0} r={2.4} />
+          <path d="M-4 5 Q-4 2 0 2 Q4 2 4 5" />
+        </g>
+      )}
+      <text x={x} y={textY} textAnchor="middle" fill="#64748b" fontSize={11}>
+        {payload?.value}
+      </text>
+    </g>
+  );
+}
+
 const SPRINT_CHART_BOX =
   "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem] w-full";
 const INSIGHTS_CONTENT_HEIGHT = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem]";
@@ -2392,7 +2418,8 @@ export function MonthAnalytics({
                       }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                      <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={42} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
                       <Tooltip
                         contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
