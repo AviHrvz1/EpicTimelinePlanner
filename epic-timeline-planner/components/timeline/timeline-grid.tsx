@@ -57,6 +57,7 @@ import { isEpicPlanDraggableId } from "@/lib/epic-dnd-ids";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTERS } from "@/lib/timeline";
 import {
+  epicDeliveryTeamAssignmentChip,
   MONTH_TEAM_COLUMNS,
   MONTH_TEAM_IDS,
   isKnownEpicTeamId,
@@ -407,6 +408,7 @@ type EpicGanttLaneRowProps = {
   emphasize?: boolean;
   emphasizeTick?: number;
   showProgress?: boolean;
+  teamAssignmentChip?: { label: string; className: string } | null;
 };
 
 function formatDayMonthYearShort(date: Date): string {
@@ -812,6 +814,7 @@ function EpicGanttLaneRow({
   emphasize = false,
   emphasizeTick = 0,
   showProgress = true,
+  teamAssignmentChip = null,
 }: EpicGanttLaneRowProps) {
   const stories = epic.userStories ?? [];
   const totalStories = stories.length;
@@ -930,6 +933,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
+            teamAssignmentChip={teamAssignmentChip}
           />
           {/* Left resize handle */}
           {onDayRangeChange && (epic.planStartMonth == null || month! <= epic.planStartMonth) ? (
@@ -974,6 +978,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
+            teamAssignmentChip={teamAssignmentChip}
           />
         </div>
       </div>
@@ -1482,6 +1487,11 @@ export function TimelineGrid({
   const [insightsTeamSearch, setInsightsTeamSearch] = useState("");
   const insightsTeamMenuRef = useRef<HTMLDivElement | null>(null);
   const insightsTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [ganttTeamIds, setGanttTeamIds] = useState<string[]>([]);
+  const [isGanttTeamMenuOpen, setIsGanttTeamMenuOpen] = useState(false);
+  const [ganttTeamSearch, setGanttTeamSearch] = useState("");
+  const ganttTeamMenuRef = useRef<HTMLDivElement | null>(null);
+  const ganttTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -1829,6 +1839,12 @@ export function TimelineGrid({
       .sort((a, b) => a[0] - b[0])
       .map(([timelineRow, items]) => ({ timelineRow, items }));
   }, [quarterRoadmapEpics]);
+  const filteredQuarterRoadmapEpicRows = useMemo(() => {
+    if (!ganttTeamIds.length) return quarterRoadmapEpicRows;
+    return quarterRoadmapEpicRows
+      .map((group) => ({ ...group, items: group.items.filter((row) => row.epic.team && ganttTeamIds.includes(row.epic.team)) }))
+      .filter((group) => group.items.length > 0);
+  }, [quarterRoadmapEpicRows, ganttTeamIds]);
   const yearRoadmapEpicRows = useMemo(() => {
     const byRow = new Map<number, Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }>>();
     for (const item of yearRoadmapEpics) {
@@ -1841,6 +1857,12 @@ export function TimelineGrid({
       .sort((a, b) => a[0] - b[0])
       .map(([timelineRow, items]) => ({ timelineRow, items }));
   }, [yearRoadmapEpics]);
+  const filteredYearRoadmapEpicRows = useMemo(() => {
+    if (!ganttTeamIds.length) return yearRoadmapEpicRows;
+    return yearRoadmapEpicRows
+      .map((group) => ({ ...group, items: group.items.filter((row) => row.epic.team && ganttTeamIds.includes(row.epic.team)) }))
+      .filter((group) => group.items.length > 0);
+  }, [yearRoadmapEpicRows, ganttTeamIds]);
   const visibleMonths = focusedQuarter
     ? [...focusedQuarter.months]
     : Array.from({ length: 12 }, (_, index) => index + 1);
@@ -2625,6 +2647,10 @@ export function TimelineGrid({
       return a.epic.title.localeCompare(b.epic.title);
     });
   }, [initiatives, activeMonth]);
+  const filteredMonthEpicGanttRows = useMemo(() => {
+    if (!ganttTeamIds.length) return monthEpicGanttRows;
+    return monthEpicGanttRows.filter(({ epic }) => epic.team && ganttTeamIds.includes(epic.team));
+  }, [monthEpicGanttRows, ganttTeamIds]);
   const monthInitiativeGanttRows = useMemo(() => {
     if (activeMonth == null) return [] as InitiativeItem[];
     const byId = new Map<string, InitiativeItem>();
@@ -3135,6 +3161,9 @@ export function TimelineGrid({
       monthPlanTab === "sprint-retrospective" ||
       monthPlanTab === "month-status");
   const showInsightsTeamPicker = activeMonth == null && quarterViewTab === "insights";
+  const showGanttTeamPicker =
+    (activeMonth != null && monthPlanTab === "epic-gantt") ||
+    (activeMonth == null && quarterViewTab === "gantt");
   const selectedSprintTeamId = sprintStoryBoardTeamId ?? "all";
   const sprintTeamOptions = useMemo(() => {
     const customIds = new Map<string, string>();
@@ -3193,6 +3222,9 @@ export function TimelineGrid({
   const insightsTeamLabel = insightsTeamIds.length === 0
     ? "All Teams"
     : insightsTeamIds.map((id) => sprintTeamOptions.find((o) => o.value === id)?.label ?? id).join(", ");
+  const ganttTeamLabel = ganttTeamIds.length === 0
+    ? "All Teams"
+    : ganttTeamIds.map((id) => sprintTeamOptions.find((o) => o.value === id)?.label ?? id).join(", ");
   const focusedQuarterDisplayName = useMemo(() => {
     if (!focusedQuarter) return "Quarter";
     const ordinals: Record<string, string> = { Q1: "1st Quarter", Q2: "2nd Quarter", Q3: "3rd Quarter", Q4: "4th Quarter" };
@@ -3264,6 +3296,30 @@ export function TimelineGrid({
       setTimeout(() => insightsTeamSearchInputRef.current?.focus(), 0);
     }
   }, [isInsightsTeamMenuOpen]);
+  useEffect(() => {
+    if (!isGanttTeamMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!ganttTeamMenuRef.current?.contains(event.target as Node)) setIsGanttTeamMenuOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsGanttTeamMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isGanttTeamMenuOpen]);
+  useEffect(() => {
+    if (isGanttTeamMenuOpen) {
+      setGanttTeamSearch("");
+      setTimeout(() => ganttTeamSearchInputRef.current?.focus(), 0);
+    }
+  }, [isGanttTeamMenuOpen]);
+  useEffect(() => {
+    if (!showGanttTeamPicker) setIsGanttTeamMenuOpen(false);
+  }, [showGanttTeamPicker]);
 
   const fullYearRoadmapGanttTracks = (
         roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
@@ -3382,12 +3438,12 @@ export function TimelineGrid({
                 )}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
-              {yearRoadmapEpicRows.map((group, idx) => (
+              {filteredYearRoadmapEpicRows.map((group, idx) => (
                 <div
                   key={`year-epic-row-${group.timelineRow}`}
                   className={cn(
                     "relative min-w-0 z-10 py-0.5",
-                    idx < yearRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
+                    idx < filteredYearRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
@@ -3604,6 +3660,69 @@ export function TimelineGrid({
                                     // 2+ teams: don't call onSprintStoryBoardTeamChange to avoid resetting sprintFilterTeamIds via useEffect
                                     return next;
                                   });
+                                }
+                              }}
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                checked && !isAll && "bg-slate-50",
+                              )}
+                            >
+                              <span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border", checked ? "border-slate-700 bg-slate-700" : "border-slate-300 bg-white")}>
+                                {checked ? <Check className="size-2.5 text-white" /> : null}
+                              </span>
+                              {option.icon}
+                              <span>{option.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                </label>
+              </>
+            ) : null}
+            {showGanttTeamPicker ? (
+              <>
+                <ChevronRight className="size-4 text-slate-400" aria-hidden />
+                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 py-0.5 pl-1.5 pr-1 shadow-none">
+                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <div className="relative z-40" ref={ganttTeamMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsGanttTeamMenuOpen((prev) => !prev)}
+                      className="inline-flex h-6 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      aria-label="Filter Gantt by team"
+                      aria-expanded={isGanttTeamMenuOpen}
+                    >
+                      <span className="truncate">{ganttTeamLabel}</span>
+                      <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                    </button>
+                    {isGanttTeamMenuOpen ? (
+                      <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                        <div className="px-1 pb-1">
+                          <input
+                            ref={ganttTeamSearchInputRef}
+                            type="text"
+                            value={ganttTeamSearch}
+                            onChange={(e) => setGanttTeamSearch(e.target.value)}
+                            placeholder="Search teams…"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                          />
+                        </div>
+                        {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(ganttTeamSearch.toLowerCase())).map((option) => {
+                          const isAll = option.value === "all";
+                          const checked = isAll ? ganttTeamIds.length === 0 : ganttTeamIds.includes(option.value);
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                if (isAll) {
+                                  setGanttTeamIds([]);
+                                } else {
+                                  setGanttTeamIds((prev) =>
+                                    prev.includes(option.value) ? prev.filter((id) => id !== option.value) : [...prev, option.value]
+                                  );
                                 }
                               }}
                               className={cn(
@@ -4619,7 +4738,7 @@ export function TimelineGrid({
                           No initiatives are planned in {MONTHS[activeMonth - 1]} yet. Plan epics from the initiative list
                           to fill this month.
                         </p>
-                      ) : roadmapBarMode !== "initiatives" && monthEpicGanttRows.length === 0 ? (
+                      ) : roadmapBarMode !== "initiatives" && filteredMonthEpicGanttRows.length === 0 ? (
                         <p className="sr-only">
                           No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag an epic from the initiative list onto
                           this month.
@@ -4633,7 +4752,7 @@ export function TimelineGrid({
                       >
                         {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
-                        ) : roadmapBarMode !== "initiatives" && monthEpicGanttRows.length === 0 ? (
+                        ) : roadmapBarMode !== "initiatives" && filteredMonthEpicGanttRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         ) : roadmapBarMode === "initiatives" ? (
                           monthInitiativeGanttRows.map((initiative, rowIndex) => (
@@ -4652,7 +4771,7 @@ export function TimelineGrid({
                             </div>
                           ))
                         ) : (
-                          monthEpicGanttRows.map(({ epic, initiative }, rowIndex) => {
+                          filteredMonthEpicGanttRows.map(({ epic, initiative }, rowIndex) => {
                             const isInitiativeEmphasis =
                               ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
                             const isEpicEmphasis =
@@ -4672,7 +4791,7 @@ export function TimelineGrid({
                               <div
                                 key={epic.id}
                                 className={cn(
-                                  rowIndex < monthEpicGanttRows.length - 1 && "border-b border-slate-200/50",
+                                  rowIndex < filteredMonthEpicGanttRows.length - 1 && "border-b border-slate-200/50",
                                 )}
                               >
                                 <EpicGanttLaneRow
@@ -4688,6 +4807,7 @@ export function TimelineGrid({
                                   emphasize={emphasize}
                                   emphasizeTick={emphasizeTick}
                                   showProgress={showRoadmapProgress}
+                                  teamAssignmentChip={epicDeliveryTeamAssignmentChip(epic.team)}
                                 />
                               </div>
                             );
@@ -4695,7 +4815,7 @@ export function TimelineGrid({
                         )}
                       </StripedGanttLaneScrollArea>
                       {(roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0) ||
-                      (roadmapBarMode !== "initiatives" && monthEpicGanttRows.length === 0) ? (
+                      (roadmapBarMode !== "initiatives" && filteredMonthEpicGanttRows.length === 0) ? (
                         <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
                           <div className="max-w-md text-center text-pretty sm:max-w-lg" aria-hidden>
                             {roadmapBarMode === "initiatives" ? (
@@ -5133,12 +5253,12 @@ export function TimelineGrid({
                       columnCount={ganttLaneColumnCount}
                       rowGapClass="space-y-0.5"
                     >
-                      {quarterRoadmapEpicRows.map((group, idx) => (
+                      {filteredQuarterRoadmapEpicRows.map((group, idx) => (
                         <div
                           key={`q-epic-row-${group.timelineRow}`}
                           className={cn(
                             "relative min-w-0 z-10 py-0.5",
-                            idx < quarterRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
+                            idx < filteredQuarterRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
                           )}
                           data-gantt-lane-index={idx}
                           data-gantt-timeline-row={group.timelineRow}
@@ -5210,6 +5330,7 @@ export function TimelineGrid({
                                       showProgress={showRoadmapProgress}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
+                                      teamAssignmentChip={epicDeliveryTeamAssignmentChip(row.epic.team)}
                                     />
                                     {onResizeEpicPlanRange ? (
                                       <>
