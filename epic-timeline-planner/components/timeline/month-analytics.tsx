@@ -2887,11 +2887,92 @@ export function MonthAnalytics({
       </article>
       </div>
 
-      {/* Row 3: Burn Up chart */}
+      {/* Row 3: Month Load (left) + Burn Up chart (right) */}
       {burnUpData.length > 0 && (
         <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
-          {/* Empty left spacer — matches CFD row layout */}
-          <div className="hidden lg:block lg:col-span-1" />
+          {/* Month Load — left column, below Workload Balance */}
+          {(() => {
+            const teamMode = (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
+            const monthDaysLeft = analytics.monthDaysLeft;
+            const loadRows = teamMode
+              ? analytics.workloadByTeam.map((t) => ({
+                  key: t.teamLabel,
+                  label: t.teamLabel,
+                  initials: t.teamLabel.slice(0, 2).toUpperCase(),
+                  daysLeft: t.daysLeftTotal,
+                  estTotal: t.estimatedTotal,
+                  onRowClick: undefined as (() => void) | undefined,
+                }))
+              : analytics.workloadByAssignee.map((row) => ({
+                  key: row.assignee,
+                  label: row.assignee,
+                  initials: row.assignee.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join(""),
+                  daysLeft: row.daysLeftTotal,
+                  estTotal: row.estimatedTotal,
+                  onRowClick: () => setWorkloadDrilldownAssignee(row.assignee),
+                }));
+            if (loadRows.length === 0) return <div className="hidden lg:block lg:col-span-1" />;
+            return (
+              <div className="flex min-h-0 flex-col lg:col-span-1">
+                <div className={cn("mb-2 flex shrink-0 items-center gap-1.5", INSIGHTS_HEADER_ROW)}>
+                  <h3 className={cn("inline-flex items-center gap-1.5 font-semibold text-slate-800", isMultiPeriodInsights ? "text-[16px]" : "text-[15px]")}>
+                    <Users className="size-4 text-slate-600" />
+                    Month Load
+                  </h3>
+                </div>
+                <div className={cn("space-y-2 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
+                  {loadRows.map((row) => {
+                    const doneDays = Math.max(0, row.estTotal - row.daysLeft);
+                    const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
+                    const atRisk = monthDaysLeft > 0 && row.daysLeft > monthDaysLeft;
+                    return (
+                      <button
+                        key={row.key}
+                        type="button"
+                        onClick={row.onRowClick}
+                        className={cn("w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition", row.onRowClick ? "hover:bg-slate-50" : "cursor-default")}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+                            {row.initials || <User className="size-3" />}
+                          </span>
+                          <div className="w-3/4 min-w-0">
+                            <div className="flex items-center justify-between gap-1.5 mb-1">
+                              <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
+                              <div className="flex shrink-0 items-center gap-1">
+                                {atRisk && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
+                                    title={`${row.daysLeft}d of work left but only ${monthDaysLeft}d remain in the month`}
+                                  >
+                                    <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
+                                    {row.daysLeft - monthDaysLeft}d over
+                                  </span>
+                                )}
+                                <span className="text-[11px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
+                              </div>
+                            </div>
+                            <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                              <div
+                                className={cn(
+                                  "absolute inset-y-0 left-0 rounded-full transition-all",
+                                  atRisk ? "bg-amber-400" : row.daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400",
+                                )}
+                                style={{ width: `${donePct}%` }}
+                              />
+                              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">
+                                {donePct}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Burn Up chart + right-side epic legend */}
           <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
@@ -3056,6 +3137,7 @@ export function MonthAnalytics({
               </div>
             </div>
           </article>
+
         </div>
       )}
     </section>
