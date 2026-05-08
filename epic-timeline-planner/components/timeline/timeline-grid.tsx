@@ -1471,6 +1471,8 @@ export function TimelineGrid({
   const prevEstScopeKeyRef = useRef<string | null>(null);
   const capacityTeamFilterRef = useRef<HTMLDivElement | null>(null);
   const [isSprintTeamMenuOpen, setIsSprintTeamMenuOpen] = useState(false);
+  const [sprintTeamSearch, setSprintTeamSearch] = useState("");
+  const sprintTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -3216,6 +3218,12 @@ export function TimelineGrid({
   useEffect(() => {
     if (!showSprintTeamPicker) setIsSprintTeamMenuOpen(false);
   }, [showSprintTeamPicker]);
+  useEffect(() => {
+    if (isSprintTeamMenuOpen) {
+      setSprintTeamSearch("");
+      setTimeout(() => sprintTeamSearchInputRef.current?.focus(), 0);
+    }
+  }, [isSprintTeamMenuOpen]);
 
   const fullYearRoadmapGanttTracks = (
         roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
@@ -3530,7 +3538,17 @@ export function TimelineGrid({
                     </button>
                     {isSprintTeamMenuOpen ? (
                       <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-                        {sprintTeamOptions.map((option) => (
+                        <div className="px-1 pb-1">
+                          <input
+                            ref={sprintTeamSearchInputRef}
+                            type="text"
+                            value={sprintTeamSearch}
+                            onChange={(e) => setSprintTeamSearch(e.target.value)}
+                            placeholder="Search teams…"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                          />
+                        </div>
+                        {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => (
                           <button
                             key={option.value}
                             type="button"
@@ -4688,7 +4706,17 @@ export function TimelineGrid({
                       </button>
                       {isSprintTeamMenuOpen ? (
                         <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-                          {sprintTeamOptions.map((option) => (
+                          <div className="px-1 pb-1">
+                            <input
+                              ref={sprintTeamSearchInputRef}
+                              type="text"
+                              value={sprintTeamSearch}
+                              onChange={(e) => setSprintTeamSearch(e.target.value)}
+                              placeholder="Search teams…"
+                              className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                            />
+                          </div>
+                          {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => (
                             <button
                               key={option.value}
                               type="button"
