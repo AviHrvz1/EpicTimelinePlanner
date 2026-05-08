@@ -2641,7 +2641,7 @@ export function MonthAnalytics({
                       data={barData}
                       barCategoryGap="15%"
                       barGap={2}
-                      margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
+                      margin={{ top: 4, right: 4, bottom: 0, left: 8 }}
                       style={{ cursor: teamMode ? "default" : "pointer" }}
                       onClick={teamMode ? undefined : (data) => {
                         const label = data?.activeLabel as string | undefined;
@@ -2653,7 +2653,7 @@ export function MonthAnalytics({
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={26} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={44} label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }} />
                       <Tooltip
                         contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2911,16 +2911,87 @@ export function MonthAnalytics({
                   estTotal: row.estimatedTotal,
                   onRowClick: () => setWorkloadDrilldownAssignee(row.assignee),
                 }));
-            if (loadRows.length === 0) return <div className="hidden lg:block lg:col-span-1" />;
+            if (loadRows.length === 0 && !workloadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
               <div className="flex min-h-0 flex-col lg:col-span-1">
-                <div className={cn("mb-2 flex shrink-0 items-center gap-1.5", INSIGHTS_HEADER_ROW)}>
+                <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
                   <h3 className={cn("inline-flex items-center gap-1.5 font-semibold text-slate-800", isMultiPeriodInsights ? "text-[16px]" : "text-[15px]")}>
                     <Users className="size-4 text-slate-600" />
                     Month Load
                   </h3>
+                  {workloadDrilldownAssignee && (
+                    <button
+                      type="button"
+                      onClick={() => setWorkloadDrilldownAssignee(null)}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      aria-label="Back to month load"
+                      title="Back to month load"
+                    >
+                      <ArrowLeft className="size-3.5" aria-hidden />
+                    </button>
+                  )}
                 </div>
-                <div className={cn("space-y-2 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
+                {workloadDrilldownAssignee ? (
+                  <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
+                    <div className="relative h-full min-h-0 min-w-0">
+                      <div
+                        ref={workloadDrilldownScrollRef}
+                        onScroll={updateWorkloadDrilldownArrowState}
+                        className={sharedDrilldownScrollAreaClass}
+                        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                      >
+                        <table className={drilldownTableClass}>
+                          {drilldownColgroup}
+                          <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+                            <tr>
+                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story ID</th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story name</th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Sprint</th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {workloadDrilldownStories.map((story) => {
+                              const statusLabel = story.status === "todo" ? "To do" : story.status === "inProgress" ? "In progress" : story.status === "done" ? "Done" : "Approved";
+                              return (
+                                <tr key={story.id} className={drilldownTableRowZebra}>
+                                  <td className="min-w-0 px-2 py-0.5">
+                                    <InsightsTruncatedHoverButton label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)} onClick={() => onOpenStory?.(story.id)} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
+                                  </td>
+                                  <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.title} /></td>
+                                  <td className="min-w-0 px-2 py-0.5">
+                                    {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                                      <InsightsTruncatedHoverButton label={storySprintDisplayLabel(story.sprint, scopeStartMonth)} onClick={() => { const t = normalizeStoryYearSprint(story.sprint, scopeStartMonth); if (t) onOpenSprintKanban?.(t, resolveStoryTeamForSprintNav(story)); }} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
+                                    ) : (
+                                      <InsightsTruncatedHoverLabel text="Unscheduled" />
+                                    )}
+                                  </td>
+                                  <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.assignee?.trim() || "Unassigned"} /></td>
+                                  <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={statusLabel} /></td>
+                                </tr>
+                              );
+                            })}
+                            {workloadDrilldownEmptyRows > 0 && Array.from({ length: workloadDrilldownEmptyRows }).map((_, i) => (
+                              <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
+                                <td colSpan={5} className="px-3 py-0.5 text-[13px]">{" "}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button type="button" onClick={() => scrollWorkloadDrilldownBy(-96)} className={cn(sharedDrilldownArrowClass, "top-0", canScrollWorkloadDrilldownUp && "bg-slate-200/70 text-slate-800")} aria-label="Scroll up"><ChevronUp className="size-3.5" /></button>
+                      <button type="button" onClick={() => scrollWorkloadDrilldownBy(96)} className={cn(sharedDrilldownArrowClass, "bottom-0", canScrollWorkloadDrilldownDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down"><ChevronDown className="size-3.5" /></button>
+                    </div>
+                  </div>
+                ) : (
+                <div className={cn("relative", INSIGHTS_CHART_BAND)}>
+                  <div
+                    ref={monthLoadScrollRef}
+                    onScroll={updateMonthLoadArrowState}
+                    className="h-full space-y-2 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollbarWidth: "none" }}
+                  >
                   {loadRows.map((row) => {
                     const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                     const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
@@ -2969,7 +3040,31 @@ export function MonthAnalytics({
                       </button>
                     );
                   })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => scrollMonthLoadBy(-96)}
+                    className={cn(
+                      "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                      canScrollMonthLoadUp && "bg-slate-200/70 text-slate-800",
+                    )}
+                    aria-label="Scroll up month load"
+                  >
+                    <ChevronUp className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollMonthLoadBy(96)}
+                    className={cn(
+                      "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                      canScrollMonthLoadDown && "bg-slate-200/70 text-slate-800",
+                    )}
+                    aria-label="Scroll down month load"
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </button>
                 </div>
+                )}
               </div>
             );
           })()}
