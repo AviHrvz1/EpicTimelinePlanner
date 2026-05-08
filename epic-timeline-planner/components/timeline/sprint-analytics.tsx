@@ -754,11 +754,11 @@ export function SprintAnalytics({
             </div>
           </div>
         ) : null}
-        {!workloadDrilldownAssignee ? <div className={`min-h-0 flex-1 space-y-2.5 ${WORKLOAD_LIST_MAX}`}>
+        {!workloadDrilldownAssignee ? <div className={`min-h-0 flex-1 space-y-2.5 ${workloadView === "stories" ? "overflow-hidden" : WORKLOAD_LIST_MAX}`}>
           {workloadView === "stories" ? (
-            <div className="min-h-0">
+            <div className="h-[clamp(14.75rem,30vh,19rem)] w-full">
               {analytics.workloadByAssignee.length > 0 ? (
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={analytics.workloadByAssignee.map((item) => ({
                       name: item.assignee.split(/\s+/)[0],
@@ -768,7 +768,7 @@ export function SprintAnalytics({
                       "Done": item.storiesByStatus.done,
                       "Approved": item.storiesByStatus.approved,
                     }))}
-                    barCategoryGap="30%"
+                    barCategoryGap="15%"
                     barGap={2}
                     margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
                   >
