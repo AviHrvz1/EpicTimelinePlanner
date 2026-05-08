@@ -1473,6 +1473,11 @@ export function TimelineGrid({
   const [isSprintTeamMenuOpen, setIsSprintTeamMenuOpen] = useState(false);
   const [sprintTeamSearch, setSprintTeamSearch] = useState("");
   const sprintTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [insightsTeamId, setInsightsTeamId] = useState<string | null>(null);
+  const [isInsightsTeamMenuOpen, setIsInsightsTeamMenuOpen] = useState(false);
+  const [insightsTeamSearch, setInsightsTeamSearch] = useState("");
+  const insightsTeamMenuRef = useRef<HTMLDivElement | null>(null);
+  const insightsTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -3126,6 +3131,7 @@ export function TimelineGrid({
       monthPlanTab === "sprint-status" ||
       monthPlanTab === "sprint-retrospective" ||
       monthPlanTab === "month-status");
+  const showInsightsTeamPicker = activeMonth == null && quarterViewTab === "insights";
   const selectedSprintTeamId = sprintStoryBoardTeamId ?? "all";
   const sprintTeamOptions = useMemo(() => {
     const customIds = new Map<string, string>();
@@ -3178,6 +3184,8 @@ export function TimelineGrid({
   }, [workspaceDirectoryUsers, sprintStoryBoardTeamId]);
   const selectedSprintTeamOption =
     sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
+  const selectedInsightsTeamOption =
+    sprintTeamOptions.find((option) => option.value === (insightsTeamId ?? "all")) ?? sprintTeamOptions[0];
   const focusedQuarterDisplayName = useMemo(() => {
     if (!focusedQuarter) return "Quarter";
     const ordinals: Record<string, string> = { Q1: "1st Quarter", Q2: "2nd Quarter", Q3: "3rd Quarter", Q4: "4th Quarter" };
@@ -3224,6 +3232,27 @@ export function TimelineGrid({
       setTimeout(() => sprintTeamSearchInputRef.current?.focus(), 0);
     }
   }, [isSprintTeamMenuOpen]);
+  useEffect(() => {
+    if (!isInsightsTeamMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!insightsTeamMenuRef.current?.contains(event.target as Node)) setIsInsightsTeamMenuOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsInsightsTeamMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isInsightsTeamMenuOpen]);
+  useEffect(() => {
+    if (isInsightsTeamMenuOpen) {
+      setInsightsTeamSearch("");
+      setTimeout(() => insightsTeamSearchInputRef.current?.focus(), 0);
+    }
+  }, [isInsightsTeamMenuOpen]);
 
   const fullYearRoadmapGanttTracks = (
         roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
@@ -3559,6 +3588,60 @@ export function TimelineGrid({
                             className={cn(
                               "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
                               selectedSprintTeamId === option.value && "bg-slate-100",
+                            )}
+                          >
+                            {option.icon}
+                            <span>{option.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </label>
+              </>
+            ) : null}
+            {showInsightsTeamPicker ? (
+              <>
+                <ChevronRight className="size-4 text-slate-400" aria-hidden />
+                <label className="inline-flex items-center gap-1 rounded-md border-0 bg-white/90 py-0.5 pl-1.5 pr-1 shadow-none">
+                  <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <div className="relative z-40" ref={insightsTeamMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsInsightsTeamMenuOpen((prev) => !prev)}
+                      className="inline-flex h-6 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      aria-label="Filter insights by team"
+                      aria-expanded={isInsightsTeamMenuOpen}
+                    >
+                      <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                        {selectedInsightsTeamOption.icon}
+                        <span className="truncate">{selectedInsightsTeamOption.label}</span>
+                      </span>
+                      <ChevronDown className="size-3.5 text-slate-500" aria-hidden />
+                    </button>
+                    {isInsightsTeamMenuOpen ? (
+                      <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                        <div className="px-1 pb-1">
+                          <input
+                            ref={insightsTeamSearchInputRef}
+                            type="text"
+                            value={insightsTeamSearch}
+                            onChange={(e) => setInsightsTeamSearch(e.target.value)}
+                            placeholder="Search teams…"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                          />
+                        </div>
+                        {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(insightsTeamSearch.toLowerCase())).map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setInsightsTeamId(option.value === "all" ? null : option.value);
+                              setIsInsightsTeamMenuOpen(false);
+                            }}
+                            className={cn(
+                              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                              (insightsTeamId ?? "all") === option.value && "bg-slate-100",
                             )}
                           >
                             {option.icon}
@@ -5139,6 +5222,7 @@ export function TimelineGrid({
             periodMonths={MONTHS.map((_, i) => i + 1)}
             periodLabel="Year"
             planYear={currentYear}
+            filterEpicTeamId={insightsTeamId}
             onOpenEpic={onOpenEpic}
             onOpenStory={onOpenStory ?? (() => {})}
             onOpenSprintKanban={(yearSprint, teamId) =>
@@ -5155,6 +5239,7 @@ export function TimelineGrid({
             periodMonths={[...focusedQuarter.months]}
             periodLabel={focusedQuarter.label}
             planYear={currentYear}
+            filterEpicTeamId={insightsTeamId}
             onOpenEpic={onOpenEpic}
             onOpenStory={onOpenStory ?? (() => {})}
             onOpenSprintKanban={(yearSprint, teamId) =>
