@@ -4731,7 +4731,6 @@ export function TimelineGrid({
           >
             {monthPlanTab === "epic-gantt" && activeMonth != null ? (
               <div className="relative flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
-                <YearRoadmapTodayLine leftPercent={monthEpicGanttTodayLeft} />
                 <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
                   <div className="col-span-2 mb-2">
@@ -4819,6 +4818,7 @@ export function TimelineGrid({
                 <MonthEpicDropArea month={activeMonth}>
                   <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
                     <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
+                      <YearRoadmapTodayLine leftPercent={monthEpicGanttTodayLeft} />
                       {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
                         <p className="sr-only">
                           No initiatives are planned in {MONTHS[activeMonth - 1]} yet. Plan epics from the initiative list

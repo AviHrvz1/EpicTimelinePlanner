@@ -25,6 +25,7 @@ import {
   Eraser,
   Folder,
   Layers,
+  TrendingUp,
   User,
   UserRound,
   Users,
@@ -353,10 +354,12 @@ function CumulativeFlowTooltip({
   active,
   payload,
   label,
+  metric,
 }: {
   active?: boolean;
   payload?: readonly BurndownTooltipPayload[];
   label?: string | number;
+  metric?: BurndownMetric;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const rows = payload.filter((item) => item.value != null);
@@ -365,7 +368,9 @@ function CumulativeFlowTooltip({
     <AnalyticsTooltipShell title={String(label ?? "Cumulative Flow")}>
       {rows.map((row) => {
         const normalized = Array.isArray(row.value) ? row.value[0] : row.value;
-        const valueText = typeof normalized === "number" ? `${Math.round(normalized)} stories` : "n/a";
+        const valueText = typeof normalized === "number"
+          ? metric === "daysLeft" ? `${Math.round(normalized)}d` : `${Math.round(normalized)} stories`
+          : "n/a";
         return (
           <AnalyticsTooltipRow
             key={String(row.dataKey ?? row.name)}
@@ -599,6 +604,7 @@ export function MonthAnalytics({
   const [isEpicDropdownOpen, setIsEpicDropdownOpen] = useState(false);
   const [showAllEpicSuggestions, setShowAllEpicSuggestions] = useState(false);
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
+  const [burnUpVisibleKeys, setBurnUpVisibleKeys] = useState<string[]>([]);
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
@@ -1476,6 +1482,76 @@ export function MonthAnalytics({
     });
   }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
   const flowResolved = flowFromSnapshots ?? analytics.flowSprintTrendData;
+
+  const [cfdMetric, setCfdMetric] = useState<BurndownMetric>("storyCount");
+
+  const flowDaysData = useMemo(() => {
+    const sourceStories = selectedEpicOption != null
+      ? (selectedEpicOption.epic.userStories ?? [])
+      : monthEpics.flatMap((row) => row.epic.userStories ?? []);
+    const scheduledStories = sourceStories.filter((s) => s.sprint != null);
+
+    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1, 23, 59, 59, 999);
+    const periodEndDate = new Date(planYear, scopeEndMonth, 0, 23, 59, 59, 999);
+    const totalDays = Math.floor((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const dayDates = Array.from({ length: totalDays }, (_, idx) => {
+      const day = new Date(periodStartDate);
+      day.setDate(periodStartDate.getDate() + idx);
+      return day;
+    });
+    const now = new Date();
+    const isCurrentPeriod = now.getFullYear() === planYear && now.getMonth() + 1 >= scopeStartMonth && now.getMonth() + 1 <= scopeEndMonth;
+    const elapsedDays = isCurrentPeriod ? Math.max(1, Math.min(totalDays, Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(planYear, scopeStartMonth - 1, 1).getTime()) / (24 * 60 * 60 * 1000)) + 1)) : totalDays;
+    const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const hasSnapshots = scheduledStories.some((s) => (s.snapshots?.length ?? 0) > 0);
+
+    return dayDates.map((dayDate, index) => {
+      const dayInMonth = index + 1;
+      const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime();
+      if (dayInMonth > elapsedDays) {
+        return { dayInMonth, labelShort: flowChartDayLabel(dayDate), isToday: false, todo: null, inProgress: null, done: null, approved: null };
+      }
+      let todo = 0; let inProgress = 0; let done = 0; let approved = 0;
+      for (const story of scheduledStories) {
+        const days = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+        if (days === 0) continue;
+        let status: string = story.status;
+        if (hasSnapshots) {
+          const snap = latestSnapshotAtDay(story, dayDate);
+          status = snap?.status ?? story.status;
+        } else {
+          const progress = (dayInMonth - 1) / Math.max(elapsedDays - 1, 1);
+          const finalStatus = story.status;
+          if (finalStatus === "approved") status = progress > 0.75 ? "approved" : progress > 0.5 ? "done" : progress > 0.25 ? "inProgress" : "todo";
+          else if (finalStatus === "done") status = progress > 0.6 ? "done" : progress > 0.3 ? "inProgress" : "todo";
+          else if (finalStatus === "inProgress") status = progress > 0.4 ? "inProgress" : "todo";
+          else status = "todo";
+        }
+        if (status === "todo") todo += days;
+        else if (status === "inProgress") inProgress += days;
+        else if (status === "done") done += days;
+        else if (status === "approved") approved += days;
+      }
+      return { dayInMonth, labelShort: flowChartDayLabel(dayDate), isToday: dayStart === nowStart,
+        todo: Number(todo.toFixed(1)), inProgress: Number(inProgress.toFixed(1)), done: Number(done.toFixed(1)), approved: Number(approved.toFixed(1)) };
+    });
+  }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
+
+  const cfdDataResolved = cfdMetric === "daysLeft" ? flowDaysData : flowResolved;
+
+  const cfdAxisTicks = useMemo(() => {
+    const labels = cfdDataResolved
+      .map((row) => String((row as { labelShort?: string }).labelShort ?? ""))
+      .filter((l) => l.length > 0);
+    if (labels.length <= 10) return labels;
+    const step = Math.max(1, Math.ceil(labels.length / 10));
+    const ticks: string[] = [];
+    for (let i = 0; i < labels.length; i += step) ticks.push(labels[i]);
+    const last = labels[labels.length - 1];
+    if (ticks[ticks.length - 1] !== last) ticks.push(last);
+    return ticks;
+  }, [cfdDataResolved]);
+
   useEffect(() => {
     setCfdVisibleKeys((prev) => {
       const allKeys = CFD_FLOW_SEGMENTS.map((seg) => seg.key);
@@ -1496,6 +1572,176 @@ export function MonthAnalytics({
   const showAllCfdKeys = () => setCfdVisibleKeys(CFD_FLOW_SEGMENTS.map((seg) => seg.key));
   const allCfdKeysSelected =
     CFD_FLOW_SEGMENTS.length > 0 && CFD_FLOW_SEGMENTS.every((seg) => cfdVisibleKeys.includes(seg.key));
+
+  // --- Burn Up chart (epic scope) ---
+  const [burnUpMetric, setBurnUpMetric] = useState<BurndownMetric>("storyCount");
+  const burnUpDueDate = useMemo(() => {
+    const epicsToCheck = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
+    if (epicsToCheck.length === 0) return null;
+    let latestMs = -Infinity;
+    let latestDate: Date | null = null;
+    for (const epic of epicsToCheck) {
+      const dueMonth = epic.planEndMonth ?? scopeEndMonth;
+      const dueYear = epic.planYear ?? planYear;
+      const dueSprint = epic.planEndSprint;
+      const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
+      const d = new Date(dueYear, dueMonth - 1, dueDay);
+      if (d.getTime() > latestMs) { latestMs = d.getTime(); latestDate = d; }
+    }
+    return latestDate;
+  }, [selectedEpicOption, monthEpics, scopeEndMonth, planYear]);
+
+  const burnUpData = useMemo(() => {
+    const epicsInScope = selectedEpicOption != null
+      ? [selectedEpicOption.epic]
+      : monthEpics.map((r) => r.epic).filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
+    const allStories = epicsInScope.flatMap((e) => (e.userStories ?? []).filter((s) => s.sprint != null));
+    const isDays = burnUpMetric === "daysLeft";
+
+    const storyValue = (s: (typeof allStories)[number]) =>
+      isDays ? Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0) : 1;
+    const storyDone = (status: string) => status === "done" || status === "approved";
+
+    const totalScope = allStories.reduce((sum, s) => sum + storyValue(s), 0);
+    if (totalScope === 0) return [] as Array<{ labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null }>;
+
+    const round = (n: number) => isDays ? Number(n.toFixed(1)) : Math.round(n);
+
+    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
+    const periodEndDate = new Date(planYear, scopeEndMonth, 0);
+    const totalDays = Math.floor((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const afterPeriod = todayStart.getTime() > periodEndDate.getTime();
+    const beforePeriod = todayStart.getTime() < periodStartDate.getTime();
+    const elapsedDays = afterPeriod
+      ? totalDays
+      : beforePeriod
+        ? 0
+        : Math.max(1, Math.min(totalDays, Math.floor((todayStart.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1));
+
+    const dueDate = burnUpDueDate;
+    const dueDayIndex = dueDate != null
+      ? Math.max(1, Math.floor((dueDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1)
+      : totalDays;
+
+    const hasSnapshots = allStories.some((s) => (s.snapshots?.length ?? 0) > 0);
+    const currentCompleted = allStories.filter((s) => storyDone(s.status)).reduce((sum, s) => sum + storyValue(s), 0);
+
+    return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null } => {
+      const dayIdx = idx + 1;
+      const dayDate = new Date(periodStartDate);
+      dayDate.setDate(dayDate.getDate() + idx);
+      const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
+      const isToday = dayStart.getTime() === todayStart.getTime();
+
+      let completed: number | null = null;
+      if (dayIdx <= elapsedDays) {
+        if (hasSnapshots) {
+          completed = 0;
+          for (const story of allStories) {
+            const snap = latestSnapshotAtDay(story, dayDate);
+            const status = snap?.status ?? story.status;
+            if (storyDone(status)) completed += storyValue(story);
+          }
+          completed = round(completed);
+        } else {
+          const raw = elapsedDays <= 1
+            ? currentCompleted
+            : currentCompleted * (dayIdx - 1) / Math.max(elapsedDays - 1, 1);
+          completed = dayIdx === elapsedDays ? round(currentCompleted) : round(raw);
+        }
+      }
+
+      let ideal: number | null = null;
+      if (totalScope > 0 && dayIdx <= dueDayIndex) {
+        const raw = dueDayIndex <= 1 ? totalScope : totalScope * (dayIdx - 1) / (dueDayIndex - 1);
+        ideal = round(Math.max(0, Math.min(totalScope, raw)));
+      }
+
+      return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: round(totalScope), ideal };
+    });
+  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth, burnUpDueDate, burnUpMetric]);
+
+  const burnUpDueDateLabel = useMemo(() => {
+    if (!burnUpDueDate) return null;
+    return `${burnUpDueDate.getDate()}/${burnUpDueDate.getMonth() + 1}`;
+  }, [burnUpDueDate]);
+
+  const burnUpLegendScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollBurnUpUp, setCanScrollBurnUpUp] = useState(false);
+  const [canScrollBurnUpDown, setCanScrollBurnUpDown] = useState(false);
+  const updateBurnUpLegendArrowState = () => {
+    const node = burnUpLegendScrollRef.current;
+    if (!node) { setCanScrollBurnUpUp(false); setCanScrollBurnUpDown(false); return; }
+    const epsilon = 2;
+    setCanScrollBurnUpUp(node.scrollTop > epsilon);
+    setCanScrollBurnUpDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
+  };
+  const scrollBurnUpLegendBy = (delta: number) => burnUpLegendScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+
+  const burnUpAxisTicks = useMemo(() => {
+    const labels = burnUpData.map((r) => r.labelShort).filter((l) => l.length > 0);
+    if (labels.length <= 10) return labels;
+    const step = Math.max(1, Math.ceil(labels.length / 10));
+    const ticks: string[] = [];
+    for (let i = 0; i < labels.length; i += step) ticks.push(labels[i]);
+    const last = labels[labels.length - 1];
+    if (ticks[ticks.length - 1] !== last) ticks.push(last);
+    return ticks;
+  }, [burnUpData]);
+
+  const burnUpScopeTotal = burnUpData.length > 0 ? burnUpData[0]?.scope ?? 0 : 0;
+  const burnUpCompletedNow = useMemo(() => {
+    for (let i = burnUpData.length - 1; i >= 0; i--) {
+      const v = burnUpData[i]?.completed;
+      if (v != null) return v;
+    }
+    return 0;
+  }, [burnUpData]);
+
+  const burnUpEpicRows = useMemo(() => {
+    const epicsInScope = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
+    return epicsInScope.map((epic, idx) => {
+      const stories = (epic.userStories ?? []).filter((s) => s.sprint != null);
+      const completed = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+      const remaining = stories.length - completed;
+      const daysLeft = stories
+        .filter((s) => s.status === "todo" || s.status === "inProgress")
+        .reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0);
+      return {
+        id: epic.id,
+        title: epic.title,
+        color: LINE_PALETTE[idx % LINE_PALETTE.length],
+        totalStories: stories.length,
+        completed,
+        remaining,
+        daysLeft: Number(daysLeft.toFixed(1)),
+        status: deriveEpicStatus(epic),
+      };
+    });
+  }, [selectedEpicOption, monthEpics]);
+
+  useEffect(() => {
+    setBurnUpVisibleKeys((prev) => {
+      const available = new Set(burnUpEpicRows.map((r) => r.id));
+      const retained = prev.filter((k) => available.has(k));
+      if (retained.length > 0) return retained;
+      return burnUpEpicRows.map((r) => r.id);
+    });
+  }, [burnUpEpicRows]);
+
+  const toggleBurnUpKey = (key: string) => {
+    setBurnUpVisibleKeys((prev) => {
+      const allKeys = burnUpEpicRows.map((r) => r.id);
+      if (prev.length === 1 && prev[0] === key) return allKeys;
+      return [key];
+    });
+  };
+  const showAllBurnUpKeys = () => setBurnUpVisibleKeys(burnUpEpicRows.map((r) => r.id));
+  const allBurnUpKeysSelected =
+    burnUpEpicRows.length > 0 && burnUpEpicRows.every((r) => burnUpVisibleKeys.includes(r.id));
+
   const workloadStoriesScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollWorkloadUp, setCanScrollWorkloadUp] = useState(false);
   const [canScrollWorkloadDown, setCanScrollWorkloadDown] = useState(false);
@@ -1999,7 +2245,7 @@ export function MonthAnalytics({
             )}
           >
             <Activity className="size-4 text-slate-600" />
-            Burndown
+            Epic Scope Burndown
           </h3>
           <div className="flex items-center gap-2">
             <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
@@ -2010,7 +2256,7 @@ export function MonthAnalytics({
                   metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
-                Days left
+                Σ Total days left
               </button>
               <button
                 type="button"
@@ -2019,33 +2265,7 @@ export function MonthAnalytics({
                   metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
-                Stories
-              </button>
-            </div>
-            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
-              <button
-                type="button"
-                onClick={() => setEstimateSource("stories")}
-                className={cn(
-                  "rounded-md px-3 py-1 text-[13px] font-medium",
-                  estimateSource === "stories"
-                    ? "bg-white text-slate-900 ring-1 ring-slate-300"
-                    : "text-slate-600",
-                )}
-              >
-                Σ Stories
-              </button>
-              <button
-                type="button"
-                onClick={() => setEstimateSource("original")}
-                className={cn(
-                  "rounded-md px-3 py-1 text-[13px] font-medium",
-                  estimateSource === "original"
-                    ? "bg-white text-slate-900 ring-1 ring-slate-300"
-                    : "text-slate-600",
-                )}
-              >
-                Original Estimation
+                Σ Total stories
               </button>
             </div>
           </div>
@@ -2067,7 +2287,6 @@ export function MonthAnalytics({
                       dataKey="axisLabel"
                       interval={0}
                       ticks={burndownAxisTicks}
-                      tickFormatter={(value) => String(value ?? "")}
                       tick={{ fontSize: 11, fill: "#64748b" }}
                       angle={-28}
                       textAnchor="end"
@@ -2537,15 +2756,33 @@ export function MonthAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
-        <h3
-          className={cn(
-            "ml-[35px] inline-flex min-h-9 shrink-0 items-center gap-1.5 font-semibold text-slate-800",
-            isMultiPeriodInsights ? "mb-3 text-[16px]" : "mb-2 text-[15px]",
-          )}
-        >
-          <Activity className="size-4 text-slate-600" />
-          Cumulative Flow
-        </h3>
+        <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+          <h3
+            className={cn(
+              "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
+              isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
+            )}
+          >
+            <Activity className="size-4 text-slate-600" />
+            Cumulative Flow
+          </h3>
+          <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
+            <button
+              type="button"
+              onClick={() => setCfdMetric("daysLeft")}
+              className={`rounded-md px-3 py-1 text-[13px] font-medium ${cfdMetric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+            >
+              Σ Total days left
+            </button>
+            <button
+              type="button"
+              onClick={() => setCfdMetric("storyCount")}
+              className={`rounded-md px-3 py-1 text-[13px] font-medium ${cfdMetric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+            >
+              Σ Total stories
+            </button>
+          </div>
+        </div>
         <div
           className={cn(
             "grid md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch",
@@ -2554,25 +2791,25 @@ export function MonthAnalytics({
           )}
         >
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
-            {flowResolved.length > 0 ? (
+            {cfdDataResolved.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={flowResolved} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
+                  <AreaChart data={cfdDataResolved} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="labelShort"
-                      interval="preserveStartEnd"
-                      tick={{ fontSize: 11, fill: "#475569" }}
+                      interval={0}
+                      ticks={cfdAxisTicks}
+                      tick={{ fontSize: 11, fill: "#64748b" }}
                       angle={-28}
                       textAnchor="end"
-                      tickMargin={2}
                       height={44}
                     />
                     <YAxis
                       allowDecimals={false}
                       tick={{ fontSize: 10, fill: "#64748b" }}
                       width={44}
-                      label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
+                      label={{ value: cfdMetric === "daysLeft" ? "Days" : "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
                     />
                     <Tooltip
                       labelFormatter={(_, payload) => {
@@ -2580,7 +2817,7 @@ export function MonthAnalytics({
                         if (row?.dayInMonth != null && row.labelShort) return `Day ${row.dayInMonth} · ${row.labelShort}`;
                         return "";
                       }}
-                      content={(props) => <CumulativeFlowTooltip {...props} />}
+                      content={(props) => <CumulativeFlowTooltip {...props} metric={cfdMetric} />}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
                     {CFD_FLOW_SEGMENTS.map(({ key, label, color }) =>
@@ -2649,6 +2886,178 @@ export function MonthAnalytics({
         </div>
       </article>
       </div>
+
+      {/* Row 3: Burn Up chart */}
+      {burnUpData.length > 0 && (
+        <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+          {/* Empty left spacer — matches CFD row layout */}
+          <div className="hidden lg:block lg:col-span-1" />
+
+          {/* Burn Up chart + right-side epic legend */}
+          <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+            <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+              <h3
+                className={cn(
+                  "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
+                  isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
+                )}
+              >
+                <TrendingUp className="size-4 text-slate-600" />
+                Epic Scope Burnup
+              </h3>
+              <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setBurnUpMetric("daysLeft")}
+                  className={`rounded-md px-3 py-1 text-[13px] font-medium ${burnUpMetric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+                >
+                  Σ Total days left
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBurnUpMetric("storyCount")}
+                  className={`rounded-md px-3 py-1 text-[13px] font-medium ${burnUpMetric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+                >
+                  Σ Total stories
+                </button>
+              </div>
+            </div>
+            <div
+              className={cn(
+                "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch",
+                INSIGHTS_CHART_GRID_GAP,
+                INSIGHTS_CONTENT_HEIGHT,
+              )}
+            >
+              {/* Chart */}
+              <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
+                <div className="absolute inset-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={burnUpData} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="labelShort"
+                        interval={0}
+                        ticks={burnUpAxisTicks}
+                        tick={(props) => {
+                          const { x, y, payload, index } = props;
+                          const label = String(payload?.value ?? "");
+                          const isToday = Boolean(burnUpData[index]?.isToday);
+                          return (
+                            <text x={x} y={y} dy={8} textAnchor="end" transform={`rotate(-28,${x},${y})`}
+                              fill={isToday ? "#0f172a" : "#64748b"} fontSize={isToday ? 13 : 11} fontWeight={isToday ? 700 : 400}
+                            >
+                              {label}
+                            </text>
+                          );
+                        }}
+                        height={44}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 10 }}
+                        width={44}
+                        label={{ value: burnUpMetric === "daysLeft" ? "Days completed" : "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
+                        domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, burnUpScopeTotal) * 1.08)]}
+                      />
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const row = payload[0]?.payload as { isToday?: boolean } | undefined;
+                          const title = String(label ?? "Epic Scope Burnup") + (row?.isToday ? " · Today" : "");
+                          return (
+                            <AnalyticsTooltipShell title={title}>
+                              {payload.map((item, idx) => (
+                                <AnalyticsTooltipRow
+                                  key={`${String(item.name)}-${idx}`}
+                                  color={item.color as string}
+                                  label={String(item.name ?? "")}
+                                  value={burnUpMetric === "daysLeft" ? `${Number(item.value ?? 0)}d` : `${Number(item.value ?? 0)} stories`}
+                                />
+                              ))}
+                            </AnalyticsTooltipShell>
+                          );
+                        }}
+                        cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
+                      />
+                      <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="completed" name="Completed" stroke="#10b981" strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Right-side legend — identical structure to burndown legend */}
+              <div className={`relative ${INSIGHTS_CONTENT_HEIGHT}`}>
+                <div
+                  ref={burnUpLegendScrollRef}
+                  onScroll={updateBurnUpLegendArrowState}
+                  className={INSIGHTS_SCROLL_MAIN}
+                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                >
+                  {/* All button */}
+                  <button
+                    type="button"
+                    onClick={showAllBurnUpKeys}
+                    className={cn(
+                      "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition hover:bg-slate-200/70",
+                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+                      allBurnUpKeysSelected ? "text-slate-900" : "text-slate-400",
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Layers className="size-3.5" aria-hidden />
+                      All
+                    </span>
+                  </button>
+                  {/* Epic rows */}
+                  {burnUpEpicRows.map((row) => {
+                    const on = burnUpVisibleKeys.includes(row.id);
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => toggleBurnUpKey(row.id)}
+                        className={cn(
+                          "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition hover:bg-slate-200/70",
+                          isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+                          on ? "text-slate-900" : "text-slate-400",
+                        )}
+                      >
+                        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: on ? row.color : "#cbd5e1" }} />
+                        <span className="truncate">{row.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => scrollBurnUpLegendBy(-96)}
+                  className={cn(
+                    "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                    canScrollBurnUpUp && "bg-slate-200/70 text-slate-800",
+                  )}
+                  aria-label="Scroll up burn up legend"
+                >
+                  <ChevronUp className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollBurnUpLegendBy(96)}
+                  className={cn(
+                    "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
+                    canScrollBurnUpDown && "bg-slate-200/70 text-slate-800",
+                  )}
+                  aria-label="Scroll down burn up legend"
+                >
+                  <ChevronDown className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+      )}
     </section>
   );
 }
