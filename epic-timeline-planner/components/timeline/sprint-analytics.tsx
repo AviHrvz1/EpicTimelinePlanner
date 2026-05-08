@@ -71,25 +71,31 @@ const WORKLOAD_LIST_MAX =
 
 function WorkloadXAxisTick({ x, y, payload, teamMode }: { x?: number; y?: number; payload?: { value: string }; teamMode: boolean }) {
   if (x == null || y == null) return null;
-  const iconY = y + 5;
-  const textY = y + 18;
+  const label = payload?.value ?? "";
+  const rowY = y + 10;
+  const estTextWidth = Math.min(label.length * 5.5, 70);
+  const iconWidth = teamMode ? 14 : 9;
+  const totalWidth = iconWidth + 3 + estTextWidth;
+  const startX = -totalWidth / 2;
+  const iconCenterX = startX + iconWidth / 2;
+  const textStartX = startX + iconWidth + 3;
   return (
-    <g>
+    <g transform={`translate(${x}, ${rowY})`}>
       {teamMode ? (
-        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+        <g fill="#94a3b8" transform={`translate(${iconCenterX}, 0)`}>
           <circle cx={-3} cy={0} r={2.2} />
           <path d="M-7 5 Q-7 2 -3 2 Q1 2 1 5" />
           <circle cx={3} cy={0} r={2.2} />
           <path d="M-1 5 Q-1 2 3 2 Q7 2 7 5" />
         </g>
       ) : (
-        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+        <g fill="#94a3b8" transform={`translate(${iconCenterX}, 0)`}>
           <circle cx={0} cy={0} r={2.4} />
           <path d="M-4 5 Q-4 2 0 2 Q4 2 4 5" />
         </g>
       )}
-      <text x={x} y={textY} textAnchor="middle" fill="#64748b" fontSize={11}>
-        {payload?.value}
+      <text x={textStartX} y={2} textAnchor="start" fill="#64748b" fontSize={11} dominantBaseline="middle">
+        {label}
       </text>
     </g>
   );
@@ -187,7 +193,7 @@ type SprintAnalyticsProps = {
   month: number;
   yearSprint: number;
   planYear: number;
-  filterEpicTeamId?: string | null;
+  filterEpicTeamIds?: string[] | null;
   /** When provided, Sprint load matches Sprint capacity board caps and bucket assignments. */
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null;
   /** Users directory rows — merged into assignee rosters for the active team filter. */
@@ -200,7 +206,7 @@ export function SprintAnalytics({
   month,
   yearSprint,
   planYear,
-  filterEpicTeamId = null,
+  filterEpicTeamIds = null,
   sprintCapacityBoard = null,
   workspaceDirectoryUsers = [],
   onOpenStory,
@@ -220,7 +226,7 @@ export function SprintAnalytics({
         yearSprint,
         metric,
         planYear,
-        filterEpicTeamId,
+        filterEpicTeamIds,
         estimateSource,
         sprintCapacityBoard,
         workspaceDirectoryUsers,
@@ -231,7 +237,7 @@ export function SprintAnalytics({
       yearSprint,
       metric,
       planYear,
-      filterEpicTeamId,
+      filterEpicTeamIds,
       estimateSource,
       sprintCapacityBoard,
       workspaceDirectoryUsers,
@@ -291,7 +297,7 @@ export function SprintAnalytics({
       if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
       if (initiative.endMonth < month || initiative.startMonth > month) continue;
       for (const epic of initiative.epics ?? []) {
-        if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+        if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
         for (const story of epic.userStories ?? []) {
           const isInSprint = story.sprint != null && storyMatchesYearSprint(story, month, yearSprint);
           const isUnscheduled = story.sprint == null;
@@ -316,7 +322,7 @@ export function SprintAnalytics({
       }
     }
     return rows;
-  }, [initiatives, month, yearSprint, filterEpicTeamId]);
+  }, [initiatives, month, yearSprint, filterEpicTeamIds]);
 
   const statusDrilldownStories = useMemo(() => {
     if (!statusDrilldownFilter) return [];
@@ -782,8 +788,7 @@ export function SprintAnalytics({
         ) : null}
         {!workloadDrilldownAssignee ? <div className={`min-h-0 flex-1 space-y-2.5 ${workloadView === "stories" ? "overflow-hidden" : WORKLOAD_LIST_MAX}`}>
           {(() => {
-            const isAllTeams = !filterEpicTeamId;
-            const teamMode = isAllTeams && analytics.workloadByTeam.length > 0;
+            const teamMode = (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
             if (workloadView === "stories") {
               const barData = teamMode
                 ? analytics.workloadByTeam.map((t) => ({
@@ -821,7 +826,7 @@ export function SprintAnalytics({
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={42} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={26} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
                         <Tooltip
                           contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}

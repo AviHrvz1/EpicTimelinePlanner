@@ -1473,7 +1473,11 @@ export function TimelineGrid({
   const [isSprintTeamMenuOpen, setIsSprintTeamMenuOpen] = useState(false);
   const [sprintTeamSearch, setSprintTeamSearch] = useState("");
   const sprintTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const [insightsTeamId, setInsightsTeamId] = useState<string | null>(null);
+  const [sprintFilterTeamIds, setSprintFilterTeamIds] = useState<string[]>(() => {
+    const t = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+    return t ? [t] : [];
+  });
+  const [insightsTeamIds, setInsightsTeamIds] = useState<string[]>([]);
   const [isInsightsTeamMenuOpen, setIsInsightsTeamMenuOpen] = useState(false);
   const [insightsTeamSearch, setInsightsTeamSearch] = useState("");
   const insightsTeamMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2407,9 +2411,8 @@ export function TimelineGrid({
     if (monthPlanTab !== "sprint-kanban" || resolvedActiveYearSprint == null) return null;
     const m = sprintBoardContextMonth;
     if (m == null) return null;
-    const teamId = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
-    return computeSprintKanbanSummaryStats(initiatives, m, resolvedActiveYearSprint, teamId);
-  }, [monthPlanTab, initiatives, resolvedActiveYearSprint, sprintBoardContextMonth, sprintStoryBoardTeamId]);
+    return computeSprintKanbanSummaryStats(initiatives, m, resolvedActiveYearSprint, sprintFilterTeamIds.length ? sprintFilterTeamIds : null);
+  }, [monthPlanTab, initiatives, resolvedActiveYearSprint, sprintBoardContextMonth, sprintFilterTeamIds]);
 
   const showSprintEndCountdown =
     activeMonth != null &&
@@ -3184,8 +3187,16 @@ export function TimelineGrid({
   }, [workspaceDirectoryUsers, sprintStoryBoardTeamId]);
   const selectedSprintTeamOption =
     sprintTeamOptions.find((option) => option.value === selectedSprintTeamId) ?? sprintTeamOptions[0];
-  const selectedInsightsTeamOption =
-    sprintTeamOptions.find((option) => option.value === (insightsTeamId ?? "all")) ?? sprintTeamOptions[0];
+  const sprintFilterTeamLabel = sprintFilterTeamIds.length === 0
+    ? "All Teams"
+    : sprintFilterTeamIds.length === 1
+      ? (sprintTeamOptions.find((o) => o.value === sprintFilterTeamIds[0])?.label ?? sprintFilterTeamIds[0])
+      : `${sprintFilterTeamIds.length} teams`;
+  const insightsTeamLabel = insightsTeamIds.length === 0
+    ? "All Teams"
+    : insightsTeamIds.length === 1
+      ? (sprintTeamOptions.find((o) => o.value === insightsTeamIds[0])?.label ?? insightsTeamIds[0])
+      : `${insightsTeamIds.length} teams`;
   const focusedQuarterDisplayName = useMemo(() => {
     if (!focusedQuarter) return "Quarter";
     const ordinals: Record<string, string> = { Q1: "1st Quarter", Q2: "2nd Quarter", Q3: "3rd Quarter", Q4: "4th Quarter" };
@@ -3226,6 +3237,10 @@ export function TimelineGrid({
   useEffect(() => {
     if (!showSprintTeamPicker) setIsSprintTeamMenuOpen(false);
   }, [showSprintTeamPicker]);
+  useEffect(() => {
+    const t = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+    setSprintFilterTeamIds(t ? [t] : []);
+  }, [sprintStoryBoardTeamId]);
   useEffect(() => {
     if (isSprintTeamMenuOpen) {
       setSprintTeamSearch("");
@@ -3559,11 +3574,8 @@ export function TimelineGrid({
                       aria-label="Filter sprint views by team"
                       aria-expanded={isSprintTeamMenuOpen}
                     >
-                      <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-                        {selectedSprintTeamOption.icon}
-                        <span className="truncate">{selectedSprintTeamOption.label}</span>
-                      </span>
-                      <ChevronDown className="size-3.5 text-slate-500" aria-hidden />
+                      <span className="truncate">{sprintFilterTeamLabel}</span>
+                      <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
                     {isSprintTeamMenuOpen ? (
                       <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -3577,23 +3589,39 @@ export function TimelineGrid({
                             className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
-                        {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => {
-                              onSprintStoryBoardTeamChange?.(option.value === "all" ? null : option.value);
-                              setIsSprintTeamMenuOpen(false);
-                            }}
-                            className={cn(
-                              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
-                              selectedSprintTeamId === option.value && "bg-slate-100",
-                            )}
-                          >
-                            {option.icon}
-                            <span>{option.label}</span>
-                          </button>
-                        ))}
+                        {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => {
+                          const isAll = option.value === "all";
+                          const checked = isAll ? sprintFilterTeamIds.length === 0 : sprintFilterTeamIds.includes(option.value);
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                if (isAll) {
+                                  setSprintFilterTeamIds([]);
+                                  onSprintStoryBoardTeamChange?.(null);
+                                } else {
+                                  setSprintFilterTeamIds((prev) => {
+                                    const next = prev.includes(option.value) ? prev.filter((id) => id !== option.value) : [...prev, option.value];
+                                    if (next.length === 1) onSprintStoryBoardTeamChange?.(next[0]);
+                                    else onSprintStoryBoardTeamChange?.(null);
+                                    return next;
+                                  });
+                                }
+                              }}
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                checked && !isAll && "bg-slate-50",
+                              )}
+                            >
+                              <span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border", checked ? "border-slate-700 bg-slate-700" : "border-slate-300 bg-white")}>
+                                {checked ? <Check className="size-2.5 text-white" /> : null}
+                              </span>
+                              {option.icon}
+                              <span>{option.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>
@@ -3613,11 +3641,8 @@ export function TimelineGrid({
                       aria-label="Filter insights by team"
                       aria-expanded={isInsightsTeamMenuOpen}
                     >
-                      <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-                        {selectedInsightsTeamOption.icon}
-                        <span className="truncate">{selectedInsightsTeamOption.label}</span>
-                      </span>
-                      <ChevronDown className="size-3.5 text-slate-500" aria-hidden />
+                      <span className="truncate">{insightsTeamLabel}</span>
+                      <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
                     {isInsightsTeamMenuOpen ? (
                       <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -3631,23 +3656,35 @@ export function TimelineGrid({
                             className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
-                        {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(insightsTeamSearch.toLowerCase())).map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => {
-                              setInsightsTeamId(option.value === "all" ? null : option.value);
-                              setIsInsightsTeamMenuOpen(false);
-                            }}
-                            className={cn(
-                              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
-                              (insightsTeamId ?? "all") === option.value && "bg-slate-100",
-                            )}
-                          >
-                            {option.icon}
-                            <span>{option.label}</span>
-                          </button>
-                        ))}
+                        {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(insightsTeamSearch.toLowerCase())).map((option) => {
+                          const isAll = option.value === "all";
+                          const checked = isAll ? insightsTeamIds.length === 0 : insightsTeamIds.includes(option.value);
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                if (isAll) {
+                                  setInsightsTeamIds([]);
+                                } else {
+                                  setInsightsTeamIds((prev) =>
+                                    prev.includes(option.value) ? prev.filter((id) => id !== option.value) : [...prev, option.value]
+                                  );
+                                }
+                              }}
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                checked && !isAll && "bg-slate-50",
+                              )}
+                            >
+                              <span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border", checked ? "border-slate-700 bg-slate-700" : "border-slate-300 bg-white")}>
+                                {checked ? <Check className="size-2.5 text-white" /> : null}
+                              </span>
+                              {option.icon}
+                              <span>{option.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>
@@ -4731,7 +4768,7 @@ export function TimelineGrid({
                   planYear={currentYear}
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
-                  filterEpicTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
+                  filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
@@ -4781,11 +4818,8 @@ export function TimelineGrid({
                         aria-label="Filter sprint capacity by team"
                         aria-expanded={isSprintTeamMenuOpen}
                       >
-                        <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-                          {selectedSprintTeamOption.icon}
-                          <span className="truncate">{selectedSprintTeamOption.label}</span>
-                        </span>
-                        <ChevronDown className="size-3.5 text-slate-500" aria-hidden />
+                        <span className="truncate">{sprintFilterTeamLabel}</span>
+                        <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                       </button>
                       {isSprintTeamMenuOpen ? (
                         <div className="absolute left-0 top-[calc(100%+0.3rem)] z-[120] w-full min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -4799,23 +4833,39 @@ export function TimelineGrid({
                               className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                             />
                           </div>
-                          {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              onClick={() => {
-                                onSprintStoryBoardTeamChange?.(option.value === "all" ? null : option.value);
-                                setIsSprintTeamMenuOpen(false);
-                              }}
-                              className={cn(
-                                "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
-                                selectedSprintTeamId === option.value && "bg-slate-100",
-                              )}
-                            >
-                              {option.icon}
-                              <span>{option.label}</span>
-                            </button>
-                          ))}
+                          {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => {
+                            const isAll = option.value === "all";
+                            const checked = isAll ? sprintFilterTeamIds.length === 0 : sprintFilterTeamIds.includes(option.value);
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => {
+                                  if (isAll) {
+                                    setSprintFilterTeamIds([]);
+                                    onSprintStoryBoardTeamChange?.(null);
+                                  } else {
+                                    setSprintFilterTeamIds((prev) => {
+                                      const next = prev.includes(option.value) ? prev.filter((id) => id !== option.value) : [...prev, option.value];
+                                      if (next.length === 1) onSprintStoryBoardTeamChange?.(next[0]);
+                                      else onSprintStoryBoardTeamChange?.(null);
+                                      return next;
+                                    });
+                                  }
+                                }}
+                                className={cn(
+                                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-700 hover:bg-slate-100",
+                                  checked && !isAll && "bg-slate-50",
+                                )}
+                              >
+                                <span className={cn("flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border", checked ? "border-slate-700 bg-slate-700" : "border-slate-300 bg-white")}>
+                                  {checked ? <Check className="size-2.5 text-white" /> : null}
+                                </span>
+                                {option.icon}
+                                <span>{option.label}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>
@@ -4837,7 +4887,7 @@ export function TimelineGrid({
                   initiatives={initiatives}
                   month={activeMonth}
                   planYear={currentYear}
-                  filterEpicTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
+                  filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
                   onOpenEpic={onOpenEpic}
                   onOpenStory={onOpenStory ?? (() => {})}
                   onOpenSprintKanban={(yearSprint, teamId) =>
@@ -4855,7 +4905,7 @@ export function TimelineGrid({
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
                   planYear={currentYear}
-                  filterEpicTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
+                  filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
                   sprintCapacityBoard={sprintCapacityBoard}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   onOpenStory={onOpenStory ?? (() => {})}
@@ -5222,7 +5272,7 @@ export function TimelineGrid({
             periodMonths={MONTHS.map((_, i) => i + 1)}
             periodLabel="Year"
             planYear={currentYear}
-            filterEpicTeamId={insightsTeamId}
+            filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
             onOpenEpic={onOpenEpic}
             onOpenStory={onOpenStory ?? (() => {})}
             onOpenSprintKanban={(yearSprint, teamId) =>
@@ -5239,7 +5289,7 @@ export function TimelineGrid({
             periodMonths={[...focusedQuarter.months]}
             periodLabel={focusedQuarter.label}
             planYear={currentYear}
-            filterEpicTeamId={insightsTeamId}
+            filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
             onOpenEpic={onOpenEpic}
             onOpenStory={onOpenStory ?? (() => {})}
             onOpenSprintKanban={(yearSprint, teamId) =>

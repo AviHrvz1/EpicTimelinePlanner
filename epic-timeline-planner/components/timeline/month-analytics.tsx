@@ -88,25 +88,31 @@ const CFD_FLOW_SEGMENTS = [
 
 function WorkloadXAxisTick({ x, y, payload, teamMode }: { x?: number; y?: number; payload?: { value: string }; teamMode: boolean }) {
   if (x == null || y == null) return null;
-  const iconY = y + 5;
-  const textY = y + 18;
+  const label = payload?.value ?? "";
+  const rowY = y + 10;
+  const estTextWidth = Math.min(label.length * 5.5, 70);
+  const iconWidth = teamMode ? 14 : 9;
+  const totalWidth = iconWidth + 3 + estTextWidth;
+  const startX = -totalWidth / 2;
+  const iconCenterX = startX + iconWidth / 2;
+  const textStartX = startX + iconWidth + 3;
   return (
-    <g>
+    <g transform={`translate(${x}, ${rowY})`}>
       {teamMode ? (
-        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+        <g fill="#94a3b8" transform={`translate(${iconCenterX}, 0)`}>
           <circle cx={-3} cy={0} r={2.2} />
           <path d="M-7 5 Q-7 2 -3 2 Q1 2 1 5" />
           <circle cx={3} cy={0} r={2.2} />
           <path d="M-1 5 Q-1 2 3 2 Q7 2 7 5" />
         </g>
       ) : (
-        <g transform={`translate(${x}, ${iconY})`} fill="#94a3b8">
+        <g fill="#94a3b8" transform={`translate(${iconCenterX}, 0)`}>
           <circle cx={0} cy={0} r={2.4} />
           <path d="M-4 5 Q-4 2 0 2 Q4 2 4 5" />
         </g>
       )}
-      <text x={x} y={textY} textAnchor="middle" fill="#64748b" fontSize={11}>
-        {payload?.value}
+      <text x={textStartX} y={2} textAnchor="start" fill="#64748b" fontSize={11} dominantBaseline="middle">
+        {label}
       </text>
     </g>
   );
@@ -417,7 +423,7 @@ type MonthAnalyticsProps = {
   periodMonths?: number[];
   periodLabel?: string;
   planYear: number;
-  filterEpicTeamId?: string | null;
+  filterEpicTeamIds?: string[] | null;
   initialSelectedEpicId?: string;
   initialSelectedInitiativeId?: string;
   onOpenEpic?: (epicId: string) => void;
@@ -519,7 +525,7 @@ function deriveEpicStatus(epic: EpicItem): "Unscheduled" | "To do" | "In progres
 function collectPeriodStories(
   initiatives: InitiativeItem[],
   months: number[],
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
   filterInitiativeId?: string | null,
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
@@ -529,7 +535,7 @@ function collectPeriodStories(
     if (initiative.status !== "scheduled") continue;
     if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
       const endMonth = epic.planEndMonth ?? initiative.endMonth;
       if (startMonth == null || endMonth == null) continue;
@@ -543,7 +549,7 @@ function collectPeriodStories(
 function collectPeriodEpics(
   initiatives: InitiativeItem[],
   months: number[],
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
   filterInitiativeId?: string | null,
 ) {
   const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
@@ -553,7 +559,7 @@ function collectPeriodEpics(
     if (initiative.status !== "scheduled") continue;
     if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
       const endMonth = epic.planEndMonth ?? initiative.endMonth;
       if (startMonth == null || endMonth == null) continue;
@@ -570,7 +576,7 @@ export function MonthAnalytics({
   periodMonths,
   periodLabel,
   planYear,
-  filterEpicTeamId = null,
+  filterEpicTeamIds = null,
   initialSelectedEpicId,
   initialSelectedInitiativeId,
   onOpenEpic,
@@ -604,8 +610,8 @@ export function MonthAnalytics({
   const isQuarterInsights = true;
   // Unfiltered epics for the initiative picker list
   const allScopeEpics = useMemo(
-    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamId),
-    [initiatives, scopeMonths, filterEpicTeamId],
+    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamIds),
+    [initiatives, scopeMonths, filterEpicTeamIds],
   );
   const scopeInitiativeOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -620,12 +626,12 @@ export function MonthAnalytics({
   }, [allScopeEpics]);
   const initiativeFilterId = selectedInitiativeId === "all" ? null : selectedInitiativeId;
   const monthEpics = useMemo(
-    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId),
-    [initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId],
+    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId),
+    [initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId],
   );
   const monthStories = useMemo(
-    () => collectPeriodStories(initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId),
-    [initiatives, scopeMonths, filterEpicTeamId, initiativeFilterId],
+    () => collectPeriodStories(initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId),
+    [initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId],
   );
   const epicComboOptions = useMemo(
     () =>
@@ -907,10 +913,11 @@ export function MonthAnalytics({
       };
     });
 
-    // Team-level aggregation — only when no team filter is active
+    // Team-level aggregation — when 0 or 2+ teams selected (not exactly 1)
+    const showTeamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
     type TeamRow = { teamId: string | null; teamLabel: string; storiesByStatus: { todo: number; inProgress: number; done: number; approved: number }; daysLeftTotal: number; estimatedTotal: number };
     let workloadByTeam: TeamRow[] = [];
-    if (!filterEpicTeamId) {
+    if (showTeamMode) {
       const byTeam = new Map<string, TeamRow>();
       for (const initiative of initiatives) {
         if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
@@ -918,6 +925,7 @@ export function MonthAnalytics({
         if (!overlaps) continue;
         for (const epic of initiative.epics ?? []) {
           const teamId = epic.team ?? null;
+          if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(teamId ?? "")) continue;
           const teamKey = teamId ?? "__unassigned__";
           const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? "Unassigned";
           for (const story of epic.userStories ?? []) {
@@ -956,7 +964,7 @@ export function MonthAnalytics({
     scopeStartMonth,
     scopeEndMonth,
     planYear,
-    filterEpicTeamId,
+    filterEpicTeamIds,
     metric,
     selectedEpicOption,
     selectedWorkloadStatuses,
@@ -2381,7 +2389,7 @@ export function MonthAnalytics({
           </div>
         ) : null}
         {!workloadDrilldownAssignee ? (() => {
-          const teamMode = !filterEpicTeamId && analytics.workloadByTeam.length > 0;
+          const teamMode = (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
           if (workloadView === "stories") {
             const barData = teamMode
               ? analytics.workloadByTeam.map((t) => ({
@@ -2419,7 +2427,7 @@ export function MonthAnalytics({
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={42} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={26} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
                       <Tooltip
                         contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}

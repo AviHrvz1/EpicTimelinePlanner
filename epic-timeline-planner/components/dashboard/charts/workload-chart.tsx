@@ -15,7 +15,7 @@ type Props = {
 
 export function WorkloadChart({ initiatives, year, quarter, sprint, team }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ?? null);
+  const analytics = buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ? [team] : null);
   const data = analytics.workloadByAssignee.map((row) => ({
     name: row.assignee,
     days: row.daysLeftTotal,

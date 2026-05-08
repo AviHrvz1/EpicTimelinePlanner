@@ -1894,7 +1894,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       initiatives,
       sprintCapacityPlanMonth,
       activeYearSprint,
-      sprintTeamFilter,
+      sprintTeamFilter ? [sprintTeamFilter] : null,
     );
     return syncCapacityAssignmentsWithKanban(
       raw,
@@ -1922,7 +1922,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         initiatives,
         sprintCapacityPlanMonth,
         activeYearSprint,
-        sprintTeamFilter,
+        sprintTeamFilter ? [sprintTeamFilter] : null,
       );
       const merged = syncCapacityAssignmentsWithKanban(
         raw,
@@ -3147,7 +3147,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             initiatives,
             sprintCapacityPlanMonth,
             activeYearSprint,
-            teamFilter,
+            teamFilter ? [teamFilter] : null,
           );
           const patches = computeKanbanStoryReorderPatches({
             boardRows,
@@ -3227,7 +3227,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
             ),
           })),
         }));
-        const rows = collectStoriesForSprintBoard(patchedInitiatives, monthForBoard, sprint, teamFilter);
+        const rows = collectStoriesForSprintBoard(patchedInitiatives, monthForBoard, sprint, teamFilter ? [teamFilter] : null);
         collectRows = rows.length;
         storyInCollectRows = rows.some((r) => r.story.id === storyId);
       }

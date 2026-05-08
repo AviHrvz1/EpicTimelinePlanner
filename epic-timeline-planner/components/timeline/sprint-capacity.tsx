@@ -766,7 +766,7 @@ export function SprintCapacityBoard({
   workspaceDirectoryUsers = [],
 }: SprintCapacityBoardProps) {
   /** Same story rows as sprint Kanban for the selected delivery team (or all teams). */
-  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, selectedTeamId);
+  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, selectedTeamId ? [selectedTeamId] : null);
   const storyById = new Map(
     rows.map((row) => [
       row.story.id,

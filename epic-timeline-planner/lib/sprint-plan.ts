@@ -61,7 +61,7 @@ function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
 export function collectMonthScopeEpicsForSprintPanel(
   initiatives: InitiativeItem[],
   month: number,
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
 ): Array<{ epic: EpicItem; initiative: InitiativeItem }> {
   const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
   for (const initiative of initiatives) {
@@ -75,7 +75,7 @@ export function collectMonthScopeEpicsForSprintPanel(
       epicIsOnPlanForMonth(epic, month),
     );
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       const isPlannedInMonth = epicIsOnPlanForMonth(epic, month);
       const isUnscheduled =
         epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
@@ -97,10 +97,10 @@ export function collectStoriesForSprintBoard(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
-  /** When set (e.g. sprint opened from a team lane), only stories under epics assigned to this team. */
-  filterEpicTeamId?: string | null,
+  /** When set, only stories under epics assigned to one of these teams. */
+  filterEpicTeamIds?: string[] | null,
 ): BoardStoryRow[] {
-  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamId);
+  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
   const out: BoardStoryRow[] = [];
   for (const { epic, initiative } of scope) {
     for (const story of epic.userStories ?? []) {
@@ -123,9 +123,9 @@ export function computeSprintKanbanSummaryStats(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
 ): SprintKanbanSummaryStats {
-  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamId);
+  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
   let storyScheduledOnKanban = 0;
   let storyTotal = 0;
   for (const { epic } of scope) {

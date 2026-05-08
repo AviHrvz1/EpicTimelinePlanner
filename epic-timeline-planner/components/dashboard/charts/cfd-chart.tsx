@@ -15,7 +15,7 @@ type Props = {
 
 export function CfdChart({ initiatives, year, quarter, sprint, team }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ?? null);
+  const analytics = buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ? [team] : null);
   const data = analytics.flowSprintTrendData;
 
   return (

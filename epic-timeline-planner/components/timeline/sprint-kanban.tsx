@@ -377,8 +377,8 @@ type SprintKanbanProps = {
   planYear: number;
   month: number;
   yearSprint: number;
-  /** When set, only stories for epics on this delivery team (same as left panel filter). */
-  filterEpicTeamId?: string | null;
+  /** When set, only stories for epics on these delivery teams (same as left panel filter). */
+  filterEpicTeamIds?: string[] | null;
   epicAccordionEmphasis?: { epicId: string; tick: number } | null;
   /** Batch sheen on all visible Kanban cards (e.g. when “Scheduled” summary filter is toggled on). */
   scheduledStoriesEmphasis?: { tick: number } | null;
@@ -398,7 +398,7 @@ export function SprintKanbanBoard({
   planYear,
   month,
   yearSprint,
-  filterEpicTeamId = null,
+  filterEpicTeamIds = null,
   epicAccordionEmphasis = null,
   scheduledStoriesEmphasis = null,
   sprintToolbarEnd = null,
@@ -415,29 +415,31 @@ export function SprintKanbanBoard({
   const showGoToOpenSprint =
     sprintClosed && workTargetSprint != null && workTargetSprint !== yearSprint && onGoToOpenSprint;
   const allRows = useMemo(
-    () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId),
-    [initiatives, month, yearSprint, filterEpicTeamId],
+    () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds),
+    [initiatives, month, yearSprint, filterEpicTeamIds],
   );
+
+  const rosterTeamId = filterEpicTeamIds?.length === 1 ? filterEpicTeamIds[0] : null;
 
   /** Team roster + assignees on visible sprint stories — drives filter chips and assignee autocomplete. */
   const boardStoryAssigneeNames = useMemo(() => {
-    const s = new Set<string>(assigneeMatchRosterForSprintTeam(filterEpicTeamId, workspaceDirectoryUsers));
+    const s = new Set<string>(assigneeMatchRosterForSprintTeam(rosterTeamId, workspaceDirectoryUsers));
     for (const row of allRows) {
       const a = row.story.assignee?.trim();
       if (a) s.add(a);
     }
     return s;
-  }, [allRows, filterEpicTeamId, workspaceDirectoryUsers]);
+  }, [allRows, rosterTeamId, workspaceDirectoryUsers]);
 
   const assigneeOptions = useMemo(() => {
-    const names = new Set<string>(assigneeMatchRosterForSprintTeam(filterEpicTeamId, workspaceDirectoryUsers));
+    const names = new Set<string>(assigneeMatchRosterForSprintTeam(rosterTeamId, workspaceDirectoryUsers));
     for (const row of allRows) names.add(storyAssigneeLabel(row.story));
     return [...names].sort((a, b) => {
       if (a === "Unassigned") return 1;
       if (b === "Unassigned") return -1;
       return a.localeCompare(b, undefined, { sensitivity: "base" });
     });
-  }, [allRows, filterEpicTeamId, workspaceDirectoryUsers]);
+  }, [allRows, rosterTeamId, workspaceDirectoryUsers]);
 
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);
@@ -460,8 +462,8 @@ export function SprintKanbanBoard({
   const allAssigneesSelected =
     assigneeOptions.length > 0 && selectedAssignees.length === assigneeOptions.length;
 
-  /** Assignee avatar circles only when a single delivery team is selected (not “all teams”). */
-  const showAssigneePeopleFilter = filterEpicTeamId != null;
+  /** Assignee avatar circles only when exactly one delivery team is selected. */
+  const showAssigneePeopleFilter = filterEpicTeamIds?.length === 1;
 
   const selectAllAssignees = useCallback(() => {
     setSelectedAssignees((prev) => {

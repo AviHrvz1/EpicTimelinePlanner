@@ -96,14 +96,14 @@ export type SprintAnalyticsData = {
 function collectWorkloadStories(
   initiatives: InitiativeItem[],
   month: number,
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       rows.push(...(epic.userStories ?? []));
     }
   }
@@ -113,11 +113,11 @@ function collectWorkloadStories(
 function collectMonthStories(
   initiatives: InitiativeItem[],
   month: number,
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
   estimateSource: EstimateSource = "auto",
 ): UserStoryItem[] {
   const rows: UserStoryItem[] = [];
-  const epicScope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamId);
+  const epicScope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
   for (const { epic } of epicScope) {
     const stories = epic.userStories ?? [];
     const storySum = epicStoryEstimateDaysSum(epic);
@@ -371,6 +371,7 @@ function buildWorkloadByTeam(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
+  filterTeamIds?: string[] | null,
 ): WorkloadTeamRow[] {
   const emptyStatus = (): WorkloadStoriesByStatus => ({ todo: 0, inProgress: 0, done: 0, approved: 0 });
   const byTeam = new Map<string, WorkloadTeamRow>();
@@ -379,6 +380,7 @@ function buildWorkloadByTeam(
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
       const teamId = epic.team ?? null;
+      if (filterTeamIds?.length && !filterTeamIds.includes(teamId ?? "")) continue;
       const teamKey = teamId ?? "__unassigned__";
       const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? "Unassigned";
       for (const story of epic.userStories ?? []) {
@@ -401,7 +403,7 @@ function buildWorkloadByTeam(
 }
 
 /**
- * Same rules as {@link SprintCapacityBoard} member columns, but respects `filterEpicTeamId` so Insights
+ * Same rules as {@link SprintCapacityBoard} member columns, but respects `filterEpicTeamIds` so Insights
  * sprint load matches Kanban assignee chips when a delivery team filter is active.
  */
 function sprintCapacityVisibleMemberKeys(
@@ -413,12 +415,13 @@ function sprintCapacityVisibleMemberKeys(
     assignments: Record<string, string[]>;
     columnOrder?: string[];
   },
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
   directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): string[] {
-  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId ?? null);
+  const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds ?? null);
   const storyIds = new Set(rows.map((r) => r.story.id));
-  const assigneeRoster = assigneeMatchRosterForSprintTeam(filterEpicTeamId ?? null, directoryUsers);
+  const rosterTeamId = filterEpicTeamIds?.length === 1 ? filterEpicTeamIds[0] : null;
+  const assigneeRoster = assigneeMatchRosterForSprintTeam(rosterTeamId, directoryUsers);
   const memberSet = new Set<string>(assigneeRoster);
   for (const row of rows) {
     const m = sprintCapacityAssigneeBucket(row.story.assignee, assigneeRoster);
@@ -461,7 +464,7 @@ function buildWorkloadCapacityByAssignee(
   planYear: number,
   initiatives: InitiativeItem[],
   capacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
   directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): { workloadCapacityByAssignee: WorkloadCapacityRow[]; workloadSprintCalendarDaysLeft: number } {
   const workloadSprintCalendarDaysLeft = sprintCalendarDaysRemaining(planYear, month, yearSprint);
@@ -513,15 +516,16 @@ function buildWorkloadCapacityByAssignee(
     return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft };
   }
 
-  const boardStoryRows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamId ?? null);
+  const boardStoryRows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds ?? null);
   const storyById = new Map(boardStoryRows.map((r) => [r.story.id, r.story]));
-  const fullRoster = assigneeMatchRosterForSprintTeam(filterEpicTeamId ?? null, directoryUsers);
+  const rosterTeamId = filterEpicTeamIds?.length === 1 ? filterEpicTeamIds[0] : null;
+  const fullRoster = assigneeMatchRosterForSprintTeam(rosterTeamId, directoryUsers);
   const visibleMembers = sprintCapacityVisibleMemberKeys(
     initiatives,
     month,
     yearSprint,
     capacityBoard,
-    filterEpicTeamId,
+    filterEpicTeamIds,
     directoryUsers,
   );
   const visibleSet = new Set(visibleMembers);
@@ -851,15 +855,18 @@ export function buildSprintAnalytics(
   metric: BurndownMetric,
   /** Calendar year for the roadmap view (must match the timeline year, not arbitrary initiative order). */
   planYear: number,
-  filterEpicTeamId?: string | null,
+  filterEpicTeamIds?: string[] | null,
   estimateSource: EstimateSource = "auto",
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): SprintAnalyticsData {
-  const stories = collectMonthStories(initiatives, month, filterEpicTeamId, estimateSource);
-  const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamId);
+  const stories = collectMonthStories(initiatives, month, filterEpicTeamIds, estimateSource);
+  const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamIds);
   const workload = buildWorkloadByAssignee(workloadStories, month, yearSprint);
-  const workloadByTeam = !filterEpicTeamId ? buildWorkloadByTeam(initiatives, month, yearSprint) : [];
+  const isTeamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
+  const workloadByTeam = isTeamMode
+    ? buildWorkloadByTeam(initiatives, month, yearSprint, filterEpicTeamIds?.length ? filterEpicTeamIds : null)
+    : [];
   const capacity = buildWorkloadCapacityByAssignee(
     stories,
     month,
@@ -867,7 +874,7 @@ export function buildSprintAnalytics(
     planYear,
     initiatives,
     sprintCapacityBoard,
-    filterEpicTeamId,
+    filterEpicTeamIds,
     workspaceDirectoryUsers,
   );
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);

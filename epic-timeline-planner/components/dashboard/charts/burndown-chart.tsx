@@ -16,7 +16,7 @@ type Props = {
 
 export function BurndownChart({ initiatives, year, quarter, sprint, metric, team }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric ?? "daysLeft", year, team ?? null);
+  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric ?? "daysLeft", year, team ? [team] : null);
   const data = analytics.burndown;
 
   return (
