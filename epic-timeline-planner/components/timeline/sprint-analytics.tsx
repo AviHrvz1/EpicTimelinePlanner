@@ -771,6 +771,13 @@ export function SprintAnalytics({
                     barCategoryGap="15%"
                     barGap={2}
                     margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
+                    style={{ cursor: "pointer" }}
+                    onClick={(data) => {
+                      const label = data?.activeLabel as string | undefined;
+                      if (!label) return;
+                      const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
+                      if (match) setWorkloadDrilldownAssignee(match.assignee);
+                    }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
@@ -784,6 +791,8 @@ export function SprintAnalytics({
                     {WORKLOAD_BAR_SEGMENTS.map((s) => (
                       <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
                         label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: (v: number) => v > 0 ? v : "" }}
+                        style={{ cursor: "pointer" }}
+                        onClick={(data: { fullName?: string }) => { if (data?.fullName) setWorkloadDrilldownAssignee(data.fullName); }}
                       />
                     ))}
                   </BarChart>
