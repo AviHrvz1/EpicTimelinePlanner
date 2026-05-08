@@ -3,7 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDraggable } from "@dnd-kit/core";
-import { X } from "lucide-react";
+import { Users, X } from "lucide-react";
 
 import {
   type GanttTimelineBarDragData,
@@ -333,6 +333,7 @@ export function EpicPlanTimelineBar({
           <span className="min-w-0 flex-1 truncate">{title}</span>
           {teamAssignmentChip ? (
             <span className={teamAssignmentChip.className} title={teamAssignmentChip.label}>
+              <Users className="mr-1 inline-block size-3 shrink-0 opacity-70" aria-hidden />
               {teamAssignmentChip.label}
             </span>
           ) : null}
