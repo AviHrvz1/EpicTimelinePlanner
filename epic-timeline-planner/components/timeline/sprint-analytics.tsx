@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon, User } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon, User } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -851,55 +851,74 @@ export function SprintAnalytics({
                 </div>
               </div>
             </div>
-          ) : analytics.workloadCapacityByAssignee.length > 0 ? (
-            analytics.workloadCapacityByAssignee.map((row) => {
-              const sprintD = analytics.workloadSprintCalendarDaysLeft;
-              const pct = row.utilizationPct;
-              const capBoard = row.sprintCapacity;
-              const barDenominatorOk = capBoard ? capBoard.capDays > 0 : sprintD > 0;
-              const barW = barDenominatorOk ? Math.min(pct, 100) : capBoard && capBoard.assignedDays > 0 ? 100 : !capBoard && row.daysLeftTotal > 0 ? 100 : 0;
-              const pctRounded = Math.round(pct);
-              const rightMetaLabel = capBoard
-                ? `${capBoard.assignedDays}d assigned · ${capBoard.capDays.toFixed(1)}d cap`
-                : `${row.estimatedTotal}d est · ${row.daysLeftTotal}d left${
-                    sprintD > 0 ? ` · ${sprintD}d left in sprint` : " · sprint ended"
-                  }`;
-              const overByPct = Math.max(0, pctRounded - 100);
-              return (
-                <div key={row.assignee}>
-                  <div className="mb-0.5 flex items-center gap-2 text-[12px] text-slate-700">
-                    <span className="inline-flex w-20 shrink-0 items-center gap-1 truncate font-medium" title={row.assignee}>
-                      <User className="size-3 shrink-0 text-slate-400" aria-hidden />
-                      {row.assignee}
-                    </span>
-                    <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full ring-1 ring-slate-200/80">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-colors",
-                          row.isOverCapacity ? "bg-red-600" : "bg-emerald-500",
-                        )}
-                        style={{ width: `${barW}%` }}
-                        role="presentation"
-                      />
+          ) : analytics.workloadByAssignee.length > 0 ? (
+            <div className="space-y-2">
+              {analytics.workloadByAssignee.map((row) => {
+                const sprintDaysLeft = analytics.workloadSprintCalendarDaysLeft;
+                const estTotal = row.estimatedTotal;
+                const daysLeft = row.daysLeftTotal;
+                const doneDays = Math.max(0, estTotal - daysLeft);
+                const donePct = estTotal > 0 ? Math.round((doneDays / estTotal) * 100) : 100;
+                const atRisk = sprintDaysLeft > 0 && daysLeft > sprintDaysLeft;
+                const sprintEnded = sprintDaysLeft === 0;
+                const initials = row.assignee
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((w) => w[0]?.toUpperCase() ?? "")
+                  .join("");
+                return (
+                  <button
+                    key={row.assignee}
+                    type="button"
+                    onClick={() => setWorkloadDrilldownAssignee(row.assignee)}
+                    className="w-full rounded-lg bg-white px-2.5 py-1.5 text-left transition hover:bg-slate-50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+                        {initials || <User className="size-3" />}
+                      </span>
+                      <div className="w-3/4 min-w-0">
+                        <div className="flex items-center justify-between gap-1.5 mb-1">
+                          <span className="truncate text-[12px] font-semibold text-slate-800">{row.assignee}</span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {atRisk && (
+                              <span
+                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
+                                title={`${daysLeft}d of work left but only ${sprintDaysLeft}d remain in the sprint`}
+                              >
+                                <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
+                                {daysLeft - sprintDaysLeft}d over
+                              </span>
+                            )}
+                            {sprintEnded && daysLeft > 0 && (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200/80">
+                                <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
+                                Ended
+                              </span>
+                            )}
+                            <span className="text-[11px] tabular-nums text-slate-500">{daysLeft}d left · {estTotal}d est</span>
+                          </div>
+                        </div>
+                        <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                          <div
+                            className={cn(
+                              "absolute inset-y-0 left-0 rounded-full transition-all",
+                              atRisk ? "bg-amber-400" : daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400",
+                            )}
+                            style={{ width: `${donePct}%` }}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700">
+                            {donePct}%
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="shrink-0 text-[11px] tabular-nums text-slate-600">
-                      {rightMetaLabel}
-                    </span>
-                  </div>
-                  {barDenominatorOk && pct > 100 ? (
-                    <p className="mt-0.5 text-[11px] font-medium tabular-nums text-red-600">
-                      Overloaded by {overByPct}%
-                    </p>
-                  ) : barDenominatorOk && pct <= 100 ? (
-                    <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
-                      {pctRounded}% {capBoard ? "of personal capacity" : "of sprint time used"}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })
+                  </button>
+                );
+              })}
+            </div>
           ) : (
-            <p className="text-[12px] text-slate-500">No open workload found for this sprint.</p>
+            <p className="text-[12px] text-slate-500">No workload found for this sprint.</p>
           )}
         </div> : null}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">

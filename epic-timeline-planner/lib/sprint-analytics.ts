@@ -51,6 +51,7 @@ export type SprintAnalyticsData = {
     assignee: string;
     openCount: number;
     daysLeftTotal: number;
+    estimatedTotal: number;
     storiesByStatus: WorkloadStoriesByStatus;
   }>;
   workloadMaxDays: number;
@@ -77,6 +78,25 @@ export type SprintAnalyticsData = {
   /** Calendar days remaining in the sprint from today (0 if the sprint has ended). */
   workloadSprintCalendarDaysLeft: number;
 };
+
+/** All sprint stories from scheduled initiatives spanning the month — broader scope than Gantt-planned epics only.
+ * Used for workload/sprint-load to match what the drilldown table shows. */
+function collectWorkloadStories(
+  initiatives: InitiativeItem[],
+  month: number,
+  filterEpicTeamId?: string | null,
+): UserStoryItem[] {
+  const rows: UserStoryItem[] = [];
+  for (const initiative of initiatives) {
+    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
+    if (initiative.endMonth < month || initiative.startMonth > month) continue;
+    for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamId && epic.team !== filterEpicTeamId) continue;
+      rows.push(...(epic.userStories ?? []));
+    }
+  }
+  return rows;
+}
 
 function collectMonthStories(
   initiatives: InitiativeItem[],
@@ -281,7 +301,7 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
   });
   const byAssignee = new Map<
     string,
-    { openCount: number; daysLeftTotal: number; storiesByStatus: WorkloadStoriesByStatus }
+    { openCount: number; daysLeftTotal: number; estimatedTotal: number; storiesByStatus: WorkloadStoriesByStatus }
   >();
   for (const story of sprintStories) {
     const assignee = story.assignee?.trim() || "Unassigned";
@@ -289,12 +309,14 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
       byAssignee.get(assignee) ?? {
         openCount: 0,
         daysLeftTotal: 0,
+        estimatedTotal: 0,
         storiesByStatus: emptyStatus(),
       };
     if (story.status === "todo") row.storiesByStatus.todo += 1;
     else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
     else if (story.status === "done") row.storiesByStatus.done += 1;
     else if (story.status === "approved") row.storiesByStatus.approved += 1;
+    row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
     if (story.status === "todo" || story.status === "inProgress") {
       row.openCount += 1;
       row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
@@ -306,6 +328,7 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
       assignee,
       openCount: v.openCount,
       daysLeftTotal: v.daysLeftTotal,
+      estimatedTotal: v.estimatedTotal,
       storiesByStatus: v.storiesByStatus,
     }))
     .sort((a, b) => b.daysLeftTotal - a.daysLeftTotal || b.openCount - a.openCount || a.assignee.localeCompare(b.assignee));
@@ -789,7 +812,8 @@ export function buildSprintAnalytics(
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): SprintAnalyticsData {
   const stories = collectMonthStories(initiatives, month, filterEpicTeamId, estimateSource);
-  const workload = buildWorkloadByAssignee(stories, month, yearSprint);
+  const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamId);
+  const workload = buildWorkloadByAssignee(workloadStories, month, yearSprint);
   const capacity = buildWorkloadCapacityByAssignee(
     stories,
     month,
