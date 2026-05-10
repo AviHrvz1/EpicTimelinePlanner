@@ -1459,7 +1459,7 @@ export function TimelineGrid({
     }
   }, [capacityLoadBasis]);
   const [showYearSprintChips, setShowYearSprintChips] = useState(false);
-  const [showGanttTeamChips, setShowGanttTeamChips] = useState(true);
+  const [showGanttTeamChips, setShowGanttTeamChips] = useState(false);
   /** When true, year or quarter roadmap Gantt uses fixed sprint column width (column threshold via ResizeObserver). */
   const [yearRoadmapHScroll, setYearRoadmapHScroll] = useState(false);
   /** When true, right panel is narrower than {@link RIGHT_PANEL_MIN_CONTENT_PX} — outer horizontal scroll for full chrome + body. */
