@@ -2604,7 +2604,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
   async function patchEpicQuarterPlan(
     epicId: string,
-    payload: { planSprint: number; planEndSprint: number; planStartMonth: number; planEndMonth: number; timelineRow?: number; planStartDay?: null; planEndDay?: null },
+    payload: { planSprint: number; planEndSprint: number; planStartMonth: number; planEndMonth: number; timelineRow?: number; planStartDay?: number | null; planEndDay?: number | null },
   ) {
     const response = await fetch(`/api/epics/${epicId}`, {
       method: "PATCH",
@@ -3692,9 +3692,17 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
 
       let month: number;
       let planSprint: 1 | 2;
+      let planStartDay: number | null = null;
       let laneIndex: number | undefined;
+      const dayCell = /^epic-plan-day:(\d+):(\d+)$/.exec(overId);
       const epicCell = /^epic-plan:(\d+):([12])$/.exec(overId);
-      if (epicCell) {
+      if (dayCell) {
+        month = Number(dayCell[1]);
+        const day = Number(dayCell[2]);
+        planSprint = day <= 15 ? 1 : 2;
+        planStartDay = day;
+        laneIndex = undefined;
+      } else if (epicCell) {
         month = Number(epicCell[1]);
         const lane = Number(epicCell[2]) as 1 | 2;
         planSprint = lane;
@@ -3806,9 +3814,18 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         rowsChanged,
         movedTimelineRow,
       });
-      flushSync(() => setInitiatives(placementNext));
+      // If a specific start day was picked, stamp it onto the placed epic before committing to state.
+      const patchedNext = planStartDay != null
+        ? placementNext.map((init) => ({
+            ...init,
+            epics: (init.epics ?? []).map((e) =>
+              e.id === epicId ? { ...e, planStartDay } : e,
+            ),
+          }))
+        : placementNext;
+      flushSync(() => setInitiatives(patchedNext));
       const updatedEpic =
-        placementNext.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId) ?? null;
+        patchedNext.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId) ?? null;
 
       try {
         const planPatch: Parameters<typeof patchEpicQuarterPlan>[1] = {
@@ -3817,6 +3834,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           planStartMonth: updatedEpic?.planStartMonth ?? month,
           planEndMonth: updatedEpic?.planEndMonth ?? month,
         };
+        if (planStartDay != null) planPatch.planStartDay = planStartDay;
         if (rowsChanged) {
           planPatch.timelineRow =
             movedTimelineRow ??

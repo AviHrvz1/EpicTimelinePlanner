@@ -1361,6 +1361,24 @@ function SprintPlanDropButton({
   );
 }
 
+/** Day-level drop indicator for the month Gantt header. Aligns with each day column. */
+function DayDropCell({ month, day }: { month: number; day: number }) {
+  const { active } = useDndContext();
+  const { setNodeRef, isOver } = useDroppable({ id: `epic-plan-day:${month}:${day}` });
+  const isEpicDragActive = active ? isEpicPlanDraggableId(String(active.id)) : false;
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "min-w-0 flex-1 basis-0 shrink-0 rounded-sm transition-all",
+        isEpicDragActive ? "h-px bg-slate-300/80" : "h-0 bg-transparent opacity-0",
+        isOver && "h-1 bg-blue-500/90",
+      )}
+      aria-hidden
+    />
+  );
+}
+
 /** Sprint-level drop indicator strip for the all-quarters Gantt header. Uses epic-plan: IDs so
  *  onDragEnd resolves month+lane directly without cursor-X math. */
 function SprintDropCell({ month, lane }: { month: number; lane: 1 | 2 }) {
@@ -4831,9 +4849,17 @@ export function TimelineGrid({
                         </div>
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <SprintDropCell month={activeMonth} lane={1} />
-                      <SprintDropCell month={activeMonth} lane={2} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex w-full min-w-0 gap-1">
+                        {sprintDaysWithWeekday(currentYear, activeMonth, 1).map((_, i) => (
+                          <DayDropCell key={i + 1} month={activeMonth} day={i + 1} />
+                        ))}
+                      </div>
+                      <div className="flex w-full min-w-0 gap-1">
+                        {sprintDaysWithWeekday(currentYear, activeMonth, 2).map((_, i) => (
+                          <DayDropCell key={i + 16} month={activeMonth} day={i + 16} />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>

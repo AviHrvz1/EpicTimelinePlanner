@@ -123,8 +123,8 @@ const epicPlanCollision: CollisionDetection = (args) => {
   const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
   const isMonthTeamCapacityDrop = (id: string) => id.startsWith("month-capacity:");
   const isQuarterTeamCapacityDrop = (id: string) => id.startsWith("quarter-capacity:");
-  /** Timeline column targets — sprint or month cells on the Gantt. */
-  const isTimelineColumn = (id: string) => id.startsWith("epic-plan:") || id.startsWith("month:");
+  /** Timeline column targets — sprint, day, or month cells on the Gantt. */
+  const isTimelineColumn = (id: string) => id.startsWith("epic-plan:") || id.startsWith("epic-plan-day:") || id.startsWith("month:");
   const isDropTarget = (id: string) =>
     isTimelineColumn(id) ||
     id === EPICS_UNPLAN_DROP_ID ||
