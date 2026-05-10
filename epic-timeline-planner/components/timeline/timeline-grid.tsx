@@ -4327,7 +4327,7 @@ export function TimelineGrid({
           <div
             className={cn(
               "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
-              isRailExpanded ? "w-44" : "w-[3.25rem]",
+              isRailExpanded ? "w-56" : "w-[3.25rem]",
             )}
             onMouseLeave={() => {
               console.log("[rail-nav] month rail mouseleave", {
@@ -4367,7 +4367,7 @@ export function TimelineGrid({
                     aria-hidden
                     className={cn(
                       railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
                     Sprint Board
@@ -4395,7 +4395,7 @@ export function TimelineGrid({
                     aria-hidden
                     className={cn(
                       railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
                     {sprintInsightsLabel}
@@ -4422,7 +4422,7 @@ export function TimelineGrid({
                     aria-hidden
                     className={cn(
                       railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
                     Sprint Capacity
@@ -4449,7 +4449,7 @@ export function TimelineGrid({
                     aria-hidden
                     className={cn(
                       railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
                     Sprint Retrospective
@@ -4477,7 +4477,7 @@ export function TimelineGrid({
                     aria-hidden
                     className={cn(
                       railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
                     Epic Plan
@@ -4502,7 +4502,7 @@ export function TimelineGrid({
                     aria-hidden
                     className={cn(
                       railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
                     Team Capacity
@@ -4527,7 +4527,7 @@ export function TimelineGrid({
                     aria-hidden
                     className={cn(
                       railLabelBaseClass,
-                      isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
                     {monthInsightsLabel}
@@ -4542,7 +4542,7 @@ export function TimelineGrid({
           <div
             className={cn(
               "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
-              isRailExpanded ? "w-44" : "w-[3.25rem]",
+              isRailExpanded ? "w-56" : "w-[3.25rem]",
             )}
             onMouseLeave={() => {
               console.log("[rail-nav] quarter rail mouseleave", {
@@ -4572,7 +4572,7 @@ export function TimelineGrid({
                 aria-hidden
                 className={cn(
                   railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                  isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
                 Gantt
@@ -4597,7 +4597,7 @@ export function TimelineGrid({
                 aria-hidden
                 className={cn(
                   railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                  isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
                 {quarterInsightsNode}
@@ -4622,7 +4622,7 @@ export function TimelineGrid({
                 aria-hidden
                 className={cn(
                   railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                  isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
                 {quarterCapacityNode}
@@ -4635,7 +4635,7 @@ export function TimelineGrid({
           <div
             className={cn(
               "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
-              isRailExpanded ? "w-44" : "w-[3.25rem]",
+              isRailExpanded ? "w-56" : "w-[3.25rem]",
             )}
             onMouseLeave={() => setIsRailExpanded(false)}
           >
@@ -4658,7 +4658,7 @@ export function TimelineGrid({
                 aria-hidden
                 className={cn(
                   railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                  isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
                 Gantt
@@ -4683,7 +4683,7 @@ export function TimelineGrid({
                 aria-hidden
                 className={cn(
                   railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                  isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
                 Portfolio Insights
@@ -4708,7 +4708,7 @@ export function TimelineGrid({
                 aria-hidden
                 className={cn(
                   railLabelBaseClass,
-                  isRailExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0",
+                  isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                 )}
               >
                 Portfolio Capacity
