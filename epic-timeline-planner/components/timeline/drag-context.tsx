@@ -123,9 +123,10 @@ const epicPlanCollision: CollisionDetection = (args) => {
   const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
   const isMonthTeamCapacityDrop = (id: string) => id.startsWith("month-capacity:");
   const isQuarterTeamCapacityDrop = (id: string) => id.startsWith("quarter-capacity:");
+  /** Timeline column targets — sprint or month cells on the Gantt. */
+  const isTimelineColumn = (id: string) => id.startsWith("epic-plan:") || id.startsWith("month:");
   const isDropTarget = (id: string) =>
-    id.startsWith("epic-plan:") ||
-    id.startsWith("month:") ||
+    isTimelineColumn(id) ||
     id === EPICS_UNPLAN_DROP_ID ||
     parseEpicBacklogSlotDropId(id) != null ||
     isKanbanTodoDrop(id) ||
@@ -136,10 +137,37 @@ const epicPlanCollision: CollisionDetection = (args) => {
     isQuarterTeamCapacityDrop(id);
   /** Thin insert zones (month epic list + team queue) should win when the pointer is over them. */
   const isNarrowSlot = (id: string) => parseEpicBacklogSlotDropId(id) != null || isMonthTeamSlotDrop(id);
+
   const pointerHits = pointerWithin(args).filter((c) => isDropTarget(String(c.id)));
   const pointerSlotHits = pointerHits.filter((c) => isNarrowSlot(String(c.id)));
   if (pointerSlotHits.length > 0) return pointerSlotHits;
-  if (pointerHits.length > 0) return pointerHits;
+
+  // Non-timeline pointer hits (kanban, capacity, unplan) win by pointer position.
+  const pointerNonTimelineHits = pointerHits.filter((c) => !isTimelineColumn(String(c.id)));
+  if (pointerNonTimelineHits.length > 0) return pointerNonTimelineHits;
+
+  // For timeline columns (month: and epic-plan:): use the bar's LEFT EDGE so the
+  // highlighted cell and drop target track where the epic BAR STARTS, not the cursor.
+  if (args.collisionRect) {
+    const anchorX = args.collisionRect.left;
+    const timelineContainers = args.droppableContainers.filter(
+      (c) => !c.disabled && isTimelineColumn(String(c.id)) && args.droppableRects.get(c.id) != null,
+    );
+    if (timelineContainers.length > 0) {
+      let best: { id: (typeof timelineContainers)[0]["id"]; dist: number; container: (typeof timelineContainers)[0] } | null = null;
+      for (const c of timelineContainers) {
+        const rect = args.droppableRects.get(c.id)!;
+        const inside = anchorX >= rect.left && anchorX <= rect.right;
+        const dist = inside ? 0 : anchorX < rect.left ? rect.left - anchorX : anchorX - rect.right;
+        if (!best || dist < best.dist || (dist === best.dist && rect.left < args.droppableRects.get(best.id)!.left)) {
+          best = { id: c.id, dist, container: c };
+        }
+      }
+      if (best) {
+        return [{ id: best.id, data: { droppableContainer: best.container, value: best.dist } }];
+      }
+    }
+  }
 
   const rectHits = rectIntersection(args).filter((c) => isDropTarget(String(c.id)));
   const rectSlotHits = rectHits.filter((c) => isNarrowSlot(String(c.id)));

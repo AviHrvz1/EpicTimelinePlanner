@@ -1361,6 +1361,25 @@ function SprintPlanDropButton({
   );
 }
 
+/** Sprint-level drop indicator strip for the all-quarters Gantt header. Uses epic-plan: IDs so
+ *  onDragEnd resolves month+lane directly without cursor-X math. */
+function SprintDropCell({ month, lane }: { month: number; lane: 1 | 2 }) {
+  const { active } = useDndContext();
+  const { setNodeRef, isOver } = useDroppable({ id: `epic-plan:${month}:${lane}` });
+  const isEpicDragActive = active ? isEpicPlanDraggableId(String(active.id)) : false;
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "w-full shrink-0 rounded-lg transition-all",
+        isEpicDragActive ? "h-px bg-slate-300/80" : "h-0 bg-transparent opacity-0",
+        isOver && "h-1 bg-blue-500/90",
+      )}
+      aria-hidden
+    />
+  );
+}
+
 type EstimateCoveragePanelTab = "unestimated" | "estimated" | "epicsNoDesc" | "storiesNoDesc";
 
 export function TimelineGrid({
@@ -5737,7 +5756,10 @@ export function TimelineGrid({
                                   </SprintPlanDropButton>
                                 </div>
                               ) : null}
-                              <MonthDropCell month={month} />
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <SprintDropCell month={month} lane={1} />
+                                <SprintDropCell month={month} lane={2} />
+                              </div>
                             </div>
                           ))}
                         </div>
