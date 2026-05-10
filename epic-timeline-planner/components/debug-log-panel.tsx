@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 type LogLevel = "log" | "info" | "warn" | "error";
@@ -98,7 +99,11 @@ export function DebugLogPanel() {
     navigator.clipboard.writeText(text).catch(() => {});
   };
 
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       {/* Toggle button */}
       <button
@@ -177,6 +182,7 @@ export function DebugLogPanel() {
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body,
   );
 }
