@@ -1847,9 +1847,10 @@ export function EpicFormDialog({
                   : undefined
               }
             >
-              <button
-                type="button"
-                className="group flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
+              <div
+                role="button"
+                tabIndex={0}
+                className="group flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
                 onClick={() => {
                   setActivityOpen((wasOpen) => {
                     if (!wasOpen) {
@@ -1859,6 +1860,7 @@ export function EpicFormDialog({
                   });
                 }}
                 aria-expanded={activityOpen}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActivityOpen((wasOpen) => { if (!wasOpen) setActivityPanelHeightPx((h) => Math.min(560, h + 96)); return !wasOpen; }); } }}
               >
                 <span className="flex items-center gap-2 text-base font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
@@ -1903,7 +1905,7 @@ export function EpicFormDialog({
                     </button>
                   </div>
                 ) : null}
-              </button>
+              </div>
 
               {activityOpen ? (
                 <div className="min-h-0 flex-1 overflow-y-auto">
