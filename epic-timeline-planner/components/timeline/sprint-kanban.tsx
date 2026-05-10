@@ -54,11 +54,11 @@ export type SprintKanbanStoryPatch = {
   daysLeft?: number;
 };
 
-const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: LucideIcon }[] = [
-  { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", Icon: ListTodo },
-  { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60", Icon: PlayCircle },
-  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", Icon: CheckCheck },
-  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60", Icon: CheckCircle2 },
+const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; hoverTone: string; Icon: LucideIcon }[] = [
+  { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", hoverTone: "hover:border-slate-300 hover:bg-slate-100/90 hover:shadow-sm", Icon: ListTodo },
+  { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60", hoverTone: "hover:border-blue-300 hover:bg-blue-100/70 hover:shadow-sm hover:shadow-blue-100", Icon: PlayCircle },
+  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", hoverTone: "hover:border-emerald-300 hover:bg-emerald-100/70 hover:shadow-sm hover:shadow-emerald-100", Icon: CheckCheck },
+  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60", hoverTone: "hover:border-violet-300 hover:bg-violet-100/70 hover:shadow-sm hover:shadow-violet-100", Icon: CheckCircle2 },
 ];
 
 function KanbanColumn({
@@ -66,6 +66,7 @@ function KanbanColumn({
   status,
   label,
   tone,
+  hoverTone,
   Icon,
   dropDisabled = false,
   sortableItemIds,
@@ -78,6 +79,7 @@ function KanbanColumn({
   status: StoryStatus;
   label: string;
   tone: string;
+  hoverTone: string;
   Icon: LucideIcon;
   dropDisabled?: boolean;
   /** Draggable ids (`story:board:…`) in column order for vertical sortable. */
@@ -95,8 +97,9 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[24rem] w-full min-w-0 flex-col rounded-xl border p-2 transition",
+        "flex min-h-[24rem] w-full min-w-0 flex-col rounded-xl border p-2 transition-all duration-150",
         tone,
+        hoverTone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
     >
@@ -651,7 +654,7 @@ export function SprintKanbanBoard({
         </div>
       ) : null}
       <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
-        {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => {
+        {KANBAN_COLUMNS.map(({ status, label, tone, hoverTone, Icon }) => {
           const colRows = byStatus.get(status) ?? [];
           const sortableItemIds = colRows.map((r) => storyBoardDraggableId(r.story.id));
           const showEstStats = status === StoryStatus.todo || status === StoryStatus.inProgress;
@@ -668,6 +671,7 @@ export function SprintKanbanBoard({
             status={status}
             label={label}
             tone={tone}
+            hoverTone={hoverTone}
             Icon={Icon}
             dropDisabled={sprintClosed}
             sortableItemIds={sortableItemIds}
