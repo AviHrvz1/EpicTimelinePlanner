@@ -1,10 +1,14 @@
 "use client";
 
-import { Clock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CalendarDays, Clock, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
-import { sprintEndDate } from "@/lib/year-sprint";
+import { sprintEndDate, sprintStartDate, monthLaneFromGlobalSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
+
+const DAY_SHORT = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatRemainder(ms: number): {
   days: number;
@@ -24,8 +28,262 @@ function formatRemainder(ms: number): {
   return { days, hours, minutes, seconds, ended: false };
 }
 
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
+function addDays(date: Date, n: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function SprintTimelinePopup({
+  planYear,
+  yearSprint,
+  onClose,
+}: {
+  planYear: number;
+  yearSprint: number;
+  onClose: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  const close = useCallback(() => {
+    setVisible(false);
+    setTimeout(onClose, 160);
+  }, [onClose]);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [close]);
+
+  const start = sprintStartDate(planYear, yearSprint);
+  const end = sprintEndDate(planYear, yearSprint);
+  const today = new Date();
+  const nowMs = Date.now();
+
+  // Build list of days in sprint
+  const totalMs = end.getTime() - start.getTime();
+  const elapsedMs = Math.max(0, Math.min(totalMs, nowMs - start.getTime()));
+  const progressPct = Math.round((elapsedMs / totalMs) * 100);
+
+  const days: Date[] = [];
+  let cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+  const endDay = new Date(end);
+  endDay.setHours(0, 0, 0, 0);
+  while (cursor <= endDay) {
+    days.push(new Date(cursor));
+    cursor = addDays(cursor, 1);
+  }
+
+  const todayInSprint = days.some((d) => isSameDay(d, today));
+  const { month, lane } = monthLaneFromGlobalSprint(yearSprint);
+
+  const workingDaysLeft = days.filter((d) => {
+    const dow = d.getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const isFutureOrToday = d >= today;
+    return !isWeekend && isFutureOrToday;
+  }).length;
+
+  const totalWorkingDays = days.filter((d) => {
+    const dow = d.getDay();
+    return dow !== 0 && dow !== 6;
+  }).length;
+
+  const formatDateRange = `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${planYear}`;
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      className={cn(
+        "fixed inset-0 z-[9990] flex items-center justify-center p-4 transition-all duration-150",
+        visible ? "opacity-100" : "opacity-0 pointer-events-none",
+      )}
+      onClick={close}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
+
+      {/* Card */}
+      <div
+        className={cn(
+          "relative z-10 w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/5 transition-all duration-150",
+          visible ? "scale-100 translate-y-0" : "scale-[0.97] translate-y-1",
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-50 ring-1 ring-indigo-100">
+              <CalendarDays className="size-5 text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-[16px] font-bold text-slate-800">
+                Sprint {yearSprint}
+                <span className="ml-2 text-slate-400 font-normal">·</span>
+                <span className="ml-2 font-normal text-slate-500">{MONTH_SHORT[month - 1]} {lane === 1 ? "1st half" : "2nd half"}</span>
+              </p>
+              <p className="text-[13px] text-slate-400">{formatDateRange}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            className="flex size-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {/* Progress bar */}
+        <div className="border-b border-slate-100 px-6 py-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[13px] font-medium text-slate-500">Sprint progress</span>
+            <span className="text-[13px] font-bold text-slate-700 tabular-nums">{progressPct}%</span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[12px] text-slate-400">
+            <span>{MONTH_SHORT[start.getMonth()]} {start.getDate()}</span>
+            {todayInSprint && (
+              <span className="font-semibold text-indigo-500">{workingDaysLeft} working day{workingDaysLeft !== 1 ? "s" : ""} left of {totalWorkingDays}</span>
+            )}
+            <span>{MONTH_SHORT[end.getMonth()]} {end.getDate()}</span>
+          </div>
+        </div>
+
+        {/* Day cells */}
+        <div className="px-6 py-5">
+          <div className="flex gap-2">
+            {days.map((day, i) => {
+              const dow = day.getDay();
+              const isWeekend = dow === 0 || dow === 6;
+              const isToday = isSameDay(day, today);
+              const isPast = day < today && !isToday;
+
+              return (
+                <div
+                  key={i}
+                  className="relative flex min-w-0 flex-1 flex-col items-center gap-1.5"
+                >
+                  {/* "Today" label */}
+                  {isToday && (
+                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-bold uppercase tracking-widest text-indigo-500">
+                      Today
+                    </span>
+                  )}
+
+                  {/* Day name */}
+                  <span
+                    className={cn(
+                      "text-[11px] font-semibold",
+                      isWeekend ? "text-slate-300" : isToday ? "text-indigo-500" : isPast ? "text-slate-300" : "text-slate-400",
+                    )}
+                  >
+                    {DAY_SHORT[dow]}
+                  </span>
+
+                  {/* Day number cell */}
+                  <div
+                    className={cn(
+                      "flex w-full items-center justify-center rounded-lg py-2.5 text-[14px] font-bold tabular-nums transition",
+                      isToday
+                        ? "bg-gradient-to-b from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-200 ring-2 ring-indigo-200"
+                        : isPast && !isWeekend
+                          ? "bg-slate-50 text-slate-300"
+                          : isPast && isWeekend
+                            ? "bg-transparent text-slate-200"
+                            : isWeekend
+                              ? "bg-transparent text-slate-300"
+                              : "bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700",
+                    )}
+                  >
+                    {day.getDate()}
+                  </div>
+
+                  {/* Dot indicator */}
+                  <div
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      isToday
+                        ? "bg-indigo-500 shadow-[0_0_5px_2px_rgba(99,102,241,0.4)]"
+                        : isPast && !isWeekend
+                          ? "bg-slate-200"
+                          : "bg-transparent",
+                    )}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Today progress line */}
+          {todayInSprint && (() => {
+            const todayIndex = days.findIndex((d) => isSameDay(d, today));
+            if (todayIndex < 0) return null;
+            const pct = ((todayIndex + 0.5) / days.length) * 100;
+            return (
+              <div className="relative mt-2 h-1 w-full rounded-full bg-slate-100">
+                <div
+                  className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-400"
+                  style={{ width: `${pct}%` }}
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-3 rounded-full bg-indigo-500 ring-2 ring-white shadow"
+                  style={{ left: `${pct}%` }}
+                />
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center gap-5 border-t border-slate-100 bg-slate-50/60 px-6 py-3">
+          <div className="flex items-center gap-2">
+            <div className="size-3 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600" />
+            <span className="text-[12px] text-slate-500">Today</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="size-3 rounded-sm bg-slate-100 ring-1 ring-slate-200" />
+            <span className="text-[12px] text-slate-500">Past</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="size-3 rounded-sm bg-slate-50 ring-1 ring-slate-200" />
+            <span className="text-[12px] text-slate-500">Upcoming</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="size-3 rounded-sm bg-slate-50/50 ring-1 ring-slate-100" />
+            <span className="text-[12px] text-slate-400">Weekend</span>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function SprintEndCountdown({ planYear, yearSprint }: { planYear: number; yearSprint: number }) {
   const [now, setNow] = useState(() => Date.now());
+  const [popupOpen, setPopupOpen] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -36,35 +294,41 @@ export function SprintEndCountdown({ planYear, yearSprint }: { planYear: number;
   const parts = formatRemainder(end.getTime() - now);
 
   return (
-    <div
-      className={cn(
-        "inline-flex h-7 max-w-full shrink-0 items-center gap-1 rounded-full bg-slate-200 px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-slate-300 tabular-nums sm:gap-1.5 sm:px-3 sm:text-[12px]",
-        parts.ended && "text-slate-600",
-      )}
-      title={parts.ended ? "Sprint window has ended" : `Sprint ends ${end.toLocaleString()}`}
-    >
-      <Clock className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
-      <span className="min-w-0 truncate" aria-live="polite">
-        {parts.ended ? (
-          "Sprint ended"
-        ) : (
-          <>
-            <span>{parts.days}d</span>
-            <span className="px-0.5 text-slate-500" aria-hidden>
-              ·
-            </span>
-            <span>{parts.hours}h</span>
-            <span className="px-0.5 text-slate-500" aria-hidden>
-              ·
-            </span>
-            <span>{String(parts.minutes).padStart(2, "0")}m</span>
-            <span className="px-0.5 text-slate-500" aria-hidden>
-              ·
-            </span>
-            <span>{String(parts.seconds).padStart(2, "0")}s</span>
-          </>
+    <>
+      <button
+        type="button"
+        onClick={() => setPopupOpen(true)}
+        className={cn(
+          "inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-slate-200 px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-slate-300 tabular-nums transition hover:bg-slate-300 hover:ring-slate-400 sm:gap-1.5 sm:px-3 sm:text-[12px]",
+          parts.ended && "text-slate-600",
         )}
-      </span>
-    </div>
+        title="View sprint timeline"
+      >
+        <Clock className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+        <span className="min-w-0 truncate" aria-live="polite">
+          {parts.ended ? (
+            "Sprint ended"
+          ) : (
+            <>
+              <span>{parts.days}d</span>
+              <span className="px-0.5 text-slate-500" aria-hidden>·</span>
+              <span>{parts.hours}h</span>
+              <span className="px-0.5 text-slate-500" aria-hidden>·</span>
+              <span>{String(parts.minutes).padStart(2, "0")}m</span>
+              <span className="px-0.5 text-slate-500" aria-hidden>·</span>
+              <span>{String(parts.seconds).padStart(2, "0")}s</span>
+            </>
+          )}
+        </span>
+      </button>
+
+      {popupOpen && (
+        <SprintTimelinePopup
+          planYear={planYear}
+          yearSprint={yearSprint}
+          onClose={() => setPopupOpen(false)}
+        />
+      )}
+    </>
   );
 }

@@ -69,6 +69,9 @@ function KanbanColumn({
   Icon,
   dropDisabled = false,
   sortableItemIds,
+  count,
+  totalEst,
+  totalLeft,
   children,
 }: {
   yearSprint: number;
@@ -79,10 +82,14 @@ function KanbanColumn({
   dropDisabled?: boolean;
   /** Draggable ids (`story:board:…`) in column order for vertical sortable. */
   sortableItemIds: string[];
+  count: number;
+  totalEst?: number;
+  totalLeft?: number;
   children: ReactNode;
 }) {
   const dropId = sprintKanbanDropId(yearSprint, status);
   const { setNodeRef, isOver } = useDroppable({ id: dropId, disabled: dropDisabled });
+  const showStats = totalEst !== undefined && totalLeft !== undefined;
 
   return (
     <div
@@ -93,9 +100,21 @@ function KanbanColumn({
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
     >
-      <div className="mb-2 flex shrink-0 items-center justify-center gap-1.5 pb-1 text-slate-600">
-        <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
-        <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
+      <div className="mb-2 flex shrink-0 flex-col gap-0.5 pb-1">
+        <div className="flex items-center justify-center gap-1.5 text-slate-600">
+          <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+          <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
+          <span className="rounded-full bg-slate-200/80 px-1.5 py-0 text-[10px] font-semibold text-slate-500">
+            {count}
+          </span>
+        </div>
+        {showStats && (
+          <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500">
+            <span title="Total estimate">{totalEst}d est</span>
+            <span className="text-slate-300">·</span>
+            <span title="Total days left">{totalLeft}d left</span>
+          </div>
+        )}
       </div>
       <SortableContext items={sortableItemIds} strategy={verticalListSortingStrategy}>
         <div className="flex flex-col gap-2">{children}</div>
@@ -635,6 +654,13 @@ export function SprintKanbanBoard({
         {KANBAN_COLUMNS.map(({ status, label, tone, Icon }) => {
           const colRows = byStatus.get(status) ?? [];
           const sortableItemIds = colRows.map((r) => storyBoardDraggableId(r.story.id));
+          const showEstStats = status === StoryStatus.todo || status === StoryStatus.inProgress;
+          const totalEst = showEstStats
+            ? colRows.reduce((s, r) => s + (r.story.estimatedDays ?? 0), 0)
+            : undefined;
+          const totalLeft = showEstStats
+            ? colRows.reduce((s, r) => s + (r.story.daysLeft ?? 0), 0)
+            : undefined;
           return (
           <KanbanColumn
             key={status}
@@ -645,6 +671,9 @@ export function SprintKanbanBoard({
             Icon={Icon}
             dropDisabled={sprintClosed}
             sortableItemIds={sortableItemIds}
+            count={colRows.length}
+            totalEst={totalEst}
+            totalLeft={totalLeft}
           >
             {colRows.map((row) => {
               const accordionEmphasis =
