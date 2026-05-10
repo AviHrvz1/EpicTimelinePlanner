@@ -5261,7 +5261,10 @@ export function TimelineGrid({
                             </span>
                           </button>
                         </div>
-                        <MonthDropCell month={month} />
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <SprintDropCell month={month} lane={1} />
+                          <SprintDropCell month={month} lane={2} />
+                        </div>
                       </div>
                     ))}
                   </div>
