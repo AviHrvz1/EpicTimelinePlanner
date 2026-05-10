@@ -4164,10 +4164,10 @@ export function TimelineGrid({
                   >
                     {sprintKanbanSummaryStats.epicCount} Epics
                   </button>
-                  <div className={summaryChipUnscheduledClass}>
-                    <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
-                    <span className="hidden sm:inline">User Stories Unscheduled</span>
-                    <span className="sm:hidden">US Unsch.</span>
+                  <div className={summaryChipStoriesClass}>
+                    <span className="truncate">{sprintKanbanSummaryStats.storyScheduledOnKanban}</span>
+                    <span className="hidden sm:inline">User Stories</span>
+                    <span className="sm:hidden">Stories</span>
                   </div>
                   <button
                     type="button"
@@ -4193,13 +4193,12 @@ export function TimelineGrid({
                     <span className="hidden sm:inline">Epic Estimated</span>
                     <span className="sm:hidden">Estimated</span>
                   </button>
-                  <div className={summaryChipStoriesClass}>
-                    <span className="truncate">{sprintKanbanSummaryStats.storyTotal}</span>
-                    <span className="hidden sm:inline">User Stories</span>
-                    <span className="sm:hidden">Stories</span>
+                  <div className={summaryChipUnscheduledClass}>
+                    <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
+                    <span className="hidden sm:inline">User Stories Unscheduled</span>
+                    <span className="sm:hidden">US Unsch.</span>
                   </div>
-                  {showSprintEndCountdown &&
-                  activeYearSprintForMonthDrill != null ? (
+                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
                 </>
