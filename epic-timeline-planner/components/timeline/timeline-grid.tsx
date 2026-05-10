@@ -2619,6 +2619,7 @@ export function TimelineGrid({
       const barWidth = barEl.getBoundingClientRect().width;
       const stepWidthPx = barWidth / spanSteps;
 
+      console.log("[epic-resize] start", { epicId, side, ss0, es0, qLo, qHi, spanSteps, stepWidthPx, barWidth });
       setEpicResizePreview({ epicId, side, deltaSteps: 0 });
 
       function onPointerMove(e: PointerEvent) {
@@ -2639,11 +2640,14 @@ export function TimelineGrid({
         handle.removeEventListener("pointercancel", onPointerUp);
         const deltaPx = e.clientX - startX;
         const deltaSteps = Math.round(deltaPx / stepWidthPx);
+        console.log("[epic-resize] pointerUp", { epicId, side, deltaPx, deltaSteps, ss0, es0, qLo, qHi });
         if (deltaSteps !== 0) {
           if (side === "right") {
             const nextEndSprint = Math.min(qHi, Math.max(ss0, es0 + deltaSteps));
+            console.log("[epic-resize] commit right", { nextEndSprint, changed: nextEndSprint !== es0 });
             if (nextEndSprint !== es0) {
               const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(ss0, nextEndSprint);
+              console.log("[epic-resize] calling commitResize right", { epicId, sm, em, ss0, nextEndSprint });
               commitResize(epicId, {
                 startMonth: sm,
                 endMonth: em,
@@ -2653,8 +2657,10 @@ export function TimelineGrid({
             }
           } else {
             const nextStartSprint = Math.max(qLo, Math.min(es0, ss0 + deltaSteps));
+            console.log("[epic-resize] commit left", { nextStartSprint, changed: nextStartSprint !== ss0 });
             if (nextStartSprint !== ss0) {
               const { startMonth: sm, endMonth: em } = monthRangeFromYearSprintRange(nextStartSprint, es0);
+              console.log("[epic-resize] calling commitResize left", { epicId, sm, em, nextStartSprint, es0 });
               commitResize(epicId, {
                 startMonth: sm,
                 endMonth: em,
@@ -2663,6 +2669,8 @@ export function TimelineGrid({
               });
             }
           }
+        } else {
+          console.log("[epic-resize] no-op: deltaSteps === 0");
         }
         setEpicResizePreview(null);
       }

@@ -69,6 +69,7 @@ import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, QUARTERS } from
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
+import { DebugLogPanel } from "@/components/debug-log-panel";
 import {
   SPRINT_CAPACITY_OTHER_BUCKET,
   SPRINT_CAPACITY_STORAGE_KEY,
@@ -4756,9 +4757,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                   }
                 }}
                 onResizeEpicPlanRange={async (epicId, range) => {
+                  console.log("[onResizeEpicPlanRange] called", { epicId, range });
                   const before = initiatives;
                   const target = before.flatMap((initiative) => initiative.epics ?? []).find((epic) => epic.id === epicId);
-                  if (!target) return;
+                  if (!target) { console.warn("[onResizeEpicPlanRange] epic not found", { epicId }); return; }
                   const overlaps = (aS: number, aE: number, bS: number, bE: number) => !(aE < bS || bE < aS);
                   let nextTimelineRow = Number.isFinite(target.timelineRow) ? target.timelineRow : 0;
                   const scheduledOthers = before
@@ -4804,18 +4806,22 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                         : epic,
                     ),
                   }));
+                  console.log("[onResizeEpicPlanRange] applying", { epicId, range, nextTimelineRow, rowMoved: nextTimelineRow !== (Number.isFinite(target.timelineRow) ? target.timelineRow : 0) });
                   setInitiatives(after);
                   try {
-                    await patchEpicQuarterPlan(epicId, {
+                    const patch = {
                       planSprint: laneFromYearSprint(range.startYearSprint),
                       planEndSprint: laneFromYearSprint(range.endYearSprint),
                       planStartMonth: range.startMonth,
                       planEndMonth: range.endMonth,
                       timelineRow: nextTimelineRow,
-                      planStartDay: null,
-                      planEndDay: null,
-                    });
+                      planStartDay: null as null,
+                      planEndDay: null as null,
+                    };
+                    console.log("[onResizeEpicPlanRange] PATCH", { epicId, patch });
+                    await patchEpicQuarterPlan(epicId, patch);
                     await persistEpicTimelineRowPatches(before, after);
+                    console.log("[onResizeEpicPlanRange] success");
                     toast.success("Approved", {
                       description: "The epic timeline was adjusted and saved.",
                     });
@@ -5319,6 +5325,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
           </div>
         </div>
       ) : null}
+      <DebugLogPanel />
     </DragContext>
   );
 }
