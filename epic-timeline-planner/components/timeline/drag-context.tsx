@@ -146,16 +146,19 @@ const epicPlanCollision: CollisionDetection = (args) => {
   const pointerNonTimelineHits = pointerHits.filter((c) => !isTimelineColumn(String(c.id)));
   if (pointerNonTimelineHits.length > 0) return pointerNonTimelineHits;
 
-  // For timeline columns (month: and epic-plan:): use the bar's LEFT EDGE so the
-  // highlighted cell and drop target track where the epic BAR STARTS, not the cursor.
+  // For timeline columns: use the bar's LEFT EDGE to pick the target cell.
+  // Two-pass: prefer specific sprint/day cells (epic-plan: / epic-plan-day:) over the broad
+  // month wrapper (month:) so MonthEpicDropArea never steals a drop from SprintDropCell/DayDropCell.
   if (args.collisionRect) {
     const anchorX = args.collisionRect.left;
-    const timelineContainers = args.droppableContainers.filter(
-      (c) => !c.disabled && isTimelineColumn(String(c.id)) && args.droppableRects.get(c.id) != null,
-    );
-    if (timelineContainers.length > 0) {
-      let best: { id: (typeof timelineContainers)[0]["id"]; dist: number; container: (typeof timelineContainers)[0] } | null = null;
-      for (const c of timelineContainers) {
+    const isSpecificCell = (id: string) => id.startsWith("epic-plan:") || id.startsWith("epic-plan-day:");
+    const isMonthWrapper = (id: string) => id.startsWith("month:");
+
+    function bestByAnchor(
+      containers: typeof args.droppableContainers,
+    ): { id: (typeof containers)[0]["id"]; dist: number; container: (typeof containers)[0] } | null {
+      let best: { id: (typeof containers)[0]["id"]; dist: number; container: (typeof containers)[0] } | null = null;
+      for (const c of containers) {
         const rect = args.droppableRects.get(c.id)!;
         const inside = anchorX >= rect.left && anchorX <= rect.right;
         const dist = inside ? 0 : anchorX < rect.left ? rect.left - anchorX : anchorX - rect.right;
@@ -163,9 +166,25 @@ const epicPlanCollision: CollisionDetection = (args) => {
           best = { id: c.id, dist, container: c };
         }
       }
-      if (best) {
-        return [{ id: best.id, data: { droppableContainer: best.container, value: best.dist } }];
-      }
+      return best;
+    }
+
+    // Pass 1: sprint/day cells only
+    const specificContainers = args.droppableContainers.filter(
+      (c) => !c.disabled && isSpecificCell(String(c.id)) && args.droppableRects.get(c.id) != null,
+    );
+    if (specificContainers.length > 0) {
+      const best = bestByAnchor(specificContainers);
+      if (best) return [{ id: best.id, data: { droppableContainer: best.container, value: best.dist } }];
+    }
+
+    // Pass 2: month wrapper fallback (all-quarters / single-quarter where no sprint cells exist)
+    const monthContainers = args.droppableContainers.filter(
+      (c) => !c.disabled && isMonthWrapper(String(c.id)) && args.droppableRects.get(c.id) != null,
+    );
+    if (monthContainers.length > 0) {
+      const best = bestByAnchor(monthContainers);
+      if (best) return [{ id: best.id, data: { droppableContainer: best.container, value: best.dist } }];
     }
   }
 
