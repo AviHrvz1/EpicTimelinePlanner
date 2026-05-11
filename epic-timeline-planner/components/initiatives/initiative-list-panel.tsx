@@ -1515,19 +1515,16 @@ function SprintEpicCard({
       </div>
       {isOpen ? (
         <div className="mt-2 ml-8 space-y-1 font-sans">
-          {stories.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">No user stories.</p>
-          ) : (
-            stories.map((story) => {
-              const meta = storyStatusMeta(story, planContextMonth);
-              const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
-              const assigneeName = storyAssigneeDisplayName(story);
-              const resolvedStorySprint =
-                planContextMonth == null ? story.sprint : resolveStoryYearSprint(story, planContextMonth);
-              const isScheduledInActiveSprint =
-                activeYearSprint != null &&
-                resolvedStorySprint != null &&
-                resolvedStorySprint === activeYearSprint;
+          {stories.map((story) => {
+            const meta = storyStatusMeta(story, planContextMonth);
+            const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
+            const assigneeName = storyAssigneeDisplayName(story);
+            const resolvedStorySprint =
+              planContextMonth == null ? story.sprint : resolveStoryYearSprint(story, planContextMonth);
+            const isScheduledInActiveSprint =
+              activeYearSprint != null &&
+              resolvedStorySprint != null &&
+              resolvedStorySprint === activeYearSprint;
               /** Drag handle hidden only while someone is assigned; clearing assignee (capacity X) restores drag. */
               const showActiveSprintAssignedIcon = isScheduledInActiveSprint && assigneeName != null;
               const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
@@ -1586,8 +1583,7 @@ function SprintEpicCard({
                   </div>
                 </div>
               );
-            })
-          )}
+          })}
           <div className="mt-1 flex items-center gap-1">
             <input
               type="text"
