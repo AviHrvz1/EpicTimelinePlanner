@@ -719,6 +719,11 @@ type InitiativeListPanelProps = {
   /** Optional action to hide this entire left panel. */
   onHidePanel?: () => void;
   /**
+   * When true, enable epic plan drag handles even if `isSprintModeActive` is true.
+   * Used for month epic-gantt tab where the user should be able to drag unscheduled epics onto the month Gantt.
+   */
+  isOnEpicGanttTab?: boolean;
+  /**
    * Users directory (and derived custom teams) — merged into the Epics “All teams” filter with Platform /
    * Experience / Data.
    */
@@ -1727,6 +1732,7 @@ export function InitiativeListPanel({
   panelStatusQuickFilter = null,
   onHidePanel,
   workspaceDirectoryUsers = [],
+  isOnEpicGanttTab = false,
 }: InitiativeListPanelProps) {
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
@@ -1744,7 +1750,18 @@ export function InitiativeListPanel({
   const epicPlanPanelMode =
     useEpicPlanLeftPanel === undefined ? activeMonth != null : useEpicPlanLeftPanel;
   const epicListScopeMonth = epicPlanPanelMode ? activeMonth : null;
-  const epicPlanDragEnabled = !isSprintModeActive;
+  const epicPlanDragEnabled = !isSprintModeActive || isOnEpicGanttTab;
+
+  const [newestEpicId, setNewestEpicId] = useState<string | null>(null);
+  const prevAllEpicIdsRef = useRef<Set<string>>(
+    new Set(initiatives.flatMap((i) => (i.epics ?? []).map((e) => e.id))),
+  );
+  useEffect(() => {
+    const currentIds = new Set(initiatives.flatMap((i) => (i.epics ?? []).map((e) => e.id)));
+    const newId = [...currentIds].find((id) => !prevAllEpicIdsRef.current.has(id)) ?? null;
+    prevAllEpicIdsRef.current = currentIds;
+    if (newId) setNewestEpicId(newId);
+  }, [initiatives]);
 
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
   const [monthEpicOpenIds, setMonthEpicOpenIds] = useState<Record<string, boolean>>({});
@@ -2056,14 +2073,21 @@ export function InitiativeListPanel({
   }, [monthPanelEpics, planAnchorMonth, epicBacklogOrderByMonth]);
   const filteredMonthBacklogEpics = useMemo(() => {
     const q = epicSearch.trim().toLowerCase();
-    if (!q) return monthPanelEpicsFiltered;
-    return monthPanelEpicsFiltered.filter(
-      ({ epic, initiative }) =>
-        epic.title.toLowerCase().includes(q) ||
-        initiative.title.toLowerCase().includes(q) ||
-        (epic.userStories ?? []).some((s) => s.title.toLowerCase().includes(q)),
-    );
-  }, [monthPanelEpicsFiltered, epicSearch]);
+    const base = q
+      ? monthPanelEpicsFiltered.filter(
+          ({ epic, initiative }) =>
+            epic.title.toLowerCase().includes(q) ||
+            initiative.title.toLowerCase().includes(q) ||
+            (epic.userStories ?? []).some((s) => s.title.toLowerCase().includes(q)),
+        )
+      : monthPanelEpicsFiltered;
+    if (!newestEpicId) return base;
+    const newestIdx = base.findIndex(({ epic }) => epic.id === newestEpicId);
+    if (newestIdx <= 0) return base;
+    const result = [...base];
+    result.unshift(...result.splice(newestIdx, 1));
+    return result;
+  }, [monthPanelEpicsFiltered, epicSearch, newestEpicId]);
 
   const epicSearchSuggestionsList = useMemo(() => {
     const titles = monthPanelEpicsFiltered
