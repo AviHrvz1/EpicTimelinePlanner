@@ -1382,13 +1382,23 @@ function SprintEpicCard({
     id: backlogDropSlot ? epicBacklogSlotDropId(backlogDropSlot.month, backlogDropSlot.index) : `epic-card:${epic.id}`,
     disabled: !backlogDropSlot || isTimelineEpicDragActive,
   });
-  const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+  const [isOpenLocal, setIsOpenLocal] = useState(false);
+  const [storyTitle, setStoryTitle] = useState("");
+  const [isAddingStory, setIsAddingStory] = useState(false);
+  const [hintStoryId, setHintStoryId] = useState<string | null>(null);
+  const [newestStoryId, setNewestStoryId] = useState<string | null>(null);
+  const allStories = epic.userStories ?? [];
+  const prevStoryIdsRef = useRef<Set<string>>(new Set(allStories.map((s) => s.id)));
+  const stories = [...allStories].sort((a, b) => {
+    if (a.id === newestStoryId) return 1;
+    if (b.id === newestStoryId) return -1;
+    return a.title.localeCompare(b.title);
+  });
   const epicPlanStatus = epicPlanningStatusMeta(epic);
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
   const completion = epicCompletionMeta(epic);
   const isEpicScheduledOnGantt =
     epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
-  const [isOpenLocal, setIsOpenLocal] = useState(false);
   const isOpen = isOpenControlled ?? isOpenLocal;
   function handleToggle() {
     if (onToggleControlled) {
@@ -1402,10 +1412,6 @@ function SprintEpicCard({
       });
     }
   }
-  const [storyTitle, setStoryTitle] = useState("");
-  const [isAddingStory, setIsAddingStory] = useState(false);
-  const [hintStoryId, setHintStoryId] = useState<string | null>(null);
-  const prevStoryIdsRef = useRef<Set<string>>(new Set(stories.map((s) => s.id)));
 
   useEffect(() => {
     const currentIds = new Set(stories.map((s) => s.id));
@@ -1413,6 +1419,7 @@ function SprintEpicCard({
     prevStoryIdsRef.current = currentIds;
     if (!newId) return;
     setHintStoryId(newId);
+    setNewestStoryId(newId);
     const t = setTimeout(() => setHintStoryId(null), 4200);
     return () => clearTimeout(t);
   }, [stories]);
