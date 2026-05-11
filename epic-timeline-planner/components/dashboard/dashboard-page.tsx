@@ -151,8 +151,8 @@ export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceD
               }}
               className={`inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] ${
                 d.id === activeDashboardId
-                  ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
-                  : "bg-gradient-to-br from-blue-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40"
+                  ? "bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 text-white ring-blue-500/75 shadow-sm hover:from-blue-500 hover:via-blue-600 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
+                  : "bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-900 ring-blue-300/75 hover:from-blue-300 hover:via-blue-400 hover:to-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40"
               }`}
             >
               {d.name}
