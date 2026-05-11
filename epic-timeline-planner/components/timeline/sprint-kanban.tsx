@@ -138,7 +138,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[24rem] w-full min-w-0 flex-col rounded-xl border p-2 transition-all duration-150",
+        "flex min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-col rounded-xl border p-2 transition-all duration-150",
         tone,
         hoverTone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",

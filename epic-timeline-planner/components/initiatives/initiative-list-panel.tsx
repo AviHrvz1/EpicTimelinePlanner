@@ -59,7 +59,7 @@ import { resolveStoryYearSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
 
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
-  if (epic.planSprint == null || epic.planStartMonth == null || epic.planEndMonth == null) return false;
+  if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
 }
 
@@ -994,8 +994,7 @@ function InitiativeTreeEpicRow({
                   </span>
                   <input
                     type="text"
-                    name={`tree-quick-story-${epic.id}`}
-                    autoComplete="off"
+                    autoComplete="new-password"
                     autoCorrect="off"
                     autoCapitalize="off"
                     spellCheck={false}
@@ -1004,6 +1003,8 @@ function InitiativeTreeEpicRow({
                     data-bwignore="true"
                     data-form-type="other"
                     data-protonpass-ignore="true"
+                    data-dashlane-ignored="true"
+                    data-keeper-ignored="true"
                     value={storyTitle}
                     onChange={(event) => setStoryTitle(event.target.value)}
                     onKeyDown={(event) => {
@@ -1590,8 +1591,7 @@ function SprintEpicCard({
           <div className="mt-1 flex items-center gap-1">
             <input
               type="text"
-              name={`month-quick-story-${epic.id}`}
-              autoComplete="off"
+              autoComplete="new-password"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
@@ -1600,6 +1600,8 @@ function SprintEpicCard({
               data-bwignore="true"
               data-form-type="other"
               data-protonpass-ignore="true"
+              data-dashlane-ignored="true"
+              data-keeper-ignored="true"
               value={storyTitle}
               onChange={(event) => setStoryTitle(event.target.value)}
               onKeyDown={(event) => {
@@ -2079,10 +2081,16 @@ export function InitiativeListPanel({
         if (!initiativeMatch && !epicMatch && !storyMatch) return false;
       }
       if (!panelQuarterFilters.includes("all")) {
-        if (
-          initiative.startMonth == null ||
-          !panelQuarterFilters.includes(quarterFromMonth(initiative.startMonth) as "Q1" | "Q2" | "Q3" | "Q4")
-        ) {
+        const initiativeQuarter =
+          initiative.startMonth != null
+            ? (quarterFromMonth(initiative.startMonth) as "Q1" | "Q2" | "Q3" | "Q4")
+            : null;
+        const hasEpicInQuarter = (initiative.epics ?? []).some(
+          (epic) =>
+            epic.planStartMonth != null &&
+            panelQuarterFilters.includes(quarterFromMonth(epic.planStartMonth) as "Q1" | "Q2" | "Q3" | "Q4"),
+        );
+        if (!hasEpicInQuarter && (initiativeQuarter == null || !panelQuarterFilters.includes(initiativeQuarter))) {
           return false;
         }
       }
