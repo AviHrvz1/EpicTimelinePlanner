@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 
-const epicTeamIdSchema = z.enum(["platform", "experience", "data", "mobile", "growth"]);
+const epicTeamIdSchema = z.string().trim().min(1).max(64);
 
 const updateEpicSchema = z.object({
   title: z.string().trim().min(2).max(120).optional(),

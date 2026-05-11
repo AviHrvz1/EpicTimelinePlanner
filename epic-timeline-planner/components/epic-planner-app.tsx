@@ -3493,11 +3493,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           toast.message("Switch the roadmap year to update that month’s team capacity.");
           return;
         }
-        const inMonth = collectMonthEpicsForTeamBoard(initiatives, teamCapacityDrop.month).some(
-          (c) => c.epic.id === epicId,
-        );
+        const month = teamCapacityDrop.month;
+        const inMonth = collectMonthEpicsForTeamBoard(initiatives, month).some((c) => c.epic.id === epicId);
         if (!inMonth) {
-          record("epic:month-team-capacity-epic-not-in-month", { epicId, month: teamCapacityDrop.month });
+          record("epic:month-team-capacity-epic-not-in-month", { epicId, month });
           toast.message("Only epics tied to this month can be assigned to team capacity.");
           return;
         }
@@ -4553,7 +4552,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
                       isSprintModeActive={isSprintModeActive}
                       isOnEpicGanttTab={activeMonthPlanTab === "epic-gantt"}
-                      isCapacityPlanningMode={activeMonthPlanTab === "sprint-capacity"}
+                      isCapacityPlanningMode={
+                        activeMonthPlanTab === "sprint-capacity" ||
+                        activeMonthPlanTab === "month-capacity" ||
+                        activeQuarterViewTab === "capacity"
+                      }
                       onCreateInitiativeQuick={async (title) => {
                         try {
                           const id = await createInitiativeQuick(title);
@@ -4607,8 +4610,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                           ? (teamId) => setSprintStoryBoardTeamId(teamId)
                           : undefined
                       }
-                      panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
-                      panelQuarterFilterLocked={focusedQuarterLabel != null && activeTimelineMonth == null}
+                      panelQuarterQuickFilter={activeTimelineMonth == null ? null : (focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null)}
+                      panelQuarterFilterLocked={false}
                       onInitiativeAccordionChange={handleInitiativeAccordionChange}
                       onEpicAccordionChange={(epicId, isOpen) => {
                         if (!isOpen) return;

@@ -51,24 +51,32 @@ export function collectQuarterEpics(
 ): QuarterEpicRow[] {
   const qStart = quarterMonths[0];
   const qEnd = quarterMonths[quarterMonths.length - 1];
-  const rows: QuarterEpicRow[] = [];
+  const byEpicId = new Map<string, QuarterEpicRow>();
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled") continue;
-    if (initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (!overlapRange(initiative.startMonth, initiative.endMonth, qStart, qEnd)) continue;
-    for (const epic of initiative.epics ?? []) {
+    const epics = initiative.epics ?? [];
+    const initiativeSpansQuarter =
+      initiative.status === "scheduled" &&
+      initiative.startMonth != null &&
+      initiative.endMonth != null &&
+      overlapRange(initiative.startMonth, initiative.endMonth, qStart, qEnd);
+    const initiativeHasPlannedEpicInQuarter = epics.some(
+      (e) =>
+        e.planStartMonth != null &&
+        e.planEndMonth != null &&
+        overlapRange(e.planStartMonth, e.planEndMonth, qStart, qEnd),
+    );
+    for (const epic of epics) {
       const epicHasPlan =
         epic.planStartMonth != null &&
         epic.planEndMonth != null &&
         overlapRange(epic.planStartMonth, epic.planEndMonth, qStart, qEnd);
-      // Keep visible quarter initiatives useful: include explicitly planned epics
-      // and epics without a specific month plan yet.
-      if (epicHasPlan || (epic.planStartMonth == null && epic.planEndMonth == null)) {
-        rows.push({ epic, initiative });
-      }
+      const isUnscheduled =
+        epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
+      if (!epicHasPlan && !(isUnscheduled && (initiativeSpansQuarter || initiativeHasPlannedEpicInQuarter))) continue;
+      byEpicId.set(epic.id, { epic, initiative });
     }
   }
-  return rows.sort((a, b) => {
+  return [...byEpicId.values()].sort((a, b) => {
     const byInit = a.initiative.title.localeCompare(b.initiative.title);
     if (byInit !== 0) return byInit;
     return a.epic.title.localeCompare(b.epic.title);

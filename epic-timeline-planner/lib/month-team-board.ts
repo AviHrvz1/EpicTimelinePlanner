@@ -90,8 +90,13 @@ export function epicDeliveryTeamAssignmentChip(teamId: string | null | undefined
   }
   const raw = teamId?.trim();
   if (raw) {
+    const label = raw
+      .split("-")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
     return {
-      label: raw,
+      label,
       className:
         "inline-flex max-w-[7rem] shrink-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-medium leading-none text-slate-700 ring-1 ring-slate-200/80",
     };
@@ -112,21 +117,35 @@ export function emptyMonthTeamBoard(): MonthTeamBoardPersisted {
   return { queues: {} };
 }
 
-/** Epics whose initiative spans this roadmap month (same scope as month epic list). */
+function epicSpansMonth(epic: EpicItem, month: number): boolean {
+  if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
+  return epic.planStartMonth <= month && epic.planEndMonth >= month;
+}
+
+/** Epics visible in the month panel — mirrors the inclusion logic of monthAssignedEpics in the panel. */
 export function collectMonthEpicsForTeamBoard(
   initiatives: InitiativeItem[],
   month: number,
 ): Array<{ epic: EpicItem; initiative: InitiativeItem }> {
-  const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+  const byEpicId = new Map<string, { epic: EpicItem; initiative: InitiativeItem }>();
   for (const initiative of initiatives) {
-    if (initiative.status !== InitiativeStatus.scheduled) continue;
-    if (initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
-    for (const epic of initiative.epics ?? []) {
-      rows.push({ epic, initiative });
+    const epics = initiative.epics ?? [];
+    const initiativeSpansMonth =
+      initiative.status === InitiativeStatus.scheduled &&
+      initiative.startMonth != null &&
+      initiative.endMonth != null &&
+      initiative.startMonth <= month &&
+      initiative.endMonth >= month;
+    const initiativeHasPlannedEpicInMonth = epics.some((e) => epicSpansMonth(e, month));
+    for (const epic of epics) {
+      const isPlannedInMonth = epicSpansMonth(epic, month);
+      const isUnscheduled =
+        epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
+      if (!isPlannedInMonth && !(isUnscheduled && (initiativeSpansMonth || initiativeHasPlannedEpicInMonth))) continue;
+      byEpicId.set(epic.id, { epic, initiative });
     }
   }
-  return [...rows].sort((a, b) => {
+  return [...byEpicId.values()].sort((a, b) => {
     const byInit = a.initiative.title.localeCompare(b.initiative.title);
     if (byInit !== 0) return byInit;
     return a.epic.title.localeCompare(b.epic.title);

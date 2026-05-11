@@ -11,6 +11,7 @@ import {
   ChevronsUp,
   Circle,
   Folder,
+  GripVertical,
   ListFilter,
   ListTodo,
   PlayCircle,
@@ -23,7 +24,6 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import Image from "next/image";
 import {
   type ReactNode,
   type RefObject,
@@ -792,9 +792,9 @@ function DragToKanbanArrowIcon({ className }: { className?: string }) {
 function DragToGanttArrowIcon({ className }: { className?: string }) {
   return (
     <span className={cn("relative inline-block", className)} aria-hidden style={{ width: "1.9rem", height: "1.9rem" }}>
-      {/* folder icon — fully visible top-left */}
-      <Folder className="absolute top-0 left-0 size-4 shrink-0" strokeWidth={2} />
-      {/* cursor tip sits at bottom-right corner of folder */}
+      {/* drag handle icon — fully visible top-left */}
+      <GripVertical className="absolute top-0 left-0 size-4 shrink-0" strokeWidth={2} />
+      {/* cursor tip sits at bottom-right corner */}
       <svg viewBox="0 0 14 16" fill="currentColor" className="absolute size-5" style={{ top: "12px", left: "11px" }} focusable="false">
         <path d="M2 1 L2 13 L5 10 L7.5 15 L9 14.3 L6.5 9.3 L10.5 9.3 Z" stroke="white" strokeWidth="0.85" strokeLinejoin="round" strokeLinecap="round" />
       </svg>
@@ -814,6 +814,7 @@ function InitiativeTreeEpicRow({
   onCreateStoryQuick,
   storyProgressDetailsVisible,
   showDragHint = false,
+  isCapacityMode = false,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -822,6 +823,7 @@ function InitiativeTreeEpicRow({
   planContextMonth: number | null;
   hideScheduledIcon?: boolean;
   epicPlanDragEnabled: boolean;
+  isCapacityMode?: boolean;
   onOpenEpic: (epic: EpicItem, initiative: InitiativeItem) => void;
   onOpenStory: (storyId: string) => void;
   onCreateStoryQuick?: (epicId: string, title: string) => Promise<void>;
@@ -830,16 +832,17 @@ function InitiativeTreeEpicRow({
 }) {
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
+  const isEpicScheduledOnGantt = planContextMonth != null
+    ? epicIsOnPlanForMonth(epic, planContextMonth)
+    : epic.planStartMonth != null && epic.planEndMonth != null;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
-    disabled: !epicPlanDragEnabled || Boolean(epicTeamId),
+    disabled: isCapacityMode ? Boolean(epicTeamId) : (!epicPlanDragEnabled || isEpicScheduledOnGantt),
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const completion = epicCompletionMeta(epic);
   const epicPlanStatus = epicPlanningStatusMeta(epic);
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
-  const isEpicScheduledOnGantt =
-    epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
 
@@ -885,22 +888,22 @@ function InitiativeTreeEpicRow({
             )}
           />
         </button>
-        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+        {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
           <button
             type="button"
-            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="relative inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
           >
             <DragHandleIcon size="sm" />
+            {showDragHint ? (
+              <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+            ) : null}
           </button>
         ) : null}
-        <span className="relative inline-flex h-7 shrink-0 items-center" aria-hidden>
+        <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
           <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
-          {showDragHint ? (
-            <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
-          ) : null}
         </span>
         <button
           type="button"
@@ -1072,6 +1075,7 @@ function InitiativeTreeCard({
   backlogDropIndex,
   planContextMonth,
   epicPlanDragEnabled,
+  isCapacityPlanningMode = false,
   storyProgressDetailsVisible,
 }: {
   initiative: InitiativeItem;
@@ -1089,6 +1093,7 @@ function InitiativeTreeCard({
   backlogDropIndex?: number;
   planContextMonth: number | null;
   epicPlanDragEnabled: boolean;
+  isCapacityPlanningMode?: boolean;
   storyProgressDetailsVisible: boolean;
 }) {
   const inMonthView = planContextMonth != null;
@@ -1096,7 +1101,16 @@ function InitiativeTreeCard({
     id: backlogDropIndex != null ? backlogSlotDropId(backlogDropIndex) : `initiative-card:${initiative.id}`,
     disabled: backlogDropIndex == null,
   });
-  const epics = [...(initiative.epics ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+  const [newestEpicId, setNewestEpicId] = useState<string | null>(null);
+  const prevEpicIdsRef = useRef<Set<string>>(new Set(initiative.epics?.map((e) => e.id) ?? []));
+  const epics = useMemo(() => {
+    const sorted = [...(initiative.epics ?? [])].sort((a, b) => {
+      if (a.id === newestEpicId) return 1;
+      if (b.id === newestEpicId) return -1;
+      return a.title.localeCompare(b.title);
+    });
+    return sorted;
+  }, [initiative.epics, newestEpicId]);
   const initiativeStories = epics.flatMap((e) => e.userStories ?? []);
   const initiativeStoryTotal = initiativeStories.length;
   const initiativeStoryDone = initiativeStories.filter(
@@ -1109,13 +1123,13 @@ function InitiativeTreeCard({
   const [isAddingEpic, setIsAddingEpic] = useState(false);
   const [openEpicIds, setOpenEpicIds] = useState<Record<string, boolean>>({});
   const [hintEpicId, setHintEpicId] = useState<string | null>(null);
-  const prevEpicIdsRef = useRef<Set<string>>(new Set(initiative.epics?.map((e) => e.id) ?? []));
 
   useEffect(() => {
     const currentIds = new Set(initiative.epics?.map((e) => e.id) ?? []);
     const newId = [...currentIds].find((id) => !prevEpicIdsRef.current.has(id)) ?? null;
     prevEpicIdsRef.current = currentIds;
     if (!newId) return;
+    setNewestEpicId(newId);
     setHintEpicId(newId);
     const t = setTimeout(() => setHintEpicId(null), 4200);
     return () => clearTimeout(t);
@@ -1271,6 +1285,7 @@ function InitiativeTreeCard({
                             planContextMonth={planContextMonth}
                             hideScheduledIcon={inMonthView || isSprintModeActive}
                             epicPlanDragEnabled={epicPlanDragEnabled}
+                            isCapacityMode={isCapacityPlanningMode}
                             onOpenEpic={onOpenEpic}
                             onOpenStory={onOpenStory}
                             onCreateStoryQuick={onCreateStoryQuick}
@@ -1378,9 +1393,12 @@ function SprintEpicCard({
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
+  const isEpicScheduledOnGantt = planContextMonth != null
+    ? epicIsOnPlanForMonth(epic, planContextMonth)
+    : epic.planStartMonth != null && epic.planEndMonth != null;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
-    disabled: !epicPlanDragEnabled || Boolean(epicTeamId),
+    disabled: isCapacityMode ? Boolean(epicTeamId) : (!epicPlanDragEnabled || isEpicScheduledOnGantt),
   });
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
     id: backlogDropSlot ? epicBacklogSlotDropId(backlogDropSlot.month, backlogDropSlot.index) : `epic-card:${epic.id}`,
@@ -1401,8 +1419,6 @@ function SprintEpicCard({
   const epicPlanStatus = epicPlanningStatusMeta(epic);
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
   const completion = epicCompletionMeta(epic);
-  const isEpicScheduledOnGantt =
-    epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
   const isOpen = isOpenControlled ?? isOpenLocal;
   function handleToggle() {
     if (onToggleControlled) {
@@ -1462,36 +1478,38 @@ function SprintEpicCard({
       }}
     >
       <div className="flex min-w-0 items-start gap-0.5">
-        <button
-          type="button"
-          onClick={handleToggle}
-          className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
-          aria-label={isOpen ? "Collapse epic" : "Expand epic"}
-          aria-expanded={isOpen}
-        >
-          <ChevronRight
-            className={cn(
-              "size-4 shrink-0 transition-transform",
-              isOpen && "rotate-90",
-            )}
-          />
-        </button>
-        {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+        <div className="flex shrink-0 flex-col items-center">
           <button
             type="button"
-            className="inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-            aria-label="Drag epic"
-            {...listeners}
-            {...attributes}
+            onClick={handleToggle}
+            className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+            aria-label={isOpen ? "Collapse epic" : "Expand epic"}
+            aria-expanded={isOpen}
           >
-            <DragHandleIcon size="sm" />
+            <ChevronRight
+              className={cn(
+                "size-4 shrink-0 transition-transform",
+                isOpen && "rotate-90",
+              )}
+            />
           </button>
-        ) : null}
-        <span className="relative inline-flex h-7 shrink-0 items-center" aria-hidden>
-          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
-          {showDragHint && epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
-            <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+          {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
+            <button
+              type="button"
+              className="relative inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+              aria-label="Drag epic"
+              {...listeners}
+              {...attributes}
+            >
+              <DragHandleIcon size="sm" />
+              {showDragHint ? (
+                <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+              ) : null}
+            </button>
           ) : null}
+        </div>
+        <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
+          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
         </span>
         <div className="min-w-0 flex-1 text-left">
           <button
@@ -1578,36 +1596,9 @@ function SprintEpicCard({
                   className="group/story flex min-h-[28px] w-full items-center gap-1.5 rounded-md py-0.5 pr-0.5 transition-colors hover:bg-muted/40"
                 >
                   {storyDragEnabled ? (
-                    isScheduledInActiveSprint ? (
-                      <>
-                        <span
-                          className="inline-flex shrink-0 items-center gap-0.5 rounded-md p-0.5 text-emerald-600"
-                          title={isAssigned ? "Scheduled · Assigned" : "Scheduled on kanban"}
-                          aria-label={isAssigned ? "Scheduled and assigned" : "Scheduled on kanban"}
-                        >
-                          <Image
-                            src="/scheduled-icon.png"
-                            alt=""
-                            width={14}
-                            height={14}
-                            className="size-3.5 object-contain"
-                            aria-hidden
-                          />
-                          {isAssigned ? <User className="size-3 text-emerald-500" aria-hidden /> : null}
-                        </span>
-                        {isCapacityMode && !isAssigned ? <StoryDragHandle storyId={story.id} /> : null}
-                      </>
-                    ) : isCapacityMode && isAssigned ? (
-                      <span
-                        className="inline-flex shrink-0 rounded-md p-0.5 text-emerald-600"
-                        title="Assigned"
-                        aria-label="Assigned"
-                      >
-                        <User className="size-3.5" aria-hidden />
-                      </span>
-                    ) : (
-                      <StoryDragHandle storyId={story.id} />
-                    )
+                    isCapacityMode
+                      ? (!isAssigned ? <StoryDragHandle storyId={story.id} /> : null)
+                      : (!isScheduledInActiveSprint ? <StoryDragHandle storyId={story.id} /> : null)
                   ) : null}
                   <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                     <UserStoryIcon />
@@ -1775,7 +1766,7 @@ export function InitiativeListPanel({
   const epicPlanPanelMode =
     useEpicPlanLeftPanel === undefined ? activeMonth != null : useEpicPlanLeftPanel;
   const epicListScopeMonth = epicPlanPanelMode ? activeMonth : null;
-  const epicPlanDragEnabled = !isSprintModeActive || isOnEpicGanttTab;
+  const epicPlanDragEnabled = !isSprintModeActive || isOnEpicGanttTab || isCapacityPlanningMode;
 
   const [newestEpicId, setNewestEpicId] = useState<string | null>(null);
   const prevAllEpicIdsRef = useRef<Set<string>>(
@@ -2685,9 +2676,19 @@ export function InitiativeListPanel({
                 window.setTimeout(() => setInitiativeSearchFocused(false), 80);
               }}
               placeholder="Search..."
-              className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-[14px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
+              className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-9 text-[14px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
               aria-label="Search initiatives, epics, or user stories"
             />
+            {initiativeSearch ? (
+              <button
+                type="button"
+                onClick={() => setInitiativeSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition hover:text-slate-600"
+                aria-label="Clear search"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            ) : null}
             {initiativeSearchFocused && initiativeSearchSuggestionsFiltered.length > 0 ? (
               <div className="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-300 bg-white p-1.5 ring-1 ring-slate-200/90">
                 {initiativeSearchSuggestionsFiltered.map((entry) => (
@@ -2867,6 +2868,7 @@ export function InitiativeListPanel({
                     backlogDropIndex={idx}
                     planContextMonth={activeMonth}
                     epicPlanDragEnabled={epicPlanDragEnabled}
+                    isCapacityPlanningMode={isCapacityPlanningMode}
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
                     onToggle={() => {
                       const next = !(openInitiativeIds[initiative.id] ?? false);
