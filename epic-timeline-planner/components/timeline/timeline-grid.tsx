@@ -223,11 +223,13 @@ function YearRoadmapEmptyStripedLane({
   roadmapLaneTodayLeft,
   columnCount,
   variant,
+  isDragging,
 }: {
   currentYear: number;
   roadmapLaneTodayLeft: number | null;
   columnCount: number;
   variant: "initiatives" | "epics";
+  isDragging?: boolean;
 }) {
   const srText =
     variant === "initiatives"
@@ -248,27 +250,41 @@ function YearRoadmapEmptyStripedLane({
           id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
           columnCount={columnCount}
           rowGapClass="space-y-1.5"
-          minHeightStyle={{ minHeight: "max(100%, calc(100dvh - 28rem))" }}
+          minHeightStyle={{ flex: "1 1 0", minHeight: 0 }}
         >
           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
         </StripedGanttLaneScrollArea>
-        <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
-          <div className="max-w-md text-center text-pretty sm:max-w-lg" aria-hidden>
+        <div className={cn(
+          "pointer-events-none absolute inset-x-3 top-3 z-[21] flex justify-center transition-opacity duration-200",
+          isDragging ? "opacity-0" : "opacity-100",
+        )}>
+          <div
+            className="px-8 py-5 text-center"
+            style={{
+              background: "rgba(255, 255, 255, 0.04)",
+              borderRadius: "16px",
+              boxShadow: "0 4px 24px rgba(15, 23, 42, 0.10), 0 1px 6px rgba(15, 23, 42, 0.06)",
+              backdropFilter: "blur(0.5px)",
+              WebkitBackdropFilter: "blur(0.5px)",
+              border: "1px solid rgba(255, 255, 255, 0.25)",
+            }}
+            aria-hidden
+          >
             {variant === "initiatives" ? (
               <>
                 <p className="text-base font-semibold leading-snug text-slate-800 sm:text-lg">
                   No initiatives on the {currentYear} roadmap yet
                 </p>
-                <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500 sm:text-[15px]">
                   Plan epics from the initiative list to fill the timeline.
                 </p>
               </>
             ) : (
               <>
-                <p className="text-lg font-semibold leading-snug text-slate-800 sm:text-xl">
+                <p className="text-base font-semibold leading-snug text-slate-800 sm:text-lg">
                   No epics on the {currentYear} roadmap yet
                 </p>
-                <p className="mt-2 text-sm font-normal leading-relaxed text-slate-600 sm:text-base">
+                <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500 sm:text-[15px]">
                   Drag an epic from the initiative list onto the timeline.
                 </p>
               </>
@@ -1435,7 +1451,7 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 ring-1 ring-blue-200/75 select-none">
+    <div className="inline-flex h-7 shrink-0 items-stretch overflow-visible rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 ring-1 ring-blue-200/75 select-none">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
         <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
@@ -1451,7 +1467,8 @@ function RoadmapSelector({
             onChange={(e) => { setQuery(e.target.value); setDropdownOpen(true); setShowCreateForm(false); }}
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-7 w-28 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[11px] font-semibold leading-none text-blue-950 outline-none sm:w-32 sm:text-[12px]"
+            className="h-7 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[11px] font-semibold leading-none text-blue-950 outline-none sm:text-[12px]"
+            style={{ width: `${Math.max(4, Math.min(10, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.58) + 1))}rem` }}
             aria-label="Select roadmap"
           />
           <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-600/80 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
@@ -1460,32 +1477,8 @@ function RoadmapSelector({
         {/* Dropdown */}
         {dropdownOpen && (
           <div className="absolute top-full left-0 z-50 mt-1 min-w-[14rem] rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
-            {filtered.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelectRoadmap?.(r.id);
-                  setDropdownOpen(false);
-                  setQuery("");
-                  setShowCreateForm(false);
-                }}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
-                  r.id === selectedRoadmap?.id && "bg-blue-50 text-blue-800",
-                )}
-              >
-                <MapIcon className="size-3.5 shrink-0 text-slate-400" />
-                <span className="flex-1 truncate">{r.name}</span>
-                <span className="shrink-0 text-[11px] text-slate-400">{(Array.isArray(r.years) ? r.years : (JSON.parse(r.years as unknown as string) as number[])).join(", ")}</span>
-                {r.id === selectedRoadmap?.id && <Check className="size-3.5 shrink-0 text-blue-600" />}
-              </button>
-            ))}
-            {filtered.length === 0 && !showCreateForm && (
-              <p className="px-3 py-2 text-[12px] text-slate-400">No roadmaps found</p>
-            )}
-            <div className="mt-1 border-t border-slate-100 pt-1">
+            {/* Create form — always first */}
+            <div className="mb-1 border-b border-slate-100 pb-1">
               {!showCreateForm ? (
                 <button
                   type="button"
@@ -1532,6 +1525,31 @@ function RoadmapSelector({
                 </div>
               )}
             </div>
+            {filtered.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onSelectRoadmap?.(r.id);
+                  setDropdownOpen(false);
+                  setQuery("");
+                  setShowCreateForm(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                  r.id === selectedRoadmap?.id && "bg-blue-50 text-blue-800",
+                )}
+              >
+                <MapIcon className="size-3.5 shrink-0 text-slate-400" />
+                <span className="flex-1 truncate">{r.name}</span>
+                <span className="shrink-0 text-[11px] text-slate-400">{(Array.isArray(r.years) ? r.years : (JSON.parse(r.years as unknown as string) as number[])).join(", ")}</span>
+                {r.id === selectedRoadmap?.id && <Check className="size-3.5 shrink-0 text-blue-600" />}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-2 text-[12px] text-slate-400">No roadmaps found</p>
+            )}
           </div>
         )}
       </div>
@@ -1618,19 +1636,19 @@ function RoadmapSelector({
       )}
 
       {/* Year sub-picker */}
-      <div className="flex items-center border-l border-blue-200/80">
-        {years.map((y) => (
-          <button
-            key={y}
-            type="button"
-            onClick={() => { if (y !== year) void onYearChange(y); }}
-            className={cn(
-              "flex h-7 items-center px-2 text-[11px] font-semibold tabular-nums text-blue-950 transition sm:px-2.5 sm:text-[12px]",
-              y === year ? "bg-blue-200/60" : "hover:bg-blue-100/60",
-            )}
-          >{y}</button>
-        ))}
-      </div>
+      {years.length > 0 && (
+        <div className="flex items-center border-l border-blue-200/80 px-1.5">
+          <select
+            value={year}
+            onChange={(e) => void onYearChange(Number(e.target.value))}
+            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold tabular-nums text-blue-950 outline-none hover:bg-blue-100/60 sm:text-[12px]"
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Delete confirmation modal */}
       {deleteConfirm && selectedRoadmap && (
@@ -1866,6 +1884,8 @@ export function TimelineGrid({
   summaryBarPortalElement,
   suppressInlineChips,
 }: TimelineGridProps) {
+  const { active: dndActive } = useDndContext();
+  const isAnyDragActive = dndActive != null;
   const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
@@ -3785,6 +3805,7 @@ export function TimelineGrid({
               roadmapLaneTodayLeft={roadmapLaneTodayLeft}
               columnCount={ganttLaneColumnCount}
               variant="initiatives"
+              isDragging={isAnyDragActive}
             />
           ) : (
             <p className="rounded-md bg-muted/40 p-3.5 text-[14px] leading-6 text-slate-600">
@@ -3798,6 +3819,7 @@ export function TimelineGrid({
               roadmapLaneTodayLeft={roadmapLaneTodayLeft}
               columnCount={ganttLaneColumnCount}
               variant="epics"
+              isDragging={isAnyDragActive}
             />
           ) : (
             <p className="bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
@@ -5878,14 +5900,14 @@ export function TimelineGrid({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div
               className={cn(
-                "min-h-0 min-w-0 flex-1",
+                "flex min-h-0 min-w-0 flex-1 flex-col",
                 !panelHScroll &&
                   yearRoadmapHScroll &&
                   "overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
               )}
             >
               <div
-                className={cn("flex min-h-0 min-w-0 flex-col gap-2", yearRoadmapHScroll && "w-max")}
+                className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-2", yearRoadmapHScroll && "w-max")}
                 style={
                   yearRoadmapHScroll
                     ? { minWidth: portfolioRoadmapHScrollContentMinWidthPx }
