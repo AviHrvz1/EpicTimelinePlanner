@@ -24,7 +24,7 @@ type Props = {
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
-export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceDirectoryUsers = [] }: Props) {
+export function DashboardPage({ initiatives: passedInitiatives, planYear, roadmaps = [], workspaceDirectoryUsers = [] }: Props) {
   const [dashboards, setDashboards] = useState<DashboardItem[]>([]);
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(null);
   const [charts, setCharts] = useState<DashboardChartItem[]>([]);
@@ -32,6 +32,18 @@ export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceD
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Full cross-roadmap initiative dataset for charts (not filtered to active roadmap)
+  const [allInitiatives, setAllInitiatives] = useState<InitiativeItem[]>(passedInitiatives);
+
+  useEffect(() => {
+    const year = new Date().getFullYear();
+    fetch(`/api/initiatives?year=${year}&roadmapId=all`)
+      .then((r) => r.json())
+      .then((data: InitiativeItem[]) => setAllInitiatives(data))
+      .catch(() => setAllInitiatives(passedInitiatives));
+  // Re-fetch when planYear changes so charts always see the right year's data
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planYear]);
 
   useEffect(() => {
     fetch("/api/dashboard/context").then((r) => r.json()).then(setContext).catch(() => null);
@@ -202,7 +214,7 @@ export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceD
           {activeDashboardId ? (
             <DashboardCanvas
               charts={charts}
-              initiatives={initiatives}
+              initiatives={allInitiatives}
               onReorder={handleReorder}
               onRemove={handleRemove}
               onEdit={handleEdit}

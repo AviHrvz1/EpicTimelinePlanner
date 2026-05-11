@@ -41,9 +41,11 @@ const createInitiativeSchema = z.object({
 
 export async function GET(request: NextRequest) {
   const year = Number(request.nextUrl.searchParams.get("year")) || DEFAULT_YEAR;
-  const roadmapId = request.nextUrl.searchParams.get("roadmapId") || DEFAULT_ROADMAP_ID;
+  const roadmapIdParam = request.nextUrl.searchParams.get("roadmapId");
+  const allRoadmaps = roadmapIdParam === "all";
+  const roadmapId = allRoadmaps ? undefined : (roadmapIdParam || DEFAULT_ROADMAP_ID);
   const initiatives = await db.initiative.findMany({
-    where: { year, roadmapId },
+    where: { year, ...(roadmapId ? { roadmapId } : {}) },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     include: INITIATIVE_INCLUDE,
   });
