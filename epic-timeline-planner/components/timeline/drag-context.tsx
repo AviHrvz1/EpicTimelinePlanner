@@ -331,6 +331,7 @@ function PlannerDragOverlayBody({ payloadSnapshot }: { payloadSnapshot: unknown 
       <TimelineBarDragPreview
         title={data.title}
         color={data.color}
+        icon={data.icon}
         progressPercent={data.progressPercent}
         progressLabel={data.progressLabel}
       />

@@ -217,6 +217,19 @@
   animation: initiative-bar-emphasis-sheen 2s cubic-bezier(0.38, 0.02, 0.22, 1) forwards;
 }
 
+@keyframes epic-drag-hint-arrow {
+  0%   { opacity: 0;   transform: translateX(0px)   translateY(calc(-50% + 10px)); }
+  12%  { opacity: 0.9; transform: translateX(20px)  translateY(calc(-50% + 10px)); }
+  70%  { opacity: 0.8; transform: translateX(320px) translateY(calc(-50% + 10px)); }
+  88%  { opacity: 0.5; transform: translateX(440px) translateY(calc(-50% + 10px)); }
+  100% { opacity: 0;   transform: translateX(520px) translateY(calc(-50% + 10px)); }
+}
+
+.animate-epic-drag-hint-arrow {
+  animation: epic-drag-hint-arrow 3.2s ease-in-out 0.35s forwards;
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-initiative-bar-emphasis-sheen {
     animation: none;

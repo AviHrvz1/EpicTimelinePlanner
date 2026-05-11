@@ -85,6 +85,7 @@ export type GanttTimelineBarDragData = {
   kind: "gantt-timeline-bar";
   title: string;
   color: string;
+  icon?: string | null;
   progressPercent: number;
   progressLabel?: string;
 };

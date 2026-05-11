@@ -767,6 +767,19 @@ function DraggableInitiativeCard({
   );
 }
 
+function DragToGanttArrowIcon({ className }: { className?: string }) {
+  return (
+    <span className={cn("relative inline-block", className)} aria-hidden style={{ width: "1.9rem", height: "1.9rem" }}>
+      {/* folder icon — fully visible top-left */}
+      <Folder className="absolute top-0 left-0 size-4 shrink-0" strokeWidth={2} />
+      {/* cursor tip sits at bottom-right corner of folder */}
+      <svg viewBox="0 0 14 16" fill="currentColor" className="absolute size-5" style={{ top: "12px", left: "11px" }} focusable="false">
+        <path d="M2 1 L2 13 L5 10 L7.5 15 L9 14.3 L6.5 9.3 L10.5 9.3 Z" stroke="white" strokeWidth="0.85" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </span>
+  );
+}
+
 function InitiativeTreeEpicRow({
   epic,
   initiative,
@@ -858,11 +871,13 @@ function InitiativeTreeEpicRow({
           >
             <DragHandleIcon size="sm" />
           </button>
-        ) : (
-          <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-            <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
-          </span>
-        )}
+        ) : null}
+        <span className="relative inline-flex h-7 shrink-0 items-center" aria-hidden>
+          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
+          {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+            <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+          ) : null}
+        </span>
         <button
           type="button"
           onClick={() => onOpenEpic(epic, initiative)}
@@ -1373,7 +1388,7 @@ function SprintEpicCard({
         setDropRef(node);
       }}
       className={cn(
-        "group rounded-xl border border-slate-200/90 bg-white p-3 font-sans antialiased shadow-sm ring-1 ring-black/5 transition-colors hover:bg-sky-50/70",
+        "group relative rounded-xl border border-slate-200/90 bg-white p-3 font-sans antialiased shadow-sm ring-1 ring-black/5 transition-colors hover:bg-sky-50/70",
         isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
@@ -1410,11 +1425,13 @@ function SprintEpicCard({
           >
             <DragHandleIcon size="sm" />
           </button>
-        ) : (
-          <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-            <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
-          </span>
-        )}
+        ) : null}
+        <span className="relative inline-flex h-7 shrink-0 items-center" aria-hidden>
+          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
+          {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+            <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+          ) : null}
+        </span>
         <div className="min-w-0 flex-1 text-left">
           <button
             type="button"

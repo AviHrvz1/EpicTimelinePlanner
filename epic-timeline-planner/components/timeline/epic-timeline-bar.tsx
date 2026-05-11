@@ -62,11 +62,13 @@ function GanttBarTooltip({ label, anchorRef }: { label: string; anchorRef: React
 export function TimelineBarDragPreview({
   title,
   color,
+  icon,
   progressPercent,
   progressLabel,
 }: {
   title: string;
   color: string;
+  icon?: string | null;
   progressPercent: number;
   progressLabel?: string;
 }) {
@@ -78,8 +80,9 @@ export function TimelineBarDragPreview({
         className={cn("relative z-10 flex h-8 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em] shadow-lg ring-1 ring-black/15", lightBg ? "text-slate-900" : "text-white")}
         style={{ backgroundColor: color }}
       >
-        <span className={cn("relative z-10 min-w-0 flex-1 truncate px-3 text-left antialiased", lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]")}>
-          {title}
+        <span className={cn("relative z-10 flex min-w-0 flex-1 items-center gap-1.5 px-3 text-left antialiased", lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]")}>
+          <EpicPlanBarIcon icon={icon} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-white/95")} />
+          <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
       <div className="mt-0.5 flex min-w-0 items-center gap-1.5 px-2">
@@ -251,6 +254,7 @@ export function EpicPlanTimelineBar({
     kind: "gantt-timeline-bar",
     title,
     color,
+    icon,
     progressPercent: safeProgress,
     progressLabel,
   } satisfies GanttTimelineBarDragData;
