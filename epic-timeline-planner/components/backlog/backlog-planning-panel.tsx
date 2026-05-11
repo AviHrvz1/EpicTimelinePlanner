@@ -84,6 +84,8 @@ type BacklogPlanningPanelProps = {
   ) => Promise<void>;
   onPatchInitiativeQuick: (initiativeId: string, patch: { assignee?: string | null; title?: string }) => Promise<void>;
   onPatchEpicQuick: (epicId: string, patch: { assignee?: string | null; title?: string }) => Promise<void>;
+  summaryBarPortalElement?: HTMLElement | null;
+  suppressInlineChips?: boolean;
 };
 
 type OptionItem = { id: string; label: string };
@@ -1321,6 +1323,8 @@ export function BacklogPlanningPanel({
   onPatchStoryQuick,
   onPatchInitiativeQuick,
   onPatchEpicQuick,
+  summaryBarPortalElement,
+  suppressInlineChips,
 }: BacklogPlanningPanelProps) {
   const [query, setQuery] = useState("");
   const [openInitiatives, setOpenInitiatives] = useState<Record<string, boolean>>({});
@@ -3981,6 +3985,53 @@ export function BacklogPlanningPanel({
     };
   }, []);
 
+  const summaryChipsJsx = (
+    <>
+      <button
+        type="button"
+        onClick={() => toggleWorkItemBadgeFilter("initiative")}
+        aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "initiative"}
+        title="Show only initiatives in the table (click again for all work items)"
+        className={cn(
+          "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
+          workItemFilter.length === 1 && workItemFilter[0] === "initiative"
+            ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm"
+            : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
+        )}
+      >
+        {summaryInitiativeCount} Initiatives
+      </button>
+      <button
+        type="button"
+        onClick={() => toggleWorkItemBadgeFilter("epic")}
+        aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "epic"}
+        title="Show only epics in the table (click again for all work items)"
+        className={cn(
+          "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
+          workItemFilter.length === 1 && workItemFilter[0] === "epic"
+            ? "bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-200 text-yellow-950 ring-yellow-300/75 shadow-sm"
+            : "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200",
+        )}
+      >
+        {summaryEpicCount} Epics
+      </button>
+      <button
+        type="button"
+        onClick={() => toggleWorkItemBadgeFilter("story")}
+        aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "story"}
+        title="Show only user stories in the table (click again for all work items)"
+        className={cn(
+          "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
+          workItemFilter.length === 1 && workItemFilter[0] === "story"
+            ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm"
+            : "bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-sky-100 hover:via-blue-200 hover:to-blue-200",
+        )}
+      >
+        {summaryStoryCount} Stories
+      </button>
+    </>
+  );
+
   return (
     <section className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
       <div className="mb-6 flex shrink-0 items-center justify-between gap-3 pb-2 pt-4">
@@ -3990,51 +4041,11 @@ export function BacklogPlanningPanel({
           </span>
           <h2 className="text-[27px] font-bold tracking-tight text-slate-900">Backlog Workspace</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => toggleWorkItemBadgeFilter("initiative")}
-            aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "initiative"}
-            title="Show only initiatives in the table (click again for all work items)"
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[15px] font-bold leading-none tracking-[0.015em] ring-1 transition",
-              workItemFilter.length === 1 && workItemFilter[0] === "initiative"
-                ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm"
-                : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
-            )}
-          >
-            {summaryInitiativeCount} initiatives
-          </button>
-          <button
-            type="button"
-            onClick={() => toggleWorkItemBadgeFilter("epic")}
-            aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "epic"}
-            title="Show only epics in the table (click again for all work items)"
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[15px] font-bold leading-none tracking-[0.015em] ring-1 transition",
-              workItemFilter.length === 1 && workItemFilter[0] === "epic"
-                ? "bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-200 text-yellow-950 ring-yellow-300/75 shadow-sm"
-                : "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200",
-            )}
-          >
-            {summaryEpicCount} epics
-          </button>
-          <button
-            type="button"
-            onClick={() => toggleWorkItemBadgeFilter("story")}
-            aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "story"}
-            title="Show only user stories in the table (click again for all work items)"
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[15px] font-bold leading-none tracking-[0.015em] ring-1 transition",
-              workItemFilter.length === 1 && workItemFilter[0] === "story"
-                ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm"
-                : "bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-sky-100 hover:via-blue-200 hover:to-blue-200",
-            )}
-          >
-            {summaryStoryCount} stories
-          </button>
-        </div>
+        {!(suppressInlineChips || summaryBarPortalElement) && (
+          <div className="flex flex-wrap items-center gap-1.5">{summaryChipsJsx}</div>
+        )}
       </div>
+      {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
 
       <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [contain:inline-size] [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
         <div

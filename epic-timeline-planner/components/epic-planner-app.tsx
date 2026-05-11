@@ -5050,6 +5050,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden"
               >
                 <BacklogPlanningPanel
+                summaryBarPortalElement={summaryBarEl}
+                suppressInlineChips
                 initiatives={initiatives}
                 storyRefById={storyRefMaps.byId}
                 onOpenInitiative={(initiativeId) => {
