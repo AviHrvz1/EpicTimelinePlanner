@@ -1311,15 +1311,19 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       0,
     );
     const completionPercent = totalStories > 0 ? Math.round((completedStories / totalStories) * 100) : 0;
+    const estimatedEpics = epics.filter((e) => e.originalEstimateDays != null && e.originalEstimateDays > 0);
+    const epicEstimatedPct = epics.length > 0 ? Math.round((estimatedEpics.length / epics.length) * 100) : 0;
 
     return {
       totalInitiatives: initiatives.length,
       scheduledInitiatives: scheduled.length,
+      totalEpics: epics.length,
       scheduledEpics: scheduledEpics.length,
       unscheduledEpics,
       totalStories,
       completedStories,
       completionPercent,
+      epicEstimatedPct,
     };
   }, [initiatives]);
 
@@ -4277,6 +4281,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   }, [isLeftPanelHidden, isResizingPanel]);
 
   const [isModeRailExpanded, setIsModeRailExpanded] = useState(false);
+  const [summaryBarEl, setSummaryBarEl] = useState<HTMLElement | null>(null);
   const modeRailLabelClass =
     "min-w-0 flex-1 truncate text-left text-[15px] font-semibold leading-snug";
   /** Right mode rail only (Roadmap / Backlog / Users). Flat indigo active — separate from timeline toolbar chips. */
@@ -4433,20 +4438,24 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     <DragContext onDragEnd={onDragEnd}>
       <main
         className={cn(
-          "h-screen min-h-0 p-8",
+          "flex h-screen min-h-0 flex-col p-8",
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-white",
           topMode === "roadmap" &&
             "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
           topMode === "backlog" &&
-            "flex min-h-0 flex-col overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
+            "overflow-hidden bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
         )}
       >
+        {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid */}
+        <div className="-mx-8 -mt-8 mb-4 flex shrink-0 items-center justify-end gap-1 overflow-x-auto border-b border-slate-200 bg-white px-6 py-2 shadow-sm sm:gap-1.5 md:gap-2">
+          <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2" />
+        </div>
         <div
           className={cn(
             "mx-auto flex w-full max-w-[2550px] flex-row gap-2.5",
             topMode === "backlog"
               ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-hidden overflow-y-hidden"
-              : "h-full min-h-0 overflow-y-visible",
+              : "flex-1 min-h-0 overflow-y-visible",
             topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden"),
           )}
         >
@@ -4681,6 +4690,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   setInsightsScopeInitId(initId);
                 }}
                 summaryBadges={roadmapSummary}
+                summaryBarPortalElement={summaryBarEl}
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 summaryStatusQuickFilter={panelStatusQuickFilter}
                 roadmaps={roadmaps}

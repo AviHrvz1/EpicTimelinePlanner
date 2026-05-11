@@ -1177,6 +1177,8 @@ type TimelineGridProps = {
   onRemoveYearFromRoadmap?: (id: string, year: number) => Promise<{ error?: string }>;
   onGetRoadmapCounts?: (id: string) => Promise<{ initiativeCount: number; epicCount: number; storyCount: number; snapshotCount: number } | null>;
   onDeleteRoadmap?: (id: string) => Promise<void>;
+  /** When provided, summary chips are portalled into this element instead of rendered in the header. */
+  summaryBarPortalElement?: HTMLElement | null;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -1859,6 +1861,7 @@ export function TimelineGrid({
   onRemoveYearFromRoadmap,
   onGetRoadmapCounts,
   onDeleteRoadmap,
+  summaryBarPortalElement,
 }: TimelineGridProps) {
   const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
@@ -4030,6 +4033,94 @@ export function TimelineGrid({
   const useRoadmapGanttChipTrack =
     !activeMonth && quarterViewTab === "gantt" && (isFullYearGanttLayout || isQuarterGanttLayout);
 
+  const summaryYearChipsJsx = summaryBadgesForScope ? (
+    <>
+      {onYearChange ? (
+        <RoadmapSelector
+          roadmaps={roadmaps}
+          selectedRoadmap={selectedRoadmap}
+          year={currentYear}
+          onYearChange={onYearChange ?? (() => {})}
+          onSelectRoadmap={onSelectRoadmap}
+          onCreateRoadmap={onCreateRoadmap}
+          onRenameRoadmap={onRenameRoadmap}
+          onAddYearToRoadmap={onAddYearToRoadmap}
+          onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
+          onGetRoadmapCounts={onGetRoadmapCounts}
+          onDeleteRoadmap={onDeleteRoadmap}
+        />
+      ) : null}
+      <button
+        type="button"
+        onClick={() => { setRoadmapBarMode("initiatives"); onSummaryStatusQuickFilterChange?.(null); }}
+        className={cn(summaryChipBaseClass, roadmapBarMode === "initiatives" ? summaryChipInitiativesOnClass : summaryChipInitiativesIdleClass)}
+      >
+        <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
+        <span className="hidden xl:inline">Initiatives</span>
+        <span className="xl:hidden">Inits</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => { setRoadmapBarMode("epics"); onSummaryStatusQuickFilterChange?.(null); }}
+        className={cn(summaryChipBaseClass, roadmapBarMode === "epics" && summaryStatusQuickFilter == null ? summaryChipEpicsOnClass : summaryChipEpicsIdleClass)}
+      >
+        <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        {("totalEpics" in summaryBadgesForScope ? summaryBadgesForScope.totalEpics : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}Epics
+      </button>
+      <div className={summaryChipStoriesStaticClass}>
+        <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+        <span className="hidden xl:inline">User Stories</span>
+        <span className="xl:hidden">Stories</span>
+      </div>
+      <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
+        <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
+          <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
+          <circle cx="8" cy="8" r="6" fill="none" stroke="#9f1239" strokeWidth="2.5" strokeLinecap="round"
+            transform="rotate(-90 8 8)"
+            strokeDasharray={`${2 * Math.PI * 6}`}
+            strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
+          />
+        </svg>
+        <span className="truncate">{estimatedEpicsPercentForScope}%</span>
+        <span className="hidden xl:inline">Epic Estimated</span>
+        <span className="xl:hidden">Estimated</span>
+      </button>
+      {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
+        <button
+          type="button"
+          onClick={() => setShowYearSprintChips((prev) => !prev)}
+          className={cn(summaryChipBaseClass, showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass)}
+        >
+          <CalendarDays className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+          <span className="hidden xl:inline">Sprints</span>
+          <span className="xl:hidden">Spr</span>
+        </button>
+      ) : null}
+      <button
+        type="button"
+        aria-pressed={showRoadmapProgress}
+        onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
+        className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
+      >
+        <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        Progress
+      </button>
+      {showGanttTeamPicker ? (
+        <button
+          type="button"
+          aria-pressed={showGanttTeamChips}
+          onClick={() => setShowGanttTeamChips((prev) => !prev)}
+          className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+        >
+          <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+          Teams
+        </button>
+      ) : null}
+    </>
+  ) : null;
+
   const timelineHeaderRow = (
       <div
         className={cn(
@@ -4318,122 +4409,7 @@ export function TimelineGrid({
                 className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2"
                 style={{ gridColumn: "1 / -1" }}
               >
-                {summaryBadgesForScope ? (
-                  <>
-                    {onYearChange ? (
-                      <RoadmapSelector
-                        roadmaps={roadmaps}
-                        selectedRoadmap={selectedRoadmap}
-                        year={currentYear}
-                        onYearChange={onYearChange ?? (() => {})}
-                        onSelectRoadmap={onSelectRoadmap}
-                        onCreateRoadmap={onCreateRoadmap}
-                        onRenameRoadmap={onRenameRoadmap}
-                        onAddYearToRoadmap={onAddYearToRoadmap}
-                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
-                        onGetRoadmapCounts={onGetRoadmapCounts}
-                        onDeleteRoadmap={onDeleteRoadmap}
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRoadmapBarMode("initiatives");
-                        onSummaryStatusQuickFilterChange?.(null);
-                      }}
-                      className={cn(
-                        summaryChipBaseClass,
-                        roadmapBarMode === "initiatives"
-                          ? summaryChipInitiativesOnClass
-                          : summaryChipInitiativesIdleClass,
-                      )}
-                    >
-                      <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                      <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
-                      <span className="hidden xl:inline">Initiatives</span>
-                      <span className="xl:hidden">Inits</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRoadmapBarMode("epics");
-                        onSummaryStatusQuickFilterChange?.(null);
-                      }}
-                      className={cn(
-                        summaryChipBaseClass,
-                        roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                          ? summaryChipEpicsOnClass
-                          : summaryChipEpicsIdleClass,
-                      )}
-                    >
-                      <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                      {("totalEpics" in summaryBadgesForScope
-                        ? summaryBadgesForScope.totalEpics
-                        : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
-                      Epics
-                    </button>
-                    <div className={summaryChipStoriesStaticClass}>
-                      <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                      <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-                      <span className="hidden xl:inline">User Stories</span>
-                      <span className="xl:hidden">Stories</span>
-                    </div>
-                    <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
-                      <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                        <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
-                        <circle
-                          cx="8"
-                          cy="8"
-                          r="6"
-                          fill="none"
-                          stroke="#9f1239"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          transform="rotate(-90 8 8)"
-                          strokeDasharray={`${2 * Math.PI * 6}`}
-                          strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
-                        />
-                      </svg>
-                      <span className="truncate">{estimatedEpicsPercentForScope}%</span>
-                      <span className="hidden xl:inline">Epic Estimated</span>
-                      <span className="xl:hidden">Estimated</span>
-                    </button>
-                    {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowYearSprintChips((prev) => !prev)}
-                        className={cn(
-                          summaryChipBaseClass,
-                          showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass,
-                        )}
-                      >
-                        <CalendarDays className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                        <span className="hidden xl:inline">Sprints</span>
-                        <span className="xl:hidden">Spr</span>
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      aria-pressed={showRoadmapProgress}
-                      onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                      className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-                    >
-                      <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                      Progress
-                    </button>
-                    {showGanttTeamPicker ? (
-                      <button
-                        type="button"
-                        aria-pressed={showGanttTeamChips}
-                        onClick={() => setShowGanttTeamChips((prev) => !prev)}
-                        className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
-                      >
-                        <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                        Teams
-                      </button>
-                    ) : null}
-                  </>
-                ) : null}
+                {summaryBarPortalElement ? null : summaryYearChipsJsx}
               </div>
             </div>
           ) : (
@@ -4443,122 +4419,7 @@ export function TimelineGrid({
                 hasBreadcrumbs ? "flex-1" : "w-full",
               )}
             >
-              {summaryBadgesForScope ? (
-                <>
-                  {onYearChange ? (
-                    <RoadmapSelector
-                        roadmaps={roadmaps}
-                        selectedRoadmap={selectedRoadmap}
-                        year={currentYear}
-                        onYearChange={onYearChange ?? (() => {})}
-                        onSelectRoadmap={onSelectRoadmap}
-                        onCreateRoadmap={onCreateRoadmap}
-                        onRenameRoadmap={onRenameRoadmap}
-                        onAddYearToRoadmap={onAddYearToRoadmap}
-                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
-                        onGetRoadmapCounts={onGetRoadmapCounts}
-                        onDeleteRoadmap={onDeleteRoadmap}
-                      />
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRoadmapBarMode("initiatives");
-                      onSummaryStatusQuickFilterChange?.(null);
-                    }}
-                    className={cn(
-                      summaryChipBaseClass,
-                      roadmapBarMode === "initiatives"
-                        ? summaryChipInitiativesOnClass
-                        : summaryChipInitiativesIdleClass,
-                    )}
-                  >
-                    <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
-                    <span className="hidden xl:inline">Initiatives</span>
-                    <span className="xl:hidden">Inits</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRoadmapBarMode("epics");
-                      onSummaryStatusQuickFilterChange?.(null);
-                    }}
-                    className={cn(
-                      summaryChipBaseClass,
-                      roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                        ? summaryChipEpicsOnClass
-                        : summaryChipEpicsIdleClass,
-                    )}
-                  >
-                    <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    {("totalEpics" in summaryBadgesForScope
-                      ? summaryBadgesForScope.totalEpics
-                      : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
-                    Epics
-                  </button>
-                  <div className={summaryChipStoriesStaticClass}>
-                    <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-                    <span className="hidden xl:inline">User Stories</span>
-                    <span className="xl:hidden">Stories</span>
-                  </div>
-                  <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
-                    <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                      <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        fill="none"
-                        stroke="#9f1239"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        transform="rotate(-90 8 8)"
-                        strokeDasharray={`${2 * Math.PI * 6}`}
-                        strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
-                      />
-                    </svg>
-                    <span className="truncate">{estimatedEpicsPercentForScope}%</span>
-                    <span className="hidden xl:inline">Epic Estimated</span>
-                    <span className="xl:hidden">Estimated</span>
-                  </button>
-                  {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowYearSprintChips((prev) => !prev)}
-                      className={cn(
-                        summaryChipBaseClass,
-                        showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass,
-                      )}
-                    >
-                      <CalendarDays className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                      <span className="hidden xl:inline">Sprints</span>
-                      <span className="xl:hidden">Spr</span>
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    aria-pressed={showRoadmapProgress}
-                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-                  >
-                    <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    Progress
-                  </button>
-                  {showGanttTeamPicker ? (
-                    <button
-                      type="button"
-                      aria-pressed={showGanttTeamChips}
-                      onClick={() => setShowGanttTeamChips((prev) => !prev)}
-                      className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
-                    >
-                      <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                      Teams
-                    </button>
-                  ) : null}
-                </>
-              ) : null}
+              {summaryBarPortalElement ? null : summaryYearChipsJsx}
             </div>
           )
         ) : activeMonth ? (
@@ -4648,117 +4509,7 @@ export function TimelineGrid({
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
                 </>
-              ) : summaryBadgesForScope ? (
-                <>
-                  {onYearChange ? (
-                    <RoadmapSelector
-                        roadmaps={roadmaps}
-                        selectedRoadmap={selectedRoadmap}
-                        year={currentYear}
-                        onYearChange={onYearChange ?? (() => {})}
-                        onSelectRoadmap={onSelectRoadmap}
-                        onCreateRoadmap={onCreateRoadmap}
-                        onRenameRoadmap={onRenameRoadmap}
-                        onAddYearToRoadmap={onAddYearToRoadmap}
-                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
-                        onGetRoadmapCounts={onGetRoadmapCounts}
-                        onDeleteRoadmap={onDeleteRoadmap}
-                      />
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRoadmapBarMode("initiatives");
-                      onSummaryStatusQuickFilterChange?.(null);
-                    }}
-                    className={cn(
-                      summaryChipBaseClass,
-                      roadmapBarMode === "initiatives"
-                        ? summaryChipInitiativesOnClass
-                        : summaryChipInitiativesIdleClass,
-                    )}
-                  >
-                    <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
-                    <span className="hidden sm:inline">Initiatives</span>
-                    <span className="sm:hidden">Inits</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRoadmapBarMode("epics");
-                      onSummaryStatusQuickFilterChange?.(null);
-                    }}
-                    className={cn(
-                      summaryChipBaseClass,
-                      roadmapBarMode === "epics" && summaryStatusQuickFilter == null
-                        ? summaryChipEpicsOnClass
-                        : summaryChipEpicsIdleClass,
-                    )}
-                  >
-                    <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    {("totalEpics" in summaryBadgesForScope
-                      ? summaryBadgesForScope.totalEpics
-                      : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}
-                    Epics
-                  </button>
-                  <div className={summaryChipStoriesStaticClass}>
-                    <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-                    <span className="hidden sm:inline">User Stories</span>
-                    <span className="sm:hidden">Stories</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openEstEpicsPanel()}
-                    className={summaryChipEstimatedClass}
-                  >
-                    <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                      <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        fill="none"
-                        stroke="#9f1239"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        transform="rotate(-90 8 8)"
-                        strokeDasharray={`${2 * Math.PI * 6}`}
-                        strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
-                      />
-                    </svg>
-                    <span className="truncate">{estimatedEpicsPercentForScope}%</span>
-                    <span className="hidden sm:inline">Epic Estimated</span>
-                    <span className="sm:hidden">Estimated</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={showRoadmapProgress}
-                    onClick={() => onShowRoadmapProgressChange(!showRoadmapProgress)}
-                    className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-                  >
-                    <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                    Progress
-                  </button>
-                  {monthPlanTab === "epic-gantt" ? (
-                    <button
-                      type="button"
-                      aria-pressed={showGanttTeamChips}
-                      onClick={() => setShowGanttTeamChips((prev) => !prev)}
-                      className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
-                    >
-                      <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-                      Teams
-                    </button>
-                  ) : null}
-                  {showSprintEndCountdown &&
-                  activeYearSprintForMonthDrill != null &&
-                  monthPlanTab !== "sprint-kanban" ? (
-                    <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
-                  ) : null}
-                </>
-              ) : null}
+              ) : (summaryBarPortalElement ? null : summaryYearChipsJsx)}
           </div>
         ) : focusedQuarter ? (
           <div className="flex items-center gap-2" />
@@ -6515,6 +6266,7 @@ export function TimelineGrid({
           </aside>
         </div>
       ) : null}
+      {summaryBarPortalElement ? createPortal(summaryYearChipsJsx, summaryBarPortalElement) : null}
     </div>
   );
 }
