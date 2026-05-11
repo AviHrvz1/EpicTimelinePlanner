@@ -24,6 +24,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       config: string;
       position: number;
       colSpan: number;
+      rowSpan: number;
     }>;
     for (const chart of charts) {
       await db.dashboardChart.create({
@@ -34,6 +35,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           config: chart.config,
           position: chart.position,
           colSpan: chart.colSpan ?? 1,
+          rowSpan: chart.rowSpan ?? 1,
         },
       });
     }
@@ -61,6 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         config: typeof c.config === "string" ? c.config : JSON.stringify(c.config ?? {}),
         position: count,
         colSpan: c.colSpan ?? 1,
+          rowSpan: c.rowSpan ?? 1,
       },
     });
     await db.dashboard.update({ where: { id }, data: {} });

@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Maximize2, Minimize2, Pencil, X } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Maximize2, Minimize2, Pencil, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
@@ -25,6 +25,7 @@ type Props = {
   onRemove: (id: string) => void;
   onEdit: (chart: DashboardChartItem) => void;
   onToggleSpan: (id: string) => void;
+  onChangeHeight: (id: string, delta: 1 | -1) => void;
 };
 
 function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiatives: InitiativeItem[] }) {
@@ -148,13 +149,16 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, onRemove, onEdit, onToggleSpan }: Props) {
+export function DashboardChartCard({ chart, initiatives, onRemove, onEdit, onToggleSpan, onChangeHeight }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id });
+  const rowSpan = chart.rowSpan ?? 1;
+  const minHeight = 260 + (rowSpan - 1) * 220;
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    minHeight,
   };
 
   return (
@@ -177,6 +181,22 @@ export function DashboardChartCard({ chart, initiatives, onRemove, onEdit, onTog
         </button>
         <span className="flex-1 truncate text-sm font-semibold text-slate-700">{chart.title}</span>
         <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            onClick={() => onChangeHeight(chart.id, -1)}
+            disabled={rowSpan <= 1}
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
+            title="Decrease height"
+          >
+            <ChevronDown className="size-3.5" />
+          </button>
+          <button
+            onClick={() => onChangeHeight(chart.id, 1)}
+            disabled={rowSpan >= 4}
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
+            title="Increase height"
+          >
+            <ChevronUp className="size-3.5" />
+          </button>
           <button
             onClick={() => onToggleSpan(chart.id)}
             className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"

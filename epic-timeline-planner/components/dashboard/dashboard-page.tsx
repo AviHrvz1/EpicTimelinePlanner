@@ -33,8 +33,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  // Save-time name prompt
-  const [namingOnSave, setNamingOnSave] = useState(false);
+  // Save modal
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveNameDraft, setSaveNameDraft] = useState("");
   const saveNameRef = useRef<HTMLInputElement>(null);
   // Delete confirmation
@@ -48,7 +48,6 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
       .then((r) => r.json())
       .then((data: InitiativeItem[]) => setAllInitiatives(data))
       .catch(() => setAllInitiatives(passedInitiatives));
-  // Re-fetch when planYear changes so charts always see the right year's data
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planYear]);
 
@@ -71,34 +70,42 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function ensureDashboard(): Promise<string> {
+  function ensureDashboard(): string {
     if (activeDashboardId) return activeDashboardId;
-    const res = await fetch("/api/dashboard", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "My Dashboard" }),
-    });
-    const created: DashboardItem = await res.json();
-    setDashboards((prev) => [created, ...prev]);
-    setActiveDashboardId(created.id);
-    return created.id;
+    // No active dashboard — create a local draft
+    const draftId = `draft-${Date.now()}`;
+    const draft: DashboardItem = {
+      id: draftId,
+      name: `Dashboard ${dashboards.length + 1}`,
+      charts: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setDashboards((prev) => [...prev, draft]);
+    setActiveDashboardId(draftId);
+    return draftId;
   }
 
-  async function createDashboard() {
-    const res = await fetch("/api/dashboard", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: `Dashboard ${dashboards.length + 1}` }),
-    });
-    const created: DashboardItem = await res.json();
-    setDashboards((prev) => [...prev, created]);
-    setActiveDashboardId(created.id);
+  function createDraftDashboard() {
+    const draftId = `draft-${Date.now()}`;
+    const draft: DashboardItem = {
+      id: draftId,
+      name: `Dashboard ${dashboards.length + 1}`,
+      charts: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setDashboards((prev) => [...prev, draft]);
+    setActiveDashboardId(draftId);
     setCharts([]);
     setDirty(false);
   }
 
   async function deleteDashboard(id: string) {
-    await fetch(`/api/dashboard/${id}`, { method: "DELETE" });
+    // Drafts are local-only — no API call needed
+    if (!id.startsWith("draft-")) {
+      await fetch(`/api/dashboard/${id}`, { method: "DELETE" });
+    }
     setDashboards((prev) => prev.filter((d) => d.id !== id));
     setConfirmDeleteId(null);
     if (activeDashboardId === id) {
@@ -114,39 +121,54 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     }
   }
 
-  function requestSave() {
+  function openSaveModal() {
     if (!activeDashboardId) return;
     const current = dashboards.find((d) => d.id === activeDashboardId);
     setSaveNameDraft(current?.name ?? "");
-    setNamingOnSave(true);
-    setTimeout(() => saveNameRef.current?.select(), 0);
+    setShowSaveModal(true);
+    setTimeout(() => { saveNameRef.current?.focus(); saveNameRef.current?.select(); }, 0);
   }
 
   async function confirmSave() {
     if (!activeDashboardId) return;
-    setNamingOnSave(false);
+    setShowSaveModal(false);
     setSaving(true);
-    const name = saveNameDraft.trim() || dashboards.find((d) => d.id === activeDashboardId)?.name;
-    await fetch(`/api/dashboard/${activeDashboardId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        charts: charts.map((c, i) => ({
-          chartType: c.chartType,
-          title: c.title,
-          config: c.config,
-          position: i,
-          colSpan: c.colSpan,
-        })),
-      }),
-    });
-    setDashboards((prev) => prev.map((d) => d.id === activeDashboardId ? { ...d, name: name ?? d.name } : d));
+    const name = saveNameDraft.trim() || dashboards.find((d) => d.id === activeDashboardId)?.name || "My Dashboard";
+
+    const chartsPayload = charts.map((c, i) => ({
+      chartType: c.chartType,
+      title: c.title,
+      config: c.config,
+      position: i,
+      colSpan: c.colSpan,
+      rowSpan: c.rowSpan ?? 1,
+    }));
+
+    if (activeDashboardId.startsWith("draft-")) {
+      // Create new dashboard in DB with all charts
+      const res = await fetch("/api/dashboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, charts: chartsPayload }),
+      });
+      const created: DashboardItem = await res.json();
+      setDashboards((prev) => prev.map((d) => d.id === activeDashboardId ? created : d));
+      setActiveDashboardId(created.id);
+      setCharts(created.charts as DashboardChartItem[]);
+    } else {
+      await fetch(`/api/dashboard/${activeDashboardId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, charts: chartsPayload }),
+      });
+      setDashboards((prev) => prev.map((d) => d.id === activeDashboardId ? { ...d, name } : d));
+    }
+
     setSaving(false);
     setDirty(false);
   }
 
-  async function handleAddCharts(configs: DashboardChartConfig[]) {
+  function handleAddCharts(configs: DashboardChartConfig[]) {
     if (editTarget) {
       const config = configs[0];
       if (!config) return;
@@ -161,7 +183,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
       setDirty(true);
       return;
     }
-    const dashId = await ensureDashboard();
+    const dashId = ensureDashboard();
     const now = Date.now();
     const newCharts: DashboardChartItem[] = configs.map((config, i) => ({
       id: `local-${now}-${i}`,
@@ -171,6 +193,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
       config: JSON.stringify(config.params),
       position: charts.length + i,
       colSpan: 1,
+      rowSpan: 1,
       createdAt: new Date().toISOString(),
     }));
     setCharts((prev) => [...prev, ...newCharts]);
@@ -193,6 +216,15 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     setDirty(true);
   }
 
+  function handleChangeHeight(chartId: string, delta: 1 | -1) {
+    setCharts((prev) =>
+      prev.map((c) =>
+        c.id === chartId ? { ...c, rowSpan: Math.max(1, Math.min(4, (c.rowSpan ?? 1) + delta)) } : c,
+      ),
+    );
+    setDirty(true);
+  }
+
   function handleReorder(next: DashboardChartItem[]) {
     setCharts(next);
     setDirty(true);
@@ -206,10 +238,10 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           {dashboards.map((d) => {
             const isActive = d.id === activeDashboardId;
             const isConfirming = confirmDeleteId === d.id;
+            const isDraft = d.id.startsWith("draft-");
             return (
               <div key={d.id} className="group relative shrink-0">
                 {isConfirming ? (
-                  /* Inline delete confirmation */
                   <div className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-2.5 text-[11.5px] font-semibold text-red-700 ring-1 ring-red-200 sm:px-3 sm:text-[12px]">
                     <span className="whitespace-nowrap">Delete "{d.name}"?</span>
                     <button
@@ -242,7 +274,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                         : "bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-900 ring-blue-300/75 hover:from-blue-300 hover:via-blue-400 hover:to-blue-400",
                     )}
                   >
-                    {d.name}
+                    {isDraft ? <span className="italic opacity-75">{d.name}</span> : d.name}
                     <span
                       role="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(d.id); }}
@@ -263,7 +295,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           })}
 
           <button
-            onClick={createDashboard}
+            onClick={createDraftDashboard}
             className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-500 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 hover:text-slate-700"
           >
             <Plus className="size-3" />
@@ -271,36 +303,15 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           </button>
         </div>
 
-        {dirty && activeDashboardId && (
-          namingOnSave ? (
-            /* Inline name-before-save input */
-            <div className="flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-2 py-1 ring-1 ring-indigo-200 focus-within:ring-indigo-400">
-              <Save className="size-3.5 shrink-0 text-indigo-400" />
-              <input
-                ref={saveNameRef}
-                value={saveNameDraft}
-                onChange={(e) => setSaveNameDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") confirmSave(); if (e.key === "Escape") setNamingOnSave(false); }}
-                placeholder="Dashboard name…"
-                className="w-32 bg-transparent text-xs font-semibold text-indigo-800 placeholder:font-normal placeholder:text-indigo-400 outline-none"
-              />
-              <button onClick={confirmSave} className="rounded-md bg-indigo-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-indigo-700 transition-colors">
-                Save
-              </button>
-              <button onClick={() => setNamingOnSave(false)} className="rounded p-0.5 text-indigo-400 hover:text-indigo-600 transition-colors">
-                <X className="size-3" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={requestSave}
-              disabled={saving}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
-            >
-              <Save className="size-3.5" />
-              {saving ? "Saving…" : "Save"}
-            </button>
-          )
+        {(dirty || activeDashboardId?.startsWith("draft-")) && activeDashboardId && (
+          <button
+            onClick={openSaveModal}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+          >
+            <Save className="size-3.5" />
+            {saving ? "Saving…" : "Save"}
+          </button>
         )}
       </div>
 
@@ -334,14 +345,49 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
               onRemove={handleRemove}
               onEdit={handleEdit}
               onToggleSpan={handleToggleSpan}
+              onChangeHeight={handleChangeHeight}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
-              <p className="text-sm">Select roadmap or team and click Add to get started</p>
+              <p className="text-sm">Click + New to create a dashboard, then add charts</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Save modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowSaveModal(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <h2 className="mb-1 text-base font-bold text-slate-800">Save Dashboard</h2>
+            <p className="mb-4 text-xs text-slate-500">Give your dashboard a name before saving.</p>
+            <input
+              ref={saveNameRef}
+              value={saveNameDraft}
+              onChange={(e) => setSaveNameDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") confirmSave(); if (e.key === "Escape") setShowSaveModal(false); }}
+              placeholder="Dashboard name…"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            />
+            <div className="mt-4 flex gap-2.5">
+              <button
+                onClick={confirmSave}
+                disabled={!saveNameDraft.trim()}
+                className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

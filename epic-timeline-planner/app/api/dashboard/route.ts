@@ -15,9 +15,26 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const name: string = body.name ?? "New Dashboard";
+  const charts = Array.isArray(body.charts) ? body.charts as Array<{
+    chartType: string; title: string; config: string;
+    position: number; colSpan: number; rowSpan: number;
+  }> : [];
+
   const dashboard = await db.dashboard.create({
-    data: { name },
-    include: { charts: true },
+    data: {
+      name,
+      charts: charts.length > 0 ? {
+        create: charts.map((c) => ({
+          chartType: c.chartType,
+          title: c.title,
+          config: c.config,
+          position: c.position,
+          colSpan: c.colSpan ?? 1,
+          rowSpan: c.rowSpan ?? 1,
+        })),
+      } : undefined,
+    },
+    include: { charts: { orderBy: { position: "asc" } } },
   });
   return NextResponse.json(dashboard, { status: 201 });
 }

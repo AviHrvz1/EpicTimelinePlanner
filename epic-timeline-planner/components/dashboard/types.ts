@@ -27,6 +27,7 @@ export type DashboardChartItem = {
   config: string;
   position: number;
   colSpan: 1 | 2;
+  rowSpan: number;
   createdAt: string;
 };
 
