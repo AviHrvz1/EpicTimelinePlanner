@@ -1,42 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Save } from "lucide-react";
 
-import { InitiativeItem } from "@/lib/types";
+import { InitiativeItem, RoadmapItem } from "@/lib/types";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { DashboardCanvas } from "./dashboard-canvas";
-import { DashboardChatPanel } from "./dashboard-chat-panel";
+import { DashboardChartBuilder } from "./dashboard-chart-builder";
 import { DashboardChartConfig, DashboardChartItem, DashboardItem } from "./types";
-
-type WorkspaceContext = {
-  teams: string[];
-  users: Array<{ id: string; name: string; team: string }>;
-  quarters: string[];
-  sprints: string[];
-  initiatives: Array<{ id: string; title: string; status: string; year: number }>;
-};
 
 type Props = {
   initiatives: InitiativeItem[];
   planYear: number;
+  roadmaps?: RoadmapItem[];
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
-export function DashboardPage({ initiatives, planYear }: Props) {
+export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceDirectoryUsers = [] }: Props) {
   const [dashboards, setDashboards] = useState<DashboardItem[]>([]);
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(null);
   const [charts, setCharts] = useState<DashboardChartItem[]>([]);
-  const [context, setContext] = useState<WorkspaceContext | null>(null);
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-
-  // Load context for LLM once
-  useEffect(() => {
-    fetch("/api/dashboard/context")
-      .then((r) => r.json())
-      .then(setContext)
-      .catch(() => null);
-  }, []);
+  const pendingDashboardRef = useRef<string | null>(null);
 
   // Load dashboards
   useEffect(() => {
@@ -52,6 +39,19 @@ export function DashboardPage({ initiatives, planYear }: Props) {
       .catch(() => null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function ensureDashboard(): Promise<string> {
+    if (activeDashboardId) return activeDashboardId;
+    const res = await fetch("/api/dashboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "My Dashboard" }),
+    });
+    const created: DashboardItem = await res.json();
+    setDashboards((prev) => [created, ...prev]);
+    setActiveDashboardId(created.id);
+    return created.id;
+  }
 
   async function createDashboard() {
     const res = await fetch("/api/dashboard", {
@@ -86,31 +86,20 @@ export function DashboardPage({ initiatives, planYear }: Props) {
     setDirty(false);
   }
 
-  async function handleAddChart(config: DashboardChartConfig) {
-    if (!activeDashboardId) {
-      // Auto-create first dashboard
-      const res = await fetch("/api/dashboard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "My Dashboard" }),
-      });
-      const created: DashboardItem = await res.json();
-      setDashboards((prev) => [created, ...prev]);
-      setActiveDashboardId(created.id);
-    }
-
-    const id = activeDashboardId ?? "pending";
-    const newChart: DashboardChartItem = {
-      id: `local-${Date.now()}`,
-      dashboardId: id,
+  async function handleAddCharts(configs: DashboardChartConfig[]) {
+    const dashId = await ensureDashboard();
+    const now = Date.now();
+    const newCharts: DashboardChartItem[] = configs.map((config, i) => ({
+      id: `local-${now}-${i}`,
+      dashboardId: dashId,
       chartType: config.chartType,
       title: config.title,
       config: JSON.stringify(config.params),
-      position: charts.length,
+      position: charts.length + i,
       colSpan: 1,
       createdAt: new Date().toISOString(),
-    };
-    setCharts((prev) => [...prev, newChart]);
+    }));
+    setCharts((prev) => [...prev, ...newCharts]);
     setDirty(true);
   }
 
@@ -135,13 +124,10 @@ export function DashboardPage({ initiatives, planYear }: Props) {
     setDirty(true);
   }
 
-  const activeDashboard = dashboards.find((d) => d.id === activeDashboardId);
-
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-md ring-1 ring-slate-200/60">
       {/* Top bar */}
       <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
-        {/* Dashboard tabs */}
         <div className="flex flex-1 items-center gap-1 overflow-x-auto">
           {dashboards.map((d) => (
             <button
@@ -169,7 +155,6 @@ export function DashboardPage({ initiatives, planYear }: Props) {
           </button>
         </div>
 
-        {/* Save */}
         {dirty && activeDashboardId && (
           <button
             onClick={save}
@@ -184,17 +169,23 @@ export function DashboardPage({ initiatives, planYear }: Props) {
 
       {/* Main split */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Chat panel — 35% */}
-        <div className="flex w-[340px] shrink-0 flex-col border-r border-slate-200 bg-white">
-          <DashboardChatPanel
+        {/* Builder panel */}
+        <div className="flex w-[300px] shrink-0 flex-col border-r border-slate-200 bg-white">
+          <DashboardChartBuilder
             key={editTarget?.id ?? "new"}
-            onAddChart={handleAddChart}
-            context={context}
+            roadmaps={roadmaps}
+            workspaceDirectoryUsers={workspaceDirectoryUsers}
+            onAddCharts={handleAddCharts}
           />
         </div>
 
-        {/* Canvas — 65% */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+        {/* Canvas */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
+          style={{
+            backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+          }}
+        >
           {activeDashboardId ? (
             <DashboardCanvas
               charts={charts}
@@ -206,7 +197,7 @@ export function DashboardPage({ initiatives, planYear }: Props) {
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
-              <p className="text-sm">Click &ldquo;New&rdquo; to create your first dashboard</p>
+              <p className="text-sm">Select roadmap or team and click Add to get started</p>
             </div>
           )}
         </div>

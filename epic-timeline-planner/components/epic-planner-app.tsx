@@ -5040,7 +5040,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             </div>
           ) : topMode === "dashboard" ? (
             <div className="min-h-0 min-w-0 flex-1">
-              <DashboardPage initiatives={initiatives} planYear={selectedYear} />
+              <DashboardPage initiatives={initiatives} planYear={selectedYear} roadmaps={roadmaps} workspaceDirectoryUsers={workspaceDirectoryUsers} />
             </div>
           ) : topMode === "users" ? (
             <div className="min-h-0 min-w-0 flex-1">

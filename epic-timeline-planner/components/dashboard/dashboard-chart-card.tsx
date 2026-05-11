@@ -25,11 +25,15 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
   let params: Record<string, unknown> = {};
   try { params = JSON.parse(chart.config); } catch { /* ignore */ }
 
+  const scopedInitiatives = params.roadmapId
+    ? initiatives.filter((i) => i.roadmapId === params.roadmapId)
+    : initiatives;
+
   switch (chart.chartType) {
     case "velocity":
       return (
         <VelocityChart
-          initiatives={initiatives}
+          initiatives={scopedInitiatives}
           quarter={(params.quarter as string) ?? "2025-Q1"}
           team={params.team as string | null}
         />
@@ -37,7 +41,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
     case "burndown":
       return (
         <BurndownChart
-          initiatives={initiatives}
+          initiatives={scopedInitiatives}
           year={(params.year as number) ?? new Date().getFullYear()}
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
@@ -47,7 +51,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
     case "cfd":
       return (
         <CfdChart
-          initiatives={initiatives}
+          initiatives={scopedInitiatives}
           year={(params.year as number) ?? new Date().getFullYear()}
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
@@ -57,7 +61,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
     case "workload":
       return (
         <WorkloadChart
-          initiatives={initiatives}
+          initiatives={scopedInitiatives}
           year={(params.year as number) ?? new Date().getFullYear()}
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
@@ -67,7 +71,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
     case "quarter-status":
       return (
         <QuarterStatusChart
-          initiatives={initiatives}
+          initiatives={scopedInitiatives}
           year={(params.year as number) ?? new Date().getFullYear()}
           quarter={(params.quarter as number) ?? 1}
           team={params.team as string | null}
