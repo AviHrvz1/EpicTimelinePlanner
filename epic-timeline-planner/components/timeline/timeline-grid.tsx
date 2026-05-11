@@ -19,6 +19,7 @@ import {
   Pencil,
   PieChart,
   Plus,
+  Search,
   Thermometer,
   Trash2,
   Users,
@@ -50,7 +51,7 @@ import { SprintEndCountdown } from "@/components/timeline/sprint-end-countdown";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
-import { computeSprintKanbanSummaryStats } from "@/lib/sprint-plan";
+import { computeSprintKanbanSummaryStats, collectStoriesForSprintBoard, collectEpicsForSprintKanban } from "@/lib/sprint-plan";
 import { sprintStoryBoardEpicTeamFilter, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import {
@@ -1466,9 +1467,10 @@ function RoadmapSelector({
             placeholder={roadmaps.length === 0 ? "Create roadmap…" : "Select…"}
             onChange={(e) => { setQuery(e.target.value); setDropdownOpen(true); setShowCreateForm(false); }}
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
+            onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
             className="h-7 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[11px] font-semibold leading-none text-blue-950 outline-none sm:text-[12px]"
-            style={{ width: `${Math.max(4, Math.min(10, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.58) + 1))}rem` }}
+            style={{ width: `${Math.max(4, Math.min(13, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.38) + 2.5))}rem` }}
             aria-label="Select roadmap"
           />
           <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-600/80 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
@@ -1535,6 +1537,7 @@ function RoadmapSelector({
                   setDropdownOpen(false);
                   setQuery("");
                   setShowCreateForm(false);
+                  inputRef.current?.blur();
                 }}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
@@ -1927,6 +1930,10 @@ export function TimelineGrid({
   /** Measures available width under the timeline card; drives right-panel + roadmap horizontal scroll. */
   const yearRoadmapMeasureRef = useRef<HTMLDivElement | null>(null);
   const [sprintKanbanViewMode, setSprintKanbanViewMode] = useState<"stories" | "epics">("stories");
+  const [sprintKanbanSearch, setSprintKanbanSearch] = useState("");
+  const [sprintKanbanSearchOpen, setSprintKanbanSearchOpen] = useState(false);
+  const sprintKanbanSearchRef = useRef<HTMLDivElement>(null);
+  const sprintKanbanSearchCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
   /** Drives slide-in/out (mirror of epic insights panel: translate + duration-300). */
   const [estEpicsPanelEntered, setEstEpicsPanelEntered] = useState(false);
@@ -2910,6 +2917,40 @@ export function TimelineGrid({
       monthPlanTab === "sprint-status" ||
       monthPlanTab === "sprint-capacity" ||
       monthPlanTab === "sprint-retrospective");
+
+  const sprintKanbanSuggestions = useMemo(() => {
+    const q = sprintKanbanSearch.trim().toLowerCase();
+    if (!q || monthPlanTab !== "sprint-kanban" || resolvedActiveYearSprint == null || sprintBoardContextMonth == null) return [];
+    const teamFilter = sprintFilterTeamIds.length ? sprintFilterTeamIds : null;
+    const seen = new Set<string>();
+    const results: { label: string; kind: "story" | "epic" | "initiative" }[] = [];
+    if (sprintKanbanViewMode === "epics") {
+      const rows = collectEpicsForSprintKanban(initiatives, sprintBoardContextMonth, resolvedActiveYearSprint, teamFilter);
+      for (const row of rows) {
+        if (row.epic.title.toLowerCase().includes(q) && !seen.has(row.epic.title)) {
+          seen.add(row.epic.title);
+          results.push({ label: row.epic.title, kind: "epic" });
+        }
+        if (row.initiative.title.toLowerCase().includes(q) && !seen.has(row.initiative.title)) {
+          seen.add(row.initiative.title);
+          results.push({ label: row.initiative.title, kind: "initiative" });
+        }
+      }
+    } else {
+      const rows = collectStoriesForSprintBoard(initiatives, sprintBoardContextMonth, resolvedActiveYearSprint, teamFilter);
+      for (const row of rows) {
+        if (row.story.title.toLowerCase().includes(q) && !seen.has(row.story.title)) {
+          seen.add(row.story.title);
+          results.push({ label: row.story.title, kind: "story" });
+        }
+        if (row.epic.title.toLowerCase().includes(q) && !seen.has(row.epic.title)) {
+          seen.add(row.epic.title);
+          results.push({ label: row.epic.title, kind: "epic" });
+        }
+      }
+    }
+    return results.slice(0, 12);
+  }, [sprintKanbanSearch, monthPlanTab, resolvedActiveYearSprint, sprintBoardContextMonth, sprintFilterTeamIds, sprintKanbanViewMode, initiatives]);
 
   const handleResizePointerDown = useCallback(
     (initiativeId: string, side: "left" | "right", event: React.PointerEvent<HTMLDivElement>) => {
@@ -4538,6 +4579,75 @@ export function TimelineGrid({
               {sprintKanbanSummaryStats ? (
                 <>
                   {!summaryBarPortalElement ? summarySprintChipsJsx : null}
+                  <div
+                    ref={sprintKanbanSearchRef}
+                    className="relative mr-2 flex items-center"
+                    onMouseEnter={() => {
+                      if (sprintKanbanSearchCloseTimer.current) clearTimeout(sprintKanbanSearchCloseTimer.current);
+                    }}
+                    onMouseLeave={() => {
+                      sprintKanbanSearchCloseTimer.current = setTimeout(() => setSprintKanbanSearchOpen(false), 120);
+                    }}
+                    onBlur={(e) => {
+                      if (!sprintKanbanSearchRef.current?.contains(e.relatedTarget as Node)) setSprintKanbanSearchOpen(false);
+                    }}
+                  >
+                    <Search className="pointer-events-none absolute left-2 z-10 size-3.5 text-slate-400" aria-hidden />
+                    <input
+                      type="text"
+                      value={sprintKanbanSearch}
+                      onChange={(e) => { setSprintKanbanSearch(e.target.value); setSprintKanbanSearchOpen(true); }}
+                      onFocus={() => sprintKanbanSearch && setSprintKanbanSearchOpen(true)}
+                      onKeyDown={(e) => { if (e.key === "Escape") { setSprintKanbanSearch(""); setSprintKanbanSearchOpen(false); } }}
+                      placeholder={sprintKanbanViewMode === "epics" ? "Search epics…" : "Search stories…"}
+                      className="h-7 w-40 rounded-lg border border-slate-200 bg-white pl-7 pr-6 text-[12px] text-slate-800 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                      aria-label="Search"
+                      autoComplete="off"
+                    />
+                    {sprintKanbanSearch ? (
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onMouseDown={(e) => { e.preventDefault(); setSprintKanbanSearch(""); setSprintKanbanSearchOpen(false); }}
+                        className="absolute right-1.5 z-10 flex h-4 w-4 items-center justify-center rounded text-slate-400 hover:text-slate-600"
+                        aria-label="Clear search"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    ) : null}
+                    {sprintKanbanSearchOpen && sprintKanbanSuggestions.length > 0 ? (
+                      <div className="absolute left-0 top-full z-50 w-72 pt-1">
+                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                          <ul role="listbox" className="max-h-64 overflow-y-auto py-1">
+                            {sprintKanbanSuggestions.map((s, i) => (
+                              <li key={`${s.kind}-${i}`} role="option">
+                                <button
+                                  type="button"
+                                  tabIndex={0}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setSprintKanbanSearch(s.label);
+                                    setSprintKanbanSearchOpen(false);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-slate-50"
+                                >
+                                  <span className={cn(
+                                    "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                                    s.kind === "story" && "bg-sky-100 text-sky-700",
+                                    s.kind === "epic" && "bg-violet-100 text-violet-700",
+                                    s.kind === "initiative" && "bg-amber-100 text-amber-700",
+                                  )}>
+                                    {s.kind === "story" ? "Story" : s.kind === "epic" ? "Epic" : "Initiative"}
+                                  </span>
+                                  <span className="min-w-0 truncate text-slate-800">{s.label}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                   {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
@@ -5273,11 +5383,8 @@ export function TimelineGrid({
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
                   viewMode={sprintKanbanViewMode}
-                  sprintToolbarEnd={
-                    showSprintEndCountdown && activeYearSprintForMonthDrill != null && monthPlanTab !== "sprint-kanban" ? (
-                      <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
-                    ) : null
-                  }
+                  searchQuery={sprintKanbanSearch}
+                  sprintToolbarEnd={null}
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onRequestUnscheduleStory={onRequestSprintKanbanStoryUnschedule}
                   onOpenStory={onOpenStory ?? (() => {})}

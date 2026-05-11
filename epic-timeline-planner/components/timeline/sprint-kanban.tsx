@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
-import { monthTeamLabelForId } from "@/lib/month-team-board";
+import { epicDeliveryTeamAssignmentChip, monthTeamLabelForId } from "@/lib/month-team-board";
 import { assigneeMatchRosterForSprintTeam, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard, collectEpicsForSprintKanban, type BoardStoryRow, type BoardEpicRow } from "@/lib/sprint-plan";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -444,6 +444,30 @@ function KanbanStoryCard({
 
 // ─── Epic view (read-only) ───────────────────────────────────────────────────
 
+const chipBase = "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold leading-none tracking-[0.01em]";
+
+function quarterFromMonth(month: number): string {
+  if (month <= 3) return "Q1";
+  if (month <= 6) return "Q2";
+  if (month <= 9) return "Q3";
+  return "Q4";
+}
+
+function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: string } {
+  const isPlanned = epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  if (!isPlanned) return { label: "Unscheduled", className: "border border-slate-200/90 bg-slate-100 text-slate-600" };
+  return { label: quarterFromMonth(epic.planStartMonth!), className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
+}
+
+function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: string } {
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
+  if (stories.every((s) => s.status === "approved")) return { label: "Approved", className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
+  if (stories.every((s) => s.status === "done" || s.status === "approved")) return { label: "Done", className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800" };
+  if (stories.some((s) => s.status === "inProgress" || s.status === "done" || s.status === "approved")) return { label: "In Progress", className: "border border-blue-200/90 bg-blue-50 text-blue-800" };
+  return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
+}
+
 function SprintEpicCard({
   row,
   month,
@@ -469,6 +493,10 @@ function SprintEpicCard({
     sprintStories.flatMap((s) => parseLabels(s.labels)),
   )];
 
+  const planStatus = epicPlanningStatusMeta(epic);
+  const execStatus = epicExecutionStatusMeta(epic);
+  const teamChip = epic.team ? epicDeliveryTeamAssignmentChip(epic.team) : null;
+
   return (
     <div
       className="group rounded-lg border border-slate-200/90 bg-white py-2.5 pl-3 pr-2.5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
@@ -493,7 +521,6 @@ function SprintEpicCard({
 
         {total > 0 ? (
           <div className="mt-2 space-y-1.5">
-            {/* Progress bar */}
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <div className="flex h-full">
                 {approved > 0 && (
@@ -507,7 +534,6 @@ function SprintEpicCard({
                 )}
               </div>
             </div>
-            {/* Story breakdown */}
             <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
               {todo > 0 && <span className="text-slate-400">{todo} to do</span>}
               {inProgress > 0 && <span className="text-blue-500">{inProgress} in progress</span>}
@@ -518,6 +544,16 @@ function SprintEpicCard({
         ) : (
           <p className="mt-1.5 text-[10px] text-slate-400">No stories in this sprint</p>
         )}
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-1">
+          {teamChip ? (
+            <span className={cn("inline-flex items-center gap-0.5", chipBase, teamChip.className)}>
+              <Users className="size-2.5 shrink-0" aria-hidden />
+              {teamChip.label}
+            </span>
+          ) : null}
+          <span className={cn(chipBase, planStatus.className)}>{planStatus.label}</span>
+          <span className={cn(chipBase, execStatus.className)}>{execStatus.label}</span>
+        </div>
       </button>
     </div>
   );
@@ -604,6 +640,8 @@ type SprintKanbanProps = {
   scheduledStoriesEmphasis?: { tick: number } | null;
   /** Shown on the same row as assignee filter chips (e.g. sprint countdown). */
   sprintToolbarEnd?: ReactNode;
+  /** External search query (controlled from header bar). Filters story/epic titles. */
+  searchQuery?: string;
   /** "epics" replaces story cards with read-only epic status cards. */
   viewMode?: "stories" | "epics";
   onUnscheduleStory?: (storyId: string) => void;
@@ -625,6 +663,7 @@ export function SprintKanbanBoard({
   epicAccordionEmphasis = null,
   scheduledStoriesEmphasis = null,
   sprintToolbarEnd = null,
+  searchQuery: searchQueryProp = "",
   viewMode = "stories",
   onUnscheduleStory,
   onRequestUnscheduleStory,
@@ -649,30 +688,39 @@ export function SprintKanbanBoard({
     [viewMode, initiatives, month, yearSprint, filterEpicTeamIds],
   );
 
-  const rosterTeamId = filterEpicTeamIds?.length === 1 ? filterEpicTeamIds[0] : null;
+  const activeTeamIds = filterEpicTeamIds ?? [];
 
   /** Team roster + assignees on visible sprint stories — drives filter chips and assignee autocomplete. */
   const boardStoryAssigneeNames = useMemo(() => {
-    const s = new Set<string>(assigneeMatchRosterForSprintTeam(rosterTeamId, workspaceDirectoryUsers));
+    const s = new Set<string>();
+    for (const teamId of activeTeamIds) {
+      for (const name of assigneeMatchRosterForSprintTeam(teamId, workspaceDirectoryUsers)) s.add(name);
+    }
     for (const row of allRows) {
       const a = row.story.assignee?.trim();
       if (a) s.add(a);
     }
     return s;
-  }, [allRows, rosterTeamId, workspaceDirectoryUsers]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRows, filterEpicTeamIds, workspaceDirectoryUsers]);
 
   const assigneeOptions = useMemo(() => {
-    const names = new Set<string>(assigneeMatchRosterForSprintTeam(rosterTeamId, workspaceDirectoryUsers));
+    const names = new Set<string>();
+    for (const teamId of activeTeamIds) {
+      for (const name of assigneeMatchRosterForSprintTeam(teamId, workspaceDirectoryUsers)) names.add(name);
+    }
     for (const row of allRows) names.add(storyAssigneeLabel(row.story));
     return [...names].sort((a, b) => {
       if (a === "Unassigned") return 1;
       if (b === "Unassigned") return -1;
       return a.localeCompare(b, undefined, { sensitivity: "base" });
     });
-  }, [allRows, rosterTeamId, workspaceDirectoryUsers]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRows, filterEpicTeamIds, workspaceDirectoryUsers]);
 
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);
+  const searchQuery = searchQueryProp;
 
   useEffect(() => {
     const valid = new Set(assigneeOptions);
@@ -692,8 +740,8 @@ export function SprintKanbanBoard({
   const allAssigneesSelected =
     assigneeOptions.length > 0 && selectedAssignees.length === assigneeOptions.length;
 
-  /** Assignee avatar circles only when exactly one delivery team is selected. */
-  const showAssigneePeopleFilter = filterEpicTeamIds?.length === 1;
+  /** Assignee avatar circles when one or more delivery teams are selected (not "all teams"). */
+  const showAssigneePeopleFilter = activeTeamIds.length > 0;
 
   const selectAllAssignees = useCallback(() => {
     setSelectedAssignees((prev) => {
@@ -703,10 +751,28 @@ export function SprintKanbanBoard({
     });
   }, [assigneeOptions]);
 
-  const rows =
+  const searchLower = searchQuery.trim().toLowerCase();
+
+  const filteredByAssignee =
     !showAssigneePeopleFilter || selectedAssignees.length === 0
       ? allRows
       : allRows.filter((row) => selectedAssignees.includes(storyAssigneeLabel(row.story)));
+
+  const rows = searchLower
+    ? filteredByAssignee.filter(
+        (row) =>
+          row.story.title.toLowerCase().includes(searchLower) ||
+          row.epic.title.toLowerCase().includes(searchLower),
+      )
+    : filteredByAssignee;
+
+  const filteredEpicRows = searchLower
+    ? epicRows.filter(
+        (row) =>
+          row.epic.title.toLowerCase().includes(searchLower) ||
+          row.initiative.title.toLowerCase().includes(searchLower),
+      )
+    : epicRows;
 
   const byStatus = new Map<StoryStatus, BoardStoryRow[]>();
   for (const col of KANBAN_COLUMNS) {
@@ -742,8 +808,7 @@ export function SprintKanbanBoard({
     return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
   }, []);
 
-  const showToolbarRow =
-    (showAssigneePeopleFilter && assigneeOptions.length > 0) || sprintToolbarEnd != null;
+  const showToolbarRow = (showAssigneePeopleFilter && assigneeOptions.length > 0) || sprintToolbarEnd != null;
 
   return (
     <div className="relative flex w-full min-h-min flex-col gap-2">
@@ -857,7 +922,7 @@ export function SprintKanbanBoard({
       ) : null}
       {viewMode === "epics" ? (
         <SprintEpicKanbanView
-          epicRows={epicRows}
+          epicRows={filteredEpicRows}
           month={month}
           yearSprint={yearSprint}
           onOpenEpic={onOpenEpic}

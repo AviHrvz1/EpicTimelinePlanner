@@ -339,7 +339,32 @@ export function EpicFormDialog({
       ),
     [sprintPlanningYear],
   );
-  const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
+  const allAssigneeNameSuggestions = useMemo(() => {
+    if (workspaceDirectoryUsers.length > 0) {
+      const set = new Set(workspaceDirectoryUsers.map((u) => u.name.trim()).filter(Boolean));
+      for (const init of initiatives) {
+        for (const epic of init.epics ?? []) {
+          for (const story of epic.userStories ?? []) {
+            if (story.assignee?.trim()) set.add(story.assignee.trim());
+          }
+          if (epic.assignee?.trim()) set.add(epic.assignee.trim());
+        }
+        if (init.assignee?.trim()) set.add(init.assignee.trim());
+      }
+      return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    }
+    return collectAssigneeNameSuggestions(initiatives);
+  }, [initiatives, workspaceDirectoryUsers]);
+  const assigneeNameSuggestions = useMemo(() => {
+    const teamId = teamDraft.trim();
+    if (!teamId || workspaceDirectoryUsers.length === 0) return allAssigneeNameSuggestions;
+    const teamMembers = workspaceDirectoryUsers
+      .filter((u) => normalizeWorkspaceUserTeam(u.team) === teamId)
+      .map((u) => u.name.trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return teamMembers.length > 0 ? teamMembers : allAssigneeNameSuggestions;
+  }, [allAssigneeNameSuggestions, teamDraft, workspaceDirectoryUsers]);
   const filteredSprintAutocompleteOptions = useMemo(() => {
     if (!isSprintAutocompleteOpen || childEditingCell?.field !== "sprint") return [];
     const raw = childEditingValue.trim().toLowerCase();
@@ -1604,9 +1629,9 @@ export function EpicFormDialog({
                   return (
                     <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                       <p className="text-[15px] font-normal text-slate-700">Roadmap</p>
-                      <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
+                      <span className="inline-flex h-7 max-w-[16rem] items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
                         <MapIcon className="size-3.5 shrink-0 text-blue-500" aria-hidden />
-                        {roadmap.name}
+                        <span className="truncate">{roadmap.name}</span>
                       </span>
                     </div>
                   );
@@ -1617,7 +1642,19 @@ export function EpicFormDialog({
                     <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                     <AssigneeCombobox
                       value={assignee}
-                      onChange={setAssignee}
+                      onChange={(name) => {
+                        setAssignee(name);
+                        if (name.trim() && workspaceDirectoryUsers.length > 0) {
+                          const match = workspaceDirectoryUsers.find((u) => u.name.trim().toLowerCase() === name.trim().toLowerCase());
+                          if (match) {
+                            const teamId = normalizeWorkspaceUserTeam(match.team);
+                            if (teamId) {
+                              setTeamDraft(teamId);
+                              setForceTeamFieldEdit(true);
+                            }
+                          }
+                        }
+                      }}
                       suggestions={assigneeNameSuggestions}
                       placeholder="Type or pick a name"
                       className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}

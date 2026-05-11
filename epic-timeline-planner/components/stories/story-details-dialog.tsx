@@ -46,6 +46,8 @@ import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_IDS } from "@/lib/month-team-board";
+import { type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
+import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { InitiativeItem, UserStoryItem, type RoadmapItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import {
@@ -101,6 +103,7 @@ type StoryDetailsDialogProps = {
     },
   ) => Promise<void>;
   onDelete?: (storyId: string) => Promise<void>;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   /** Styled confirm (matches planner overlay); falls back to `window.confirm` when omitted. */
   onRequestConfirm?: (opts: {
     title: string;
@@ -141,6 +144,7 @@ export function StoryDetailsDialog({
   storyRef: _storyRef,
   surfaceAnchorRef,
   roadmaps = [],
+  workspaceDirectoryUsers = [],
 }: StoryDetailsDialogProps) {
   const statusMeta: Record<StoryStatus, { Icon: typeof ListTodo }> = {
     [StoryStatus.todo]: { Icon: ListTodo },
@@ -167,7 +171,6 @@ export function StoryDetailsDialog({
       ),
     [sprintPlanningYear],
   );
-  const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
   const [priority, setPriority] = useState("");
   const [sprint, setSprint] = useState("");
   const [status, setStatus] = useState<StoryStatus>(StoryStatus.todo);
@@ -175,6 +178,33 @@ export function StoryDetailsDialog({
   const [daysLeft, setDaysLeft] = useState("");
   const [epicId, setEpicId] = useState("");
   const [epicTeamDraft, setEpicTeamDraft] = useState("");
+  const allAssigneeNameSuggestions = useMemo(() => {
+    if (workspaceDirectoryUsers.length > 0) {
+      // Use full names from directory; supplement with any existing story assignees not in the directory
+      const set = new Set(workspaceDirectoryUsers.map((u) => u.name.trim()).filter(Boolean));
+      for (const init of initiatives) {
+        for (const epic of init.epics ?? []) {
+          for (const story of epic.userStories ?? []) {
+            if (story.assignee?.trim()) set.add(story.assignee.trim());
+          }
+          if (epic.assignee?.trim()) set.add(epic.assignee.trim());
+        }
+        if (init.assignee?.trim()) set.add(init.assignee.trim());
+      }
+      return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    }
+    return collectAssigneeNameSuggestions(initiatives);
+  }, [initiatives, workspaceDirectoryUsers]);
+  const assigneeNameSuggestions = useMemo(() => {
+    const teamId = epicTeamDraft.trim();
+    if (!teamId || workspaceDirectoryUsers.length === 0) return allAssigneeNameSuggestions;
+    const teamMembers = workspaceDirectoryUsers
+      .filter((u) => normalizeWorkspaceUserTeam(u.team) === teamId)
+      .map((u) => u.name.trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return teamMembers.length > 0 ? teamMembers : allAssigneeNameSuggestions;
+  }, [allAssigneeNameSuggestions, epicTeamDraft, workspaceDirectoryUsers]);
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [saving, setSaving] = useState(false);
   const [commenting, setCommenting] = useState(false);
@@ -984,9 +1014,9 @@ export function StoryDetailsDialog({
               return (
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Roadmap</p>
-                  <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
+                  <span className="inline-flex h-7 max-w-[16rem] items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
                     <MapIcon className="size-3.5 shrink-0 text-blue-500" aria-hidden />
-                    {roadmap.name}
+                    <span className="truncate">{roadmap.name}</span>
                   </span>
                 </div>
               );
@@ -997,7 +1027,17 @@ export function StoryDetailsDialog({
                 <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                 <AssigneeCombobox
                   value={assignee}
-                  onChange={setAssignee}
+                  onChange={(name) => {
+                    setAssignee(name);
+                    if (name.trim() && workspaceDirectoryUsers.length > 0) {
+                      const nameLower = name.trim().toLowerCase();
+                      const match = workspaceDirectoryUsers.find((u) => u.name.trim().toLowerCase() === nameLower);
+                      if (match) {
+                        const teamId = normalizeWorkspaceUserTeam(match.team);
+                        if (teamId) setEpicTeamDraft(teamId);
+                      }
+                    }
+                  }}
                   suggestions={assigneeNameSuggestions}
                   placeholder="Type or pick a name"
                   className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}

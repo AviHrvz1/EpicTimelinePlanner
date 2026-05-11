@@ -305,6 +305,7 @@ export function SprintEndCountdown({ planYear, yearSprint }: { planYear: number;
         title="View sprint timeline"
       >
         <Clock className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+        <span className="text-slate-500">Left</span>
         <span className="min-w-0 truncate" aria-live="polite">
           {parts.ended ? (
             "Sprint ended"

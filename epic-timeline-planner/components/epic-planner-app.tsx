@@ -5366,6 +5366,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         story={selectedStory}
         initiatives={initiatives}
         roadmaps={roadmaps}
+        workspaceDirectoryUsers={workspaceDirectoryUsers}
         lockParentEpicId={creatingStoryEpicId}
         onClose={() => {
           setStoryDialogOpen(false);

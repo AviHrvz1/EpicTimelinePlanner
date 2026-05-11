@@ -3,13 +3,38 @@
 import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { LucideIcon } from "lucide-react";
-import { BadgeCheck, CheckCircle2, Folder, ListTodo, PlayCircle } from "lucide-react";
+import { BadgeCheck, CheckCircle2, Folder, ListTodo, PlayCircle, Users } from "lucide-react";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { epicTimelineDraggableId, monthEpicKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectEpicsForMonthStatusBoard, deriveEpicAggregateStatus } from "@/lib/month-epic-kanban";
+import { epicDeliveryTeamAssignmentChip } from "@/lib/month-team-board";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
+
+function quarterFromMonth(month: number): string {
+  if (month <= 3) return "Q1";
+  if (month <= 6) return "Q2";
+  if (month <= 9) return "Q3";
+  return "Q4";
+}
+
+function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: string } {
+  const isPlanned = epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
+  if (!isPlanned) return { label: "Unscheduled", className: "border border-slate-200/90 bg-slate-100 text-slate-600" };
+  return { label: quarterFromMonth(epic.planStartMonth!), className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
+}
+
+function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: string } {
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
+  if (stories.every((s) => s.status === "approved")) return { label: "Approved", className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
+  if (stories.every((s) => s.status === "done" || s.status === "approved")) return { label: "Done", className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800" };
+  if (stories.some((s) => s.status === "inProgress" || s.status === "done" || s.status === "approved")) return { label: "In Progress", className: "border border-blue-200/90 bg-blue-50 text-blue-800" };
+  return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
+}
+
+const chipBase = "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold leading-none tracking-[0.01em]";
 
 const EPIC_KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: LucideIcon }[] = [
   { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", Icon: ListTodo },
@@ -75,6 +100,10 @@ function MonthEpicKanbanCard({
       ? "No stories"
       : `${n} ${n === 1 ? "story" : "stories"} · ${stories.filter((s) => s.status === StoryStatus.todo).length} to do · ${stories.filter((s) => s.status === StoryStatus.inProgress).length} in progress · ${stories.filter((s) => s.status === StoryStatus.done).length} done · ${stories.filter((s) => s.status === StoryStatus.approved).length} approved`;
 
+  const planStatus = epicPlanningStatusMeta(epic);
+  const execStatus = epicExecutionStatusMeta(epic);
+  const teamChip = epic.team ? epicDeliveryTeamAssignmentChip(epic.team) : null;
+
   return (
     <div
       ref={setNodeRef}
@@ -111,10 +140,20 @@ function MonthEpicKanbanCard({
                 <Folder className="size-3.5" strokeWidth={2} />
               </span>
             )}
-            <span className="min-w-0">{epic.title}</span>
+            <span className="min-w-0 truncate">{epic.title}</span>
           </p>
           <p className="mt-1 truncate text-[12px] text-slate-500">{initiativeTitle}</p>
           <p className="mt-1.5 text-[11px] leading-snug text-slate-600">{summary}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {teamChip ? (
+              <span className={cn("inline-flex items-center gap-0.5", chipBase, teamChip.className)}>
+                <Users className="size-2.5 shrink-0" aria-hidden />
+                {teamChip.label}
+              </span>
+            ) : null}
+            <span className={cn(chipBase, planStatus.className)}>{planStatus.label}</span>
+            <span className={cn(chipBase, execStatus.className)}>{execStatus.label}</span>
+          </div>
         </button>
       </div>
     </div>
