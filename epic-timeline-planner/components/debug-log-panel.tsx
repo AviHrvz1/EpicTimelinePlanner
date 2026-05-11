@@ -61,7 +61,7 @@ export function DebugLogPanel() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (console as any)[level] = (...args: unknown[]) => {
         orig(...args);
-        push(level, args);
+        queueMicrotask(() => push(level, args));
       };
     }
     return () => {

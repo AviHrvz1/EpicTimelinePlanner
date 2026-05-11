@@ -316,6 +316,179 @@ function IconFilterSelect<T extends string>({
   );
 }
 
+function TeamFilterAutocomplete({
+  values,
+  onToggle,
+  options,
+  ariaLabel,
+  allValue,
+  disabled = false,
+}: {
+  values: string[];
+  onToggle: (value: string) => void;
+  options: IconFilterOption<string>[];
+  ariaLabel: string;
+  allValue: string;
+  disabled?: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const isAllSelected = values.includes(allValue) || values.length === 0;
+  const selectedNonAll = values.filter((v) => v !== allValue);
+
+  const displayLabel = isAllSelected
+    ? ""
+    : selectedNonAll.length === 1
+      ? (options.find((o) => o.value === selectedNonAll[0])?.label ?? selectedNonAll[0])
+      : `${selectedNonAll.length} teams`;
+
+  const placeholder = isAllSelected ? "All Teams" : "";
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (disabled) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setOpen(true);
+      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && activeIndex >= 0 && filtered[activeIndex]) {
+      e.preventDefault();
+      onToggle(filtered[activeIndex].value);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      inputRef.current?.blur();
+    }
+  }
+
+  useEffect(() => {
+    if (activeIndex >= 0 && listRef.current) {
+      const item = listRef.current.children[activeIndex] as HTMLElement | undefined;
+      item?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeIndex]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div
+        className={cn(
+          "flex h-9 items-center gap-1.5 rounded-lg bg-white px-2 ring-1 ring-slate-200 transition",
+          disabled ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50",
+          open && "ring-2 ring-ring/40",
+        )}
+      >
+        <Users className="size-3.5 shrink-0 text-slate-500" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? query : displayLabel}
+          placeholder={placeholder}
+          disabled={disabled}
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          aria-autocomplete="list"
+          autoComplete="off"
+          className={cn(
+            "min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400",
+            disabled && "cursor-not-allowed",
+          )}
+          onFocus={() => { if (!disabled) setOpen(true); }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={handleKeyDown}
+        />
+        {!isAllSelected && !disabled && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={(e) => { e.stopPropagation(); onToggle(allValue); setQuery(""); }}
+            className="shrink-0 text-slate-400 hover:text-slate-700"
+            aria-label="Clear team filter"
+          >
+            <X className="size-3" />
+          </button>
+        )}
+        <ChevronDown
+          className={cn("size-3.5 shrink-0 text-slate-500 transition", open && "rotate-180")}
+          aria-hidden
+          onClick={() => { if (!disabled) { setOpen((v) => !v); inputRef.current?.focus(); } }}
+        />
+      </div>
+
+      {open && (
+        <div
+          ref={listRef}
+          className="absolute top-full left-0 z-50 mt-1 max-h-56 w-full min-w-max overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+          role="listbox"
+          aria-multiselectable="true"
+        >
+          {filtered.length === 0 ? (
+            <p className="px-2 py-2 text-[12px] text-slate-400">No teams found</p>
+          ) : (
+            filtered.map((opt, idx) => {
+              const checked = isAllSelected ? opt.value === allValue : values.includes(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="option"
+                  aria-selected={checked}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { onToggle(opt.value); setQuery(""); inputRef.current?.focus(); }}
+                  className={cn(
+                    "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                    checked && "bg-slate-100 text-slate-900",
+                    activeIndex === idx && "ring-1 ring-inset ring-slate-300",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    tabIndex={-1}
+                    readOnly
+                    checked={checked}
+                    className="size-3.5 rounded border-slate-300 text-slate-700"
+                  />
+                  <span className="shrink-0">{opt.icon}</span>
+                  <span className="whitespace-nowrap">{opt.label}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
   sprintLabel: string | null;
   statusLabel: string;
@@ -2154,7 +2327,7 @@ export function InitiativeListPanel({
                 disabled={panelQuarterFilterLocked}
               />
             )}
-            <IconFilterSelect
+            <TeamFilterAutocomplete
               values={panelTeamFilterIds}
               onToggle={handlePanelTeamFilterToggle}
               options={teamFilterOptions}
@@ -2429,7 +2602,7 @@ export function InitiativeListPanel({
               allValue="all"
               disabled={panelQuarterFilterLocked}
             />
-            <IconFilterSelect
+            <TeamFilterAutocomplete
               values={panelTeamFilterIds}
               onToggle={handlePanelTeamFilterToggle}
               options={teamFilterOptions}

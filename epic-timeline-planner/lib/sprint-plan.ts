@@ -1,3 +1,4 @@
+import { StoryStatus } from "@/lib/generated/prisma";
 import { resolveEpicPlanYearSprint, resolveStoryYearSprint } from "@/lib/year-sprint";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 
@@ -109,6 +110,34 @@ export function collectStoriesForSprintBoard(
     }
   }
   return out;
+}
+
+export type BoardEpicRow = { epic: EpicItem; initiative: InitiativeItem; sprintStatus: StoryStatus };
+
+/** Status of an epic derived only from its stories scheduled on the active sprint. */
+export function deriveEpicSprintStatus(epic: EpicItem, month: number, yearSprint: number): StoryStatus {
+  const sprintStories = (epic.userStories ?? []).filter((s) => storyMatchesYearSprint(s, month, yearSprint));
+  if (sprintStories.length === 0) return StoryStatus.todo;
+  if (sprintStories.some((s) => s.status === StoryStatus.inProgress)) return StoryStatus.inProgress;
+  if (sprintStories.every((s) => s.status === StoryStatus.approved)) return StoryStatus.approved;
+  if (sprintStories.every((s) => s.status === StoryStatus.done || s.status === StoryStatus.approved)) return StoryStatus.done;
+  if (sprintStories.every((s) => s.status === StoryStatus.todo)) return StoryStatus.todo;
+  return StoryStatus.inProgress;
+}
+
+/** Epics in sprint scope, each annotated with their sprint-derived status. */
+export function collectEpicsForSprintKanban(
+  initiatives: InitiativeItem[],
+  month: number,
+  yearSprint: number,
+  filterEpicTeamIds?: string[] | null,
+): BoardEpicRow[] {
+  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
+  return scope.map(({ epic, initiative }) => ({
+    epic,
+    initiative,
+    sprintStatus: deriveEpicSprintStatus(epic, month, yearSprint),
+  }));
 }
 
 export type SprintKanbanSummaryStats = {

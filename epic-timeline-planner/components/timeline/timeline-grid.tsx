@@ -1503,6 +1503,7 @@ export function TimelineGrid({
   const [rightPanelHScroll, setRightPanelHScroll] = useState(false);
   /** Measures available width under the timeline card; drives right-panel + roadmap horizontal scroll. */
   const yearRoadmapMeasureRef = useRef<HTMLDivElement | null>(null);
+  const [sprintKanbanViewMode, setSprintKanbanViewMode] = useState<"stories" | "epics">("stories");
   const [estEpicsPanelOpen, setEstEpicsPanelOpen] = useState(false);
   /** Drives slide-in/out (mirror of epic insights panel: translate + duration-300). */
   const [estEpicsPanelEntered, setEstEpicsPanelEntered] = useState(false);
@@ -2470,6 +2471,8 @@ export function TimelineGrid({
   }, [activeMonth, resolvedActiveYearSprint]);
 
   const activeYearSprintForMonthDrill = resolvedActiveYearSprint;
+
+  useEffect(() => { setSprintKanbanViewMode("stories"); }, [resolvedActiveYearSprint, activeMonth]);
 
   const sprintKanbanSummaryStats = useMemo(() => {
     if (monthPlanTab !== "sprint-kanban" || resolvedActiveYearSprint == null) return null;
@@ -4152,23 +4155,33 @@ export function TimelineGrid({
                   <button
                     type="button"
                     onClick={() => {
+                      setSprintKanbanViewMode((m) => m === "epics" ? "stories" : "epics");
                       setRoadmapBarMode("epics");
                       onSummaryStatusQuickFilterChange?.(null);
                     }}
                     className={cn(
                       summaryChipBaseClass,
-                      roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+                      sprintKanbanViewMode === "epics"
                         ? summaryChipEpicsOnClass
                         : summaryChipEpicsIdleClass,
                     )}
                   >
                     {sprintKanbanSummaryStats.epicCount} Epics
                   </button>
-                  <div className={summaryChipStoriesClass}>
+                  <button
+                    type="button"
+                    onClick={() => setSprintKanbanViewMode("stories")}
+                    className={cn(
+                      summaryChipBaseClass,
+                      sprintKanbanViewMode === "stories"
+                        ? summaryChipStoriesClass + " ring-1 ring-blue-300"
+                        : summaryChipStoriesClass,
+                    )}
+                  >
                     <span className="truncate">{sprintKanbanSummaryStats.storyScheduledOnKanban}</span>
                     <span className="hidden sm:inline">User Stories</span>
                     <span className="sm:hidden">Stories</span>
-                  </div>
+                  </button>
                   <button
                     type="button"
                     onClick={() => openEstEpicsPanel()}
@@ -5030,6 +5043,7 @@ export function TimelineGrid({
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
+                  viewMode={sprintKanbanViewMode}
                   sprintToolbarEnd={
                     showSprintEndCountdown && activeYearSprintForMonthDrill != null && monthPlanTab !== "sprint-kanban" ? (
                       <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
@@ -5038,6 +5052,7 @@ export function TimelineGrid({
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}
                   onRequestUnscheduleStory={onRequestSprintKanbanStoryUnschedule}
                   onOpenStory={onOpenStory ?? (() => {})}
+                  onOpenEpic={onOpenEpic}
                   onPatchStory={onSprintKanbanStoryPatch}
                   onGoToOpenSprint={(ys) =>
                     onEnterSprintStoryBoard?.(ys, sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId))

@@ -566,6 +566,19 @@ function computeEpicMonthLanePlacement(
       ...others.slice(insertAt),
     ];
     const rowByEpicId = new Map(newOrder.map((row, idx) => [row.epicId, idx]));
+    console.log("[gantt-drop][epic] first-schedule placement", {
+      epicId,
+      month,
+      planSprint,
+      insertAt,
+      laneIndex,
+      othersCount: others.length,
+      newOrder: newOrder.map((r) => ({ epicId: r.epicId, row: r.timelineRow, range: [r.startMonth, r.endMonth] })),
+      assignedRows: Object.fromEntries(rowByEpicId),
+      epicsChangingRow: newOrder
+        .map((r, idx) => ({ epicId: r.epicId, from: r.timelineRow, to: idx }))
+        .filter((r) => r.from !== r.to),
+    });
     const next = prev.map((initiative) => ({
       ...initiative,
       epics: (initiative.epics ?? []).map((epic) =>

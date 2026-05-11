@@ -10,6 +10,7 @@ import {
   ArrowRight,
   CheckCheck,
   CheckCircle2,
+  Folder,
   ListTodo,
   PlayCircle,
   UserRound,
@@ -21,8 +22,8 @@ import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { assigneeMatchRosterForSprintTeam, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
-import { collectStoriesForSprintBoard, type BoardStoryRow } from "@/lib/sprint-plan";
-import { InitiativeItem, UserStoryItem } from "@/lib/types";
+import { collectStoriesForSprintBoard, collectEpicsForSprintKanban, type BoardStoryRow, type BoardEpicRow } from "@/lib/sprint-plan";
+import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -31,6 +32,46 @@ import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
 function storyAssigneeLabel(story: UserStoryItem): string {
   return story.assignee?.trim() || "Unassigned";
+}
+
+const LABEL_CHIP_PALETTES = [
+  "border-indigo-200/70 bg-indigo-50 text-indigo-700",
+  "border-violet-200/70 bg-violet-50 text-violet-700",
+  "border-sky-200/70 bg-sky-50 text-sky-700",
+  "border-emerald-200/70 bg-emerald-50 text-emerald-700",
+  "border-amber-200/70 bg-amber-50 text-amber-700",
+  "border-rose-200/70 bg-rose-50 text-rose-700",
+  "border-teal-200/70 bg-teal-50 text-teal-700",
+  "border-orange-200/70 bg-orange-50 text-orange-700",
+] as const;
+
+function labelChipClass(label: string): string {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) & 0xffff;
+  return LABEL_CHIP_PALETTES[hash % LABEL_CHIP_PALETTES.length]!;
+}
+
+function parseLabels(raw: string | null | undefined): string[] {
+  return (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function LabelChips({ labels }: { labels: string[] }) {
+  if (labels.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {labels.map((lab, i) => (
+        <span
+          key={`${lab}-${i}`}
+          className={cn(
+            "inline-flex max-w-[10rem] shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold leading-tight",
+            labelChipClass(lab),
+          )}
+        >
+          <span className="truncate">{lab}</span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function assigneeFilterIcon(name: string): LucideIcon {
@@ -266,6 +307,7 @@ function KanbanStoryCard({
               {story.title}
             </p>
             <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
+            {story.labels && <LabelChips labels={parseLabels(story.labels)} />}
           </button>
           {onUnscheduleStory ? (
             <button
@@ -400,6 +442,156 @@ function KanbanStoryCard({
   );
 }
 
+// ─── Epic view (read-only) ───────────────────────────────────────────────────
+
+function SprintEpicCard({
+  row,
+  month,
+  yearSprint,
+  onOpenEpic,
+}: {
+  row: BoardEpicRow;
+  month: number;
+  yearSprint: number;
+  onOpenEpic?: (epicId: string) => void;
+}) {
+  const { epic, initiative } = row;
+  const sprintStories = (epic.userStories ?? []).filter(
+    (s) => s.sprint != null && (s.sprint >= 3 ? s.sprint === yearSprint : s.sprint + (month - 1) * 2 === yearSprint),
+  );
+  const todo = sprintStories.filter((s) => s.status === StoryStatus.todo).length;
+  const inProgress = sprintStories.filter((s) => s.status === StoryStatus.inProgress).length;
+  const done = sprintStories.filter((s) => s.status === StoryStatus.done).length;
+  const approved = sprintStories.filter((s) => s.status === StoryStatus.approved).length;
+  const total = sprintStories.length;
+
+  const epicLabels = [...new Set(
+    sprintStories.flatMap((s) => parseLabels(s.labels)),
+  )];
+
+  return (
+    <div
+      className="group rounded-lg border border-slate-200/90 bg-white py-2.5 pl-3 pr-2.5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+      style={{ borderLeftColor: epic.color, borderLeftWidth: 3 }}
+    >
+      <button
+        type="button"
+        onClick={() => onOpenEpic?.(epic.id)}
+        className="w-full text-left"
+        disabled={!onOpenEpic}
+      >
+        <p className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold leading-snug text-slate-900">
+          {epic.icon?.trim() && epic.icon !== "📁" ? (
+            <span className="shrink-0 text-[14px]">{epic.icon}</span>
+          ) : (
+            <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+          )}
+          <span className="min-w-0 truncate">{epic.title}</span>
+        </p>
+        <p className="mt-0.5 truncate text-[11px] text-slate-400">{initiative.title}</p>
+        {epicLabels.length > 0 && <LabelChips labels={epicLabels} />}
+
+        {total > 0 ? (
+          <div className="mt-2 space-y-1.5">
+            {/* Progress bar */}
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="flex h-full">
+                {approved > 0 && (
+                  <div className="h-full bg-violet-400" style={{ width: `${(approved / total) * 100}%` }} />
+                )}
+                {done > 0 && (
+                  <div className="h-full bg-emerald-400" style={{ width: `${(done / total) * 100}%` }} />
+                )}
+                {inProgress > 0 && (
+                  <div className="h-full bg-blue-400" style={{ width: `${(inProgress / total) * 100}%` }} />
+                )}
+              </div>
+            </div>
+            {/* Story breakdown */}
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
+              {todo > 0 && <span className="text-slate-400">{todo} to do</span>}
+              {inProgress > 0 && <span className="text-blue-500">{inProgress} in progress</span>}
+              {done > 0 && <span className="text-emerald-500">{done} done</span>}
+              {approved > 0 && <span className="text-violet-500">{approved} approved</span>}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1.5 text-[10px] text-slate-400">No stories in this sprint</p>
+        )}
+      </button>
+    </div>
+  );
+}
+
+const EPIC_STATUS_COLUMNS: { status: StoryStatus; label: string; tone: string; hoverTone: string; Icon: LucideIcon }[] = [
+  { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", hoverTone: "hover:border-slate-300 hover:bg-slate-100/90 hover:shadow-sm", Icon: ListTodo },
+  { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60", hoverTone: "hover:border-blue-300 hover:bg-blue-100/70 hover:shadow-sm hover:shadow-blue-100", Icon: PlayCircle },
+  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", hoverTone: "hover:border-emerald-300 hover:bg-emerald-100/70 hover:shadow-sm hover:shadow-emerald-100", Icon: CheckCheck },
+  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60", hoverTone: "hover:border-violet-300 hover:bg-violet-100/70 hover:shadow-sm hover:shadow-violet-100", Icon: CheckCircle2 },
+];
+
+function SprintEpicKanbanView({
+  epicRows,
+  month,
+  yearSprint,
+  onOpenEpic,
+}: {
+  epicRows: BoardEpicRow[];
+  month: number;
+  yearSprint: number;
+  onOpenEpic?: (epicId: string) => void;
+}) {
+  const byStatus = new Map<StoryStatus, BoardEpicRow[]>();
+  for (const col of EPIC_STATUS_COLUMNS) byStatus.set(col.status, []);
+  for (const row of epicRows) {
+    byStatus.get(row.sprintStatus)?.push(row);
+  }
+
+  return (
+    <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+      {EPIC_STATUS_COLUMNS.map(({ status, label, tone, hoverTone, Icon }) => {
+        const colRows = byStatus.get(status) ?? [];
+        return (
+          <div
+            key={status}
+            className={cn(
+              "flex min-h-[24rem] w-full min-w-0 flex-col rounded-xl border p-2 transition-all duration-150",
+              tone,
+              hoverTone,
+            )}
+          >
+            <div className="mb-2 flex shrink-0 flex-col gap-0.5 pb-1">
+              <div className="flex items-center justify-center gap-1.5 text-slate-600">
+                <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+                <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
+                <span className="rounded-full bg-slate-200/80 px-1.5 py-0 text-[10px] font-semibold text-slate-500">
+                  {colRows.length}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {colRows.map((row) => (
+                <SprintEpicCard
+                  key={row.epic.id}
+                  row={row}
+                  month={month}
+                  yearSprint={yearSprint}
+                  onOpenEpic={onOpenEpic}
+                />
+              ))}
+              {colRows.length === 0 && (
+                <p className="py-4 text-center text-[11px] text-slate-400">No epics</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 type SprintKanbanProps = {
   initiatives: InitiativeItem[];
   planYear: number;
@@ -408,13 +600,16 @@ type SprintKanbanProps = {
   /** When set, only stories for epics on these delivery teams (same as left panel filter). */
   filterEpicTeamIds?: string[] | null;
   epicAccordionEmphasis?: { epicId: string; tick: number } | null;
-  /** Batch sheen on all visible Kanban cards (e.g. when “Scheduled” summary filter is toggled on). */
+  /** Batch sheen on all visible Kanban cards (e.g. when "Scheduled" summary filter is toggled on). */
   scheduledStoriesEmphasis?: { tick: number } | null;
   /** Shown on the same row as assignee filter chips (e.g. sprint countdown). */
   sprintToolbarEnd?: ReactNode;
+  /** "epics" replaces story cards with read-only epic status cards. */
+  viewMode?: "stories" | "epics";
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
   onOpenStory: (storyId: string) => void;
+  onOpenEpic?: (epicId: string) => void;
   onPatchStory?: (storyId: string, patch: SprintKanbanStoryPatch) => void;
   /** When viewing a closed sprint, jump to the first still-open sprint in `planYear` (same team filter). */
   onGoToOpenSprint?: (yearSprint: number) => void;
@@ -430,21 +625,28 @@ export function SprintKanbanBoard({
   epicAccordionEmphasis = null,
   scheduledStoriesEmphasis = null,
   sprintToolbarEnd = null,
+  viewMode = "stories",
   onUnscheduleStory,
   onRequestUnscheduleStory,
   onOpenStory,
+  onOpenEpic,
   onPatchStory,
   onGoToOpenSprint,
   workspaceDirectoryUsers = [],
 }: SprintKanbanProps) {
   const sprintClosed = sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
-  /** Fresh on each render so the target matches wall-clock “today” when the tab stays open across a sprint boundary. */
+  /** Fresh on each render so the target matches wall-clock "today" when the tab stays open across a sprint boundary. */
   const workTargetSprint = currentWorkYearSprintForPlan(planYear);
   const showGoToOpenSprint =
     sprintClosed && workTargetSprint != null && workTargetSprint !== yearSprint && onGoToOpenSprint;
   const allRows = useMemo(
     () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds),
     [initiatives, month, yearSprint, filterEpicTeamIds],
+  );
+
+  const epicRows = useMemo(
+    () => viewMode === "epics" ? collectEpicsForSprintKanban(initiatives, month, yearSprint, filterEpicTeamIds) : [],
+    [viewMode, initiatives, month, yearSprint, filterEpicTeamIds],
   );
 
   const rosterTeamId = filterEpicTeamIds?.length === 1 ? filterEpicTeamIds[0] : null;
@@ -653,7 +855,15 @@ export function SprintKanbanBoard({
           </div>
         </div>
       ) : null}
-      <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+      {viewMode === "epics" ? (
+        <SprintEpicKanbanView
+          epicRows={epicRows}
+          month={month}
+          yearSprint={yearSprint}
+          onOpenEpic={onOpenEpic}
+        />
+      ) : null}
+      <div className={cn("grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-4", viewMode === "epics" && "hidden")}>
         {KANBAN_COLUMNS.map(({ status, label, tone, hoverTone, Icon }) => {
           const colRows = byStatus.get(status) ?? [];
           const sortableItemIds = colRows.map((r) => storyBoardDraggableId(r.story.id));
