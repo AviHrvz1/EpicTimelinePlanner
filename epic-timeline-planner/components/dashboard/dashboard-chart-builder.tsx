@@ -44,39 +44,69 @@ function currentSprintParams(): { year: number; quarter: number; sprint: number;
 }
 
 const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; description: string; accent: string }> = {
-  velocity: {
-    label: "Velocity",
-    icon: <BarChart2 className="size-4 text-indigo-500" />,
-    description: "Stories completed per sprint across a quarter",
-    accent: "border-indigo-200 bg-indigo-50 text-indigo-700",
-  },
   burndown: {
     label: "Burndown",
     icon: <TrendingDown className="size-4 text-rose-500" />,
-    description: "Remaining work vs ideal line — pick roadmaps & teams",
+    description: "Remaining work vs ideal line for a sprint",
     accent: "border-rose-200 bg-rose-50 text-rose-700",
   },
   cfd: {
     label: "Cumulative Flow",
     icon: <AreaChart className="size-4 text-emerald-500" />,
-    description: "Story status stacked over time — pick roadmaps & teams",
+    description: "Story status stacked over time in a sprint",
     accent: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  "story-status": {
+    label: "User Stories Status",
+    icon: <PieChart className="size-4 text-sky-500" />,
+    description: "Pie breakdown of story statuses in a sprint",
+    accent: "border-sky-200 bg-sky-50 text-sky-700",
+  },
+  "workload-balance": {
+    label: "Workload Balance",
+    icon: <BarChart2 className="size-4 text-indigo-500" />,
+    description: "Stories per assignee / team grouped by status",
+    accent: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  },
+  "sprint-load": {
+    label: "Sprint Load",
+    icon: <Users className="size-4 text-violet-500" />,
+    description: "Days left vs estimated per assignee / team",
+    accent: "border-violet-200 bg-violet-50 text-violet-700",
+  },
+  "sprint-burnup": {
+    label: "Sprint Burnup",
+    icon: <AreaChart className="size-4 text-teal-500" />,
+    description: "Completed vs scope vs ideal line for a sprint",
+    accent: "border-teal-200 bg-teal-50 text-teal-700",
+  },
+  "epic-burnup": {
+    label: "Epic Scope Burnup",
+    icon: <AreaChart className="size-4 text-purple-500" />,
+    description: "Epic scope completed vs total scope over a sprint",
+    accent: "border-purple-200 bg-purple-50 text-purple-700",
+  },
+  velocity: {
+    label: "Velocity",
+    icon: <BarChart2 className="size-4 text-amber-500" />,
+    description: "Stories completed per sprint across a quarter",
+    accent: "border-amber-200 bg-amber-50 text-amber-700",
   },
   workload: {
     label: "Workload",
-    icon: <Users className="size-4 text-amber-500" />,
+    icon: <Users className="size-4 text-orange-500" />,
     description: "Days left by assignee for a sprint",
-    accent: "border-amber-200 bg-amber-50 text-amber-700",
+    accent: "border-orange-200 bg-orange-50 text-orange-700",
   },
   "quarter-status": {
     label: "Quarter Status",
-    icon: <PieChart className="size-4 text-sky-500" />,
+    icon: <PieChart className="size-4 text-pink-500" />,
     description: "Story status breakdown for a whole quarter",
-    accent: "border-sky-200 bg-sky-50 text-sky-700",
+    accent: "border-pink-200 bg-pink-50 text-pink-700",
   },
 };
 
-const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "cfd"]);
+const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
 
 // ─── Multi-select toggle list ─────────────────────────────────────────────────
 

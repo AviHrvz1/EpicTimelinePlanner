@@ -8,8 +8,13 @@ import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
 import { BurndownChart } from "./charts/burndown-chart";
 import { CfdChart } from "./charts/cfd-chart";
+import { EpicBurnupChart } from "./charts/epic-burnup-chart";
 import { QuarterStatusChart } from "./charts/quarter-status-chart";
+import { SprintBurnupChart } from "./charts/sprint-burnup-chart";
+import { SprintLoadChart } from "./charts/sprint-load-chart";
+import { StoryStatusChart } from "./charts/story-status-chart";
 import { VelocityChart } from "./charts/velocity-chart";
+import { WorkloadBalanceChart } from "./charts/workload-balance-chart";
 import { WorkloadChart } from "./charts/workload-chart";
 import { DashboardChartItem } from "./types";
 
@@ -74,6 +79,56 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           initiatives={scopedInitiatives}
           year={(params.year as number) ?? new Date().getFullYear()}
           quarter={(params.quarter as number) ?? 1}
+          team={params.team as string | null}
+        />
+      );
+    case "story-status":
+      return (
+        <StoryStatusChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          team={params.team as string | null}
+        />
+      );
+    case "workload-balance":
+      return (
+        <WorkloadBalanceChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          team={params.team as string | null}
+        />
+      );
+    case "sprint-load":
+      return (
+        <SprintLoadChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          team={params.team as string | null}
+        />
+      );
+    case "sprint-burnup":
+      return (
+        <SprintBurnupChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          team={params.team as string | null}
+        />
+      );
+    case "epic-burnup":
+      return (
+        <EpicBurnupChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
         />
       );

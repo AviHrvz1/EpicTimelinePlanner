@@ -3,7 +3,12 @@ export type ChartType =
   | "burndown"
   | "cfd"
   | "workload"
-  | "quarter-status";
+  | "quarter-status"
+  | "story-status"
+  | "workload-balance"
+  | "sprint-load"
+  | "sprint-burnup"
+  | "epic-burnup";
 
 export type DashboardChartConfig = {
   chartType: ChartType;

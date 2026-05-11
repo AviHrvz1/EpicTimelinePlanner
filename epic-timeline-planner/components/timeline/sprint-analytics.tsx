@@ -1163,7 +1163,7 @@ export function SprintAnalytics({
             <div className="mb-2 flex shrink-0 items-center gap-2">
               <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                 <Activity className="size-4 text-slate-600" />
-                Epic Scope Burnup
+                Sprint Burnup
               </h3>
             </div>
             <div className="grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">

@@ -47,6 +47,31 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     icon: <PieChart className="size-4 text-sky-500" />,
     description: "Story status breakdown for a whole quarter",
   },
+  "story-status": {
+    label: "User Stories Status",
+    icon: <PieChart className="size-4 text-sky-400" />,
+    description: "Pie breakdown of story statuses in a sprint",
+  },
+  "workload-balance": {
+    label: "Workload Balance",
+    icon: <BarChart2 className="size-4 text-indigo-400" />,
+    description: "Stories per assignee / team grouped by status",
+  },
+  "sprint-load": {
+    label: "Sprint Load",
+    icon: <Users className="size-4 text-violet-500" />,
+    description: "Days left vs estimated per assignee / team",
+  },
+  "sprint-burnup": {
+    label: "Sprint Burnup",
+    icon: <AreaChart className="size-4 text-teal-500" />,
+    description: "Completed vs scope vs ideal line for a sprint",
+  },
+  "epic-burnup": {
+    label: "Epic Scope Burnup",
+    icon: <AreaChart className="size-4 text-purple-500" />,
+    description: "Epic scope completed vs total scope over a sprint",
+  },
 };
 
 const CHART_TYPE_VALUES: string[] = Object.keys(CHART_META);

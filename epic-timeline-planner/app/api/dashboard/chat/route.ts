@@ -14,8 +14,8 @@ type CollectedParams = {
   teamAsked?: boolean;
 };
 
-const CHART_TYPES: ChartType[] = ["velocity", "burndown", "cfd", "workload", "quarter-status"];
-const NEEDS_SPRINT = new Set(["burndown", "cfd", "workload"]);
+const CHART_TYPES: ChartType[] = ["velocity", "burndown", "cfd", "workload", "quarter-status", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"];
+const NEEDS_SPRINT = new Set(["burndown", "cfd", "workload", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
 const NEEDS_METRIC = new Set(["burndown", "workload"]);
 
 function nextStep(p: CollectedParams): Record<string, unknown> {
@@ -105,6 +105,26 @@ function buildChart(p: CollectedParams): Record<string, unknown> {
     case "quarter-status":
       title = `${p.quarterStr} Status${teamSuffix}`;
       params = { year: p.year, quarter: p.quarter, ...(p.team ? { team: p.team } : {}) };
+      break;
+    case "story-status":
+      title = `Sprint ${p.sprint} User Stories Status${teamSuffix}`;
+      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, ...(p.team ? { team: p.team } : {}) };
+      break;
+    case "workload-balance":
+      title = `Sprint ${p.sprint} Workload Balance${teamSuffix}`;
+      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, ...(p.team ? { team: p.team } : {}) };
+      break;
+    case "sprint-load":
+      title = `Sprint ${p.sprint} Load${teamSuffix}`;
+      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, ...(p.team ? { team: p.team } : {}) };
+      break;
+    case "sprint-burnup":
+      title = `Sprint ${p.sprint} Burnup${teamSuffix}`;
+      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, ...(p.team ? { team: p.team } : {}) };
+      break;
+    case "epic-burnup":
+      title = `Sprint ${p.sprint} Epic Scope Burnup${teamSuffix}`;
+      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, ...(p.team ? { team: p.team } : {}) };
       break;
     default:
       title = "Chart";
