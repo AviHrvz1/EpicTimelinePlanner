@@ -4647,7 +4647,7 @@ export function TimelineGrid({
                   onClick={() => {
                     onMonthPlanTabChange?.("sprint-capacity");
                   }}
-                  title="Sprint Capacity"
+                  title="Capacity Planning"
                   onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
                     "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
@@ -4658,7 +4658,7 @@ export function TimelineGrid({
                   )}
                 >
                   <Thermometer className="size-4" aria-hidden />
-                  <span className="sr-only">Sprint Capacity</span>
+                  <span className="sr-only">Capacity Planning</span>
                   <span
                     aria-hidden
                     className={cn(
@@ -4666,7 +4666,7 @@ export function TimelineGrid({
                       isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
                     )}
                   >
-                    Sprint Capacity
+                    Capacity Planning
                   </span>
                 </button>
                 <button

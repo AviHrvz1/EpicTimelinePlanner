@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Check, GripVertical, Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -38,6 +38,19 @@ import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
 function storyAssigneeDisplayLabel(story: UserStoryItem): string {
   return story.assignee?.trim() || "Unassigned";
+}
+
+function DragToAssignIcon({ className }: { className?: string }) {
+  return (
+    <span className={cn("relative inline-block", className)} aria-hidden style={{ width: "1.9rem", height: "1.9rem" }}>
+      <span className="absolute top-0 left-0 size-4 shrink-0 flex items-center justify-center">
+        <UserRound className="size-4" />
+      </span>
+      <svg viewBox="0 0 14 16" fill="currentColor" className="absolute size-5" style={{ top: "12px", left: "11px" }} focusable="false">
+        <path d="M2 1 L2 13 L5 10 L7.5 15 L9 14.3 L6.5 9.3 L10.5 9.3 Z" stroke="white" strokeWidth="0.85" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </span>
+  );
 }
 
 function capacityBucketToFilterLabel(bucket: string): string {
@@ -180,6 +193,16 @@ function CapacityStoryCard({
   onOpenStory: (storyId: string) => void;
 }) {
   const isUnassigned = card.assigneeLabel === "Unassigned";
+  const [showAssignHint, setShowAssignHint] = useState(isUnassigned);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isUnassigned) {
+      setShowAssignHint(true);
+      hintTimerRef.current = setTimeout(() => setShowAssignHint(false), 4200);
+    }
+    return () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [draftDays, setDraftDays] = useState<number | null>(null);
   const isDirty = draftDays !== null && draftDays !== card.estimatedDays;
   const displayDays = draftDays !== null ? draftDays : card.estimatedDays;
@@ -249,8 +272,11 @@ function CapacityStoryCard({
               className="w-full truncate text-left text-[13px] font-semibold leading-snug text-slate-900 hover:text-blue-700"
               onClick={() => onOpenStory(card.id)}
             >
-              <span className="mr-1.5 inline-flex align-middle text-slate-600">
+              <span className="relative mr-1.5 inline-flex align-middle text-slate-600">
                 <UserStoryIcon className="size-3.5" />
+                {showAssignHint ? (
+                  <DragToAssignIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-emerald-600" />
+                ) : null}
               </span>
               {card.title}
             </button>

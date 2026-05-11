@@ -17,6 +17,7 @@ import {
   type Collision,
   type CollisionDetection,
 } from "@dnd-kit/core";
+import { CalendarCheck2, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { TimelineBarDragPreview } from "@/components/timeline/epic-timeline-bar";
@@ -320,7 +321,7 @@ function DragOverlayLayer() {
 }
 
 function PlannerDragOverlayBody({ payloadSnapshot }: { payloadSnapshot: unknown }) {
-  const { active } = useDndContext();
+  const { active, over } = useDndContext();
   if (!active) return null;
   const id = String(active.id);
   const data =
@@ -343,15 +344,38 @@ function PlannerDragOverlayBody({ payloadSnapshot }: { payloadSnapshot: unknown 
     );
   }
 
+  if (isStoryDraggableId(id)) {
+    const overId = active.data.current !== undefined && over ? String(over.id) : "";
+    if (overId.startsWith("kanban:") || overId.startsWith("story:board:")) {
+      return (
+        <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 shadow-xl">
+          <CalendarCheck2 className="size-4 shrink-0" aria-hidden />
+          Schedule
+        </div>
+      );
+    }
+    if (overId.startsWith("capacity:")) {
+      return (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 shadow-xl">
+          <UserRound className="size-4 shrink-0" aria-hidden />
+          Assign
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-xl">
+        Move story
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-xl">
       {isEpicPlanDraggableId(id)
         ? "Place epic"
         : isInitiativeDraggableId(id)
           ? "Move initiative"
-          : isStoryDraggableId(id)
-            ? "Move story"
-            : "Move"}
+          : "Move"}
     </div>
   );
 }
