@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Save } from "lucide-react";
 
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
@@ -8,6 +8,14 @@ import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { DashboardCanvas } from "./dashboard-canvas";
 import { DashboardChartBuilder } from "./dashboard-chart-builder";
 import { DashboardChartConfig, DashboardChartItem, DashboardItem } from "./types";
+
+type WorkspaceContext = {
+  teams: string[];
+  users: Array<{ id: string; name: string; team: string }>;
+  quarters: string[];
+  sprints: string[];
+  initiatives: Array<{ id: string; title: string; status: string; year: number }>;
+};
 
 type Props = {
   initiatives: InitiativeItem[];
@@ -20,10 +28,14 @@ export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceD
   const [dashboards, setDashboards] = useState<DashboardItem[]>([]);
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(null);
   const [charts, setCharts] = useState<DashboardChartItem[]>([]);
+  const [context, setContext] = useState<WorkspaceContext | null>(null);
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const pendingDashboardRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/dashboard/context").then((r) => r.json()).then(setContext).catch(() => null);
+  }, []);
 
   // Load dashboards
   useEffect(() => {
@@ -175,6 +187,7 @@ export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceD
             key={editTarget?.id ?? "new"}
             roadmaps={roadmaps}
             workspaceDirectoryUsers={workspaceDirectoryUsers}
+            context={context}
             onAddCharts={handleAddCharts}
           />
         </div>
