@@ -767,6 +767,21 @@ function DraggableInitiativeCard({
   );
 }
 
+function DragToKanbanArrowIcon({ className }: { className?: string }) {
+  return (
+    <span className={cn("relative inline-block", className)} aria-hidden style={{ width: "1.9rem", height: "1.9rem" }}>
+      {/* user story icon — fully visible top-left */}
+      <span className="absolute top-0 left-0 size-4 shrink-0 flex items-center justify-center">
+        <UserStoryIcon />
+      </span>
+      {/* cursor tip sits at bottom-right corner of story icon */}
+      <svg viewBox="0 0 14 16" fill="currentColor" className="absolute size-5" style={{ top: "12px", left: "11px" }} focusable="false">
+        <path d="M2 1 L2 13 L5 10 L7.5 15 L9 14.3 L6.5 9.3 L10.5 9.3 Z" stroke="white" strokeWidth="0.85" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </span>
+  );
+}
+
 function DragToGanttArrowIcon({ className }: { className?: string }) {
   return (
     <span className={cn("relative inline-block", className)} aria-hidden style={{ width: "1.9rem", height: "1.9rem" }}>
@@ -1382,6 +1397,18 @@ function SprintEpicCard({
   }
   const [storyTitle, setStoryTitle] = useState("");
   const [isAddingStory, setIsAddingStory] = useState(false);
+  const [hintStoryId, setHintStoryId] = useState<string | null>(null);
+  const prevStoryIdsRef = useRef<Set<string>>(new Set(stories.map((s) => s.id)));
+
+  useEffect(() => {
+    const currentIds = new Set(stories.map((s) => s.id));
+    const newId = [...currentIds].find((id) => !prevStoryIdsRef.current.has(id)) ?? null;
+    prevStoryIdsRef.current = currentIds;
+    if (!newId) return;
+    setHintStoryId(newId);
+    const t = setTimeout(() => setHintStoryId(null), 4200);
+    return () => clearTimeout(t);
+  }, [stories]);
 
   async function handleAddStory() {
     const title = storyTitle.trim();
@@ -1553,8 +1580,11 @@ function SprintEpicCard({
                       <StoryDragHandle storyId={story.id} />
                     )
                   ) : null}
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                  <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                     <UserStoryIcon />
+                    {hintStoryId === story.id ? (
+                      <DragToKanbanArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+                    ) : null}
                   </span>
                   <MiddlePanelStoryTitleButton
                     storyTitle={story.title}
