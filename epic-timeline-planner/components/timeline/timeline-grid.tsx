@@ -5505,6 +5505,8 @@ export function TimelineGrid({
                         <SprintRetrospectiveEditor
                           sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
                           teamName={teamLabel}
+                          teamId={teamId}
+                          workspaceDirectoryUsers={workspaceDirectoryUsers}
                           initialDoc={teamDoc}
                           updatedAt={teamDoc?.updatedAt ?? null}
                           onSave={(doc) => onSaveSprintRetrospective?.(doc, teamId)}
@@ -5515,6 +5517,7 @@ export function TimelineGrid({
                 ) : (
                   <SprintRetrospectiveEditor
                     sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
+                    workspaceDirectoryUsers={workspaceDirectoryUsers}
                     initialDoc={sprintRetrospective}
                     updatedAt={sprintRetrospective?.updatedAt ?? null}
                     onSave={(doc) => onSaveSprintRetrospective?.(doc)}

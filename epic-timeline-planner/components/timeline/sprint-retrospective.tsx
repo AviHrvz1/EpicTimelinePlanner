@@ -28,11 +28,15 @@ import {
   Underline as UnderlineIcon,
   Undo,
   User,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useReducer, useState, type MouseEvent } from "react";
 
+import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
+import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
 
 const SECTION_TEMPLATE_HTML = "<p></p>";
@@ -53,6 +57,8 @@ export type SprintRetrospectiveDoc = {
 type SprintRetrospectiveEditorProps = {
   sprintLabel: string;
   teamName?: string | null;
+  teamId?: string | null;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   initialDoc: SprintRetrospectiveDoc | null;
   updatedAt: string | null;
   onSave: (doc: SprintRetrospectiveDoc) => void;
@@ -226,8 +232,8 @@ function RetroRichSection({
           <TitleIcon className="size-4.5" aria-hidden />
         </div>
         <div className="min-w-0 pt-0.5">
-          <p className="text-[15px] font-semibold leading-snug text-slate-800">{title}</p>
-          <p className="mt-0.5 text-[12px] text-slate-500">{subtitle}</p>
+          <p className="text-[18px] font-semibold leading-snug text-slate-800">{title}</p>
+          <p className="mt-0.5 text-[13px] text-slate-500">{subtitle}</p>
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -243,6 +249,8 @@ function RetroRichSection({
 export function SprintRetrospectiveEditor({
   sprintLabel,
   teamName,
+  teamId,
+  workspaceDirectoryUsers = [],
   initialDoc,
   updatedAt,
   onSave,
@@ -251,6 +259,14 @@ export function SprintRetrospectiveEditor({
   const [improveHtml, setImproveHtml] = useState(() => normalizeSectionHtml(initialDoc?.improveHtml));
   const [actionItems, setActionItems] = useState<SprintRetroActionItem[]>(initialDoc?.actionItems ?? []);
   const [savedAtText, setSavedAtText] = useState<string | null>(null);
+
+  const ownerSuggestions = useMemo(() => {
+    if (workspaceDirectoryUsers.length === 0) return [];
+    const members = teamId
+      ? workspaceDirectoryUsers.filter((u) => normalizeWorkspaceUserTeam(u.team) === teamId)
+      : workspaceDirectoryUsers;
+    return members.map((u) => u.name.trim()).filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [workspaceDirectoryUsers, teamId]);
 
   useEffect(() => {
     setWentWellHtml(normalizeSectionHtml(initialDoc?.wentWellHtml));
@@ -292,7 +308,19 @@ export function SprintRetrospectiveEditor({
       <div className="min-h-0 flex-1 overflow-y-auto">
 
         {/* Hero header */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-white px-6 py-7 sm:px-8 sm:py-8 border-b border-slate-200">
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-white px-6 py-7 sm:px-8 sm:py-8 border-b border-slate-200 shadow-[0_2px_12px_0_rgba(0,0,0,0.07)]">
+          {/* Team identity banner — visible when a specific team is shown */}
+          {teamName ? (
+            <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-indigo-50 px-4 py-2.5 ring-1 ring-indigo-100">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-indigo-100 ring-1 ring-indigo-200">
+                <Users className="size-3.5 text-indigo-600" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-indigo-400">Team</p>
+                <p className="truncate text-[15px] font-bold text-indigo-800">{teamName}</p>
+              </div>
+            </div>
+          ) : null}
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-slate-200/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
@@ -301,12 +329,6 @@ export function SprintRetrospectiveEditor({
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">
                 {sprintLabel}
-                {teamName ? (
-                  <span className="ml-2.5 inline-flex items-center gap-1 rounded-full bg-slate-200/80 px-2.5 py-0.5 text-sm font-semibold text-slate-600 align-middle">
-                    <User className="size-3.5 shrink-0" aria-hidden />
-                    {teamName}
-                  </span>
-                ) : null}
               </h2>
               <p className="mt-1.5 text-sm text-slate-400">Reflect · Learn · Improve</p>
             </div>
@@ -371,8 +393,8 @@ export function SprintRetrospectiveEditor({
                 <ListChecks className="size-4 text-violet-600" aria-hidden />
               </div>
               <div>
-                <p className="text-[14px] font-semibold text-slate-800">Action Items</p>
-                <p className="text-[11px] text-slate-400">Assign owners and due dates to follow through</p>
+                <p className="text-[17px] font-semibold text-slate-800">Action Items</p>
+                <p className="text-[13px] text-slate-400">Assign owners and due dates to follow through</p>
               </div>
               {actionItems.length > 0 && (
                 <span className="ml-auto inline-flex size-6 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200">
@@ -404,15 +426,17 @@ export function SprintRetrospectiveEditor({
                         placeholder="Describe the action…"
                         className="h-8 min-w-0 flex-[3] rounded-lg border border-transparent bg-white px-2.5 text-sm text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-violet-300 focus:ring-1 focus:ring-violet-200/60"
                       />
-                      <label className="flex h-8 min-w-[7rem] flex-1 items-center gap-1.5 rounded-lg border border-transparent bg-white px-2.5 shadow-sm focus-within:border-violet-300 focus-within:ring-1 focus-within:ring-violet-200/60">
+                      <div className="relative flex h-8 min-w-[7rem] flex-1 items-center gap-1.5 rounded-lg border border-transparent bg-white px-2.5 shadow-sm focus-within:border-violet-300 focus-within:ring-1 focus-within:ring-violet-200/60">
                         <User className="size-3.5 shrink-0 text-slate-400" aria-hidden />
-                        <input
+                        <AssigneeCombobox
                           value={item.owner}
-                          onChange={(e) => updateActionItem(item.id, { owner: e.target.value })}
+                          onChange={(v) => updateActionItem(item.id, { owner: v })}
+                          suggestions={ownerSuggestions}
                           placeholder="Owner"
-                          className="h-full min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                          className="h-full min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 border-0 shadow-none focus:ring-0 p-0"
+                          aria-label="Owner"
                         />
-                      </label>
+                      </div>
                       <label className="flex h-8 min-w-[8rem] items-center gap-1.5 rounded-lg border border-transparent bg-white px-2.5 shadow-sm focus-within:border-violet-300 focus-within:ring-1 focus-within:ring-violet-200/60">
                         <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden />
                         <input
