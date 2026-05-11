@@ -5472,7 +5472,7 @@ export function TimelineGrid({
                         >
                           <span>{FULL_MONTHS[month - 1]}</span>
                         </button>
-                        <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:mt-3 sm:gap-2">
+                        <div className="mt-2.5 grid grid-cols-2 gap-2 sm:mt-3">
                           <button
                             type="button"
                             title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, 1))} (${sprintDateWeekdayRangeText(currentYear, month, 1)})`}
@@ -5508,7 +5508,7 @@ export function TimelineGrid({
                             </span>
                           </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="-mx-[9px] grid grid-cols-2 gap-2">
                           <SprintDropCell month={month} lane={1} />
                           <SprintDropCell month={month} lane={2} />
                         </div>
