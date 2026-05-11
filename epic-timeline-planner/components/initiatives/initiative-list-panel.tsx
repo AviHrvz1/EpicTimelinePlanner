@@ -1578,19 +1578,7 @@ function SprintEpicCard({
                   className="group/story flex min-h-[28px] w-full items-center gap-1.5 rounded-md py-0.5 pr-0.5 transition-colors hover:bg-muted/40"
                 >
                   {storyDragEnabled ? (
-                    isCapacityMode ? (
-                      isAssigned ? (
-                        <span
-                          className="inline-flex shrink-0 rounded-md p-0.5 text-emerald-600"
-                          title="Assigned"
-                          aria-label="Assigned"
-                        >
-                          <User className="size-3.5" aria-hidden />
-                        </span>
-                      ) : (
-                        <StoryDragHandle storyId={story.id} />
-                      )
-                    ) : isScheduledInActiveSprint ? (
+                    isScheduledInActiveSprint ? (
                       <span
                         className="inline-flex shrink-0 items-center gap-0.5 rounded-md p-0.5 text-emerald-600"
                         title={isAssigned ? "Scheduled · Assigned" : "Scheduled on kanban"}
@@ -1605,6 +1593,14 @@ function SprintEpicCard({
                           aria-hidden
                         />
                         {isAssigned ? <User className="size-3 text-emerald-500" aria-hidden /> : null}
+                      </span>
+                    ) : isCapacityMode && isAssigned ? (
+                      <span
+                        className="inline-flex shrink-0 rounded-md p-0.5 text-emerald-600"
+                        title="Assigned"
+                        aria-label="Assigned"
+                      >
+                        <User className="size-3.5" aria-hidden />
                       </span>
                     ) : (
                       <StoryDragHandle storyId={story.id} />
