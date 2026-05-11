@@ -10,6 +10,7 @@ import {
   RotateCcw,
   TrendingDown,
   Users,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -130,45 +131,92 @@ const CHART_TYPE_ORDER: ChartType[] = [
   "quarter-status",
 ];
 
-// ─── Multi-select toggle list ─────────────────────────────────────────────────
+// ─── Autocomplete multi-select ────────────────────────────────────────────────
 
-function MultiToggle<T extends string>({
+function AutocompleteMultiSelect<T extends string>({
   options,
   selected,
   onToggle,
   renderLabel,
+  placeholder,
 }: {
   options: T[];
   selected: Set<T>;
   onToggle: (v: T) => void;
   renderLabel: (v: T) => string;
+  placeholder?: string;
 }) {
+  const [query, setQuery] = useState("");
+  const filtered = query.trim()
+    ? options.filter((o) => renderLabel(o).toLowerCase().includes(query.toLowerCase()))
+    : options;
+
   return (
-    <div className="flex flex-col gap-1">
-      {options.map((opt) => {
-        const active = selected.has(opt);
-        return (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onToggle(opt)}
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-              active
-                ? "border-indigo-300 bg-indigo-50 font-semibold text-indigo-800"
-                : "border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-slate-50",
-            )}
-          >
-            <span className={cn(
-              "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
-              active ? "border-indigo-500 bg-indigo-500" : "border-slate-300 bg-white",
-            )}>
-              {active && <Check className="size-2.5 text-white" strokeWidth={3} />}
-            </span>
-            <span className="truncate">{renderLabel(opt)}</span>
+    <div className="flex flex-col gap-1.5">
+      {/* Selected chips */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap gap-1 pb-0.5">
+          {[...selected].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => onToggle(v)}
+              className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-800 hover:bg-indigo-100 transition-colors"
+            >
+              {renderLabel(v)}
+              <X className="size-2.5 shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Search input */}
+      <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-200">
+        <svg className="size-3.5 shrink-0 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+        </svg>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={placeholder ?? "Search…"}
+          className="flex-1 bg-transparent text-xs text-slate-700 placeholder:text-slate-400 outline-none"
+        />
+        {query && (
+          <button type="button" onClick={() => setQuery("")} className="shrink-0 text-slate-300 hover:text-slate-500">
+            <X className="size-3" />
           </button>
-        );
-      })}
+        )}
+      </div>
+      {/* Filtered options */}
+      {filtered.length === 0 ? (
+        <p className="px-1 py-1.5 text-[11px] text-slate-400">No results</p>
+      ) : (
+        <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
+          {filtered.map((opt) => {
+            const active = selected.has(opt);
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => onToggle(opt)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                  active
+                    ? "border-indigo-300 bg-indigo-50 font-semibold text-indigo-800"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-slate-50",
+                )}
+              >
+                <span className={cn(
+                  "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
+                  active ? "border-indigo-500 bg-indigo-500" : "border-slate-300 bg-white",
+                )}>
+                  {active && <Check className="size-2.5 text-white" strokeWidth={3} />}
+                </span>
+                <span className="truncate">{renderLabel(opt)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -274,17 +322,13 @@ function SprintChartForm({
         {/* Roadmaps */}
         {roadmaps.length > 0 && (
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Roadmaps</p>
-              {selectedRoadmapIds.size > 0 && (
-                <button type="button" onClick={() => setSelectedRoadmapIds(new Set())} className="text-[10px] text-slate-400 hover:text-slate-600">Clear</button>
-              )}
-            </div>
-            <MultiToggle
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-400">Roadmaps</p>
+            <AutocompleteMultiSelect
               options={roadmaps.map((r) => r.id)}
               selected={selectedRoadmapIds}
               onToggle={(id) => setSelectedRoadmapIds((prev) => toggle(prev, id))}
               renderLabel={(id) => roadmaps.find((r) => r.id === id)?.name ?? id}
+              placeholder="Search roadmaps…"
             />
           </div>
         )}
@@ -292,17 +336,13 @@ function SprintChartForm({
         {/* Teams */}
         {teamOptions.length > 0 && (
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Teams</p>
-              {selectedTeamIds.size > 0 && (
-                <button type="button" onClick={() => setSelectedTeamIds(new Set())} className="text-[10px] text-slate-400 hover:text-slate-600">Clear</button>
-              )}
-            </div>
-            <MultiToggle
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-400">Teams</p>
+            <AutocompleteMultiSelect
               options={teamOptions.map((t) => t.id)}
               selected={selectedTeamIds}
               onToggle={(id) => setSelectedTeamIds((prev) => toggle(prev, id))}
               renderLabel={(id) => teamOptions.find((t) => t.id === id)?.label ?? id}
+              placeholder="Search teams…"
             />
           </div>
         )}
