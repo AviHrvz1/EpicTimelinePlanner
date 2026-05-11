@@ -3850,6 +3850,8 @@ export function TimelineGrid({
                 )}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
+              <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+              <StripedGanttHorizontalGuides />
               {yearRoadmapInitiativeRows.map((group, idx) => (
                 <div
                   key={`year-init-row-${group.timelineRow}`}
@@ -3916,6 +3918,8 @@ export function TimelineGrid({
                 )}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
+              <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
+              <StripedGanttHorizontalGuides />
               {filteredYearRoadmapEpicRows.map((group, idx) => (
                 <div
                   key={`year-epic-row-${group.timelineRow}`}

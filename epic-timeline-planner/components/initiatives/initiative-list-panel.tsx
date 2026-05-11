@@ -1349,6 +1349,7 @@ function SprintEpicCard({
   storyProgressDetailsVisible,
   isOpenControlled,
   onToggleControlled,
+  showDragHint = false,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -1366,6 +1367,7 @@ function SprintEpicCard({
   storyProgressDetailsVisible: boolean;
   isOpenControlled?: boolean;
   onToggleControlled?: () => void;
+  showDragHint?: boolean;
 }) {
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
@@ -1476,7 +1478,7 @@ function SprintEpicCard({
         ) : null}
         <span className="relative inline-flex h-7 shrink-0 items-center" aria-hidden>
           <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
-          {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+          {showDragHint && epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
             <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
           ) : null}
         </span>
@@ -2625,6 +2627,7 @@ export function InitiativeListPanel({
                     planContextMonth={planAnchorMonth}
                     hideScheduledIcon={epicPlanPanelMode || isSprintModeActive}
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
+                    showDragHint={newestEpicId === epic.id}
                     isOpenControlled={monthEpicOpenIds[epic.id] ?? false}
                     onToggleControlled={() =>
                       setMonthEpicOpenIds((prev) => ({ ...prev, [epic.id]: !(prev[epic.id] ?? false) }))
