@@ -19,7 +19,7 @@ import { monthTeamLabelForId } from "@/lib/month-team-board";
 import type { RoadmapItem } from "@/lib/types";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { capacityPlanTeamCatalogFromDirectory } from "@/lib/workspace-users";
-import type { ChartType, DashboardChartConfig, LLMChartProposal, LLMQuestion } from "./types";
+import type { ChartType, DashboardChartConfig, DashboardChartItem, LLMChartProposal, LLMQuestion } from "./types";
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -223,21 +223,63 @@ function AutocompleteMultiSelect<T extends string>({
 
 // ─── Simplified burndown/cfd form ─────────────────────────────────────────────
 
+function parseChartItemConfig(chart: DashboardChartItem): Record<string, unknown> {
+  try { return JSON.parse(chart.config); } catch { return {}; }
+}
+
+function chartItemToCollectedParams(chart: DashboardChartItem): CollectedParams {
+  const cfg = parseChartItemConfig(chart);
+  const year = cfg.year as number | undefined;
+  const quarter = cfg.quarter as number | undefined;
+  return {
+    chartType: chart.chartType,
+    year,
+    quarter,
+    quarterStr: year && quarter ? `${year}-Q${quarter}` : undefined,
+    sprint: cfg.sprint as number | undefined,
+    team: cfg.team as string | undefined,
+    teamAsked: cfg.team !== undefined,
+    metric: cfg.metric as string | undefined,
+    metricAsked: cfg.metric !== undefined,
+  };
+}
+
 function SprintChartForm({
   chartType,
   roadmaps,
   workspaceDirectoryUsers,
   onAdd,
   onBack,
+  editTarget,
+  onCancelEdit,
 }: {
   chartType: ChartType;
   roadmaps: RoadmapItem[];
   workspaceDirectoryUsers: readonly SprintWorkspaceDirectoryUser[];
   onAdd: (configs: DashboardChartConfig[]) => void;
   onBack: () => void;
+  editTarget?: DashboardChartItem | null;
+  onCancelEdit?: () => void;
 }) {
-  const [selectedRoadmapIds, setSelectedRoadmapIds] = useState<Set<string>>(new Set());
-  const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
+  const initRoadmapIds = useMemo(() => {
+    if (!editTarget) return new Set<string>();
+    const cfg = parseChartItemConfig(editTarget);
+    return cfg.roadmapId ? new Set([cfg.roadmapId as string]) : new Set<string>();
+  }, [editTarget]);
+
+  const initTeamIds = useMemo(() => {
+    if (!editTarget) return new Set<string>();
+    const cfg = parseChartItemConfig(editTarget);
+    return cfg.team ? new Set([cfg.team as string]) : new Set<string>();
+  }, [editTarget]);
+
+  const [selectedRoadmapIds, setSelectedRoadmapIds] = useState<Set<string>>(initRoadmapIds);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(initTeamIds);
+
+  useEffect(() => {
+    setSelectedRoadmapIds(initRoadmapIds);
+    setSelectedTeamIds(initTeamIds);
+  }, [initRoadmapIds, initTeamIds]);
 
   const teamOptions = useMemo(
     () => capacityPlanTeamCatalogFromDirectory(workspaceDirectoryUsers),
@@ -245,8 +287,10 @@ function SprintChartForm({
   );
   const sprintInfo = useMemo(() => currentSprintParams(), []);
 
-  const chartCount =
-    (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
+  const isEditing = !!editTarget;
+  const chartCount = isEditing
+    ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0) ? 0 : 1)
+    : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
       ? 0
       : (selectedRoadmapIds.size || 1) * (selectedTeamIds.size || 1);
 
@@ -348,7 +392,7 @@ function SprintChartForm({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
+      <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 space-y-2">
         <button
           type="button"
           disabled={chartCount === 0}
@@ -358,12 +402,25 @@ function SprintChartForm({
             chartCount > 0 ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm" : "bg-slate-100 text-slate-400 cursor-not-allowed",
           )}
         >
-          {chartCount === 0 ? "Select roadmap or team" : `Add ${chartCount} chart${chartCount !== 1 ? "s" : ""}`}
+          {chartCount === 0
+            ? "Select roadmap or team"
+            : isEditing
+              ? "Update chart"
+              : `Add ${chartCount} chart${chartCount !== 1 ? "s" : ""}`}
         </button>
-        {chartCount > 1 && (
-          <p className="mt-1.5 text-center text-[11px] text-slate-400">
+        {!isEditing && chartCount > 1 && (
+          <p className="text-center text-[11px] text-slate-400">
             {selectedRoadmapIds.size || 1} roadmap × {selectedTeamIds.size || 1} team
           </p>
+        )}
+        {isEditing && (
+          <button
+            type="button"
+            onClick={() => { onCancelEdit?.(); onBack(); }}
+            className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
         )}
       </div>
     </div>
@@ -567,20 +624,29 @@ function OtherChartFlow({
   context,
   onAdd,
   onBack,
+  editTarget,
+  onCancelEdit,
 }: {
   chartType: ChartType;
   context: WorkspaceContext | null;
   onAdd: (config: DashboardChartConfig) => void;
   onBack: () => void;
+  editTarget?: DashboardChartItem | null;
+  onCancelEdit?: () => void;
 }) {
-  const [params, setParams] = useState<CollectedParams>({ chartType });
+  const initialParams = useMemo<CollectedParams>(
+    () => editTarget ? chartItemToCollectedParams(editTarget) : { chartType },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const [params, setParams] = useState<CollectedParams>(initialParams);
   const [step, setStep] = useState<Step>(null);
   const [proposal, setProposal] = useState<LLMChartProposal | null>(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Array<{ q: string; a: string }>>([]);
 
   useEffect(() => {
-    fetchNext({ chartType });
+    fetchNext(initialParams);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -634,6 +700,12 @@ function OtherChartFlow({
           {meta.icon}
         </div>
         <p className="flex-1 text-sm font-semibold text-slate-800">{meta.label}</p>
+        {editTarget && (
+          <button onClick={() => { onCancelEdit?.(); onBack(); }} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <X className="size-3" />
+            Cancel
+          </button>
+        )}
         {history.length > 0 && (
           <button onClick={handleReset} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <RotateCcw className="size-3" />
@@ -674,14 +746,20 @@ function OtherChartFlow({
             <p className="mb-3 text-xs text-slate-600">{proposal.title}</p>
             <div className="flex gap-2">
               <button
-                onClick={() => { onAdd({ chartType: proposal.chartType, title: proposal.title, params: proposal.params }); handleReset(); }}
+                onClick={() => { onAdd({ chartType: proposal.chartType, title: proposal.title, params: proposal.params }); if (editTarget) { onCancelEdit?.(); onBack(); } else { handleReset(); } }}
                 className="flex-1 rounded-lg bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors"
               >
-                Add to dashboard
+                {editTarget ? "Update chart" : "Add to dashboard"}
               </button>
-              <button onClick={handleReset} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-                Start over
-              </button>
+              {editTarget ? (
+                <button onClick={() => { onCancelEdit?.(); onBack(); }} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                  Cancel
+                </button>
+              ) : (
+                <button onClick={handleReset} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                  Start over
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -697,10 +775,16 @@ type Props = {
   workspaceDirectoryUsers: readonly SprintWorkspaceDirectoryUser[];
   context: WorkspaceContext | null;
   onAddCharts: (configs: DashboardChartConfig[]) => void;
+  editTarget?: DashboardChartItem | null;
+  onCancelEdit?: () => void;
 };
 
-export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, context, onAddCharts }: Props) {
+export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, context, onAddCharts, editTarget, onCancelEdit }: Props) {
   const [selectedType, setSelectedType] = useState<ChartType | null>(null);
+
+  useEffect(() => {
+    if (editTarget) setSelectedType(editTarget.chartType);
+  }, [editTarget]);
 
   function handleAddSingle(config: DashboardChartConfig) {
     onAddCharts([config]);
@@ -714,6 +798,8 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
         workspaceDirectoryUsers={workspaceDirectoryUsers}
         onAdd={onAddCharts}
         onBack={() => setSelectedType(null)}
+        editTarget={editTarget}
+        onCancelEdit={onCancelEdit}
       />
     );
   }
@@ -725,6 +811,8 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
         context={context}
         onAdd={handleAddSingle}
         onBack={() => setSelectedType(null)}
+        editTarget={editTarget}
+        onCancelEdit={onCancelEdit}
       />
     );
   }

@@ -33,10 +33,10 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  // New dashboard name input
-  const [creatingName, setCreatingName] = useState(false);
-  const [newName, setNewName] = useState("");
-  const newNameRef = useRef<HTMLInputElement>(null);
+  // Save-time name prompt
+  const [namingOnSave, setNamingOnSave] = useState(false);
+  const [saveNameDraft, setSaveNameDraft] = useState("");
+  const saveNameRef = useRef<HTMLInputElement>(null);
   // Delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // Full cross-roadmap initiative dataset for charts (not filtered to active roadmap)
@@ -84,19 +84,11 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     return created.id;
   }
 
-  function startCreating() {
-    setNewName("");
-    setCreatingName(true);
-    setTimeout(() => newNameRef.current?.focus(), 0);
-  }
-
-  async function confirmCreate() {
-    const name = newName.trim() || `Dashboard ${dashboards.length + 1}`;
-    setCreatingName(false);
+  async function createDashboard() {
     const res = await fetch("/api/dashboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name: `Dashboard ${dashboards.length + 1}` }),
     });
     const created: DashboardItem = await res.json();
     setDashboards((prev) => [...prev, created]);
@@ -122,13 +114,24 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     }
   }
 
-  async function save() {
+  function requestSave() {
     if (!activeDashboardId) return;
+    const current = dashboards.find((d) => d.id === activeDashboardId);
+    setSaveNameDraft(current?.name ?? "");
+    setNamingOnSave(true);
+    setTimeout(() => saveNameRef.current?.select(), 0);
+  }
+
+  async function confirmSave() {
+    if (!activeDashboardId) return;
+    setNamingOnSave(false);
     setSaving(true);
+    const name = saveNameDraft.trim() || dashboards.find((d) => d.id === activeDashboardId)?.name;
     await fetch(`/api/dashboard/${activeDashboardId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        name,
         charts: charts.map((c, i) => ({
           chartType: c.chartType,
           title: c.title,
@@ -138,11 +141,26 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
         })),
       }),
     });
+    setDashboards((prev) => prev.map((d) => d.id === activeDashboardId ? { ...d, name: name ?? d.name } : d));
     setSaving(false);
     setDirty(false);
   }
 
   async function handleAddCharts(configs: DashboardChartConfig[]) {
+    if (editTarget) {
+      const config = configs[0];
+      if (!config) return;
+      setCharts((prev) =>
+        prev.map((c) =>
+          c.id === editTarget.id
+            ? { ...c, chartType: config.chartType, title: config.title, config: JSON.stringify(config.params) }
+            : c,
+        ),
+      );
+      setEditTarget(null);
+      setDirty(true);
+      return;
+    }
     const dashId = await ensureDashboard();
     const now = Date.now();
     const newCharts: DashboardChartItem[] = configs.map((config, i) => ({
@@ -244,47 +262,45 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
             );
           })}
 
-          {/* New dashboard — inline name input */}
-          {creatingName ? (
-            <div className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 ring-1 ring-indigo-200 focus-within:ring-indigo-400">
+          <button
+            onClick={createDashboard}
+            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-500 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 hover:text-slate-700"
+          >
+            <Plus className="size-3" />
+            New
+          </button>
+        </div>
+
+        {dirty && activeDashboardId && (
+          namingOnSave ? (
+            /* Inline name-before-save input */
+            <div className="flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-2 py-1 ring-1 ring-indigo-200 focus-within:ring-indigo-400">
+              <Save className="size-3.5 shrink-0 text-indigo-400" />
               <input
-                ref={newNameRef}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmCreate();
-                  if (e.key === "Escape") setCreatingName(false);
-                }}
+                ref={saveNameRef}
+                value={saveNameDraft}
+                onChange={(e) => setSaveNameDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") confirmSave(); if (e.key === "Escape") setNamingOnSave(false); }}
                 placeholder="Dashboard name…"
-                className="w-28 bg-transparent text-[11.5px] font-semibold text-indigo-800 placeholder:font-normal placeholder:text-indigo-400 outline-none sm:text-[12px]"
+                className="w-32 bg-transparent text-xs font-semibold text-indigo-800 placeholder:font-normal placeholder:text-indigo-400 outline-none"
               />
-              <button onClick={confirmCreate} className="rounded-full bg-indigo-500 p-0.5 text-white hover:bg-indigo-600 transition-colors" title="Create">
-                <Check className="size-2.5" strokeWidth={3} />
+              <button onClick={confirmSave} className="rounded-md bg-indigo-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-indigo-700 transition-colors">
+                Save
               </button>
-              <button onClick={() => setCreatingName(false)} className="rounded-full p-0.5 text-indigo-400 hover:text-indigo-600 transition-colors" title="Cancel">
-                <X className="size-2.5" strokeWidth={3} />
+              <button onClick={() => setNamingOnSave(false)} className="rounded p-0.5 text-indigo-400 hover:text-indigo-600 transition-colors">
+                <X className="size-3" />
               </button>
             </div>
           ) : (
             <button
-              onClick={startCreating}
-              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-500 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 hover:text-slate-700"
+              onClick={requestSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
             >
-              <Plus className="size-3" />
-              New
+              <Save className="size-3.5" />
+              {saving ? "Saving…" : "Save"}
             </button>
-          )}
-        </div>
-
-        {dirty && activeDashboardId && (
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
-          >
-            <Save className="size-3.5" />
-            {saving ? "Saving…" : "Save"}
-          </button>
+          )
         )}
       </div>
 
@@ -298,6 +314,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
             workspaceDirectoryUsers={workspaceDirectoryUsers}
             context={context}
             onAddCharts={handleAddCharts}
+            editTarget={editTarget}
+            onCancelEdit={() => setEditTarget(null)}
           />
         </div>
 
