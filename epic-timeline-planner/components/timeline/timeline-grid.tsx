@@ -4150,6 +4150,83 @@ export function TimelineGrid({
     </>
   ) : null;
 
+  const summarySprintChipsJsx = sprintKanbanSummaryStats ? (
+    <>
+      {onYearChange ? (
+        <RoadmapSelector
+          roadmaps={roadmaps}
+          selectedRoadmap={selectedRoadmap}
+          year={currentYear}
+          onYearChange={onYearChange ?? (() => {})}
+          onSelectRoadmap={onSelectRoadmap}
+          onCreateRoadmap={onCreateRoadmap}
+          onRenameRoadmap={onRenameRoadmap}
+          onAddYearToRoadmap={onAddYearToRoadmap}
+          onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
+          onGetRoadmapCounts={onGetRoadmapCounts}
+          onDeleteRoadmap={onDeleteRoadmap}
+        />
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          setSprintKanbanViewMode((m) => m === "epics" ? "stories" : "epics");
+          setRoadmapBarMode("epics");
+          onSummaryStatusQuickFilterChange?.(null);
+        }}
+        className={cn(
+          summaryChipBaseClass,
+          sprintKanbanViewMode === "epics" ? summaryChipEpicsOnClass : summaryChipEpicsIdleClass,
+        )}
+      >
+        {sprintKanbanSummaryStats.epicCount} Epics
+      </button>
+      <button
+        type="button"
+        onClick={() => setSprintKanbanViewMode("stories")}
+        className={cn(
+          summaryChipBaseClass,
+          sprintKanbanViewMode === "stories"
+            ? summaryChipStoriesClass + " ring-1 ring-blue-300"
+            : summaryChipStoriesClass,
+        )}
+      >
+        <span className="truncate">{sprintKanbanSummaryStats.storyScheduledOnKanban}</span>
+        <span className="hidden sm:inline">User Stories</span>
+        <span className="sm:hidden">Stories</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => openEstEpicsPanel()}
+        className={summaryChipEstimatedClass}
+      >
+        <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
+          <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
+          <circle
+            cx="8"
+            cy="8"
+            r="6"
+            fill="none"
+            stroke="#9f1239"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            transform="rotate(-90 8 8)"
+            strokeDasharray={`${2 * Math.PI * 6}`}
+            strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
+          />
+        </svg>
+        <span className="truncate">{estimatedEpicsPercentForScope}%</span>
+        <span className="hidden sm:inline">Epic Estimated</span>
+        <span className="sm:hidden">Estimated</span>
+      </button>
+      <div className={summaryChipUnscheduledClass}>
+        <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
+        <span className="hidden sm:inline">User Stories Unscheduled</span>
+        <span className="sm:hidden">US Unsch.</span>
+      </div>
+    </>
+  ) : null;
+
   const timelineHeaderRow = (
       <div
         className={cn(
@@ -4460,80 +4537,7 @@ export function TimelineGrid({
           >
               {sprintKanbanSummaryStats ? (
                 <>
-                  {onYearChange ? (
-                    <RoadmapSelector
-                        roadmaps={roadmaps}
-                        selectedRoadmap={selectedRoadmap}
-                        year={currentYear}
-                        onYearChange={onYearChange ?? (() => {})}
-                        onSelectRoadmap={onSelectRoadmap}
-                        onCreateRoadmap={onCreateRoadmap}
-                        onRenameRoadmap={onRenameRoadmap}
-                        onAddYearToRoadmap={onAddYearToRoadmap}
-                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
-                        onGetRoadmapCounts={onGetRoadmapCounts}
-                        onDeleteRoadmap={onDeleteRoadmap}
-                      />
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSprintKanbanViewMode((m) => m === "epics" ? "stories" : "epics");
-                      setRoadmapBarMode("epics");
-                      onSummaryStatusQuickFilterChange?.(null);
-                    }}
-                    className={cn(
-                      summaryChipBaseClass,
-                      sprintKanbanViewMode === "epics"
-                        ? summaryChipEpicsOnClass
-                        : summaryChipEpicsIdleClass,
-                    )}
-                  >
-                    {sprintKanbanSummaryStats.epicCount} Epics
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSprintKanbanViewMode("stories")}
-                    className={cn(
-                      summaryChipBaseClass,
-                      sprintKanbanViewMode === "stories"
-                        ? summaryChipStoriesClass + " ring-1 ring-blue-300"
-                        : summaryChipStoriesClass,
-                    )}
-                  >
-                    <span className="truncate">{sprintKanbanSummaryStats.storyScheduledOnKanban}</span>
-                    <span className="hidden sm:inline">User Stories</span>
-                    <span className="sm:hidden">Stories</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEstEpicsPanel()}
-                    className={summaryChipEstimatedClass}
-                  >
-                    <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-                      <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="6"
-                        fill="none"
-                        stroke="#9f1239"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        transform="rotate(-90 8 8)"
-                        strokeDasharray={`${2 * Math.PI * 6}`}
-                        strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
-                      />
-                    </svg>
-                    <span className="truncate">{estimatedEpicsPercentForScope}%</span>
-                    <span className="hidden sm:inline">Epic Estimated</span>
-                    <span className="sm:hidden">Estimated</span>
-                  </button>
-                  <div className={summaryChipUnscheduledClass}>
-                    <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
-                    <span className="hidden sm:inline">User Stories Unscheduled</span>
-                    <span className="sm:hidden">US Unsch.</span>
-                  </div>
+                  {!summaryBarPortalElement ? summarySprintChipsJsx : null}
                   {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
@@ -6295,7 +6299,10 @@ export function TimelineGrid({
           </aside>
         </div>
       ) : null}
-      {summaryBarPortalElement ? createPortal(summaryYearChipsJsx, summaryBarPortalElement) : null}
+      {summaryBarPortalElement ? createPortal(
+        sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx,
+        summaryBarPortalElement
+      ) : null}
     </div>
   );
 }
