@@ -149,10 +149,10 @@ export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceD
                 setCharts(d.charts as DashboardChartItem[]);
                 setDirty(false);
               }}
-              className={`shrink-0 rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+              className={`inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] ${
                 d.id === activeDashboardId
-                  ? "bg-indigo-600 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-100"
+                  ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
+                  : "bg-gradient-to-br from-blue-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40"
               }`}
             >
               {d.name}
@@ -160,9 +160,9 @@ export function DashboardPage({ initiatives, planYear, roadmaps = [], workspaceD
           ))}
           <button
             onClick={createDashboard}
-            className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-500 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3" />
             New
           </button>
         </div>
