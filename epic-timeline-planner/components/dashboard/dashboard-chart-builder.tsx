@@ -3,6 +3,7 @@
 import {
   AreaChart,
   BarChart2,
+  Bot,
   Check,
   ChevronLeft,
   PieChart,
@@ -45,10 +46,16 @@ function currentSprintParams(): { year: number; quarter: number; sprint: number;
 
 const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; description: string; accent: string }> = {
   burndown: {
-    label: "Burndown",
+    label: "Sprint Burndown",
     icon: <TrendingDown className="size-4 text-rose-500" />,
     description: "Remaining work vs ideal line for a sprint",
     accent: "border-rose-200 bg-rose-50 text-rose-700",
+  },
+  "epic-burndown": {
+    label: "Epic Burndown",
+    icon: <TrendingDown className="size-4 text-amber-500" />,
+    description: "Epic-level remaining stories vs ideal across a sprint",
+    accent: "border-amber-200 bg-amber-50 text-amber-700",
   },
   cfd: {
     label: "Cumulative Flow",
@@ -106,7 +113,22 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
   },
 };
 
-const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
+const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
+
+// Display order: burndowns first, burnups next, then other sprint types, then quarter-level
+const CHART_TYPE_ORDER: ChartType[] = [
+  "burndown",
+  "epic-burndown",
+  "sprint-burnup",
+  "epic-burnup",
+  "cfd",
+  "story-status",
+  "workload-balance",
+  "sprint-load",
+  "velocity",
+  "workload",
+  "quarter-status",
+];
 
 // ─── Multi-select toggle list ─────────────────────────────────────────────────
 
@@ -670,13 +692,18 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
   // Step 1: chart type picker
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <p className="text-sm font-semibold text-slate-800">Chart builder</p>
-        <p className="text-xs text-slate-400">Pick a chart type to get started</p>
+      <div className="border-b border-slate-200 px-4 py-4">
+        <div className="flex items-center gap-2.5 mb-0.5">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 shadow-sm">
+            <Bot className="size-4 text-white" />
+          </div>
+          <p className="text-base font-bold text-slate-800">Chart Builder</p>
+        </div>
+        <p className="mt-1.5 text-sm text-slate-500 pl-0.5">Pick a chart type to get started</p>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="flex flex-col gap-2">
-          {(Object.keys(CHART_META) as ChartType[]).map((type) => {
+          {CHART_TYPE_ORDER.map((type) => {
             const meta = CHART_META[type];
             return (
               <button

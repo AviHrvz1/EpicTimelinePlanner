@@ -1,6 +1,7 @@
 export type ChartType =
   | "velocity"
   | "burndown"
+  | "epic-burndown"
   | "cfd"
   | "workload"
   | "quarter-status"

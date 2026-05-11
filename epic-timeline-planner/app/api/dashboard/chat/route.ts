@@ -14,8 +14,8 @@ type CollectedParams = {
   teamAsked?: boolean;
 };
 
-const CHART_TYPES: ChartType[] = ["velocity", "burndown", "cfd", "workload", "quarter-status", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"];
-const NEEDS_SPRINT = new Set(["burndown", "cfd", "workload", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
+const CHART_TYPES: ChartType[] = ["velocity", "burndown", "epic-burndown", "cfd", "workload", "quarter-status", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"];
+const NEEDS_SPRINT = new Set(["burndown", "epic-burndown", "cfd", "workload", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
 const NEEDS_METRIC = new Set(["burndown", "workload"]);
 
 function nextStep(p: CollectedParams): Record<string, unknown> {
@@ -92,6 +92,12 @@ function buildChart(p: CollectedParams): Record<string, unknown> {
       const metricLabel = p.metric === "storyCount" ? "Story count" : "Days left";
       title = `${p.quarterStr} Sprint ${p.sprint} Burndown · ${metricLabel}${teamSuffix}`;
       params = { year: p.year, quarter: p.quarter, sprint: p.sprint, metric: p.metric ?? "daysLeft", ...(p.team ? { team: p.team } : {}) };
+      break;
+    }
+    case "epic-burndown": {
+      const metricLabel = p.metric === "storyCount" ? "Story count" : "Days left";
+      title = `${p.quarterStr} Sprint ${p.sprint} Epic Burndown · ${metricLabel}${teamSuffix}`;
+      params = { year: p.year, quarter: p.quarter, sprint: p.sprint, metric: p.metric ?? "storyCount", ...(p.team ? { team: p.team } : {}) };
       break;
     }
     case "cfd":

@@ -7,6 +7,7 @@ import { GripVertical, Maximize2, Minimize2, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
 import { BurndownChart } from "./charts/burndown-chart";
+import { EpicBurndownChart } from "./charts/epic-burndown-chart";
 import { CfdChart } from "./charts/cfd-chart";
 import { EpicBurnupChart } from "./charts/epic-burnup-chart";
 import { QuarterStatusChart } from "./charts/quarter-status-chart";
@@ -46,6 +47,16 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
     case "burndown":
       return (
         <BurndownChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          team={params.team as string | null}
+        />
+      );
+    case "epic-burndown":
+      return (
+        <EpicBurndownChart
           initiatives={scopedInitiatives}
           year={(params.year as number) ?? new Date().getFullYear()}
           quarter={(params.quarter as number) ?? 1}

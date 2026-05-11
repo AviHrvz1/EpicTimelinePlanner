@@ -28,9 +28,14 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     description: "Stories completed per sprint across a quarter",
   },
   burndown: {
-    label: "Burndown",
+    label: "Sprint Burndown",
     icon: <TrendingDown className="size-4 text-rose-500" />,
     description: "Remaining work vs ideal line for a sprint",
+  },
+  "epic-burndown": {
+    label: "Epic Burndown",
+    icon: <TrendingDown className="size-4 text-amber-500" />,
+    description: "Epic-level remaining stories vs ideal across a sprint",
   },
   cfd: {
     label: "Cumulative Flow",
@@ -464,6 +469,8 @@ type CollectedParams = {
   sprint?: number;
   team?: string;
   teamAsked?: boolean;
+  metric?: string;
+  metricAsked?: boolean;
 };
 
 function formatAnswerForDisplay(field: string, raw: string): string {
