@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Save } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Plus, Save, Trash2, X } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { DashboardCanvas } from "./dashboard-canvas";
@@ -32,6 +33,12 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // New dashboard name input
+  const [creatingName, setCreatingName] = useState(false);
+  const [newName, setNewName] = useState("");
+  const newNameRef = useRef<HTMLInputElement>(null);
+  // Delete confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // Full cross-roadmap initiative dataset for charts (not filtered to active roadmap)
   const [allInitiatives, setAllInitiatives] = useState<InitiativeItem[]>(passedInitiatives);
 
@@ -77,17 +84,42 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     return created.id;
   }
 
-  async function createDashboard() {
+  function startCreating() {
+    setNewName("");
+    setCreatingName(true);
+    setTimeout(() => newNameRef.current?.focus(), 0);
+  }
+
+  async function confirmCreate() {
+    const name = newName.trim() || `Dashboard ${dashboards.length + 1}`;
+    setCreatingName(false);
     const res = await fetch("/api/dashboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: `Dashboard ${dashboards.length + 1}` }),
+      body: JSON.stringify({ name }),
     });
     const created: DashboardItem = await res.json();
-    setDashboards((prev) => [created, ...prev]);
+    setDashboards((prev) => [...prev, created]);
     setActiveDashboardId(created.id);
     setCharts([]);
     setDirty(false);
+  }
+
+  async function deleteDashboard(id: string) {
+    await fetch(`/api/dashboard/${id}`, { method: "DELETE" });
+    setDashboards((prev) => prev.filter((d) => d.id !== id));
+    setConfirmDeleteId(null);
+    if (activeDashboardId === id) {
+      const remaining = dashboards.filter((d) => d.id !== id);
+      if (remaining.length > 0) {
+        setActiveDashboardId(remaining[0].id);
+        setCharts(remaining[0].charts as DashboardChartItem[]);
+      } else {
+        setActiveDashboardId(null);
+        setCharts([]);
+      }
+      setDirty(false);
+    }
   }
 
   async function save() {
@@ -152,31 +184,96 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-md ring-1 ring-slate-200/60">
       {/* Top bar */}
       <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
-        <div className="flex flex-1 items-center gap-1 overflow-x-auto">
-          {dashboards.map((d) => (
+        <div className="flex flex-1 items-center gap-1.5 overflow-x-auto">
+          {dashboards.map((d) => {
+            const isActive = d.id === activeDashboardId;
+            const isConfirming = confirmDeleteId === d.id;
+            return (
+              <div key={d.id} className="group relative shrink-0">
+                {isConfirming ? (
+                  /* Inline delete confirmation */
+                  <div className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-2.5 text-[11.5px] font-semibold text-red-700 ring-1 ring-red-200 sm:px-3 sm:text-[12px]">
+                    <span className="whitespace-nowrap">Delete "{d.name}"?</span>
+                    <button
+                      onClick={() => deleteDashboard(d.id)}
+                      className="ml-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600 transition-colors"
+                      title="Confirm delete"
+                    >
+                      <Check className="size-2.5" strokeWidth={3} />
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="rounded-full p-0.5 text-red-400 hover:text-red-600 transition-colors"
+                      title="Cancel"
+                    >
+                      <X className="size-2.5" strokeWidth={3} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setActiveDashboardId(d.id);
+                      setCharts(d.charts as DashboardChartItem[]);
+                      setConfirmDeleteId(null);
+                      setDirty(false);
+                    }}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full border-0 pl-2.5 pr-1.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:pl-3 sm:text-[12px]",
+                      isActive
+                        ? "bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 text-white ring-blue-500/75 shadow-sm"
+                        : "bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-900 ring-blue-300/75 hover:from-blue-300 hover:via-blue-400 hover:to-blue-400",
+                    )}
+                  >
+                    {d.name}
+                    <span
+                      role="button"
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(d.id); }}
+                      className={cn(
+                        "ml-0.5 rounded-full p-0.5 transition-all",
+                        isActive
+                          ? "text-blue-200 opacity-0 group-hover:opacity-100 hover:bg-blue-700/40 hover:text-white"
+                          : "text-blue-600/50 opacity-0 group-hover:opacity-100 hover:bg-blue-200 hover:text-blue-800",
+                      )}
+                      title="Delete dashboard"
+                    >
+                      <Trash2 className="size-2.5" />
+                    </span>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* New dashboard — inline name input */}
+          {creatingName ? (
+            <div className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 ring-1 ring-indigo-200 focus-within:ring-indigo-400">
+              <input
+                ref={newNameRef}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmCreate();
+                  if (e.key === "Escape") setCreatingName(false);
+                }}
+                placeholder="Dashboard name…"
+                className="w-28 bg-transparent text-[11.5px] font-semibold text-indigo-800 placeholder:font-normal placeholder:text-indigo-400 outline-none sm:text-[12px]"
+              />
+              <button onClick={confirmCreate} className="rounded-full bg-indigo-500 p-0.5 text-white hover:bg-indigo-600 transition-colors" title="Create">
+                <Check className="size-2.5" strokeWidth={3} />
+              </button>
+              <button onClick={() => setCreatingName(false)} className="rounded-full p-0.5 text-indigo-400 hover:text-indigo-600 transition-colors" title="Cancel">
+                <X className="size-2.5" strokeWidth={3} />
+              </button>
+            </div>
+          ) : (
             <button
-              key={d.id}
-              onClick={() => {
-                setActiveDashboardId(d.id);
-                setCharts(d.charts as DashboardChartItem[]);
-                setDirty(false);
-              }}
-              className={`inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] ${
-                d.id === activeDashboardId
-                  ? "bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 text-white ring-blue-500/75 shadow-sm hover:from-blue-500 hover:via-blue-600 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50"
-                  : "bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-900 ring-blue-300/75 hover:from-blue-300 hover:via-blue-400 hover:to-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40"
-              }`}
+              onClick={startCreating}
+              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-500 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 hover:text-slate-700"
             >
-              {d.name}
+              <Plus className="size-3" />
+              New
             </button>
-          ))}
-          <button
-            onClick={createDashboard}
-            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-500 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40"
-          >
-            <Plus className="size-3" />
-            New
-          </button>
+          )}
         </div>
 
         {dirty && activeDashboardId && (
