@@ -20,6 +20,7 @@ import {
   List,
   ListOrdered,
   ListTree,
+  Map as MapIcon,
   MessageSquare,
   Quote,
   Tag,
@@ -29,7 +30,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -44,14 +45,13 @@ import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobo
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
-import { MonthAnalytics } from "@/components/timeline/month-analytics";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { MONTHS } from "@/lib/timeline";
 import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { useResizableTableColumns } from "@/lib/use-resizable-table-columns";
-import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, UserStoryItem, type RoadmapItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
@@ -155,11 +155,7 @@ type EpicFormDialogProps = {
   surfaceAnchorRef?: RefObject<HTMLElement | null>;
   /** Users directory — custom team slugs appear in the team combobox alongside delivery teams. */
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
-  /** Insights scope pre-selection read from URL (epic or initiative id). */
-  initialInsightsScopeEpicId?: string | null;
-  initialInsightsScopeInitId?: string | null;
-  /** Called when the insights scope selection changes so the parent can persist to URL. */
-  onInsightsScopeChange?: (epicId: string | null, initId: string | null) => void;
+  roadmaps?: RoadmapItem[];
 };
 
 export function EpicFormDialog({
@@ -180,9 +176,7 @@ export function EpicFormDialog({
   onAddComment,
   surfaceAnchorRef,
   workspaceDirectoryUsers = [],
-  initialInsightsScopeEpicId,
-  initialInsightsScopeInitId,
-  onInsightsScopeChange,
+  roadmaps = [],
 }: EpicFormDialogProps) {
   const [title, setTitle] = useState(epic?.title ?? "");
   const [icon, setIcon] = useState(epic?.icon ?? "📁");
@@ -206,11 +200,7 @@ export function EpicFormDialog({
   const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
-  const [epicInsightsPanelOpen, setEpicInsightsPanelOpen] = useState(false);
-  const [insightsScopeLabel, setInsightsScopeLabel] = useState<string | null>(null);
   const [dialogWidthVw, setDialogWidthVw] = useState(64);
-  const [epicInsightsPanelOffset, setEpicInsightsPanelOffset] = useState({ x: 0, y: 0 });
-  const [epicInsightsPanelWidthPx, setEpicInsightsPanelWidthPx] = useState(560);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
@@ -314,11 +304,6 @@ export function EpicFormDialog({
       setActivityPanelHeightPx(340);
       setActivityOpen((epic?.userStories?.length ?? 0) === 0);
       setDescriptionAccordionOpen(true);
-      setEpicInsightsPanelOpen(false);
-      setEpicInsightsPanelOffset({ x: 0, y: 0 });
-      const epicPanelWidth = Math.min(window.innerWidth * 0.75, 1320);
-      const available = Math.max(520, Math.floor(window.innerWidth - epicPanelWidth));
-      setEpicInsightsPanelWidthPx(available);
       dragStartRef.current = null;
     }
   }, [open]);
@@ -553,27 +538,26 @@ export function EpicFormDialog({
   const showTeamSelect = !persistedTeam || forceTeamFieldEdit;
   const planningYearDisplay =
     selectedInitiative?.year != null ? String(selectedInitiative.year) : epic?.planYear != null ? String(epic.planYear) : "Not set";
-  const epicInsightsMonth = epic?.planStartMonth ?? selectedInitiative?.startMonth ?? 1;
-  const epicInsightsQuarter = quarterNumFromMonth(epicInsightsMonth);
-  const epicInsightsMonths = monthIndicesForQuarter(epicInsightsQuarter);
-  const epicInsightsPlanYear = selectedInitiative?.year ?? epic?.planYear ?? initiatives[0]?.year ?? new Date().getFullYear();
-  const epicScopedInitiativesForInsights = useMemo(() => {
-    if (!epic) return [];
-    return initiatives
-      .map((initiative) =>
-        initiative.id === epic.initiativeId
-          ? { ...initiative, epics: (initiative.epics ?? []).filter((row) => row.id === epic.id) }
-          : { ...initiative, epics: [] },
-      )
-      .filter((initiative) => (initiative.epics ?? []).length > 0);
-  }, [epic, initiatives]);
-  const getEpicDetailsSeparatorX = useCallback(() => {
-    const rect = dialogShellRef.current?.getBoundingClientRect();
-    if (!rect) return window.innerWidth;
-    const visualLeft = rect.left + dialogOffset.x;
-    const separatorX = visualLeft + rect.width - detailsPanelWidthPx - 44;
-    return Math.max(0, Math.min(window.innerWidth, separatorX));
-  }, [dialogOffset.x, detailsPanelWidthPx]);
+  function openInsightsWindow() {
+    if (!epic) return;
+    // Compute display ID (EPIC-01, EPIC-16, …) from the full initiatives list
+    const allEpicsSorted = [...initiatives]
+      .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime() || a.title.localeCompare(b.title))
+      .flatMap((i) => i.epics ?? [])
+      .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime() || a.title.localeCompare(b.title));
+    const idx = allEpicsSorted.findIndex((e) => e.id === epic.id);
+    const displayId = idx >= 0 ? `EPIC-${String(idx + 1).padStart(2, "0")}` : epic.id;
+    // Carry over relevant URL context params from the current page
+    const cur = new URLSearchParams(window.location.search);
+    const p = new URLSearchParams();
+    p.set("epicDisplayId", displayId);
+    for (const key of ["month", "planTab", "sprint"] as const) {
+      const v = cur.get(key);
+      if (v) p.set(key, v);
+    }
+    p.set("sprintView", "epic-insights");
+    window.open(`/epic-insights?${p.toString()}`, "_blank");
+  }
 
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
@@ -824,88 +808,6 @@ export function EpicFormDialog({
     window.addEventListener("pointerup", onPointerUp);
   }
 
-  function beginEpicInsightsDrag(event: React.PointerEvent<HTMLDivElement>) {
-    if (!epicInsightsPanelOpen || event.button !== 0) return;
-    event.preventDefault();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startOffset = epicInsightsPanelOffset;
-
-    function onPointerMove(moveEvent: PointerEvent) {
-      const dx = moveEvent.clientX - startX;
-      const dy = moveEvent.clientY - startY;
-      const separatorX = getEpicDetailsSeparatorX();
-      const maxX = Math.max(0, separatorX - epicInsightsPanelWidthPx);
-      const maxY = Math.max(0, window.innerHeight - 180);
-      setEpicInsightsPanelOffset({
-        x: Math.max(0, Math.min(maxX, startOffset.x + dx)),
-        y: Math.max(0, Math.min(maxY, startOffset.y + dy)),
-      });
-    }
-
-    function onPointerUp() {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-  }
-
-  function beginEpicInsightsResizeRight(event: React.PointerEvent<HTMLDivElement>) {
-    if (!epicInsightsPanelOpen || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startX = event.clientX;
-    const startWidth = epicInsightsPanelWidthPx;
-    const currentLeft = epicInsightsPanelOffset.x;
-
-    function onPointerMove(moveEvent: PointerEvent) {
-      const delta = moveEvent.clientX - startX;
-      const separatorX = getEpicDetailsSeparatorX();
-      const maxWidth = Math.max(520, separatorX - currentLeft);
-      const next = Math.max(520, Math.min(maxWidth, startWidth + delta));
-      setEpicInsightsPanelWidthPx(next);
-    }
-
-    function onPointerUp() {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-  }
-
-  function beginEpicInsightsResizeLeft(event: React.PointerEvent<HTMLDivElement>) {
-    if (!epicInsightsPanelOpen || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startX = event.clientX;
-    const startWidth = epicInsightsPanelWidthPx;
-    const startLeft = epicInsightsPanelOffset.x;
-
-    function onPointerMove(moveEvent: PointerEvent) {
-      const delta = moveEvent.clientX - startX;
-      const separatorX = getEpicDetailsSeparatorX();
-      const nextLeft = startLeft + delta;
-      const boundedLeft = Math.max(0, Math.min(separatorX - 520, nextLeft));
-      const adjustedDelta = boundedLeft - startLeft;
-      const nextWidth = startWidth - adjustedDelta;
-      const maxWidth = Math.max(520, separatorX - boundedLeft);
-      const boundedWidth = Math.max(520, Math.min(maxWidth, nextWidth));
-      setEpicInsightsPanelOffset((prev) => ({ ...prev, x: boundedLeft }));
-      setEpicInsightsPanelWidthPx(boundedWidth);
-    }
-
-    function onPointerUp() {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-  }
 
   function beginChildCellEdit(
     storyId: string,
@@ -1036,33 +938,14 @@ export function EpicFormDialog({
                 <EpicPlanBarIcon icon={icon} className="mr-0 [&_svg]:size-4 [&_svg]:text-slate-600" />
                 <span className="truncate">{title || (epic ? "Epic details" : "Create epic")}</span>
               </span>
-              {epicInsightsPanelOpen && insightsScopeLabel ? (
-                <>
-                  <ChevronRight className="size-4 shrink-0 text-slate-400" />
-                  <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-indigo-700">
-                    <BarChart3 className="size-4 shrink-0 text-indigo-500" aria-hidden />
-                    <span className="truncate">{insightsScopeLabel}</span>
-                  </span>
-                </>
-              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {epic ? (
                 <Button
                   size="icon-sm"
-                  variant={epicInsightsPanelOpen ? "secondary" : "ghost"}
-                  onClick={() =>
-                    setEpicInsightsPanelOpen((prev) => {
-                      if (!prev) {
-                        const initialWidth = Math.max(520, Math.min(Math.round(window.innerWidth * 0.80), window.innerWidth - 48));
-                        const initialLeft = Math.round((window.innerWidth - initialWidth) / 2);
-                        setEpicInsightsPanelOffset({ x: initialLeft, y: 0 });
-                        setEpicInsightsPanelWidthPx(initialWidth);
-                      }
-                      return !prev;
-                    })
-                  }
-                  aria-label={epicInsightsPanelOpen ? "Close epic insights panel" : "Open epic insights panel"}
+                  variant="ghost"
+                  onClick={openInsightsWindow}
+                  aria-label="Open epic insights in new window"
                   title="Epic insights"
                   className="text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
                 >
@@ -1714,6 +1597,20 @@ export function EpicFormDialog({
                   <p className="text-[15px] font-normal text-slate-700">Month</p>
                   <select value={planMonthDraft} onChange={(event) => { const name = event.target.value; setPlanMonthDraft(name); if (!name) return; const idx = MONTHS.indexOf(name as (typeof MONTHS)[number]); if (idx >= 0) { setPlanQuarterDraft(`Q${quarterNumFromMonth(idx + 1)}`); } }} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800"><option value="">Not set</option>{allowedMonthNames.map((month) => (<option key={month} value={month}>{month}</option>))}</select>
                 </div>
+                {(() => {
+                  const parentInit = initiatives.find((i) => i.id === initiativeId);
+                  const roadmap = roadmaps.find((r) => r.id === parentInit?.roadmapId);
+                  if (!roadmap) return null;
+                  return (
+                    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                      <p className="text-[15px] font-normal text-slate-700">Roadmap</p>
+                      <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
+                        <MapIcon className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+                        {roadmap.name}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Assignee</p>
                   <div className="relative flex min-w-0 w-full items-center">
@@ -1956,82 +1853,6 @@ export function EpicFormDialog({
           </div>
           </div>
         </div>
-      </div>
-      <div
-        className={cn(
-          "fixed left-0 top-0 z-[60] border-l border-slate-200/90 bg-white shadow-2xl transition-transform duration-300",
-          !epicInsightsPanelOpen && "pointer-events-none",
-        )}
-        style={{
-          left: epicInsightsPanelOffset.x,
-          top: epicInsightsPanelOffset.y,
-          width: epicInsightsPanelWidthPx,
-          height: `calc(80vh - ${epicInsightsPanelOffset.y}px)`,
-          transform: epicInsightsPanelOpen
-            ? "translateX(0)"
-            : "translateX(100vw)",
-        }}
-      >
-        <div className="flex h-full min-h-0 flex-col">
-          <div
-            className="flex cursor-move items-center justify-between border-b border-slate-200/90 px-8 py-4"
-            onPointerDown={beginEpicInsightsDrag}
-          >
-            <div className="inline-flex items-center gap-3 text-2xl font-bold text-slate-800">
-              <BarChart3 className="size-6 text-indigo-600" aria-hidden />
-              Epic Insights · {`Q${epicInsightsQuarter}`}{epic?.title ? <span className="text-slate-400 font-normal"> ({epic.title})</span> : null}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setEpicInsightsPanelOpen(false)}
-              aria-label="Close epic insights"
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-10 pt-4">
-            {epic ? (
-              <MonthAnalytics
-                initiatives={epicScopedInitiativesForInsights}
-                month={epicInsightsMonth}
-                periodMonths={epicInsightsMonths}
-                periodLabel={`Q${epicInsightsQuarter}`}
-                planYear={epicInsightsPlanYear}
-                initialSelectedEpicId={initialInsightsScopeEpicId ?? epic.id}
-                initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-                onOpenEpic={() => {
-                  setEpicInsightsPanelOpen(false);
-                }}
-                onOpenStory={onOpenStory}
-                onScopeChange={(type, id, label) => {
-                  setInsightsScopeLabel(label);
-                  onInsightsScopeChange?.(
-                    type === "epic" ? id : null,
-                    type === "initiative" ? id : null,
-                  );
-                }}
-              />
-            ) : (
-              <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                Save this epic first to view insights.
-              </p>
-            )}
-          </div>
-        </div>
-        <div
-          className="absolute inset-y-0 left-0 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
-          onPointerDown={beginEpicInsightsResizeLeft}
-          aria-label="Resize epic insights panel from left"
-          role="separator"
-        />
-        <div
-          className="absolute inset-y-0 right-0 w-2.5 cursor-col-resize bg-transparent hover:bg-indigo-200/40"
-          onPointerDown={beginEpicInsightsResizeRight}
-          aria-label="Resize epic insights panel from right"
-          role="separator"
-        />
       </div>
       {typeof document !== "undefined" &&
       isSprintAutocompleteOpen &&

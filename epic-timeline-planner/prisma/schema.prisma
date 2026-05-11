@@ -21,6 +21,16 @@ enum StoryStatus {
   approved
 }
 
+model Roadmap {
+  id          String      @id @default(uuid())
+  name        String
+  /** Sorted list of calendar years in scope for this roadmap. */
+  years       String      @default("[]")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  initiatives Initiative[]
+}
+
 model Initiative {
   id          String              @id @default(uuid())
   title       String
@@ -37,6 +47,8 @@ model Initiative {
   /** Vertical order in full-roadmap Gantt (lower = higher on screen). Preserved when moving months. */
   timelineRow Int              @default(0)
   year        Int
+  roadmapId   String?
+  roadmap     Roadmap?            @relation(fields: [roadmapId], references: [id])
   epics       Epic[]
   comments    InitiativeComment[]
   history     InitiativeHistory[]
@@ -70,6 +82,7 @@ model Epic {
   originalEstimateDays Int?
   color        String        @default("#3B82F6")
   initiativeId String
+  roadmapId    String?
   planYear       Int?
   planQuarter    Int?
   initiative     Initiative    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
@@ -118,6 +131,7 @@ model UserStory {
   assignee      String?
   labels        String?
   priority      String?
+  roadmapId     String?
   planYear      Int?
   planQuarter   Int?
   sprint        Int?

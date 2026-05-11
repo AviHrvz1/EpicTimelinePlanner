@@ -3,6 +3,7 @@
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   CalendarDays,
   Check,
@@ -15,8 +16,11 @@ import {
   Flag,
   Folder,
   Map as MapIcon,
+  Pencil,
   PieChart,
+  Plus,
   Thermometer,
+  Trash2,
   Users,
   X,
   Zap,
@@ -32,6 +36,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
@@ -65,7 +70,7 @@ import {
   monthTeamLabelForId,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
-import { EpicItem, InitiativeItem, type UserStoryItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, type UserStoryItem, type RoadmapItem } from "@/lib/types";
 import {
   capacityPlanTeamCatalogFromDirectory,
   normalizeWorkspaceUserTeam,
@@ -1161,6 +1166,17 @@ type TimelineGridProps = {
   initialInsightsScopeInitId?: string | null;
   /** Fired when the user selects an epic or initiative in any insights scope picker. */
   onInsightsScopeChange?: (epicId: string | null, initId: string | null) => void;
+  /** Roadmap management props */
+  roadmaps?: RoadmapItem[];
+  selectedRoadmapId?: string;
+  selectedRoadmap?: RoadmapItem | null;
+  onSelectRoadmap?: (id: string, year?: number) => void;
+  onCreateRoadmap?: (name: string, years: number[]) => Promise<void>;
+  onRenameRoadmap?: (id: string, name: string) => Promise<void>;
+  onAddYearToRoadmap?: (id: string, year: number) => Promise<void>;
+  onRemoveYearFromRoadmap?: (id: string, year: number) => Promise<{ error?: string }>;
+  onGetRoadmapCounts?: (id: string) => Promise<{ initiativeCount: number; epicCount: number; storyCount: number; snapshotCount: number } | null>;
+  onDeleteRoadmap?: (id: string) => Promise<void>;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -1222,41 +1238,412 @@ function QuarterYearProgressIcon({
 }
 
 /** Year control: soft sky tint + dark type (calmer than saturated gradient). */
-function RoadmapYearSelect({
+function RoadmapDeleteConfirm({
+  roadmapName,
+  counts,
+  onConfirm,
+  onCancel,
+}: {
+  roadmapName: string;
+  counts: { initiativeCount: number; epicCount: number; storyCount: number; snapshotCount: number };
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [confirmName, setConfirmName] = useState("");
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
+  const cancel = () => { setVisible(false); setTimeout(onCancel, 150); };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") cancel(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  });
+  return createPortal(
+    <div
+      className={cn("fixed inset-0 z-[9990] flex items-center justify-center p-4 transition-all duration-150", visible ? "opacity-100" : "opacity-0 pointer-events-none")}
+      onClick={cancel}
+    >
+      <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
+      <div
+        className={cn("relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl transition-all duration-150", visible ? "scale-100 translate-y-0" : "scale-[0.97] translate-y-1")}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-red-50 ring-1 ring-red-100">
+            <Trash2 className="size-5 text-red-600" />
+          </div>
+          <div>
+            <p className="text-[15px] font-bold text-slate-800">Delete &ldquo;{roadmapName}&rdquo;?</p>
+            <p className="text-[12px] text-slate-400">This action cannot be undone.</p>
+          </div>
+          <button type="button" onClick={cancel} className="ml-auto flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="rounded-xl bg-red-50 border border-red-100 p-3 text-[13px] text-red-700 space-y-1">
+            <p className="font-semibold flex items-center gap-1.5"><AlertTriangle className="size-4" /> Permanently deletes:</p>
+            <ul className="ml-5 list-disc space-y-0.5 text-red-600">
+              <li>{counts.initiativeCount} initiative{counts.initiativeCount !== 1 ? "s" : ""}</li>
+              <li>{counts.epicCount} epic{counts.epicCount !== 1 ? "s" : ""}</li>
+              <li>{counts.storyCount} user stor{counts.storyCount !== 1 ? "ies" : "y"}</li>
+              <li>{counts.snapshotCount} retrospective snapshot{counts.snapshotCount !== 1 ? "s" : ""}</li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-1.5 text-[12px] font-medium text-slate-600">Type <span className="font-bold text-slate-800">{roadmapName}</span> to confirm</p>
+            <input
+              autoFocus
+              type="text"
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && confirmName === roadmapName) onConfirm(); }}
+              placeholder={roadmapName}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-red-400/40"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+          <button type="button" onClick={cancel} className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button
+            type="button"
+            disabled={confirmName !== roadmapName}
+            onClick={onConfirm}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >Delete roadmap</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function RoadmapSelector({
+  roadmaps,
+  selectedRoadmap,
   year,
   onYearChange,
+  onSelectRoadmap,
+  onCreateRoadmap,
+  onRenameRoadmap,
+  onAddYearToRoadmap,
+  onRemoveYearFromRoadmap,
+  onGetRoadmapCounts,
+  onDeleteRoadmap,
 }: {
+  roadmaps: RoadmapItem[];
+  selectedRoadmap: RoadmapItem | null;
   year: number;
   onYearChange: (nextYear: number) => void | Promise<void>;
+  onSelectRoadmap?: (id: string, year?: number) => void;
+  onCreateRoadmap?: (name: string, years: number[]) => Promise<void>;
+  onRenameRoadmap?: (id: string, name: string) => Promise<void>;
+  onAddYearToRoadmap?: (id: string, year: number) => Promise<void>;
+  onRemoveYearFromRoadmap?: (id: string, year: number) => Promise<{ error?: string }>;
+  onGetRoadmapCounts?: (id: string) => Promise<{ initiativeCount: number; epicCount: number; storyCount: number; snapshotCount: number } | null>;
+  onDeleteRoadmap?: (id: string) => Promise<void>;
 }) {
+  const currentCalYear = new Date().getFullYear();
+
+  // Autocomplete state
+  const [query, setQuery] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Create form state
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newYears, setNewYears] = useState<number[]>([currentCalYear]);
+  const [creating, setCreating] = useState(false);
+
+  // Manage popover state
+  const [manageOpen, setManageOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState(selectedRoadmap?.name ?? "");
+  const [yearError, setYearError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ counts: { initiativeCount: number; epicCount: number; storyCount: number; snapshotCount: number } } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const manageRef = useRef<HTMLDivElement>(null);
+
+  // Sync rename field when roadmap changes
+  useEffect(() => { setRenameValue(selectedRoadmap?.name ?? ""); }, [selectedRoadmap?.id, selectedRoadmap?.name]);
+
+  // Close autocomplete on outside click
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setDropdownOpen(false);
+    }
+    if (dropdownOpen) document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [dropdownOpen]);
+
+  // Close manage popover on outside click
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (manageRef.current && !manageRef.current.contains(e.target as Node)) setManageOpen(false);
+    }
+    if (manageOpen) document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [manageOpen]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return roadmaps;
+    return roadmaps.filter((r) => r.name.toLowerCase().includes(q));
+  }, [roadmaps, query]);
+
+  const years: number[] = selectedRoadmap?.years ?? [year];
+
+  async function submitCreate() {
+    if (!newName.trim() || newYears.length === 0 || !onCreateRoadmap) return;
+    setCreating(true);
+    await onCreateRoadmap(newName.trim(), newYears);
+    setCreating(false);
+    setShowCreateForm(false);
+    setNewName("");
+    setNewYears([currentCalYear]);
+    setDropdownOpen(false);
+    setQuery("");
+  }
+
+  async function handleRename() {
+    if (!selectedRoadmap || !onRenameRoadmap || renameValue.trim() === selectedRoadmap.name) return;
+    await onRenameRoadmap(selectedRoadmap.id, renameValue.trim());
+  }
+
+  async function handleDeleteRequest() {
+    if (!selectedRoadmap || !onGetRoadmapCounts) return;
+    const counts = await onGetRoadmapCounts(selectedRoadmap.id);
+    if (!counts) return;
+    setDeleteConfirm({ counts });
+  }
+
+  async function handleDeleteConfirmed() {
+    if (!selectedRoadmap || !onDeleteRoadmap) return;
+    setDeleting(true);
+    await onDeleteRoadmap(selectedRoadmap.id);
+    setDeleting(false);
+    setDeleteConfirm(null);
+    setManageOpen(false);
+  }
+
+  // Available future years not yet in roadmap
+  const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
+
   return (
-    <label className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 shadow-none ring-1 ring-blue-200/75 outline-none select-none transition-colors hover:from-sky-100 hover:via-blue-200 hover:to-blue-200 focus-within:ring-2 focus-within:ring-blue-400/30 focus-within:ring-offset-0">
-      <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
-        <MapIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-        Roadmap
-      </span>
-      <div className="relative flex items-center">
-        <select
-          value={year}
-          onChange={(event) => {
-            const nextYear = Number(event.target.value);
-            if (nextYear === year) return;
-            void Promise.resolve(onYearChange(nextYear));
-          }}
-          className="h-7 min-w-[4.25rem] cursor-pointer appearance-none bg-transparent py-0 pl-2 pr-6 text-center font-sans text-[11px] font-semibold tabular-nums leading-none text-blue-950 outline-none focus:shadow-none focus:ring-0 focus:ring-offset-0 sm:min-w-[4.75rem] sm:pl-2.5 sm:pr-7 sm:text-[12px]"
-          aria-label="Roadmap year"
-        >
-          <option value={2024}>2024</option>
-          <option value={2025}>2025</option>
-          <option value={2026}>2026</option>
-          <option value={2027}>2027</option>
-        </select>
-        <ChevronDown
-          className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-600/80 sm:right-1.5"
-          aria-hidden
-        />
+    <div className="inline-flex h-7 shrink-0 items-stretch overflow-hidden rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 ring-1 ring-blue-200/75 select-none">
+      {/* Roadmap label + autocomplete */}
+      <div ref={containerRef} className="relative flex items-stretch">
+        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
+          <MapIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+          Roadmap
+        </span>
+        <div className="relative flex items-center">
+          <input
+            ref={inputRef}
+            type="text"
+            value={dropdownOpen ? query : (selectedRoadmap?.name ?? "")}
+            placeholder={roadmaps.length === 0 ? "Create roadmap…" : "Select…"}
+            onChange={(e) => { setQuery(e.target.value); setDropdownOpen(true); setShowCreateForm(false); }}
+            onFocus={() => { setDropdownOpen(true); setQuery(""); }}
+            onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
+            className="h-7 w-28 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[11px] font-semibold leading-none text-blue-950 outline-none sm:w-32 sm:text-[12px]"
+            aria-label="Select roadmap"
+          />
+          <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-600/80 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
+        </div>
+
+        {/* Dropdown */}
+        {dropdownOpen && (
+          <div className="absolute top-full left-0 z-50 mt-1 min-w-[14rem] rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+            {filtered.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onSelectRoadmap?.(r.id);
+                  setDropdownOpen(false);
+                  setQuery("");
+                  setShowCreateForm(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                  r.id === selectedRoadmap?.id && "bg-blue-50 text-blue-800",
+                )}
+              >
+                <MapIcon className="size-3.5 shrink-0 text-slate-400" />
+                <span className="flex-1 truncate">{r.name}</span>
+                <span className="shrink-0 text-[11px] text-slate-400">{(Array.isArray(r.years) ? r.years : (JSON.parse(r.years as unknown as string) as number[])).join(", ")}</span>
+                {r.id === selectedRoadmap?.id && <Check className="size-3.5 shrink-0 text-blue-600" />}
+              </button>
+            ))}
+            {filtered.length === 0 && !showCreateForm && (
+              <p className="px-3 py-2 text-[12px] text-slate-400">No roadmaps found</p>
+            )}
+            <div className="mt-1 border-t border-slate-100 pt-1">
+              {!showCreateForm ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setShowCreateForm(true)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium text-indigo-600 hover:bg-indigo-50"
+                >
+                  <Plus className="size-3.5" /> New roadmap
+                </button>
+              ) : (
+                <div className="px-2 py-2 space-y-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void submitCreate(); if (e.key === "Escape") setShowCreateForm(false); }}
+                    placeholder="Roadmap name…"
+                    className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-400/40"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {[0, 1, 2, 3].map((i) => {
+                      const y = currentCalYear + i;
+                      const checked = newYears.includes(y);
+                      return (
+                        <button
+                          key={y}
+                          type="button"
+                          onClick={() => setNewYears((prev) => checked ? prev.filter((x) => x !== y) : [...prev, y].sort())}
+                          className={cn("rounded-md border px-2 py-0.5 text-[12px] font-medium transition", checked ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50")}
+                        >{y}</button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button type="button" onClick={() => setShowCreateForm(false)} className="flex-1 rounded-lg border border-slate-200 py-1 text-[12px] font-medium text-slate-500 hover:bg-slate-50">Cancel</button>
+                    <button
+                      type="button"
+                      disabled={!newName.trim() || newYears.length === 0 || creating}
+                      onClick={() => void submitCreate()}
+                      className="flex-1 rounded-lg bg-blue-600 py-1 text-[12px] font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                    >{creating ? "Creating…" : "Create"}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-    </label>
+
+      {/* Pencil manage button */}
+      {selectedRoadmap && (
+        <div ref={manageRef} className="relative flex items-center border-l border-blue-200/80">
+          <button
+            type="button"
+            onClick={() => setManageOpen((v) => !v)}
+            className="flex h-7 w-6 items-center justify-center text-blue-600/70 transition hover:bg-blue-100/60 hover:text-blue-800"
+            title="Manage roadmap"
+          >
+            <Pencil className="size-3" />
+          </button>
+
+          {/* Manage popover */}
+          {manageOpen && (
+            <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl space-y-3">
+              {/* Rename */}
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rename</p>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void handleRename(); }}
+                    className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-400/40"
+                  />
+                  <button
+                    type="button"
+                    disabled={!renameValue.trim() || renameValue.trim() === selectedRoadmap.name}
+                    onClick={() => void handleRename()}
+                    className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+                  >Save</button>
+                </div>
+              </div>
+
+              {/* Years */}
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Years in scope</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {years.map((y) => (
+                    <div key={y} className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[12px] font-medium text-blue-800">
+                      {y}
+                      <button
+                        type="button"
+                        title={`Remove ${y}`}
+                        onClick={async () => {
+                          setYearError(null);
+                          const result = await onRemoveYearFromRoadmap?.(selectedRoadmap.id, y);
+                          if (result?.error) setYearError(result.error);
+                        }}
+                        className="ml-0.5 text-blue-400 hover:text-red-500"
+                      ><X className="size-2.5" /></button>
+                    </div>
+                  ))}
+                  {addableYears.map((y) => (
+                    <button
+                      key={y}
+                      type="button"
+                      onClick={() => { setYearError(null); void onAddYearToRoadmap?.(selectedRoadmap.id, y); }}
+                      className="flex items-center gap-0.5 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[12px] text-slate-400 hover:border-blue-400 hover:text-blue-600"
+                    ><Plus className="size-2.5" />{y}</button>
+                  ))}
+                </div>
+                {yearError && <p className="text-[11px] text-red-600">{yearError}</p>}
+              </div>
+
+              {/* Delete */}
+              <div className="border-t border-slate-100 pt-2">
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteRequest()}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="size-3.5" /> Delete roadmap
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Year sub-picker */}
+      <div className="flex items-center border-l border-blue-200/80">
+        {years.map((y) => (
+          <button
+            key={y}
+            type="button"
+            onClick={() => { if (y !== year) void onYearChange(y); }}
+            className={cn(
+              "flex h-7 items-center px-2 text-[11px] font-semibold tabular-nums text-blue-950 transition sm:px-2.5 sm:text-[12px]",
+              y === year ? "bg-blue-200/60" : "hover:bg-blue-100/60",
+            )}
+          >{y}</button>
+        ))}
+      </div>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && selectedRoadmap && (
+        <RoadmapDeleteConfirm
+          roadmapName={selectedRoadmap.name}
+          counts={deleteConfirm.counts}
+          onConfirm={() => void handleDeleteConfirmed()}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
+      {deleting && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/60 backdrop-blur-sm">
+          <p className="text-[14px] font-semibold text-slate-600">Deleting roadmap…</p>
+        </div>,
+        document.body,
+      )}
+    </div>
   );
 }
 
@@ -1462,6 +1849,16 @@ export function TimelineGrid({
   initialInsightsScopeInitId,
   onInsightsScopeChange,
   onMonthEpicDayRangeChange,
+  roadmaps = [],
+  selectedRoadmapId,
+  selectedRoadmap = null,
+  onSelectRoadmap,
+  onCreateRoadmap,
+  onRenameRoadmap,
+  onAddYearToRoadmap,
+  onRemoveYearFromRoadmap,
+  onGetRoadmapCounts,
+  onDeleteRoadmap,
 }: TimelineGridProps) {
   const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
@@ -3924,7 +4321,19 @@ export function TimelineGrid({
                 {summaryBadgesForScope ? (
                   <>
                     {onYearChange ? (
-                      <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                      <RoadmapSelector
+                        roadmaps={roadmaps}
+                        selectedRoadmap={selectedRoadmap}
+                        year={currentYear}
+                        onYearChange={onYearChange ?? (() => {})}
+                        onSelectRoadmap={onSelectRoadmap}
+                        onCreateRoadmap={onCreateRoadmap}
+                        onRenameRoadmap={onRenameRoadmap}
+                        onAddYearToRoadmap={onAddYearToRoadmap}
+                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
+                        onGetRoadmapCounts={onGetRoadmapCounts}
+                        onDeleteRoadmap={onDeleteRoadmap}
+                      />
                     ) : null}
                     <button
                       type="button"
@@ -4037,7 +4446,19 @@ export function TimelineGrid({
               {summaryBadgesForScope ? (
                 <>
                   {onYearChange ? (
-                    <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                    <RoadmapSelector
+                        roadmaps={roadmaps}
+                        selectedRoadmap={selectedRoadmap}
+                        year={currentYear}
+                        onYearChange={onYearChange ?? (() => {})}
+                        onSelectRoadmap={onSelectRoadmap}
+                        onCreateRoadmap={onCreateRoadmap}
+                        onRenameRoadmap={onRenameRoadmap}
+                        onAddYearToRoadmap={onAddYearToRoadmap}
+                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
+                        onGetRoadmapCounts={onGetRoadmapCounts}
+                        onDeleteRoadmap={onDeleteRoadmap}
+                      />
                   ) : null}
                   <button
                     type="button"
@@ -4150,7 +4571,19 @@ export function TimelineGrid({
               {sprintKanbanSummaryStats ? (
                 <>
                   {onYearChange ? (
-                    <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                    <RoadmapSelector
+                        roadmaps={roadmaps}
+                        selectedRoadmap={selectedRoadmap}
+                        year={currentYear}
+                        onYearChange={onYearChange ?? (() => {})}
+                        onSelectRoadmap={onSelectRoadmap}
+                        onCreateRoadmap={onCreateRoadmap}
+                        onRenameRoadmap={onRenameRoadmap}
+                        onAddYearToRoadmap={onAddYearToRoadmap}
+                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
+                        onGetRoadmapCounts={onGetRoadmapCounts}
+                        onDeleteRoadmap={onDeleteRoadmap}
+                      />
                   ) : null}
                   <button
                     type="button"
@@ -4218,7 +4651,19 @@ export function TimelineGrid({
               ) : summaryBadgesForScope ? (
                 <>
                   {onYearChange ? (
-                    <RoadmapYearSelect year={currentYear} onYearChange={onYearChange} />
+                    <RoadmapSelector
+                        roadmaps={roadmaps}
+                        selectedRoadmap={selectedRoadmap}
+                        year={currentYear}
+                        onYearChange={onYearChange ?? (() => {})}
+                        onSelectRoadmap={onSelectRoadmap}
+                        onCreateRoadmap={onCreateRoadmap}
+                        onRenameRoadmap={onRenameRoadmap}
+                        onAddYearToRoadmap={onAddYearToRoadmap}
+                        onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
+                        onGetRoadmapCounts={onGetRoadmapCounts}
+                        onDeleteRoadmap={onDeleteRoadmap}
+                      />
                   ) : null}
                   <button
                     type="button"

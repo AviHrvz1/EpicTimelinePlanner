@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 
 const DEFAULT_YEAR = new Date().getFullYear();
+const DEFAULT_ROADMAP_ID = "default-roadmap-0000-0000-000000000001";
 
 const INITIATIVE_INCLUDE = {
   comments: { orderBy: { createdAt: "desc" as const } },
@@ -35,12 +36,14 @@ const createInitiativeSchema = z.object({
   startMonth: z.number().int().min(1).max(12).optional().nullable(),
   endMonth: z.number().int().min(1).max(12).optional().nullable(),
   year: z.number().int().min(2000).max(2100).optional(),
+  roadmapId: z.string().optional(),
 });
 
 export async function GET(request: NextRequest) {
   const year = Number(request.nextUrl.searchParams.get("year")) || DEFAULT_YEAR;
+  const roadmapId = request.nextUrl.searchParams.get("roadmapId") || DEFAULT_ROADMAP_ID;
   const initiatives = await db.initiative.findMany({
-    where: { year },
+    where: { year, roadmapId },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     include: INITIATIVE_INCLUDE,
   });
@@ -58,6 +61,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const roadmapId = parsed.data.roadmapId ?? DEFAULT_ROADMAP_ID;
+
   const initiative = await db.initiative.create({
     data: {
       title: parsed.data.title,
@@ -68,6 +73,7 @@ export async function POST(request: NextRequest) {
       startMonth: parsed.data.startMonth ?? null,
       endMonth: parsed.data.endMonth ?? null,
       year: parsed.data.year ?? DEFAULT_YEAR,
+      roadmapId,
       status: InitiativeStatus.backlog,
       history: { create: { entry: "Initiative created" } },
     },

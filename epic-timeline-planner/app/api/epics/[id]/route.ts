@@ -99,7 +99,7 @@ export async function PATCH(
     const nextInitiativeId = patch.initiativeId ?? existing.initiativeId;
     const initiative = await db.initiative.findUnique({
       where: { id: nextInitiativeId },
-      select: { year: true, startMonth: true, color: true },
+      select: { year: true, startMonth: true, color: true, roadmapId: true },
     });
     const nextPlanStartMonth =
       patch.planStartMonth !== undefined
@@ -117,6 +117,7 @@ export async function PATCH(
         ...(patch.assignee !== undefined ? { assignee: patch.assignee } : {}),
         ...(initiative?.color != null ? { color: initiative.color } : {}),
         ...(patch.initiativeId !== undefined ? { initiativeId: patch.initiativeId } : {}),
+        ...(initiative?.roadmapId != null ? { roadmapId: initiative.roadmapId } : {}),
         ...(patch.planSprint !== undefined ? { planSprint: patch.planSprint } : {}),
         ...(patch.planEndSprint !== undefined ? { planEndSprint: patch.planEndSprint } : {}),
         ...(patch.planStartMonth !== undefined ? { planStartMonth: patch.planStartMonth } : {}),

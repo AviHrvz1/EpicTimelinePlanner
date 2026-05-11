@@ -20,6 +20,7 @@ import {
   List,
   ListOrdered,
   ListTree,
+  Map as MapIcon,
   MessageSquare,
   Quote,
   Tag,
@@ -44,7 +45,7 @@ import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { MONTHS } from "@/lib/timeline";
-import { type EpicItem, InitiativeItem } from "@/lib/types";
+import { type EpicItem, InitiativeItem, type RoadmapItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
 import { useResizableTableColumns } from "@/lib/use-resizable-table-columns";
@@ -98,6 +99,10 @@ type InitiativeFormDialogProps = {
   onAddComment?: (initiativeId: string, body: string) => Promise<void>;
   onExitComplete?: () => void;
   surfaceAnchorRef?: RefObject<HTMLElement | null>;
+  roadmaps?: RoadmapItem[];
+  selectedRoadmapId?: string;
+  onChangeRoadmap?: (roadmapId: string) => void;
+  onCreateRoadmap?: (name: string) => Promise<string | null>;
 };
 
 export function InitiativeFormDialog({
@@ -112,12 +117,23 @@ export function InitiativeFormDialog({
   onPatchEpic,
   onAddComment,
   surfaceAnchorRef,
+  roadmaps = [],
+  selectedRoadmapId,
+  onChangeRoadmap,
+  onCreateRoadmap,
 }: InitiativeFormDialogProps) {
   const [title, setTitle] = useState(initiative?.title ?? "");
   const [icon, setIcon] = useState(initiative?.icon === "🎯" ? "" : (initiative?.icon ?? ""));
   const [description, setDescription] = useState(initiative?.description ?? "");
   const [assignee, setAssignee] = useState(initiative?.assignee ?? "");
   const [color, setColor] = useState(initiative?.color ?? "#3B82F6");
+  const [formRoadmapId, setFormRoadmapId] = useState(initiative?.roadmapId ?? selectedRoadmapId ?? "");
+  const [roadmapQuery, setRoadmapQuery] = useState("");
+  const [roadmapDropdownOpen, setRoadmapDropdownOpen] = useState(false);
+  const [roadmapHighlightIdx, setRoadmapHighlightIdx] = useState(0);
+  const [roadmapCreating, setRoadmapCreating] = useState(false);
+  const roadmapInputRef = useRef<HTMLInputElement>(null);
+  const roadmapDropdownRef = useRef<HTMLDivElement>(null);
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
   const [activityOpen, setActivityOpen] = useState(() => (initiative?.epics?.length ?? 0) === 0);
   const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
@@ -173,6 +189,9 @@ export function InitiativeFormDialog({
     setDescription(initiative?.description ?? "");
     setAssignee(initiative?.assignee ?? "");
     setColor(initiative?.color ?? "#3B82F6");
+    setFormRoadmapId(initiative?.roadmapId ?? selectedRoadmapId ?? "");
+    setRoadmapQuery("");
+    setRoadmapDropdownOpen(false);
     setActivityTab("comments");
     setActivityOpen((initiative?.epics?.length ?? 0) === 0);
     if (initiative?.id) {
@@ -1055,6 +1074,132 @@ export function InitiativeFormDialog({
                   <p className="text-[15px] font-normal text-slate-700">Month</p>
                   <input readOnly value={initiativePlanningMonth} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
                 </div>
+                {(() => {
+                  const selectedRoadmap = roadmaps.find((r) => r.id === formRoadmapId);
+                  const q = roadmapQuery.trim().toLowerCase();
+                  const filteredRoadmaps = q
+                    ? roadmaps.filter((r) => r.name.toLowerCase().includes(q))
+                    : roadmaps;
+                  const createLabel = roadmapQuery.trim() ? `Create "${roadmapQuery.trim()}"` : "Create new roadmap";
+                  const allOptions = [{ id: "__create__", name: createLabel }, ...filteredRoadmaps];
+                  return (
+                    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-3">
+                      <p className="mt-1.5 text-[15px] font-normal text-slate-700">Roadmap</p>
+                      <div className="relative">
+                        <div className="flex h-7 items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-blue-400/40">
+                          <MapIcon className="ml-2 size-3.5 shrink-0 text-slate-400" aria-hidden />
+                          <input
+                            ref={roadmapInputRef}
+                            value={roadmapDropdownOpen ? roadmapQuery : (selectedRoadmap?.name ?? "")}
+                            onChange={(e) => {
+                              setRoadmapQuery(e.target.value);
+                              setRoadmapHighlightIdx(0);
+                            }}
+                            onFocus={() => {
+                              setRoadmapQuery("");
+                              setRoadmapDropdownOpen(true);
+                              setRoadmapHighlightIdx(0);
+                            }}
+                            onBlur={() => {
+                              window.setTimeout(() => {
+                                setRoadmapDropdownOpen(false);
+                                setRoadmapQuery("");
+                              }, 150);
+                            }}
+                            onKeyDown={(e) => {
+                              if (!roadmapDropdownOpen) return;
+                              if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                setRoadmapHighlightIdx((i) => Math.min(i + 1, allOptions.length - 1));
+                              } else if (e.key === "ArrowUp") {
+                                e.preventDefault();
+                                setRoadmapHighlightIdx((i) => Math.max(i - 1, 0));
+                              } else if (e.key === "Enter") {
+                                e.preventDefault();
+                                const opt = allOptions[roadmapHighlightIdx];
+                                if (!opt) return;
+                                if (opt.id === "__create__") {
+                                  const name = roadmapQuery.trim() || "New Roadmap";
+                                  setRoadmapCreating(true);
+                                  onCreateRoadmap?.(name).then((newId) => {
+                                    if (newId) { setFormRoadmapId(newId); onChangeRoadmap?.(newId); }
+                                  }).finally(() => setRoadmapCreating(false));
+                                } else {
+                                  setFormRoadmapId(opt.id);
+                                  onChangeRoadmap?.(opt.id);
+                                }
+                                setRoadmapDropdownOpen(false);
+                                setRoadmapQuery("");
+                              } else if (e.key === "Escape") {
+                                setRoadmapDropdownOpen(false);
+                                setRoadmapQuery("");
+                              }
+                            }}
+                            placeholder="Search roadmaps…"
+                            autoComplete="off"
+                            className="h-full min-w-0 flex-1 bg-transparent px-2 text-[14px] text-slate-800 outline-none"
+                          />
+                          {roadmapCreating ? (
+                            <span className="mr-2 text-[11px] text-slate-400">Creating…</span>
+                          ) : (
+                            <ChevronDown className="mr-2 size-3.5 shrink-0 text-slate-400" aria-hidden />
+                          )}
+                        </div>
+                        {roadmapDropdownOpen && (
+                          <div
+                            ref={roadmapDropdownRef}
+                            className="absolute left-0 right-0 top-full z-[200] mt-1 max-h-52 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black/5"
+                          >
+                            {allOptions.map((opt, i) => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-center gap-2 px-3 py-2 text-left text-[13px]",
+                                  opt.id === "__create__"
+                                    ? "font-medium text-blue-700 hover:bg-blue-50"
+                                    : "text-slate-800 hover:bg-slate-50",
+                                  i === roadmapHighlightIdx &&
+                                    (opt.id === "__create__" ? "bg-blue-50" : "bg-slate-50"),
+                                  opt.id === formRoadmapId && opt.id !== "__create__" && "font-medium text-indigo-700",
+                                )}
+                                onMouseEnter={() => setRoadmapHighlightIdx(i)}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  if (opt.id === "__create__") {
+                                    const name = roadmapQuery.trim() || "New Roadmap";
+                                    setRoadmapCreating(true);
+                                    onCreateRoadmap?.(name).then((newId) => {
+                                      if (newId) { setFormRoadmapId(newId); onChangeRoadmap?.(newId); }
+                                    }).finally(() => setRoadmapCreating(false));
+                                  } else {
+                                    setFormRoadmapId(opt.id);
+                                    onChangeRoadmap?.(opt.id);
+                                  }
+                                  setRoadmapDropdownOpen(false);
+                                  setRoadmapQuery("");
+                                }}
+                              >
+                                {opt.id === "__create__" ? (
+                                  <>
+                                    <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-[11px] font-bold">+</span>
+                                    {opt.name}
+                                  </>
+                                ) : (
+                                  <>
+                                    <MapIcon className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                                    {opt.name}
+                                    {opt.id === formRoadmapId && <Check className="ml-auto size-3.5 text-indigo-500" />}
+                                  </>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Assignee</p>
                   <div className="relative flex min-w-0 w-full items-center">

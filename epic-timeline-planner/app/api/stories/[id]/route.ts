@@ -67,6 +67,7 @@ export async function PATCH(
       epicId: true,
       planYear: true,
       planQuarter: true,
+      roadmapId: true,
     },
   });
   if (!existing) {
@@ -101,6 +102,7 @@ export async function PATCH(
       planYear: true,
       planQuarter: true,
       planStartMonth: true,
+      roadmapId: true,
       initiative: { select: { year: true, startMonth: true } },
     },
   });
@@ -126,6 +128,7 @@ export async function PATCH(
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.backlogOrder !== undefined ? { backlogOrder: patch.backlogOrder } : {}),
       ...(patch.epicId !== undefined ? { epicId: patch.epicId } : {}),
+      ...(targetEpic?.roadmapId != null ? { roadmapId: targetEpic.roadmapId } : {}),
       planYear: nextPlanYear,
       planQuarter: nextPlanQuarter,
       ...(changes.length > 0

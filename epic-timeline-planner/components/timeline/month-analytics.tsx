@@ -419,6 +419,7 @@ type MonthAnalyticsProps = {
   periodLabel?: string;
   planYear: number;
   filterEpicTeamIds?: string[] | null;
+  forceUserMode?: boolean;
   initialSelectedEpicId?: string;
   initialSelectedInitiativeId?: string;
   onOpenEpic?: (epicId: string) => void;
@@ -588,6 +589,7 @@ export function MonthAnalytics({
   periodLabel,
   planYear,
   filterEpicTeamIds = null,
+  forceUserMode = false,
   initialSelectedEpicId,
   initialSelectedInitiativeId,
   onOpenEpic,
@@ -2650,7 +2652,7 @@ export function MonthAnalytics({
           </div>
         ) : null}
         {!workloadDrilldownAssignee ? (() => {
-          const teamMode = (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
+          const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
           if (workloadView === "stories") {
             const barData = teamMode
               ? analytics.workloadByTeam.map((t) => ({
@@ -2932,7 +2934,7 @@ export function MonthAnalytics({
         <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
           {/* Month Load — left column, below Workload Balance */}
           {(() => {
-            const teamMode = (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
+            const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
             const monthDaysLeft = analytics.monthDaysLeft;
             const loadRows = teamMode
               ? analytics.workloadByTeam.map((t) => ({

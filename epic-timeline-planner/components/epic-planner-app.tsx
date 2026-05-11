@@ -66,7 +66,7 @@ import {
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import { splitQuarterTotalAcrossMonths } from "@/lib/quarter-team-capacity";
 import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, QUARTERS } from "@/lib/timeline";
-import { EpicItem, InitiativeItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, RoadmapItem } from "@/lib/types";
 import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
 import { DebugLogPanel } from "@/components/debug-log-panel";
@@ -110,9 +110,13 @@ import {
   yearSprintRangeFromMonthRange,
 } from "@/lib/year-sprint";
 
+const ROADMAP_STORAGE_KEY = "epicPlanner.selectedRoadmapId.v1";
+
 type PlannerProps = {
   initialInitiatives: InitiativeItem[];
   year: number;
+  initialRoadmaps: RoadmapItem[];
+  initialRoadmapId: string;
 };
 
 const SPRINT_RETROSPECTIVE_STORAGE_KEY = "epicPlanner.sprintRetrospective.v1";
@@ -859,10 +863,19 @@ function resolveEpicIdFromUrlParam(epicParam: string, maps: ReturnType<typeof bu
   return maps.idByRef[stripped] ?? maps.idByRef[padded] ?? raw;
 }
 
-export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
+export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, initialRoadmapId }: PlannerProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [initiatives, setInitiatives] = useState(initialInitiatives);
+  const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>(initialRoadmaps);
+  const [selectedRoadmapId, setSelectedRoadmapId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(ROADMAP_STORAGE_KEY);
+      if (stored && initialRoadmaps.some((r) => r.id === stored)) return stored;
+    }
+    return initialRoadmapId;
+  });
+  const selectedRoadmap = roadmaps.find((r) => r.id === selectedRoadmapId) ?? roadmaps[0] ?? null;
   const [selectedYear, setSelectedYear] = useState(year);
   const [initiativeDialogOpen, setInitiativeDialogOpen] = useState(false);
   const [editingInitiative, setEditingInitiative] = useState<InitiativeItem | undefined>(undefined);
@@ -2225,11 +2238,123 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     }
   }, [stripStoryFromPersistedCapacityAssignments]);
 
-  async function refresh(targetYear = selectedYear) {
+  async function refresh(targetYear = selectedYear, targetRoadmapId = selectedRoadmapId) {
     const data = await parseJson<InitiativeItem[]>(
-      await fetch(`/api/initiatives?year=${targetYear}`, { cache: "no-store" }),
+      await fetch(`/api/initiatives?year=${targetYear}&roadmapId=${targetRoadmapId}`, { cache: "no-store" }),
     );
     setInitiatives(data);
+  }
+
+  async function refreshRoadmaps() {
+    const data = await parseJson<RoadmapItem[]>(await fetch("/api/roadmaps", { cache: "no-store" }));
+    setRoadmaps(data);
+  }
+
+  async function handleCreateRoadmap(name: string, years: number[]) {
+    const res = await fetch("/api/roadmaps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, years }),
+    });
+    if (!res.ok) { toast.error("Failed to create roadmap"); return; }
+    const newRoadmap = await parseJson<RoadmapItem>(res);
+    setRoadmaps((prev) => [newRoadmap, ...prev]);
+    handleSelectRoadmap(newRoadmap.id, newRoadmap.years[0] ?? selectedYear, [newRoadmap]);
+  }
+
+  async function createRoadmapQuick(name: string): Promise<string | null> {
+    const currentYear = new Date().getFullYear();
+    const res = await fetch("/api/roadmaps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, years: [currentYear] }),
+    });
+    if (!res.ok) { toast.error("Failed to create roadmap"); return null; }
+    const newRoadmap = await parseJson<RoadmapItem>(res);
+    setRoadmaps((prev) => [...prev, newRoadmap]);
+    toast.success(`Roadmap "${name}" created`);
+    return newRoadmap.id;
+  }
+
+  async function handleRenameRoadmap(id: string, name: string) {
+    const res = await fetch(`/api/roadmaps/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) { toast.error("Failed to rename roadmap"); return; }
+    const updated = await parseJson<RoadmapItem>(res);
+    setRoadmaps((prev) => prev.map((r) => (r.id === id ? updated : r)));
+  }
+
+  async function handleAddYearToRoadmap(id: string, yr: number) {
+    const res = await fetch(`/api/roadmaps/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addYear: yr }),
+    });
+    if (!res.ok) { toast.error("Failed to add year to roadmap"); return; }
+    const updated = await parseJson<RoadmapItem>(res);
+    setRoadmaps((prev) => prev.map((r) => (r.id === id ? updated : r)));
+  }
+
+  async function handleRemoveYearFromRoadmap(id: string, yr: number): Promise<{ error?: string }> {
+    const res = await fetch(`/api/roadmaps/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ removeYear: yr }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return { error: (body as { message?: string }).message ?? "Cannot remove year" };
+    }
+    const updated = await parseJson<RoadmapItem>(res);
+    setRoadmaps((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    if (selectedRoadmapId === id && selectedYear === yr) {
+      const newYear = updated.years[0] ?? new Date().getFullYear();
+      setSelectedYear(newYear);
+      await refresh(newYear, id);
+    }
+    return {};
+  }
+
+  async function handleGetRoadmapCounts(id: string) {
+    const res = await fetch(`/api/roadmaps/${id}`, { method: "POST", cache: "no-store" });
+    if (!res.ok) return null;
+    return res.json() as Promise<{ initiativeCount: number; epicCount: number; storyCount: number; snapshotCount: number }>;
+  }
+
+  async function handleDeleteRoadmap(id: string) {
+    const res = await fetch(`/api/roadmaps/${id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("Failed to delete roadmap"); return; }
+    setRoadmaps((prev) => {
+      const remaining = prev.filter((r) => r.id !== id);
+      const nextRoadmap = remaining[0] ?? null;
+      if (nextRoadmap) {
+        const nextYear = nextRoadmap.years[0] ?? new Date().getFullYear();
+        handleSelectRoadmap(nextRoadmap.id, nextYear, remaining);
+      } else {
+        setInitiatives([]);
+      }
+      return remaining;
+    });
+  }
+
+  function handleSelectRoadmap(id: string, yr?: number, roadmapList?: RoadmapItem[]) {
+    const list = roadmapList ?? roadmaps;
+    const roadmap = list.find((r) => r.id === id) ?? null;
+    const nextYear = yr ?? (roadmap?.years.includes(selectedYear) ? selectedYear : (roadmap?.years[0] ?? selectedYear));
+    setSelectedRoadmapId(id);
+    setSelectedYear(nextYear);
+    localStorage.setItem(ROADMAP_STORAGE_KEY, id);
+    setFocusedQuarterLabel(null);
+    setActiveTimelineMonth(null);
+    setActiveYearSprint(null);
+    setActiveSprintTab("kanban");
+    setActiveMonthPlanTab("epic-gantt");
+    setActiveQuarterViewTab("gantt");
+    setSprintStoryBoardTeamId(null);
+    void refresh(nextYear, id);
   }
 
   /** If an epic is in a month team board queue but `team` is still null, set team from that queue (month / quarter / year capacity). */
@@ -2382,7 +2507,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
       : fetch("/api/initiatives", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, year: selectedYear }),
+          body: JSON.stringify({ ...payload, year: selectedYear, roadmapId: selectedRoadmapId }),
         });
 
     await request;
@@ -2452,7 +2577,7 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
     const response = await fetch("/api/initiatives", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, year: selectedYear }),
+      body: JSON.stringify({ title, year: selectedYear, roadmapId: selectedRoadmapId }),
     });
     if (!response.ok) {
       throw new Error("Failed to create initiative");
@@ -4558,6 +4683,16 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
                 summaryBadges={roadmapSummary}
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 summaryStatusQuickFilter={panelStatusQuickFilter}
+                roadmaps={roadmaps}
+                selectedRoadmapId={selectedRoadmapId}
+                selectedRoadmap={selectedRoadmap}
+                onSelectRoadmap={handleSelectRoadmap}
+                onCreateRoadmap={handleCreateRoadmap}
+                onRenameRoadmap={handleRenameRoadmap}
+                onAddYearToRoadmap={handleAddYearToRoadmap}
+                onRemoveYearFromRoadmap={handleRemoveYearFromRoadmap}
+                onGetRoadmapCounts={handleGetRoadmapCounts}
+                onDeleteRoadmap={handleDeleteRoadmap}
                 onYearChange={async (nextYear) => {
                   if (nextYear === selectedYear) return;
                   setSelectedYear(nextYear);
@@ -5129,6 +5264,10 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }}
         onSubmit={handleUpsertInitiative}
         surfaceAnchorRef={planningRightSurfaceRef}
+        roadmaps={roadmaps}
+        selectedRoadmapId={selectedRoadmapId}
+        onChangeRoadmap={() => {}}
+        onCreateRoadmap={createRoadmapQuick}
       />
       <EpicFormDialog
         open={epicDialogOpen}
@@ -5202,17 +5341,13 @@ export function EpicPlannerApp({ initialInitiatives, year }: PlannerProps) {
         }}
         workspaceDirectoryUsers={workspaceDirectoryUsers}
         surfaceAnchorRef={planningRightSurfaceRef}
-        initialInsightsScopeEpicId={insightsScopeEpicId}
-        initialInsightsScopeInitId={insightsScopeInitId}
-        onInsightsScopeChange={(epicId, initId) => {
-          setInsightsScopeEpicId(epicId);
-          setInsightsScopeInitId(initId);
-        }}
+        roadmaps={roadmaps}
       />
       <StoryDetailsDialog
         open={storyDialogOpen}
         story={selectedStory}
         initiatives={initiatives}
+        roadmaps={roadmaps}
         lockParentEpicId={creatingStoryEpicId}
         onClose={() => {
           setStoryDialogOpen(false);

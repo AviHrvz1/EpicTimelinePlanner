@@ -1,5 +1,14 @@
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
 
+export type RoadmapItem = {
+  id: string;
+  name: string;
+  years: number[];
+  initiativeCount?: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
 export type StoryCommentItem = {
   id: string;
   body: string;
@@ -65,6 +74,7 @@ export type UserStoryItem = {
   assignee: string | null;
   labels: string | null;
   priority: string | null;
+  roadmapId: string | null;
   planYear: number | null;
   planQuarter: number | null;
   sprint: number | null;
@@ -91,6 +101,7 @@ export type EpicItem = {
   originalEstimateDays: number | null;
   color: string;
   initiativeId: string;
+  roadmapId: string | null;
   planYear: number | null;
   planQuarter: number | null;
   planSprint: number | null;
@@ -125,6 +136,7 @@ export type InitiativeItem = {
   endYearSprint: number | null;
   timelineRow: number;
   year: number;
+  roadmapId: string | null;
   epics: EpicItem[];
   comments: InitiativeCommentItem[];
   history: InitiativeHistoryItem[];

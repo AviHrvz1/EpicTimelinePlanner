@@ -85,6 +85,7 @@ export function epicForBurndown(epic: EpicItem, source: EstimateSource): EpicIte
               assignee: epic.assignee ?? null,
               labels: null,
               priority: null,
+              roadmapId: epic.roadmapId ?? null,
               planYear: epic.planYear ?? null,
               planQuarter: epic.planQuarter ?? null,
               sprint: null,

@@ -24,6 +24,7 @@ import {
   List,
   ListOrdered,
   ListTodo,
+  Map as MapIcon,
   MessageSquare,
   PlayCircle,
   Quote,
@@ -45,7 +46,7 @@ import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_IDS } from "@/lib/month-team-board";
-import { InitiativeItem, UserStoryItem } from "@/lib/types";
+import { InitiativeItem, UserStoryItem, type RoadmapItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import {
   isUsablePlanningSurfaceRect,
@@ -118,6 +119,7 @@ type StoryDetailsDialogProps = {
   onExitComplete?: () => void;
   /** When set, the panel matches this element (e.g. right timeline column). */
   surfaceAnchorRef?: RefObject<HTMLElement | null>;
+  roadmaps?: RoadmapItem[];
 };
 
 export function StoryDetailsDialog({
@@ -138,6 +140,7 @@ export function StoryDetailsDialog({
   onOpenStory,
   storyRef: _storyRef,
   surfaceAnchorRef,
+  roadmaps = [],
 }: StoryDetailsDialogProps) {
   const statusMeta: Record<StoryStatus, { Icon: typeof ListTodo }> = {
     [StoryStatus.todo]: { Icon: ListTodo },
@@ -973,6 +976,21 @@ export function StoryDetailsDialog({
                 </select>
               </div>
             </label>
+            {(() => {
+              const parentEpic = initiatives.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId);
+              const parentInit = initiatives.find((i) => i.id === parentEpic?.initiativeId);
+              const roadmap = roadmaps.find((r) => r.id === parentInit?.roadmapId);
+              if (!roadmap) return null;
+              return (
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Roadmap</p>
+                  <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
+                    <MapIcon className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+                    {roadmap.name}
+                  </span>
+                </div>
+              );
+            })()}
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Assignee</p>
               <div className="group/assignee relative flex min-w-0 w-full items-center">

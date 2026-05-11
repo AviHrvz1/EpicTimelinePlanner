@@ -5,7 +5,7 @@ import { PrismaClient } from "@/lib/generated/prisma";
  * so the next import gets a new `PrismaClient` after `prisma generate`.
  * (e.g. UserStory.backlogOrder / Epic.backlogOrder — old cached clients reject those fields.)
  */
-const PRISMA_CLIENT_CACHE_VERSION = 8;
+const PRISMA_CLIENT_CACHE_VERSION = 9;
 
 type LegacyGlobal = typeof globalThis & { prisma?: PrismaClient };
 

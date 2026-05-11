@@ -47,6 +47,7 @@ export async function POST(
     select: {
       planQuarter: true,
       planStartMonth: true,
+      roadmapId: true,
       initiative: { select: { year: true, startMonth: true } },
     },
   });
@@ -67,6 +68,7 @@ export async function POST(
       daysLeft: parsed.data.daysLeft ?? null,
       status: parsed.data.status ?? StoryStatus.todo,
       epicId: id,
+      roadmapId: epic.roadmapId,
       planYear: epic.initiative.year,
       planQuarter: epic.planQuarter ?? quarterFromMonth(epic.planStartMonth ?? epic.initiative.startMonth),
       history: {
