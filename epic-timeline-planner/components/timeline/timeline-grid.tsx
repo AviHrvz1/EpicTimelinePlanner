@@ -1179,6 +1179,8 @@ type TimelineGridProps = {
   onDeleteRoadmap?: (id: string) => Promise<void>;
   /** When provided, summary chips are portalled into this element instead of rendered in the header. */
   summaryBarPortalElement?: HTMLElement | null;
+  /** When true, chips are never rendered inline in the header (use with summaryBarPortalElement to avoid flash-of-inline-chips on mount). */
+  suppressInlineChips?: boolean;
 };
 
 const QUARTER_PROGRESS_STEPS: Record<string, number> = {
@@ -1862,6 +1864,7 @@ export function TimelineGrid({
   onGetRoadmapCounts,
   onDeleteRoadmap,
   summaryBarPortalElement,
+  suppressInlineChips,
 }: TimelineGridProps) {
   const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
@@ -4124,16 +4127,16 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 py-2.5 shadow-none ring-0",
+          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 py-1 shadow-none ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
         {hasBreadcrumbs ? (
           <div
             className={cn(
-              "relative z-30 inline-flex shrink-0 items-center gap-1 rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 py-0.5 pl-1.5 pr-1 shadow-none ring-0 outline-none",
-              useRoadmapGanttChipTrack &&
-                "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 pr-1",
+              "relative z-30 inline-flex shrink-0 items-center gap-1 py-0.5 pl-1.5 pr-1 outline-none",
+              useRoadmapGanttChipTrack && !suppressInlineChips &&
+                "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 pr-1 shadow-none ring-0",
             )}
           >
             {breadcrumbItems.map((item, index) => (
@@ -4400,7 +4403,7 @@ export function TimelineGrid({
           </div>
         ) : null}
         {!activeMonth ? (
-          useRoadmapGanttChipTrack ? (
+          useRoadmapGanttChipTrack && !suppressInlineChips ? (
             <div
               className="grid min-w-0 w-full max-w-full gap-2"
               style={ganttLaneGridStyle}
@@ -4409,7 +4412,7 @@ export function TimelineGrid({
                 className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2"
                 style={{ gridColumn: "1 / -1" }}
               >
-                {summaryBarPortalElement ? null : summaryYearChipsJsx}
+                {summaryYearChipsJsx}
               </div>
             </div>
           ) : (
@@ -4419,7 +4422,7 @@ export function TimelineGrid({
                 hasBreadcrumbs ? "flex-1" : "w-full",
               )}
             >
-              {summaryBarPortalElement ? null : summaryYearChipsJsx}
+              {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
             </div>
           )
         ) : activeMonth ? (
@@ -4509,7 +4512,7 @@ export function TimelineGrid({
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
                   ) : null}
                 </>
-              ) : (summaryBarPortalElement ? null : summaryYearChipsJsx)}
+              ) : ((suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx)}
           </div>
         ) : focusedQuarter ? (
           <div className="flex items-center gap-2" />

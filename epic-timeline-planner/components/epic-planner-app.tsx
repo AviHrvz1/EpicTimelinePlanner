@@ -4452,7 +4452,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         </div>
         <div
           className={cn(
-            "mx-auto flex w-full max-w-[2550px] flex-row gap-2.5",
+            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5",
             topMode === "backlog"
               ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-hidden overflow-y-hidden"
               : "flex-1 min-h-0 overflow-y-visible",
@@ -4470,7 +4470,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           >
             <div
               className={cn(
-                "absolute top-0 left-0 flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-slate-200/80 bg-white shadow-[0_4px_20px_-6px_rgba(15,23,42,0.09)] transition-[width,box-shadow] duration-200 ease-out",
+                "absolute top-0 left-0 flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-slate-200/80 bg-white shadow-[2px_0_12px_-2px_rgba(15,23,42,0.14),0_4px_16px_-4px_rgba(15,23,42,0.10)] transition-[width,box-shadow] duration-200 ease-out",
                 isModeRailExpanded
                   ? "z-50 w-[244px] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.22)] ring-1 ring-slate-200/70"
                   : "z-30 w-[58px]",
@@ -4691,6 +4691,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 }}
                 summaryBadges={roadmapSummary}
                 summaryBarPortalElement={summaryBarEl}
+                suppressInlineChips
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 summaryStatusQuickFilter={panelStatusQuickFilter}
                 roadmaps={roadmaps}
