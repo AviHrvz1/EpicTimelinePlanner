@@ -791,6 +791,7 @@ function InitiativeTreeEpicRow({
   onOpenStory,
   onCreateStoryQuick,
   storyProgressDetailsVisible,
+  showDragHint = false,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -803,6 +804,7 @@ function InitiativeTreeEpicRow({
   onOpenStory: (storyId: string) => void;
   onCreateStoryQuick?: (epicId: string, title: string) => Promise<void>;
   storyProgressDetailsVisible: boolean;
+  showDragHint?: boolean;
 }) {
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
@@ -874,7 +876,7 @@ function InitiativeTreeEpicRow({
         ) : null}
         <span className="relative inline-flex h-7 shrink-0 items-center" aria-hidden>
           <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
-          {epicPlanDragEnabled && !isEpicScheduledOnGantt && !epicTeamId ? (
+          {showDragHint ? (
             <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
           ) : null}
         </span>
@@ -1083,6 +1085,18 @@ function InitiativeTreeCard({
   const [epicTitle, setEpicTitle] = useState("");
   const [isAddingEpic, setIsAddingEpic] = useState(false);
   const [openEpicIds, setOpenEpicIds] = useState<Record<string, boolean>>({});
+  const [hintEpicId, setHintEpicId] = useState<string | null>(null);
+  const prevEpicIdsRef = useRef<Set<string>>(new Set(initiative.epics?.map((e) => e.id) ?? []));
+
+  useEffect(() => {
+    const currentIds = new Set(initiative.epics?.map((e) => e.id) ?? []);
+    const newId = [...currentIds].find((id) => !prevEpicIdsRef.current.has(id)) ?? null;
+    prevEpicIdsRef.current = currentIds;
+    if (!newId) return;
+    setHintEpicId(newId);
+    const t = setTimeout(() => setHintEpicId(null), 4200);
+    return () => clearTimeout(t);
+  }, [initiative.epics]);
 
   async function handleAddEpic() {
     const title = epicTitle.trim();
@@ -1220,6 +1234,7 @@ function InitiativeTreeCard({
                             epic={epic}
                             initiative={initiative}
                             isEpicOpen={isEpicOpen}
+                            showDragHint={hintEpicId === epic.id}
                             onToggleEpic={() =>
                               setOpenEpicIds((prev) => {
                                 const next = !(prev[epic.id] ?? false);
