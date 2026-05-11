@@ -723,6 +723,8 @@ type InitiativeListPanelProps = {
    * Used for month epic-gantt tab where the user should be able to drag unscheduled epics onto the month Gantt.
    */
   isOnEpicGanttTab?: boolean;
+  /** When true (sprint-capacity tab), unassigned stories show drag handle; scheduled stories skip the scheduled icon. */
+  isCapacityPlanningMode?: boolean;
   /**
    * Users directory (and derived custom teams) — merged into the Epics “All teams” filter with Platform /
    * Experience / Data.
@@ -1350,6 +1352,7 @@ function SprintEpicCard({
   isOpenControlled,
   onToggleControlled,
   showDragHint = false,
+  isCapacityMode = false,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -1368,6 +1371,7 @@ function SprintEpicCard({
   isOpenControlled?: boolean;
   onToggleControlled?: () => void;
   showDragHint?: boolean;
+  isCapacityMode?: boolean;
 }) {
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
@@ -1566,29 +1570,41 @@ function SprintEpicCard({
               activeYearSprint != null &&
               resolvedStorySprint != null &&
               resolvedStorySprint === activeYearSprint;
-              /** Drag handle hidden only while someone is assigned; clearing assignee (capacity X) restores drag. */
-              const showActiveSprintAssignedIcon = isScheduledInActiveSprint && assigneeName != null;
               const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
+              const isAssigned = assigneeName != null;
               return (
                 <div
                   key={story.id}
                   className="group/story flex min-h-[28px] w-full items-center gap-1.5 rounded-md py-0.5 pr-0.5 transition-colors hover:bg-muted/40"
                 >
                   {storyDragEnabled ? (
-                    showActiveSprintAssignedIcon ? (
+                    isCapacityMode ? (
+                      isAssigned ? (
+                        <span
+                          className="inline-flex shrink-0 rounded-md p-0.5 text-emerald-600"
+                          title="Assigned"
+                          aria-label="Assigned"
+                        >
+                          <User className="size-3.5" aria-hidden />
+                        </span>
+                      ) : (
+                        <StoryDragHandle storyId={story.id} />
+                      )
+                    ) : isScheduledInActiveSprint ? (
                       <span
-                        className="inline-flex shrink-0 rounded-md p-1 text-emerald-600"
-                        title="Assigned in active sprint"
-                        aria-label="Assigned in active sprint"
+                        className="inline-flex shrink-0 items-center gap-0.5 rounded-md p-0.5 text-emerald-600"
+                        title={isAssigned ? "Scheduled · Assigned" : "Scheduled on kanban"}
+                        aria-label={isAssigned ? "Scheduled and assigned" : "Scheduled on kanban"}
                       >
                         <Image
                           src="/scheduled-icon.png"
                           alt=""
-                          width={16}
-                          height={16}
-                          className="size-4 object-contain"
+                          width={14}
+                          height={14}
+                          className="size-3.5 object-contain"
                           aria-hidden
                         />
+                        {isAssigned ? <User className="size-3 text-emerald-500" aria-hidden /> : null}
                       </span>
                     ) : (
                       <StoryDragHandle storyId={story.id} />
@@ -1742,6 +1758,7 @@ export function InitiativeListPanel({
   onHidePanel,
   workspaceDirectoryUsers = [],
   isOnEpicGanttTab = false,
+  isCapacityPlanningMode = false,
 }: InitiativeListPanelProps) {
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
@@ -2635,6 +2652,7 @@ export function InitiativeListPanel({
                     hideScheduledIcon={epicPlanPanelMode || isSprintModeActive}
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
                     showDragHint={newestEpicId === epic.id}
+                    isCapacityMode={isCapacityPlanningMode}
                     isOpenControlled={monthEpicOpenIds[epic.id] ?? false}
                     onToggleControlled={() =>
                       setMonthEpicOpenIds((prev) => ({ ...prev, [epic.id]: !(prev[epic.id] ?? false) }))

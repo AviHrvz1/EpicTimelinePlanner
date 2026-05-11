@@ -4553,6 +4553,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
                       isSprintModeActive={isSprintModeActive}
                       isOnEpicGanttTab={activeMonthPlanTab === "epic-gantt"}
+                      isCapacityPlanningMode={activeMonthPlanTab === "sprint-capacity"}
                       onCreateInitiativeQuick={async (title) => {
                         try {
                           const id = await createInitiativeQuick(title);
