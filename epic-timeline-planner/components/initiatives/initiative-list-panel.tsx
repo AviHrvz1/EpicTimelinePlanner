@@ -1579,21 +1579,24 @@ function SprintEpicCard({
                 >
                   {storyDragEnabled ? (
                     isScheduledInActiveSprint ? (
-                      <span
-                        className="inline-flex shrink-0 items-center gap-0.5 rounded-md p-0.5 text-emerald-600"
-                        title={isAssigned ? "Scheduled · Assigned" : "Scheduled on kanban"}
-                        aria-label={isAssigned ? "Scheduled and assigned" : "Scheduled on kanban"}
-                      >
-                        <Image
-                          src="/scheduled-icon.png"
-                          alt=""
-                          width={14}
-                          height={14}
-                          className="size-3.5 object-contain"
-                          aria-hidden
-                        />
-                        {isAssigned ? <User className="size-3 text-emerald-500" aria-hidden /> : null}
-                      </span>
+                      <>
+                        <span
+                          className="inline-flex shrink-0 items-center gap-0.5 rounded-md p-0.5 text-emerald-600"
+                          title={isAssigned ? "Scheduled · Assigned" : "Scheduled on kanban"}
+                          aria-label={isAssigned ? "Scheduled and assigned" : "Scheduled on kanban"}
+                        >
+                          <Image
+                            src="/scheduled-icon.png"
+                            alt=""
+                            width={14}
+                            height={14}
+                            className="size-3.5 object-contain"
+                            aria-hidden
+                          />
+                          {isAssigned ? <User className="size-3 text-emerald-500" aria-hidden /> : null}
+                        </span>
+                        {isCapacityMode && !isAssigned ? <StoryDragHandle storyId={story.id} /> : null}
+                      </>
                     ) : isCapacityMode && isAssigned ? (
                       <span
                         className="inline-flex shrink-0 rounded-md p-0.5 text-emerald-600"
