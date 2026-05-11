@@ -96,7 +96,7 @@ function buildChart(p: CollectedParams): Record<string, unknown> {
     }
     case "epic-burndown": {
       const metricLabel = p.metric === "storyCount" ? "Story count" : "Days left";
-      title = `${p.quarterStr} Sprint ${p.sprint} Epic Burndown · ${metricLabel}${teamSuffix}`;
+      title = `${p.quarterStr} Sprint ${p.sprint} Epic Scope Burndown · ${metricLabel}${teamSuffix}`;
       params = { year: p.year, quarter: p.quarter, sprint: p.sprint, metric: p.metric ?? "storyCount", ...(p.team ? { team: p.team } : {}) };
       break;
     }

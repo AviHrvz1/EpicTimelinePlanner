@@ -52,7 +52,7 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     accent: "border-rose-200 bg-rose-50 text-rose-700",
   },
   "epic-burndown": {
-    label: "Epic Burndown",
+    label: "Epic Scope Burndown",
     icon: <TrendingDown className="size-4 text-amber-500" />,
     description: "Epic-level remaining stories vs ideal across a sprint",
     accent: "border-amber-200 bg-amber-50 text-amber-700",

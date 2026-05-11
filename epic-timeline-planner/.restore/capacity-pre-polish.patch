@@ -1,0 +1,518 @@
+diff --git a/epic-timeline-planner/components/timeline/sprint-capacity.tsx b/epic-timeline-planner/components/timeline/sprint-capacity.tsx
+index d5eb122..913a517 100644
+--- a/epic-timeline-planner/components/timeline/sprint-capacity.tsx
++++ b/epic-timeline-planner/components/timeline/sprint-capacity.tsx
+@@ -1,12 +1,13 @@
+ "use client";
+ 
+-import { AlertTriangle } from "lucide-react";
++import { AlertTriangle, Users } from "lucide-react";
+ import { useDraggable, useDroppable } from "@dnd-kit/core";
+ import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
+ import { InitiativeItem } from "@/lib/types";
+ import { cn } from "@/lib/utils";
+ import { sprintCapacityBucketDropId, storyBoardDraggableId } from "@/lib/epic-dnd-ids";
+ import { defaultMembersForTeam, type SprintCapacityBoard as SprintCapacityBoardState } from "@/lib/sprint-capacity";
++import { UserStoryIcon } from "@/components/ui/user-story-icon";
+ 
+ type SprintCapacityBoardProps = {
+   initiatives: InitiativeItem[];
+@@ -57,13 +58,16 @@ function CapacityStoryCard({
+         <div className="min-w-0 flex-1 pr-1">
+           <button
+             type="button"
+-            className="truncate text-left text-[12px] font-semibold text-slate-900 hover:text-blue-700"
++            className="block w-full truncate text-left text-[13px] font-semibold text-slate-900 hover:text-blue-700"
+             onClick={() => onOpenStory(card.id)}
+           >
++            <span className="mr-1.5 inline-flex align-middle text-slate-600">
++              <UserStoryIcon className="size-3.5" />
++            </span>
+             {card.title}
+           </button>
+         </div>
+-        <span className="shrink-0 text-[10px] font-medium text-slate-600">Est</span>
++        <span className="shrink-0 text-[11px] font-semibold text-slate-600">Est</span>
+         <input
+           type="number"
+           min={0}
+@@ -71,7 +75,7 @@ function CapacityStoryCard({
+           step={1}
+           value={card.estimatedDays}
+           onChange={(event) => onEstimateChange(card.id, Number(event.target.value || 0))}
+-          className="h-6 w-14 shrink-0 rounded border border-slate-200 bg-white px-1.5 text-[11px] text-slate-800"
++          className="h-6 w-12 shrink-0 rounded border border-slate-200 bg-white px-1 text-[11px] font-medium text-slate-800"
+         />
+       </div>
+     </article>
+@@ -105,17 +109,26 @@ function CapacityBucket({
+   const overCapacity = assignedTotal > capacity;
+   const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
+   const thermometerPct = Math.max(0, Math.min(100, utilization));
+-  const thermometerTone = overCapacity
+-    ? "bg-rose-500"
++  const capacityMarkerPct = Math.max(0, Math.min(100, (capacity / 10) * 100));
++  const memberGradientKey = member.toLowerCase().replace(/[^a-z0-9]+/g, "-");
++  const fluidStops = overCapacity
++    ? { top: "#fb7185", mid: "#ef4444", bot: "#b91c1c" }
+     : utilization >= 85
+-      ? "bg-amber-500"
+-      : "bg-emerald-500";
++      ? { top: "#fbbf24", mid: "#f59e0b", bot: "#b45309" }
++      : { top: "#22d3ee", mid: "#14b8a6", bot: "#0f766e" };
++  const bucketFill =
++    "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
+ 
+   return (
+     <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100/70">
+       <div className="mb-2 flex items-center justify-between gap-2">
+-        <p className="truncate text-[13px] font-bold text-slate-800">{member}</p>
+-        <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600">
++        <p className="truncate text-[15px] font-bold text-slate-800">
++          <span className="mr-1.5 inline-flex align-middle text-slate-600">
++            <Users className="size-4" />
++          </span>
++          {member}
++        </p>
++        <label className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-600">
+           Capacity
+           <input
+             type="number"
+@@ -124,7 +137,7 @@ function CapacityBucket({
+             step={0.5}
+             value={capacity}
+             onChange={(event) => onCapacityChange(Number(event.target.value || 0))}
+-            className="h-7 w-14 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] text-slate-800"
++            className="h-7 w-12 rounded-md border border-slate-200 bg-white px-1 text-[11px] font-medium text-slate-800"
+           />
+           d
+         </label>
+@@ -132,16 +145,16 @@ function CapacityBucket({
+       <div className="grid grid-cols-[minmax(0,1fr)_56px] gap-2">
+         <div
+           ref={setNodeRef}
+-          style={{ ["--bucket-row-h" as string]: "calc((27rem - 1rem) / 10)" }}
++          style={{ ["--bucket-row-h" as string]: "calc((29rem - 1rem) / 10)" }}
+           className={cn(
+-            "relative min-h-[27rem] overflow-hidden rounded-2xl border border-slate-300/80 bg-slate-50 p-2 transition",
++            "relative min-h-[29rem] overflow-hidden rounded-2xl border border-slate-300/80 bg-slate-50 p-2 transition",
+             isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
+           )}
+         >
+           <img
+             src="/images/sprint-capacity-bucket.svg"
+             alt="Capacity bucket"
+-            className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-30"
++            className="pointer-events-none absolute inset-y-0 left-1/2 h-full w-[94%] -translate-x-1/2 object-contain opacity-30"
+           />
+           {Array.from({ length: 10 }, (_, i) => (
+             <div
+@@ -151,11 +164,11 @@ function CapacityBucket({
+             />
+           ))}
+           <div
+-            className={cn(
+-              "pointer-events-none absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t transition-all",
+-              overCapacity ? "from-rose-400/45 to-amber-200/20" : "from-sky-400/35 to-cyan-200/10",
+-            )}
+-            style={{ height: `${fillPct}%` }}
++            className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] transition-all"
++            style={{
++              height: `${fillPct}%`,
++              background: bucketFill,
++            }}
+           />
+           <div className="relative z-20 flex h-full max-h-full flex-col-reverse gap-2 overflow-y-auto">
+             {cards.map((card) => (
+@@ -168,26 +181,61 @@ function CapacityBucket({
+             ))}
+           </div>
+         </div>
+-        <div className="flex min-h-[27rem] flex-col items-center justify-between rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
++        <div className="flex min-h-[29rem] flex-col items-center rounded-2xl border border-slate-200/90 bg-slate-50/80 p-2">
+           <div className="text-center">
+-            <p className="text-[10px] font-semibold text-slate-600">Load</p>
+-            <p className={cn("text-[11px] font-bold", overCapacity ? "text-rose-600" : "text-slate-700")}>
++            <p className="text-[11px] font-semibold text-slate-600">Load</p>
++            <p className="text-[13px] font-bold text-slate-700">
+               {Math.round(utilization)}%
+             </p>
+           </div>
+-          <div className="relative h-[15.5rem] w-8 overflow-hidden rounded-full border border-slate-300 bg-white">
+-            <div
+-              className={cn("absolute bottom-0 inset-x-0 transition-all", thermometerTone)}
+-              style={{ height: `${thermometerPct}%` }}
+-            />
++          <div className="flex flex-1 items-center py-1">
++            <svg viewBox="0 0 84 292" className="h-full w-[4rem]" aria-label="Capacity gauge">
++              <defs>
++                <linearGradient id={`track-${member}`} x1="0" y1="0" x2="0" y2="1">
++                  <stop offset="0%" stopColor="#f8fafc" />
++                  <stop offset="100%" stopColor="#eef2f7" />
++                </linearGradient>
++                <linearGradient id={`fluid-${memberGradientKey}`} x1="0" y1="0" x2="0" y2="1">
++                  <stop offset="0%" stopColor={fluidStops.top} />
++                  <stop offset="52%" stopColor={fluidStops.mid} />
++                  <stop offset="100%" stopColor={fluidStops.bot} />
++                </linearGradient>
++              </defs>
++              <rect x="28" y="18" width="28" height="246" rx="14" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
++              <rect x="34" y="26" width="16" height="214" rx="8" fill={`url(#track-${member})`} stroke="#cbd5e1" strokeWidth="1" />
++              {Array.from({ length: 10 }, (_, i) => {
++                const y = 240 - i * 21.4;
++                return <line key={i} x1="56" y1={y} x2="66" y2={y} stroke="#94a3b8" strokeWidth="1.5" opacity="0.9" />;
++              })}
++              <line
++                x1="24"
++                x2="68"
++                y1={240 - (capacityMarkerPct / 100) * 214}
++                y2={240 - (capacityMarkerPct / 100) * 214}
++                stroke="#64748b"
++                strokeWidth="1.5"
++                strokeDasharray="2 3"
++                opacity="0.85"
++              />
++              <rect
++                x="36"
++                y={240 - (thermometerPct / 100) * 214}
++                width="12"
++                height={(thermometerPct / 100) * 214}
++                rx="6"
++                fill={`url(#fluid-${memberGradientKey})`}
++                opacity="0.95"
++              />
++              {overCapacity ? <AlertTriangle x={60} y={10} className="size-4 text-rose-600" /> : null}
++            </svg>
+           </div>
+-          <div className="text-center text-[10px] font-semibold text-slate-600">
++          <div className="text-center text-[11px] font-semibold text-slate-600">
+             <p>{assignedTotal.toFixed(1)}d</p>
+             <p>/ {capacity.toFixed(1)}d</p>
+           </div>
+         </div>
+       </div>
+-      <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
++      <div className="mt-2 flex items-center justify-between text-[12px] font-semibold">
+         <span className="text-slate-600">{assignedTotal.toFixed(1)}d planned</span>
+         <span className={cn("text-slate-500", overCapacity && "inline-flex items-center gap-1 text-rose-600")}>
+           {overCapacity ? <AlertTriangle className="size-3.5" aria-hidden /> : null}
+@@ -229,7 +277,7 @@ export function SprintCapacityBoard({
+ 
+   return (
+     <div className="space-y-3">
+-      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2 text-[12px] text-slate-600">
++      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 text-[13px] font-medium text-slate-600">
+         Drag user stories from the left panel into a developer bucket. Bucket fill and warnings update from planned vs available days.
+       </div>
+       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
+diff --git a/epic-timeline-planner/components/timeline/timeline-grid.tsx b/epic-timeline-planner/components/timeline/timeline-grid.tsx
+index defe0f6..d004653 100644
+--- a/epic-timeline-planner/components/timeline/timeline-grid.tsx
++++ b/epic-timeline-planner/components/timeline/timeline-grid.tsx
+@@ -1,7 +1,7 @@
+ "use client";
+ 
+ import { useDroppable } from "@dnd-kit/core";
+-import { BarChart3, ChevronDown, ChevronRight, Map as MapIcon } from "lucide-react";
++import { BarChart3, ChevronDown, ChevronRight, Map as MapIcon, Thermometer } from "lucide-react";
+ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+ 
+ import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
+@@ -888,6 +888,8 @@ export function TimelineGrid({
+ 
+   const hasBreadcrumbs = breadcrumbItems.length > 0;
+   const hasContextSideMenu = activeMonth != null || focusedQuarter != null;
++  const railNavTooltipClass =
++    "pointer-events-none absolute left-full top-1/2 z-[200] ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100";
+   const showSprintTeamPicker =
+     activeMonth != null &&
+     (monthPlanTab === "sprint-kanban" ||
+@@ -1013,7 +1015,7 @@ export function TimelineGrid({
+       </div>
+       {activeMonth ? (
+         <div className="relative z-30 h-0">
+-          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
++          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+             {activeSprint != null &&
+             (monthPlanTab === "sprint-kanban" ||
+               monthPlanTab === "sprint-status" ||
+@@ -1027,7 +1029,7 @@ export function TimelineGrid({
+                   }}
+                   title="Sprint board"
+                   className={cn(
+-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                     monthPlanTab === "sprint-kanban"
+                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+@@ -1035,6 +1037,9 @@ export function TimelineGrid({
+                 >
+                   <MapIcon className="size-4" aria-hidden />
+                   <span className="sr-only">Sprint board</span>
++                  <span role="tooltip" className={railNavTooltipClass}>
++                    Sprint board
++                  </span>
+                 </button>
+                 <button
+                   type="button"
+@@ -1044,7 +1049,7 @@ export function TimelineGrid({
+                   }}
+                   title="Sprint insights"
+                   className={cn(
+-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                     monthPlanTab === "sprint-status"
+                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+@@ -1052,6 +1057,9 @@ export function TimelineGrid({
+                 >
+                   <BarChart3 className="size-4" aria-hidden />
+                   <span className="sr-only">Sprint insights</span>
++                  <span role="tooltip" className={railNavTooltipClass}>
++                    Sprint insights
++                  </span>
+                 </button>
+                 <button
+                   type="button"
+@@ -1060,14 +1068,17 @@ export function TimelineGrid({
+                   }}
+                   title="Sprint capacity"
+                   className={cn(
+-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                     monthPlanTab === "sprint-capacity"
+                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                   )}
+                 >
+-                  <BarChart3 className="size-4" aria-hidden />
++                  <Thermometer className="size-4" aria-hidden />
+                   <span className="sr-only">Sprint capacity</span>
++                  <span role="tooltip" className={railNavTooltipClass}>
++                    Sprint capacity
++                  </span>
+                 </button>
+               </>
+             ) : (
+@@ -1077,7 +1088,7 @@ export function TimelineGrid({
+                   onClick={() => onMonthPlanTabChange?.("epic-gantt")}
+                   title="Epic plan"
+                   className={cn(
+-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                     monthPlanTab === "epic-gantt"
+                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+@@ -1085,13 +1096,16 @@ export function TimelineGrid({
+                 >
+                   <MapIcon className="size-4" aria-hidden />
+                   <span className="sr-only">Epic plan</span>
++                  <span role="tooltip" className={railNavTooltipClass}>
++                    Epic plan
++                  </span>
+                 </button>
+                 <button
+                   type="button"
+                   onClick={() => onMonthPlanTabChange?.("team-queue")}
+                   title="Team queue"
+                   className={cn(
+-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                     monthPlanTab === "team-queue"
+                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+@@ -1099,13 +1113,16 @@ export function TimelineGrid({
+                 >
+                   <BarChart3 className="size-4" aria-hidden />
+                   <span className="sr-only">Team queue</span>
++                  <span role="tooltip" className={railNavTooltipClass}>
++                    Team queue
++                  </span>
+                 </button>
+                 <button
+                   type="button"
+                   onClick={() => onMonthPlanTabChange?.("month-status")}
+                   title="Month insights"
+                   className={cn(
+-                    "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                    "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                     monthPlanTab === "month-status"
+                       ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+@@ -1113,6 +1130,9 @@ export function TimelineGrid({
+                 >
+                   <BarChart3 className="size-4" aria-hidden />
+                   <span className="sr-only">Month insights</span>
++                  <span role="tooltip" className={railNavTooltipClass}>
++                    Month insights
++                  </span>
+                 </button>
+               </>
+             )}
+@@ -1120,13 +1140,13 @@ export function TimelineGrid({
+         </div>
+       ) : focusedQuarter ? (
+         <div className="relative z-30 h-0">
+-          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
++          <div className="absolute left-0 top-0 inline-flex w-[3.25rem] flex-col gap-1 overflow-visible rounded-lg border border-slate-200/80 bg-white/80 p-1 shadow-sm ring-1 ring-slate-100/80">
+             <button
+               type="button"
+               onClick={() => setQuarterViewTab("gantt")}
+               title="Gantt"
+               className={cn(
+-                "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                 quarterViewTab === "gantt"
+                   ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+@@ -1134,13 +1154,16 @@ export function TimelineGrid({
+             >
+               <MapIcon className="size-4" aria-hidden />
+               <span className="sr-only">Gantt</span>
++              <span role="tooltip" className={railNavTooltipClass}>
++                Gantt
++              </span>
+             </button>
+             <button
+               type="button"
+               onClick={() => setQuarterViewTab("status")}
+               title="Quarter status"
+               className={cn(
+-                "inline-flex h-9 w-full items-center justify-center rounded-md transition",
++                "group relative inline-flex h-9 w-full items-center justify-center overflow-visible rounded-md transition",
+                 quarterViewTab === "status"
+                   ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+@@ -1148,6 +1171,9 @@ export function TimelineGrid({
+             >
+               <BarChart3 className="size-4" aria-hidden />
+               <span className="sr-only">Quarter status</span>
++              <span role="tooltip" className={railNavTooltipClass}>
++                Quarter status
++              </span>
+             </button>
+           </div>
+         </div>
+diff --git a/epic-timeline-planner/public/images/sprint-capacity-bucket.svg b/epic-timeline-planner/public/images/sprint-capacity-bucket.svg
+index 64a9845..4253b64 100644
+--- a/epic-timeline-planner/public/images/sprint-capacity-bucket.svg
++++ b/epic-timeline-planner/public/images/sprint-capacity-bucket.svg
+@@ -1,60 +1,76 @@
+ <svg width="800" height="1100" viewBox="0 0 800 1100" xmlns="http://www.w3.org/2000/svg">
+   <defs>
+     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+-      <stop offset="0%" stop-color="#f9fbff"/>
+-      <stop offset="100%" stop-color="#e9eef7"/>
++      <stop offset="0%" stop-color="#f8fbff"/>
++      <stop offset="100%" stop-color="#ecf2fb"/>
+     </linearGradient>
+-    <linearGradient id="bucketOuter" x1="0" y1="0" x2="0" y2="1">
+-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92"/>
+-      <stop offset="55%" stop-color="#dce5f3" stop-opacity="0.78"/>
+-      <stop offset="100%" stop-color="#c5d1e5" stop-opacity="0.82"/>
++    <linearGradient id="outerWall" x1="0" y1="0" x2="0" y2="1">
++      <stop offset="0%" stop-color="#fdfefe" stop-opacity="0.96"/>
++      <stop offset="55%" stop-color="#e4ecf8" stop-opacity="0.78"/>
++      <stop offset="100%" stop-color="#cfdbeb" stop-opacity="0.82"/>
+     </linearGradient>
+-    <linearGradient id="bucketInner" x1="0" y1="0" x2="0" y2="1">
+-      <stop offset="0%" stop-color="#f5f9ff" stop-opacity="0.5"/>
+-      <stop offset="100%" stop-color="#d9e5f7" stop-opacity="0.22"/>
++    <linearGradient id="innerWall" x1="0" y1="0" x2="0" y2="1">
++      <stop offset="0%" stop-color="#f6faff" stop-opacity="0.55"/>
++      <stop offset="100%" stop-color="#dce8f8" stop-opacity="0.24"/>
+     </linearGradient>
+-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+-      <feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#8ea3c2" flood-opacity="0.35"/>
++    <linearGradient id="highlight" x1="0" y1="0" x2="1" y2="0">
++      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.52"/>
++      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
++    </linearGradient>
++    <filter id="drop" x="-20%" y="-20%" width="140%" height="140%">
++      <feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#8aa2c4" flood-opacity="0.32"/>
+     </filter>
+   </defs>
+ 
+   <rect width="800" height="1100" fill="url(#bg)"/>
+-  <ellipse cx="400" cy="1025" rx="220" ry="36" fill="#b7c6dd" opacity="0.35"/>
++  <ellipse cx="400" cy="1038" rx="230" ry="34" fill="#b7c9e2" opacity="0.3"/>
++
++  <g filter="url(#drop)">
++    <!-- Outer bucket -->
++    <path d="M196 214 L604 214 L552 946 Q400 1033 248 946 Z" fill="url(#outerWall)" stroke="#9bb0cd" stroke-width="8"/>
++
++    <!-- Inner cavity -->
++    <path d="M240 262 L560 262 L520 908 Q400 970 280 908 Z" fill="url(#innerWall)" stroke="#bccbe0" stroke-width="4"/>
++
++    <!-- Top rim -->
++    <ellipse cx="400" cy="214" rx="222" ry="55" fill="#f9fcff" stroke="#98aecb" stroke-width="8"/>
++    <ellipse cx="400" cy="222" rx="196" ry="39" fill="#eef5ff" stroke="#c1d0e3" stroke-width="3"/>
+ 
+-  <g filter="url(#shadow)">
+-    <path d="M210 210 L590 210 L545 940 Q400 1030 255 940 Z" fill="url(#bucketOuter)" stroke="#9fb1cc" stroke-width="8"/>
+-    <path d="M245 255 L555 255 L518 905 Q400 970 282 905 Z" fill="url(#bucketInner)" stroke="#b9c8de" stroke-width="4"/>
+-    <ellipse cx="400" cy="210" rx="210" ry="52" fill="#f8fbff" stroke="#9cb0cc" stroke-width="8"/>
+-    <ellipse cx="400" cy="218" rx="188" ry="36" fill="#edf4ff" stroke="#c0cee0" stroke-width="3"/>
++    <!-- Side highlights -->
++    <path d="M255 286 L292 892" stroke="url(#highlight)" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
++    <path d="M545 286 L508 892" stroke="url(#highlight)" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+   </g>
+ 
+-  <g stroke="#aebfda" stroke-width="2.6" opacity="0.78">
+-    <line x1="278" y1="318" x2="522" y2="318"/>
+-    <line x1="274" y1="384" x2="526" y2="384"/>
+-    <line x1="270" y1="450" x2="530" y2="450"/>
+-    <line x1="266" y1="516" x2="534" y2="516"/>
+-    <line x1="262" y1="582" x2="538" y2="582"/>
+-    <line x1="258" y1="648" x2="542" y2="648"/>
+-    <line x1="254" y1="714" x2="546" y2="714"/>
+-    <line x1="250" y1="780" x2="550" y2="780"/>
+-    <line x1="246" y1="846" x2="554" y2="846"/>
+-    <line x1="242" y1="912" x2="558" y2="912"/>
++  <!-- Capacity split lines -->
++  <g stroke="#afc0d9" stroke-width="2.5" opacity="0.8">
++    <line x1="268" y1="322" x2="532" y2="322"/>
++    <line x1="264" y1="387" x2="536" y2="387"/>
++    <line x1="260" y1="452" x2="540" y2="452"/>
++    <line x1="256" y1="517" x2="544" y2="517"/>
++    <line x1="252" y1="582" x2="548" y2="582"/>
++    <line x1="248" y1="647" x2="552" y2="647"/>
++    <line x1="244" y1="712" x2="556" y2="712"/>
++    <line x1="240" y1="777" x2="560" y2="777"/>
++    <line x1="236" y1="842" x2="564" y2="842"/>
++    <line x1="232" y1="907" x2="568" y2="907"/>
+   </g>
+ 
+-  <g fill="#6a7d99" font-size="25" font-family="Inter, Arial, sans-serif" font-weight="600" opacity="0.9">
+-    <text x="565" y="324">1</text>
+-    <text x="570" y="390">2</text>
+-    <text x="570" y="456">3</text>
+-    <text x="570" y="522">4</text>
+-    <text x="570" y="588">5</text>
+-    <text x="570" y="654">6</text>
+-    <text x="570" y="720">7</text>
+-    <text x="570" y="786">8</text>
+-    <text x="570" y="852">9</text>
+-    <text x="558" y="918">10</text>
++  <!-- Scale labels -->
++  <g fill="#6b7f9c" font-size="24" font-family="Inter, Arial, sans-serif" font-weight="600" opacity="0.92">
++    <text x="612" y="328">1</text>
++    <text x="612" y="393">2</text>
++    <text x="612" y="458">3</text>
++    <text x="612" y="523">4</text>
++    <text x="612" y="588">5</text>
++    <text x="612" y="653">6</text>
++    <text x="612" y="718">7</text>
++    <text x="612" y="783">8</text>
++    <text x="612" y="848">9</text>
++    <text x="598" y="913">10</text>
+   </g>
+ 
+-  <line x1="236" y1="350" x2="562" y2="350" stroke="#e63946" stroke-width="6" stroke-linecap="round"/>
+-  <rect x="562" y="334" width="136" height="30" rx="15" fill="#fff4f5" stroke="#f29ca3" stroke-width="2"/>
+-  <text x="630" y="355" text-anchor="middle" fill="#cc2f3c" font-size="16" font-family="Inter, Arial, sans-serif" font-weight="700">MAX FILL</text>
++  <!-- Max fill indicator -->
++  <line x1="226" y1="350" x2="574" y2="350" stroke="#e24656" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
++  <rect x="572" y="331" width="154" height="38" rx="19" fill="#fff4f6" stroke="#f2a3ae" stroke-width="2"/>
++  <text x="649" y="357" text-anchor="middle" fill="#cb3444" font-size="20" font-family="Inter, Arial, sans-serif" font-weight="700">MAX FILL</text>
+ </svg>
