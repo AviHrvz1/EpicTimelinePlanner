@@ -309,26 +309,20 @@ export function SprintRetrospectiveEditor({
 
         {/* Hero header */}
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-white px-6 py-7 sm:px-8 sm:py-8 border-b border-slate-200 shadow-[0_2px_12px_0_rgba(0,0,0,0.07)]">
-          {/* Team identity banner — visible when a specific team is shown */}
-          {teamName ? (
-            <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-indigo-50 px-4 py-2.5 ring-1 ring-indigo-100">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-indigo-100 ring-1 ring-indigo-200">
-                <Users className="size-3.5 text-indigo-600" aria-hidden />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-indigo-400">Team</p>
-                <p className="truncate text-[15px] font-bold text-indigo-800">{teamName}</p>
-              </div>
-            </div>
-          ) : null}
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-slate-200/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
                 <NotebookPen className="size-3" aria-hidden />
                 Sprint Retrospective
               </div>
-              <h2 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">
+              <h2 className="flex flex-wrap items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">
                 {sprintLabel}
+                {teamName ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200">
+                    <Users className="size-3.5 shrink-0" aria-hidden />
+                    {teamName}
+                  </span>
+                ) : null}
               </h2>
               <p className="mt-1.5 text-sm text-slate-400">Reflect · Learn · Improve</p>
             </div>
