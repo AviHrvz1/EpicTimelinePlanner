@@ -41,6 +41,10 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const saveNameRef = useRef<HTMLInputElement>(null);
   // Delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Inline rename
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
   // Builder panel open/collapsed + resize
   const [builderOpen, setBuilderOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(380);
@@ -127,6 +131,23 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     setDashboards((prev) => [...prev, draft]);
     setActiveDashboardId(draftId);
     return draftId;
+  }
+
+  async function renameDashboard(id: string, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setDashboards((prev) => prev.map((d) => d.id === id ? { ...d, name: trimmed } : d));
+    setRenamingId(null);
+    if (!id.startsWith("draft-")) {
+      await fetch(`/api/dashboard/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: trimmed }) });
+    }
+  }
+
+  function renameChart(chartId: string, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    setCharts((prev) => prev.map((c) => c.id === chartId ? { ...c, title: trimmed } : c));
+    setDirty(true);
   }
 
   async function deleteDashboard(id: string) {
@@ -361,7 +382,40 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                         : "border-transparent bg-transparent text-slate-500 hover:bg-white/60 hover:text-slate-700",
                     )}
                   >
-                    {d.name}
+                    {isActive && renamingId === d.id ? (
+                      <input
+                        ref={renameInputRef}
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => renameDashboard(d.id, renameValue)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); renameDashboard(d.id, renameValue); }
+                          if (e.key === "Escape") { setRenamingId(null); }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-32 bg-transparent text-[13px] font-medium text-slate-800 outline-none border-b border-slate-400 leading-none"
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        {d.name}
+                        {isActive && (
+                          <span
+                            role="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenamingId(d.id);
+                              setRenameValue(d.name);
+                              setTimeout(() => renameInputRef.current?.select(), 0);
+                            }}
+                            className="ml-0.5 rounded p-0.5 text-slate-300 opacity-0 transition-all group-hover/tab:opacity-100 hover:bg-slate-100 hover:text-slate-500"
+                            title="Rename dashboard"
+                          >
+                            <Pencil className="size-3" />
+                          </span>
+                        )}
+                      </>
+                    )}
                     <span
                       role="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(d.id); }}
@@ -489,6 +543,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
               onEdit={handleEdit}
               onToggleSpan={handleToggleSpan}
               onChangeHeight={handleChangeHeight}
+              onRenameChart={renameChart}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">

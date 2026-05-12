@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronUp, GripVertical, Maximize2, Minimize2, Pencil, X } from "lucide-react";
@@ -27,6 +28,7 @@ type Props = {
   onEdit: (chart: DashboardChartItem) => void;
   onToggleSpan: (id: string) => void;
   onChangeHeight: (id: string, delta: 1 | -1) => void;
+  onRenameChart: (id: string, title: string) => void;
 };
 
 function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiatives: InitiativeItem[] }) {
@@ -150,10 +152,22 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onChangeHeight }: Props) {
+export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onChangeHeight, onRenameChart }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
   const minHeight = 260 + (rowSpan - 1) * 220;
+  const [renamingTitle, setRenamingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState(chart.title);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  // Keep local value in sync if parent updates the chart title (e.g. after save/reload)
+  if (!renamingTitle && titleValue !== chart.title) setTitleValue(chart.title);
+
+  function commitRename() {
+    const trimmed = titleValue.trim();
+    if (trimmed && trimmed !== chart.title) onRenameChart(chart.id, trimmed);
+    else setTitleValue(chart.title);
+    setRenamingTitle(false);
+  }
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -182,7 +196,30 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
             <GripVertical className="size-4" />
           </button>
         )}
-        <span className="flex-1 truncate text-sm font-semibold text-slate-700">{chart.title}</span>
+        {renamingTitle ? (
+          <input
+            ref={titleInputRef}
+            value={titleValue}
+            onChange={(e) => setTitleValue(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } else if (e.key === "Escape") { setTitleValue(chart.title); setRenamingTitle(false); } }}
+            className="flex-1 rounded border border-indigo-300 bg-white px-1.5 py-0.5 text-sm font-semibold text-slate-700 outline-none ring-1 ring-indigo-300 focus:ring-indigo-500"
+            autoFocus
+          />
+        ) : (
+          <span
+            className="group/title flex flex-1 items-center gap-1 truncate text-sm font-semibold text-slate-700"
+          >
+            <span className="truncate">{chart.title}</span>
+            <button
+              onClick={() => { setTitleValue(chart.title); setRenamingTitle(true); setTimeout(() => titleInputRef.current?.select(), 0); }}
+              className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition-all group-hover/title:opacity-100 hover:bg-slate-100 hover:text-slate-500"
+              title="Rename chart"
+            >
+              <Pencil className="size-3" />
+            </button>
+          </span>
+        )}
         {isEditMode && (
           <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
             <button

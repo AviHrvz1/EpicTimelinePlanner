@@ -205,7 +205,7 @@ function AutocompleteMultiSelect<T extends string>({
               key={v}
               type="button"
               onClick={() => onToggle(v)}
-              className="inline-flex items-center gap-1 rounded-full bg-slate-100 ring-1 ring-slate-200 py-1 pl-3 pr-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-200 hover:ring-slate-300 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full bg-slate-100 ring-1 ring-slate-200 py-1 pl-3 pr-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 hover:ring-slate-300 transition-colors"
             >
               {renderLabel(v)}
               <X className="size-2.5 shrink-0 opacity-75" />
@@ -222,7 +222,7 @@ function AutocompleteMultiSelect<T extends string>({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder ?? "Search…"}
-          className="flex-1 bg-transparent text-[13px] text-slate-700 placeholder:text-slate-400 outline-none"
+          className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
         />
         {query && (
           <button type="button" onClick={() => setQuery("")} className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors">
@@ -232,7 +232,7 @@ function AutocompleteMultiSelect<T extends string>({
       </div>
       {/* Filtered options */}
       {filtered.length === 0 ? (
-        <p className="px-1 py-2 text-xs text-slate-400">No results</p>
+        <p className="px-1 py-2 text-sm text-slate-400">No results</p>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm max-h-44 overflow-y-auto">
           {filtered.map((opt, i) => {
@@ -243,7 +243,7 @@ function AutocompleteMultiSelect<T extends string>({
                 type="button"
                 onClick={() => onToggle(opt)}
                 className={cn(
-                  "flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[13px] transition-colors",
+                  "flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-sm transition-colors",
                   i > 0 && "border-t border-slate-50",
                   active
                     ? "bg-indigo-50 font-semibold text-indigo-800"
@@ -403,13 +403,13 @@ function SprintChartForm({
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
         {/* Current sprint */}
         <div>
-          <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5"><Flag className="size-3" />Current Sprint</p>
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5"><Flag className="size-3" />Current Sprint</p>
           <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3 shadow-sm">
             <span className="relative flex size-2 shrink-0">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
               <span className="relative inline-flex size-2 rounded-full bg-indigo-500" />
             </span>
-            <span className="text-[13px] font-semibold text-indigo-700 tracking-tight">{sprintInfo.label}</span>
+            <span className="text-sm font-semibold text-indigo-700 tracking-tight">{sprintInfo.label}</span>
           </div>
         </div>
 
@@ -471,7 +471,7 @@ function SprintChartForm({
           disabled={chartCount === 0}
           onClick={handleAdd}
           className={cn(
-            "w-full rounded-xl py-3 text-[13px] font-bold tracking-tight transition-all shadow-sm",
+            "w-full rounded-xl py-3 text-sm font-bold tracking-tight transition-all shadow-sm",
             chartCount > 0
               ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500 shadow-indigo-200"
               : "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none",
@@ -484,7 +484,7 @@ function SprintChartForm({
               : `Add ${chartCount} chart${chartCount !== 1 ? "s" : ""}`}
         </button>
         {!isEditing && chartCount > 1 && (
-          <p className="text-center text-[11px] text-slate-400">
+          <p className="text-center text-xs text-slate-400">
             {selectedRoadmapIds.size || 1} roadmap × {selectedTeamIds.size || 1} team
           </p>
         )}
@@ -492,7 +492,7 @@ function SprintChartForm({
           <button
             type="button"
             onClick={() => { onCancelEdit?.(); onBack(); }}
-            className="w-full rounded-xl border border-slate-200 py-2.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
+            className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
@@ -578,7 +578,7 @@ function WidgetPicker({
       <div className="flex flex-wrap gap-1.5 pt-1">
         {widget.choices.map((c) => (
           <button key={c} onClick={() => onSelect(c)}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors">
+            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-sm hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition-colors">
             {c}
           </button>
         ))}
@@ -661,7 +661,7 @@ function SearchInput({ value, onChange, placeholder, ref: inputRef }: { value: s
         <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
       </svg>
       <input ref={inputRef} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="flex-1 bg-transparent text-xs text-slate-700 placeholder:text-slate-400 outline-none" />
+        className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none" />
     </div>
   );
 }
@@ -675,15 +675,15 @@ function ScrollList({ options, activeMark, onSelect, renderLabel }: {
   return (
     <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       {options.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-slate-400">No results</p>
+        <p className="px-3 py-2 text-sm text-slate-400">No results</p>
       ) : options.map((o) => {
         const isActive = o === activeMark;
         const label = renderLabel ? renderLabel(o) : o;
         return (
           <button key={o} onClick={() => onSelect(o)}
-            className={cn("flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-indigo-50",
+            className={cn("flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-indigo-50",
               isActive ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-700")}>
-            {isActive && <span className="shrink-0 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 leading-none">Active</span>}
+            {isActive && <span className="shrink-0 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[11px] font-bold text-indigo-600 leading-none">Active</span>}
             {label}
           </button>
         );
@@ -774,15 +774,15 @@ function OtherChartFlow({
         <div className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg border", meta.accent)}>
           {meta.icon}
         </div>
-        <p className="flex-1 text-sm font-semibold text-slate-800">{meta.label}</p>
+        <p className="flex-1 text-base font-semibold text-slate-800">{meta.label}</p>
         {editTarget && (
-          <button onClick={() => { onCancelEdit?.(); onBack(); }} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button onClick={() => { onCancelEdit?.(); onBack(); }} className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <X className="size-3" />
             Cancel
           </button>
         )}
         {history.length > 0 && (
-          <button onClick={handleReset} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button onClick={handleReset} className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <RotateCcw className="size-3" />
             Reset
           </button>
@@ -792,7 +792,7 @@ function OtherChartFlow({
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {/* History of answered questions */}
         {history.map((h, i) => (
-          <div key={i} className="rounded-xl bg-slate-50 px-3 py-2.5 text-xs">
+          <div key={i} className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm">
             <p className="font-medium text-slate-500">{h.q}</p>
             <p className="mt-0.5 font-semibold text-slate-800">{h.a}</p>
           </div>
@@ -809,7 +809,7 @@ function OtherChartFlow({
 
         {step && !loading && (
           <div>
-            <p className="mb-2 text-xs font-semibold text-slate-700">{step.question}</p>
+            <p className="mb-2 text-sm font-semibold text-slate-700">{step.question}</p>
             <WidgetPicker widget={step.widget} context={context} onSelect={handleAnswer} />
           </div>
         )}
@@ -817,21 +817,21 @@ function OtherChartFlow({
         {/* Proposal */}
         {proposal && !loading && (
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
-            <p className="mb-1 text-xs font-semibold text-indigo-700">Ready to add</p>
-            <p className="mb-3 text-xs text-slate-600">{proposal.title}</p>
+            <p className="mb-1 text-sm font-semibold text-indigo-700">Ready to add</p>
+            <p className="mb-3 text-sm text-slate-600">{proposal.title}</p>
             <div className="flex gap-2">
               <button
                 onClick={() => { onAdd({ chartType: proposal.chartType, title: proposal.title, params: proposal.params }); if (editTarget) { onCancelEdit?.(); onBack(); } else { handleReset(); } }}
-                className="flex-1 rounded-lg bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors"
+                className="flex-1 rounded-lg bg-indigo-600 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
               >
                 {editTarget ? "Update chart" : "Add to dashboard"}
               </button>
               {editTarget ? (
-                <button onClick={() => { onCancelEdit?.(); onBack(); }} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                <button onClick={() => { onCancelEdit?.(); onBack(); }} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                   Cancel
                 </button>
               ) : (
-                <button onClick={handleReset} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                <button onClick={handleReset} className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                   Start over
                 </button>
               )}
@@ -900,9 +900,9 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
           <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 shadow-sm">
             <Bot className="size-4 text-white" />
           </div>
-          <p className="text-base font-bold text-slate-800">Chart Builder</p>
+          <p className="text-lg font-bold text-slate-800">Chart Builder</p>
         </div>
-        <p className="mt-1.5 text-sm text-slate-500 pl-0.5">Pick a chart type to get started</p>
+        <p className="mt-1.5 text-base text-slate-500 pl-0.5">Pick a chart type to get started</p>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="flex flex-col gap-2">
@@ -919,8 +919,8 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
                   {meta.icon}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800">{meta.label}</p>
-                  <p className="text-[11px] leading-snug text-slate-400">{meta.description}</p>
+                  <p className="text-sm font-semibold text-slate-800">{meta.label}</p>
+                  <p className="text-xs leading-snug text-slate-400">{meta.description}</p>
                 </div>
               </button>
             );
