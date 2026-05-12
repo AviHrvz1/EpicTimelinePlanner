@@ -1014,7 +1014,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   } | null>(null);
   const [isConfirmingDialog, setIsConfirmingDialog] = useState(false);
   const pendingStoryDialogNavigationRef = useRef<null | (() => void)>(null);
-  const [panelWidth, setPanelWidth] = useState(520);
+  const [panelWidth, setPanelWidth] = useState(600);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const [isLeftPanelHidden, setIsLeftPanelHidden] = useState(false);
   /** Synced with TimelineGrid “Progress” chip — Gantt bar rows + left-panel story progress. */
