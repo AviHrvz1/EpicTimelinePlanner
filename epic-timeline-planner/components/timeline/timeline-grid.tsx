@@ -1972,6 +1972,11 @@ export function TimelineGrid({
   const [ganttTeamSearch, setGanttTeamSearch] = useState("");
   const ganttTeamMenuRef = useRef<HTMLDivElement | null>(null);
   const ganttTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [ganttSearchQuery, setGanttSearchQuery] = useState("");
+  const [ganttSearchOpen, setGanttSearchOpen] = useState(false);
+  const [ganttSearchFilter, setGanttSearchFilter] = useState<{ type: "initiative" | "epic"; id: string; label: string } | null>(null);
+  const ganttSearchRef = useRef<HTMLDivElement | null>(null);
+  const ganttSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -2343,6 +2348,68 @@ export function TimelineGrid({
       .map((group) => ({ ...group, items: group.items.filter((row) => row.epic.team && ganttTeamIds.includes(row.epic.team)) }))
       .filter((group) => group.items.length > 0);
   }, [yearRoadmapEpicRows, ganttTeamIds]);
+
+  // ─── Gantt search filter (autocomplete by name + scope) ──────────────────────
+  const ganttSearchResults = useMemo(() => {
+    const q = ganttSearchQuery.trim().toLowerCase();
+    if (roadmapBarMode === "initiatives") {
+      return {
+        initiatives: yearRoadmapInitiatives.filter(i => !q || i.initiative.title.toLowerCase().includes(q)).slice(0, 8).map(i => i.initiative),
+        epics: [] as EpicItem[],
+      };
+    }
+    return {
+      initiatives: yearRoadmapInitiatives.filter(i => !q || i.initiative.title.toLowerCase().includes(q)).slice(0, 5).map(i => i.initiative),
+      epics: yearRoadmapEpics.filter(i => !q || i.epic.title.toLowerCase().includes(q)).slice(0, 8).map(i => i.epic),
+    };
+  }, [ganttSearchQuery, roadmapBarMode, yearRoadmapInitiatives, yearRoadmapEpics]);
+
+  const ganttSearchEpicIds = useMemo((): Set<string> | null => {
+    if (!ganttSearchFilter && !ganttSearchQuery.trim()) return null;
+    if (ganttSearchFilter) {
+      if (ganttSearchFilter.type === "epic") return new Set([ganttSearchFilter.id]);
+      const ids = new Set<string>();
+      for (const { epic, initiative } of yearRoadmapEpics) {
+        if (initiative.id === ganttSearchFilter.id) ids.add(epic.id);
+      }
+      return ids;
+    }
+    const q = ganttSearchQuery.trim().toLowerCase();
+    const ids = new Set<string>();
+    for (const { epic } of yearRoadmapEpics) { if (epic.title.toLowerCase().includes(q)) ids.add(epic.id); }
+    return ids;
+  }, [ganttSearchFilter, ganttSearchQuery, yearRoadmapEpics]);
+
+  const ganttSearchInitiativeIds = useMemo((): Set<string> | null => {
+    if (!ganttSearchFilter && !ganttSearchQuery.trim()) return null;
+    if (ganttSearchFilter?.type === "initiative") return new Set([ganttSearchFilter.id]);
+    if (ganttSearchFilter?.type === "epic") return null;
+    const q = ganttSearchQuery.trim().toLowerCase();
+    const ids = new Set<string>();
+    for (const { initiative } of yearRoadmapInitiatives) { if (initiative.title.toLowerCase().includes(q)) ids.add(initiative.id); }
+    return ids;
+  }, [ganttSearchFilter, ganttSearchQuery, yearRoadmapInitiatives]);
+
+  const ganttSearchAppliedYearEpicRows = useMemo(() => {
+    if (!ganttSearchEpicIds) return filteredYearRoadmapEpicRows;
+    return filteredYearRoadmapEpicRows.map(g => ({ ...g, items: g.items.filter(i => ganttSearchEpicIds!.has(i.epic.id)) })).filter(g => g.items.length > 0);
+  }, [filteredYearRoadmapEpicRows, ganttSearchEpicIds]);
+
+  const ganttSearchAppliedQuarterEpicRows = useMemo(() => {
+    if (!ganttSearchEpicIds) return filteredQuarterRoadmapEpicRows;
+    return filteredQuarterRoadmapEpicRows.map(g => ({ ...g, items: g.items.filter(i => ganttSearchEpicIds!.has(i.epic.id)) })).filter(g => g.items.length > 0);
+  }, [filteredQuarterRoadmapEpicRows, ganttSearchEpicIds]);
+
+  const ganttSearchAppliedYearInitiativeRows = useMemo(() => {
+    if (!ganttSearchInitiativeIds) return yearRoadmapInitiativeRows;
+    return yearRoadmapInitiativeRows.map(g => ({ ...g, items: g.items.filter(i => ganttSearchInitiativeIds!.has(i.initiative.id)) })).filter(g => g.items.length > 0);
+  }, [yearRoadmapInitiativeRows, ganttSearchInitiativeIds]);
+
+  const ganttSearchAppliedQuarterInitiativeRows = useMemo(() => {
+    if (!ganttSearchInitiativeIds) return quarterRoadmapInitiativeRows;
+    return quarterRoadmapInitiativeRows.map(g => ({ ...g, items: g.items.filter(i => ganttSearchInitiativeIds!.has(i.initiative.id)) })).filter(g => g.items.length > 0);
+  }, [quarterRoadmapInitiativeRows, ganttSearchInitiativeIds]);
+
   const visibleMonths = focusedQuarter
     ? [...focusedQuarter.months]
     : Array.from({ length: 12 }, (_, index) => index + 1);
@@ -3186,6 +3253,16 @@ export function TimelineGrid({
     return [...byId.values()].sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
   }, [activeMonth, monthEpicGanttRows]);
 
+  const ganttSearchAppliedMonthEpicRows = useMemo(() => {
+    if (!ganttSearchEpicIds) return filteredMonthEpicGanttRows;
+    return filteredMonthEpicGanttRows.filter(r => ganttSearchEpicIds.has(r.epic.id));
+  }, [filteredMonthEpicGanttRows, ganttSearchEpicIds]);
+
+  const ganttSearchAppliedMonthInitiativeRows = useMemo(() => {
+    if (!ganttSearchInitiativeIds) return monthInitiativeGanttRows;
+    return monthInitiativeGanttRows.filter(i => ganttSearchInitiativeIds.has(i.id));
+  }, [monthInitiativeGanttRows, ganttSearchInitiativeIds]);
+
   useEffect(() => {
     if (!resizePreview || activeMonth != null) return;
     const target = scheduledInitiatives.find((i) => i.id === resizePreview.initiativeId);
@@ -3848,7 +3925,7 @@ export function TimelineGrid({
   }, [showGanttTeamPicker]);
 
   const fullYearRoadmapGanttTracks = (
-        roadmapBarMode === "initiatives" && yearRoadmapInitiativeRows.length === 0 ? (
+        roadmapBarMode === "initiatives" && ganttSearchAppliedYearInitiativeRows.length === 0 ? (
           focusedQuarter && quarterViewTab === "gantt" ? null : !focusedQuarter ? (
             <YearRoadmapEmptyStripedLane
               currentYear={currentYear}
@@ -3902,12 +3979,12 @@ export function TimelineGrid({
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
               <StripedGanttHorizontalGuides />
-              {yearRoadmapInitiativeRows.map((group, idx) => (
+              {ganttSearchAppliedYearInitiativeRows.map((group, idx) => (
                 <div
                   key={`year-init-row-${group.timelineRow}`}
                   className={cn(
                     "relative min-w-0 z-10 py-0.5",
-                    idx < yearRoadmapInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                    idx < ganttSearchAppliedYearInitiativeRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
@@ -3970,12 +4047,12 @@ export function TimelineGrid({
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
               <StripedGanttHorizontalGuides />
-              {filteredYearRoadmapEpicRows.map((group, idx) => (
+              {ganttSearchAppliedYearEpicRows.map((group, idx) => (
                 <div
                   key={`year-epic-row-${group.timelineRow}`}
                   className={cn(
                     "relative min-w-0 z-10 py-px",
-                    idx < filteredYearRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
+                    idx < ganttSearchAppliedYearEpicRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
@@ -4277,6 +4354,76 @@ export function TimelineGrid({
     </>
   ) : null;
 
+  const ganttSearchJsx = (
+    <div
+      ref={ganttSearchRef}
+      className="relative ml-2 flex shrink-0 items-center"
+      onBlur={(e) => { if (!ganttSearchRef.current?.contains(e.relatedTarget as Node)) setGanttSearchOpen(false); }}
+    >
+      <Search className="pointer-events-none absolute left-2 z-10 size-3.5 text-slate-400" aria-hidden />
+      <input
+        ref={ganttSearchInputRef}
+        type="text"
+        value={ganttSearchQuery}
+        onChange={(e) => { setGanttSearchQuery(e.target.value); setGanttSearchFilter(null); setGanttSearchOpen(true); }}
+        onFocus={() => setGanttSearchOpen(true)}
+        placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
+        className="h-7 w-36 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13px] text-slate-700 placeholder:text-slate-400 outline-none focus:w-52 focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200"
+      />
+      {(ganttSearchQuery || ganttSearchFilter) ? (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { setGanttSearchQuery(""); setGanttSearchFilter(null); setGanttSearchOpen(false); }}
+          className="absolute right-1.5 z-10 text-slate-400 hover:text-slate-600"
+          aria-label="Clear search"
+        >
+          <X className="size-3.5" />
+        </button>
+      ) : null}
+      {ganttSearchOpen && (ganttSearchResults.initiatives.length > 0 || ganttSearchResults.epics.length > 0) ? (
+        <div className="absolute right-0 top-[calc(100%+4px)] z-[130] w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+          {ganttSearchResults.initiatives.length > 0 ? (
+            <div>
+              <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                {roadmapBarMode === "initiatives" ? "Initiatives" : "Show all epics from"}
+              </p>
+              {ganttSearchResults.initiatives.map((init) => (
+                <button
+                  key={init.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setGanttSearchFilter({ type: "initiative", id: init.id, label: init.title }); setGanttSearchQuery(init.title); setGanttSearchOpen(false); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-700 hover:bg-slate-50"
+                >
+                  <Zap className="size-3.5 shrink-0 text-violet-400" aria-hidden />
+                  <span className="truncate">{init.title}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {ganttSearchResults.epics.length > 0 ? (
+            <div className={cn(ganttSearchResults.initiatives.length > 0 ? "border-t border-slate-100" : "")}>
+              <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Epics</p>
+              {ganttSearchResults.epics.map((epic) => (
+                <button
+                  key={epic.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setGanttSearchFilter({ type: "epic", id: epic.id, label: epic.title }); setGanttSearchQuery(epic.title); setGanttSearchOpen(false); }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-700 hover:bg-slate-50"
+                >
+                  <Folder className="size-3.5 shrink-0 text-indigo-400" aria-hidden />
+                  <span className="truncate">{epic.title}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+
   const timelineHeaderRow = (
       <div
         className={cn(
@@ -4566,6 +4713,7 @@ export function TimelineGrid({
                 style={{ gridColumn: "1 / -1" }}
               >
                 {summaryYearChipsJsx}
+                {ganttSearchJsx}
               </div>
             </div>
           ) : (
@@ -4576,6 +4724,7 @@ export function TimelineGrid({
               )}
             >
               {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
+              {ganttSearchJsx}
             </div>
           )
         ) : activeMonth ? (
@@ -4662,11 +4811,12 @@ export function TimelineGrid({
                   ) : null}
                 </>
               ) : ((suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx)}
+              {ganttSearchJsx}
           </div>
         ) : focusedQuarter ? (
-          <div className="flex items-center gap-2" />
+          <div className="flex items-center gap-2">{ganttSearchJsx}</div>
         ) : (
-          <div className="flex items-center gap-2" />
+          <div className="flex items-center gap-2">{ganttSearchJsx}</div>
         )}
       </div>
   );
@@ -5243,12 +5393,12 @@ export function TimelineGrid({
                       </div>
                     )}
                     <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
-                      {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
+                      {roadmapBarMode === "initiatives" && ganttSearchAppliedMonthInitiativeRows.length === 0 ? (
                         <p className="sr-only">
                           No initiatives are planned in {MONTHS[activeMonth - 1]} yet. Plan epics from the initiative list
                           to fill this month.
                         </p>
-                      ) : roadmapBarMode !== "initiatives" && filteredMonthEpicGanttRows.length === 0 ? (
+                      ) : roadmapBarMode !== "initiatives" && ganttSearchAppliedMonthEpicRows.length === 0 ? (
                         <p className="sr-only">
                           No epics are planned in {MONTHS[activeMonth - 1]} yet. Drag an epic from the initiative list onto
                           this month.
@@ -5261,16 +5411,16 @@ export function TimelineGrid({
                         noScrollbar
                         minHeightStyle={{ minHeight: "72rem" }}
                       >
-                        {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
+                        {roadmapBarMode === "initiatives" && ganttSearchAppliedMonthInitiativeRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
-                        ) : roadmapBarMode !== "initiatives" && filteredMonthEpicGanttRows.length === 0 ? (
+                        ) : roadmapBarMode !== "initiatives" && ganttSearchAppliedMonthEpicRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         ) : roadmapBarMode === "initiatives" ? (
-                          monthInitiativeGanttRows.map((initiative, rowIndex) => (
+                          ganttSearchAppliedMonthInitiativeRows.map((initiative, rowIndex) => (
                             <div
                               key={initiative.id}
                               className={cn(
-                                rowIndex < monthInitiativeGanttRows.length - 1 && "border-b border-slate-200/50",
+                                rowIndex < ganttSearchAppliedMonthInitiativeRows.length - 1 && "border-b border-slate-200/50",
                               )}
                             >
                               <MonthInitiativeGanttLaneRow
@@ -5282,7 +5432,7 @@ export function TimelineGrid({
                             </div>
                           ))
                         ) : (
-                          filteredMonthEpicGanttRows.map(({ epic, initiative }, rowIndex) => {
+                          ganttSearchAppliedMonthEpicRows.map(({ epic, initiative }, rowIndex) => {
                             const isInitiativeEmphasis =
                               ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
                             const isEpicEmphasis =
@@ -5302,7 +5452,7 @@ export function TimelineGrid({
                               <div
                                 key={epic.id}
                                 className={cn(
-                                  rowIndex < filteredMonthEpicGanttRows.length - 1 && "border-b border-slate-200/50",
+                                  rowIndex < ganttSearchAppliedMonthEpicRows.length - 1 && "border-b border-slate-200/50",
                                 )}
                               >
                                 <EpicGanttLaneRow
@@ -5325,8 +5475,8 @@ export function TimelineGrid({
                           })
                         )}
                       </StripedGanttLaneScrollArea>
-                      {(roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0) ||
-                      (roadmapBarMode !== "initiatives" && filteredMonthEpicGanttRows.length === 0) ? (
+                      {(roadmapBarMode === "initiatives" && ganttSearchAppliedMonthInitiativeRows.length === 0) ||
+                      (roadmapBarMode !== "initiatives" && ganttSearchAppliedMonthEpicRows.length === 0) ? (
                         <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
                           <div className="max-w-md text-center text-pretty sm:max-w-lg" aria-hidden>
                             {roadmapBarMode === "initiatives" ? (
@@ -5693,7 +5843,7 @@ export function TimelineGrid({
                     className="relative flex min-h-0 w-full basis-0 flex-1 flex-col"
                   >
                   {roadmapBarMode === "initiatives" ? (
-                    quarterRoadmapInitiativeRows.length === 0 ? (
+                    ganttSearchAppliedQuarterInitiativeRows.length === 0 ? (
                       <>
                         <p className="sr-only">
                           No initiatives with planned epics in {focusedQuarter.label} yet. Plan epics from the initiative
@@ -5725,12 +5875,12 @@ export function TimelineGrid({
                         rowGapClass="space-y-2"
                         minHeightStyle={{ minHeight: "72rem" }}
                       >
-                        {quarterRoadmapInitiativeRows.map((group, idx) => (
+                        {ganttSearchAppliedQuarterInitiativeRows.map((group, idx) => (
                           <div
                             key={`q-init-row-${group.timelineRow}`}
                             className={cn(
                               "relative min-w-0 z-10 py-0.5",
-                              idx < quarterRoadmapInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                              idx < ganttSearchAppliedQuarterInitiativeRows.length - 1 && "border-b border-slate-200/50",
                             )}
                             data-gantt-lane-index={idx}
                             data-gantt-timeline-row={group.timelineRow}
@@ -5800,12 +5950,12 @@ export function TimelineGrid({
                       rowGapClass="space-y-0.5"
                       minHeightStyle={{ minHeight: "72rem" }}
                     >
-                      {filteredQuarterRoadmapEpicRows.map((group, idx) => (
+                      {ganttSearchAppliedQuarterEpicRows.map((group, idx) => (
                         <div
                           key={`q-epic-row-${group.timelineRow}`}
                           className={cn(
                             "relative min-w-0 z-10 py-0.5",
-                            idx < filteredQuarterRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
+                            idx < ganttSearchAppliedQuarterEpicRows.length - 1 && "border-b border-slate-200/50",
                           )}
                           data-gantt-lane-index={idx}
                           data-gantt-timeline-row={group.timelineRow}
