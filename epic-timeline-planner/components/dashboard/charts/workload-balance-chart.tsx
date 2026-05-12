@@ -45,7 +45,7 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team 
   }
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <ResponsiveContainer width="100%" height="100%">
       <BarChart data={barData} barCategoryGap="20%" margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
         <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />

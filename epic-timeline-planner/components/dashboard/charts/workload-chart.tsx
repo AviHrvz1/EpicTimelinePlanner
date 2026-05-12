@@ -23,7 +23,7 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team }: Prop
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={Math.max(140, data.length * 32 + 40)}>
+    <ResponsiveContainer width="100%" height="100%">
       <BarChart layout="vertical" data={data} margin={{ top: 4, right: 24, left: 4, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />

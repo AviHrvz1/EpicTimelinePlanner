@@ -33,7 +33,7 @@ export function EpicBurnupChart({ initiatives, year, quarter, sprint, team }: Pr
   const todayPoint = data.find((d) => d.isToday);
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis dataKey="labelShort" tick={{ fontSize: 10 }} interval="preserveStartEnd" />

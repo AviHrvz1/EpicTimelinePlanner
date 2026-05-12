@@ -30,8 +30,8 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team }: P
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <ResponsiveContainer width="60%" height={180}>
+    <div className="flex h-full items-center gap-3">
+      <ResponsiveContainer width="60%" height="100%">
         <PieChart>
           <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="35%" outerRadius="65%" paddingAngle={3} cornerRadius={5} stroke="#fff" strokeWidth={2}>
             {data.map((entry) => <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />)}

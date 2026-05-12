@@ -48,7 +48,7 @@ export function QuarterStatusChart({ initiatives, year, quarter, team }: Props) 
   }
 
   return (
-    <ResponsiveContainer width="100%" height={160}>
+    <ResponsiveContainer width="100%" height="100%">
       <PieChart>
         <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} innerRadius={28}>
           {data.map((_, i) => (

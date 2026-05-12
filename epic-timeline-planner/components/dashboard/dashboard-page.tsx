@@ -298,6 +298,17 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     setDirty(true);
   }
 
+  function handleDecreaseSpan(chartId: string) {
+    setCharts((prev) =>
+      prev.map((c) => {
+        if (c.id !== chartId) return c;
+        const span = c.colSpan ?? 1;
+        return { ...c, colSpan: (span === 1 ? 3 : span - 1) as 1 | 2 | 3 };
+      }),
+    );
+    setDirty(true);
+  }
+
   function handleChangeHeight(chartId: string, delta: 1 | -1) {
     setCharts((prev) =>
       prev.map((c) =>
@@ -542,6 +553,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
               onRemove={handleRemove}
               onEdit={handleEdit}
               onToggleSpan={handleToggleSpan}
+              onDecreaseSpan={handleDecreaseSpan}
               onChangeHeight={handleChangeHeight}
               onRenameChart={renameChart}
             />

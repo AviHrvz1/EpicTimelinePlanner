@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronUp, GripVertical, Maximize2, Minimize2, Pencil, X } from "lucide-react";
+import { GripVertical, Pencil, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
@@ -27,9 +27,40 @@ type Props = {
   onRemove: (id: string) => void;
   onEdit: (chart: DashboardChartItem) => void;
   onToggleSpan: (id: string) => void;
+  onDecreaseSpan: (id: string) => void;
   onChangeHeight: (id: string, delta: 1 | -1) => void;
   onRenameChart: (id: string, title: string) => void;
 };
+
+function ResizePad({
+  onUp, onDown, onLeft, onRight,
+  disableUp, disableDown,
+}: {
+  onUp: () => void; onDown: () => void; onLeft: () => void; onRight: () => void;
+  disableUp: boolean; disableDown: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className="size-7 shrink-0"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <polygon points="10,1 14,6.5 6,6.5"
+        onClick={disableUp ? undefined : onUp}
+        className={cn("transition-colors", disableUp ? "fill-slate-200 cursor-not-allowed" : "fill-slate-400 hover:fill-slate-700 cursor-pointer")} />
+      <polygon points="10,19 14,13.5 6,13.5"
+        onClick={disableDown ? undefined : onDown}
+        className={cn("transition-colors", disableDown ? "fill-slate-200 cursor-not-allowed" : "fill-slate-400 hover:fill-slate-700 cursor-pointer")} />
+      <polygon points="1,10 6.5,6 6.5,14"
+        onClick={onLeft}
+        className="fill-slate-400 hover:fill-slate-700 cursor-pointer transition-colors" />
+      <polygon points="19,10 13.5,6 13.5,14"
+        onClick={onRight}
+        className="fill-slate-400 hover:fill-slate-700 cursor-pointer transition-colors" />
+      <circle cx="10" cy="10" r="1.5" className="fill-slate-300" />
+    </svg>
+  );
+}
 
 function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiatives: InitiativeItem[] }) {
   let params: Record<string, unknown> = {};
@@ -152,10 +183,10 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onChangeHeight, onRenameChart }: Props) {
+export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
-  const minHeight = 260 + (rowSpan - 1) * 220;
+  const cardHeight = 300 + (rowSpan - 1) * 220;
   const [renamingTitle, setRenamingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(chart.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -173,7 +204,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    minHeight,
+    height: cardHeight,
   };
 
   return (
@@ -222,29 +253,14 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
         )}
         {isEditMode && (
           <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              onClick={() => onChangeHeight(chart.id, -1)}
-              disabled={rowSpan <= 1}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
-              title="Decrease height"
-            >
-              <ChevronDown className="size-3.5" />
-            </button>
-            <button
-              onClick={() => onChangeHeight(chart.id, 1)}
-              disabled={rowSpan >= 4}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
-              title="Increase height"
-            >
-              <ChevronUp className="size-3.5" />
-            </button>
-            <button
-              onClick={() => onToggleSpan(chart.id)}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              title={chart.colSpan === 3 ? "Shrink to 1 col" : chart.colSpan === 2 ? "Expand to 3 cols" : "Expand to 2 cols"}
-            >
-              {chart.colSpan === 3 ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-            </button>
+            <ResizePad
+              onUp={() => onChangeHeight(chart.id, -1)}
+              onDown={() => onChangeHeight(chart.id, 1)}
+              onLeft={() => onDecreaseSpan(chart.id)}
+              onRight={() => onToggleSpan(chart.id)}
+              disableUp={rowSpan <= 1}
+              disableDown={rowSpan >= 4}
+            />
             <button
               onClick={() => onEdit(chart)}
               className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -263,8 +279,8 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
         )}
       </div>
 
-      {/* Chart body */}
-      <div className="flex-1 px-2 py-3">
+      {/* Chart body — min-h-0 ensures flex-1 has a definite height so height="100%" works in ResponsiveContainer */}
+      <div className="min-h-0 flex-1 overflow-hidden px-2 py-2">
         <ChartBody chart={chart} initiatives={initiatives} />
       </div>
     </div>
