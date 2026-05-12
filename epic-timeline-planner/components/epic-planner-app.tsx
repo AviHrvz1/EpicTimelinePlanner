@@ -4709,11 +4709,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     aria-hidden
                   />
                   {/* Downward triangle tip at top of separator */}
-                  <div
-                    className="pointer-events-none absolute top-0 left-[35%] z-20 h-2.5 w-3.5 -translate-x-1/2 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.10)]"
-                    style={{ clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}
+                  <svg
+                    className="pointer-events-none absolute top-0 left-[35%] z-20 -translate-x-1/2 drop-shadow-sm"
+                    width="14"
+                    height="10"
+                    viewBox="0 0 14 10"
                     aria-hidden
-                  />
+                  >
+                    <polygon points="0,0 14,0 7,10" fill="white" />
+                    <path d="M0,0 L7,10 L14,0" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+                  </svg>
                   {/* Drag pill */}
                   <div
                     className="pointer-events-none relative z-10 -translate-x-[30%] flex h-10 w-[7px] flex-col items-center justify-center gap-[3px] rounded-full bg-white shadow-[0_1px_4px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/80 transition-all duration-150 group-hover:shadow-[0_2px_8px_rgba(15,23,42,0.16)] group-hover:ring-slate-300 group-active:bg-slate-50"

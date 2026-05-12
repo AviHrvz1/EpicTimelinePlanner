@@ -193,18 +193,11 @@ function YearRoadmapTodayLine({ leftPercent }: { leftPercent: number | null }) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
   const x = Math.min(100, Math.max(0, leftPercent));
   return (
-    <>
-      <div
-        className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
-        style={{ left: `${x}%` }}
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute top-0 z-[6] h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500"
-        style={{ left: `${x}%` }}
-        aria-hidden
-      />
-    </>
+    <div
+      className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
+      style={{ left: `${x}%` }}
+      aria-hidden
+    />
   );
 }
 
@@ -593,7 +586,7 @@ function GanttTodayMarker({
             <div className="absolute left-1/2 top-[75px] bottom-0 w-px -translate-x-1/2 bg-emerald-500/95" />
           ) : null}
           {showArrow ? (
-            <div className="absolute top-[68px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
+            <div className="absolute top-[62px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
           ) : null}
         </div>
       </div>
