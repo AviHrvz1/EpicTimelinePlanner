@@ -277,7 +277,7 @@ export function EpicPlanTimelineBar({
       }}
       className={cn(
         "group/bar relative z-20 space-y-0",
-        isDragging && "z-50 opacity-60",
+        isDragging && "opacity-0",
       )}
       style={{
         transform:
