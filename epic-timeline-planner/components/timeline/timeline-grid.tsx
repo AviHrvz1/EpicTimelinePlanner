@@ -3944,7 +3944,7 @@ export function TimelineGrid({
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
-                  "relative z-10 min-h-0 flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden",
+                  "relative z-10 min-h-0 flex-1 space-y-0 overflow-y-auto [&::-webkit-scrollbar]:hidden",
                   !yearRoadmapHScroll && "overflow-x-hidden",
                 )}
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
@@ -3955,7 +3955,7 @@ export function TimelineGrid({
                 <div
                   key={`year-epic-row-${group.timelineRow}`}
                   className={cn(
-                    "relative min-w-0 z-10 py-0.5",
+                    "relative min-w-0 z-10 py-px",
                     idx < filteredYearRoadmapEpicRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
