@@ -82,12 +82,12 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
   --scrollbar-track: transparent;
-  --scrollbar-thumb-from: #bae6fd;
-  --scrollbar-thumb-to: #3b82f6;
-  --scrollbar-thumb-from-hover: #7dd3fc;
-  --scrollbar-thumb-to-hover: #2563eb;
-  --scrollbar-thumb-from-active: #38bdf8;
-  --scrollbar-thumb-to-active: #1d4ed8;
+  --scrollbar-thumb-from: #e2e8f0;
+  --scrollbar-thumb-to: #a1a1aa;
+  --scrollbar-thumb-from-hover: #cbd5e1;
+  --scrollbar-thumb-to-hover: #71717a;
+  --scrollbar-thumb-from-active: #94a3b8;
+  --scrollbar-thumb-to-active: #52525b;
 }
 
 .dark {
@@ -263,7 +263,7 @@
   .capacity-bucket-scroll {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: #7dd3fc transparent;
+    scrollbar-color: #a1a1aa transparent;
   }
   .capacity-bucket-scroll::-webkit-scrollbar {
     width: 6px;
@@ -295,7 +295,7 @@
   body,
   * {
     scrollbar-width: thin;
-    scrollbar-color: #7dd3fc transparent;
+    scrollbar-color: #a1a1aa transparent;
   }
   *::-webkit-scrollbar {
     width: 6px;

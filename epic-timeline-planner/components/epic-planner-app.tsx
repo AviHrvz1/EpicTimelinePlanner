@@ -4555,7 +4555,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 isResizingPanel && "select-none",
               )}
               style={{
-                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr)" : "auto 12px minmax(0, 1fr)",
+                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr)" : "auto 20px minmax(0, 1fr)",
               }}
             >
               <div
@@ -4705,12 +4705,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 >
                   {/* Separator line — always visible, centered */}
                   <div
-                    className="pointer-events-none absolute inset-y-0 left-[35%] w-[2px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.07)] transition-all duration-150 group-hover:shadow-[0_0_0_1px_rgba(15,23,42,0.13)]"
+                    className="pointer-events-none absolute inset-y-0 left-[65%] w-[3px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)] transition-all duration-150 group-hover:shadow-[0_0_0_1px_rgba(15,23,42,0.18)]"
                     aria-hidden
                   />
                   {/* Downward triangle tip at top of separator */}
                   <svg
-                    className="pointer-events-none absolute top-0 left-[35%] z-20 -translate-x-1/2 drop-shadow-sm"
+                    className="pointer-events-none absolute top-0 left-[65%] z-20 -translate-x-1/2 drop-shadow-sm"
                     width="14"
                     height="10"
                     viewBox="0 0 14 10"
@@ -4721,7 +4721,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   </svg>
                   {/* Drag pill */}
                   <div
-                    className="pointer-events-none relative z-10 -translate-x-[30%] flex h-10 w-[7px] flex-col items-center justify-center gap-[3px] rounded-full bg-white shadow-[0_1px_4px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/80 transition-all duration-150 group-hover:shadow-[0_2px_8px_rgba(15,23,42,0.16)] group-hover:ring-slate-300 group-active:bg-slate-50"
+                    className="pointer-events-none absolute left-[65%] top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 flex h-10 w-[7px] flex-col items-center justify-center gap-[3px] rounded-full bg-white shadow-[0_1px_4px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/80 transition-all duration-150 group-hover:shadow-[0_2px_8px_rgba(15,23,42,0.16)] group-hover:ring-slate-300 group-active:bg-slate-50"
                     aria-hidden
                   >
                     <span className="h-px w-[3px] rounded-full bg-slate-300" />

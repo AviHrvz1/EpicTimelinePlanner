@@ -4254,7 +4254,7 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mb-4 flex w-full min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 py-1 shadow-none ring-0",
+          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-0 bg-gradient-to-r from-slate-100 via-zinc-100 to-slate-200 py-2 pl-5 pr-4 shadow-[inset_0_4px_6px_-4px_rgba(15,23,42,0.13),inset_0_-4px_6px_-4px_rgba(15,23,42,0.09)] ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
@@ -4263,7 +4263,7 @@ export function TimelineGrid({
             className={cn(
               "relative z-30 inline-flex shrink-0 items-center gap-1 py-0.5 pl-1.5 pr-1 outline-none",
               useRoadmapGanttChipTrack && !suppressInlineChips &&
-                "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 rounded-lg border-0 bg-gradient-to-r from-slate-50 via-indigo-50/60 to-violet-50/50 pr-1 shadow-none ring-0",
+                "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 rounded-none border-0 bg-gradient-to-r from-slate-100 via-zinc-100 to-slate-200 pr-1 shadow-none ring-0",
             )}
           >
             {breadcrumbItems.map((item, index) => (
