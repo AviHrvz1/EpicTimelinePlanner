@@ -307,7 +307,7 @@ export function EpicPlanTimelineBar({
         className={cn(
           "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-medium tracking-[0.01em] active:cursor-grabbing",
           lightBg ? "text-slate-900" : "text-white",
-          compact ? "h-7 text-[12px]" : "h-8 text-[12px]",
+          compact ? "h-7 text-[13px]" : "h-8 text-[13px]",
           emphasizeFlash
             ? "ring-1 ring-white/20"
             : "shadow-lg ring-1 ring-black/15",

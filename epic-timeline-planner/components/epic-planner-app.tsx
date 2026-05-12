@@ -4477,7 +4477,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     <DragContext onDragEnd={onDragEnd}>
       <main
         className={cn(
-          "flex h-screen min-h-0 flex-col pb-8 px-2",
+          "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-2",
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-white",
           topMode === "roadmap" &&
             "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-slate-100 via-zinc-100 to-slate-200",
@@ -4486,7 +4486,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         )}
       >
         {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid */}
-        <div className="-mx-2 flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
+        <div className="-mr-2 flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
           <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2" />
         </div>
         <div
@@ -4539,7 +4539,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           </div>
           <div
             className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col gap-5 pt-2",
+              "flex min-h-0 min-w-0 flex-1 flex-col gap-5",
+              topMode !== "roadmap" && "pt-2",
               topMode === "backlog"
                 ? "h-full min-h-0 overflow-x-hidden overflow-y-hidden"
                 : "overflow-x-hidden overflow-y-visible",
@@ -4559,7 +4560,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             >
               <div
                 className={cn(
-                  "relative min-h-0 overflow-hidden rounded-l-xl bg-white/90 motion-reduce:transition-none",
+                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2",
                   !isResizingPanel && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
@@ -4720,7 +4721,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               )}
               <div
                 ref={planningRightSurfaceRef}
-                className="flex min-h-0 min-w-0 flex-col overflow-x-visible overflow-y-hidden"
+                className="mt-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl"
               >
                 <TimelineGrid
                 initiatives={initiatives}

@@ -2372,7 +2372,7 @@ export function InitiativeListPanel({
       >
         <div className="min-h-0 bg-white ps-3 pe-3 [direction:ltr]">
       {epicPlanPanelMode ? (
-        <div className="space-y-4">
+        <div className="space-y-2">
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 z-10 size-4.5 -translate-y-1/2 text-slate-400"
@@ -2670,7 +2670,7 @@ export function InitiativeListPanel({
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 z-10 size-4.5 -translate-y-1/2 text-slate-400"

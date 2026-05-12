@@ -4308,12 +4308,12 @@ export function TimelineGrid({
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
                 <label className="inline-flex items-center gap-1 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[12px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <span className="text-[16px] font-semibold tracking-[0.01em] text-slate-500">Team</span>
                   <div className="group/trigger relative z-40" ref={sprintTeamMenuRef}>
                     <button
                       type="button"
                       onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[16px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter sprint views by team"
                       aria-expanded={isSprintTeamMenuOpen}
                     >
