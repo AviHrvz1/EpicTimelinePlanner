@@ -14,6 +14,7 @@ import {
   LineChart,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -264,17 +265,29 @@ export function SprintAnalytics({
         .filter((item) => item.selectedStoryCount > 0),
     [analytics.workloadByAssignee, selectedWorkloadStatuses],
   );
-  const burnUpData = useMemo(() => {
-    const days = analytics.flowSprintTrendData;
-    if (days.length === 0) return [];
-    const finalScope = days[days.length - 1]!.todo + days[days.length - 1]!.inProgress + days[days.length - 1]!.done + days[days.length - 1]!.approved;
-    return days.map((d, idx) => {
-      const scope = d.todo + d.inProgress + d.done + d.approved;
-      const completed = d.done + d.approved;
-      const ideal = finalScope > 0 ? Math.round((finalScope * idx) / Math.max(days.length - 1, 1)) : 0;
-      return { labelShort: d.labelShort, scope, completed, ideal, isToday: d.isToday };
+  // Extend burn-up and CFD to the full sprint x-axis; future days get null for actual values.
+  const cfdExtendedData = useMemo(() => {
+    const pastByLabel = new Map(analytics.flowSprintTrendData.map((d) => [d.labelShort, d]));
+    return analytics.burndown.map((bd) => {
+      const past = pastByLabel.get(bd.labelShort);
+      return past ?? { labelShort: bd.labelShort, isToday: bd.isToday, dayInSprint: null, todo: null, inProgress: null, done: null, approved: null };
     });
-  }, [analytics.flowSprintTrendData]);
+  }, [analytics.burndown, analytics.flowSprintTrendData]);
+
+  const burnUpData = useMemo(() => {
+    const allDays = analytics.burndown;
+    if (allDays.length === 0) return [];
+    const pastByLabel = new Map(analytics.flowSprintTrendData.map((d) => [d.labelShort, d]));
+    const lastPast = analytics.flowSprintTrendData[analytics.flowSprintTrendData.length - 1];
+    const finalScope = lastPast ? lastPast.todo + lastPast.inProgress + lastPast.done + lastPast.approved : 0;
+    return allDays.map((bd, idx) => {
+      const past = pastByLabel.get(bd.labelShort);
+      const scope = past ? past.todo + past.inProgress + past.done + past.approved : finalScope;
+      const completed = past != null ? past.done + past.approved : null;
+      const ideal = finalScope > 0 ? Math.round((finalScope * idx) / Math.max(allDays.length - 1, 1)) : 0;
+      return { labelShort: bd.labelShort, scope, completed, ideal, isToday: bd.isToday };
+    });
+  }, [analytics.burndown, analytics.flowSprintTrendData]);
 
   const allCfdKeysSelected = cfdVisibleKeys.length === CFD_FLOW_SEGMENTS.length;
   const showAllCfdKeys = () => setCfdVisibleKeys(CFD_FLOW_SEGMENTS.map((segment) => segment.key));
@@ -675,6 +688,14 @@ export function SprintAnalytics({
                       );
                     }}
                   />
+                  {analytics.burndown.find((d) => d.isToday) && (
+                    <ReferenceLine
+                      x={analytics.burndown.find((d) => d.isToday)?.labelShort}
+                      stroke="#94a3b8"
+                      strokeDasharray="4 2"
+                      label={{ value: "Today", position: "insideTopRight", fontSize: 10, fill: "#94a3b8" }}
+                    />
+                  )}
                   <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
                   <Line type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2} dot={false} connectNulls={false} name="Actual" />
                 </LineChart>
@@ -875,7 +896,7 @@ export function SprintAnalytics({
             {analytics.flowSprintTrendData.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={analytics.flowSprintTrendData} margin={{ top: 4, right: 4, left: 18, bottom: 28 }}>
+                  <AreaChart data={cfdExtendedData} margin={{ top: 4, right: 4, left: 18, bottom: 28 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="labelShort"
@@ -883,7 +904,7 @@ export function SprintAnalytics({
                       tick={(props) => {
                         const { x, y, payload, index } = props;
                         const label = typeof payload?.value === "string" ? payload.value : String(payload?.value ?? "");
-                        const isToday = Boolean(analytics.flowSprintTrendData[index]?.isToday);
+                        const isToday = Boolean(cfdExtendedData[index]?.isToday);
                         return (
                           <text
                             x={x}
@@ -945,6 +966,14 @@ export function SprintAnalytics({
                         );
                       }}
                     />
+                    {cfdExtendedData.find((d) => d.isToday) && (
+                      <ReferenceLine
+                        x={cfdExtendedData.find((d) => d.isToday)?.labelShort}
+                        stroke="#94a3b8"
+                        strokeDasharray="4 2"
+                        label={{ value: "Today", position: "insideTopRight", fontSize: 10, fill: "#94a3b8" }}
+                      />
+                    )}
                     {CFD_FLOW_SEGMENTS.map(({ key, label, color }) =>
                       cfdVisibleKeys.includes(key) ? (
                         <Area
@@ -959,6 +988,7 @@ export function SprintAnalytics({
                           strokeOpacity={1}
                           strokeWidth={1.5}
                           isAnimationActive={false}
+                          connectNulls={false}
                         />
                       ) : null,
                     )}
@@ -1209,6 +1239,14 @@ export function SprintAnalytics({
                           );
                         }}
                       />
+                      {burnUpData.find((d) => d.isToday) && (
+                        <ReferenceLine
+                          x={burnUpData.find((d) => d.isToday)?.labelShort}
+                          stroke="#94a3b8"
+                          strokeDasharray="4 2"
+                          label={{ value: "Today", position: "insideTopRight", fontSize: 10, fill: "#94a3b8" }}
+                        />
+                      )}
                       <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} strokeDasharray="4 3" name="Ideal" />
                       <Line type="monotone" dataKey="scope" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="Scope" />
                       <Line type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={2} dot={false} connectNulls={false} name="Completed" />

@@ -813,7 +813,7 @@ export function MonthAnalytics({
     let today1Based = 1;
     if (startToday >= monthEnd) today1Based = totalDays;
     else if (startToday > monthStart) {
-      today1Based = Math.min(totalDays, Math.max(1, new Date(startToday).getDate()));
+      today1Based = Math.min(totalDays, Math.max(1, Math.floor((startToday - monthStart) / 86400000) + 1));
     }
 
     const startValue =
@@ -1210,8 +1210,10 @@ export function MonthAnalytics({
     const horizon = monthBurndown.length;
     if (horizon === 0) return monthBurndown;
     const now = new Date();
-    const isCurrentMonth = now.getFullYear() === planYear && now.getMonth() + 1 === month;
-    const elapsedDays = isCurrentMonth ? Math.max(1, Math.min(horizon, now.getDate())) : horizon;
+    const periodStartMs = new Date(planYear, scopeStartMonth - 1, 1).getTime();
+    const nowDayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const rawElapsed = Math.floor((nowDayMs - periodStartMs) / 86400000) + 1;
+    const elapsedDays = Math.max(0, Math.min(horizon, rawElapsed));
     const seriesKeys = monthBurndownEpics.map((epic) => epic.id);
     const nextRows = monthBurndown.map((row) => ({ ...row })) as Array<
       (typeof monthBurndown)[number] & Record<string, number | string | boolean | null | undefined>
@@ -1234,7 +1236,7 @@ export function MonthAnalytics({
       }
     }
     return nextRows;
-  }, [monthBurndown, monthBurndownEpics, planYear, month]);
+  }, [monthBurndown, monthBurndownEpics, planYear, month, scopeStartMonth]);
   const monthBurndownFromSnapshots = useMemo(() => {
     if (monthBurndown.length === 0) return null;
     const sourceEpics = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
@@ -1242,8 +1244,10 @@ export function MonthAnalytics({
     if (!hasSnapshots) return null;
 
     const now = new Date();
-    const isCurrentMonth = now.getFullYear() === planYear && now.getMonth() + 1 === month;
-    const elapsedDays = isCurrentMonth ? Math.max(1, Math.min(monthBurndown.length, now.getDate())) : monthBurndown.length;
+    const periodStartMs2 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
+    const nowDayMs2 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const rawElapsed2 = Math.floor((nowDayMs2 - periodStartMs2) / 86400000) + 1;
+    const elapsedDays = Math.max(0, Math.min(monthBurndown.length, rawElapsed2));
     const rows = monthBurndown.map((row) => ({ ...row })) as Array<Record<string, number | string | boolean | null | undefined>>;
 
     for (let i = 0; i < rows.length; i += 1) {
@@ -1461,8 +1465,10 @@ export function MonthAnalytics({
       return isStoryOpen(status);
     });
     const now = new Date();
-    const isCurrentMonth = now.getFullYear() === planYear && now.getMonth() + 1 === month;
-    const elapsedDays = isCurrentMonth ? Math.max(1, Math.min(totalDays, now.getDate())) : totalDays;
+    const periodStartMs3 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
+    const nowDayMs3 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const rawElapsed3 = Math.floor((nowDayMs3 - periodStartMs3) / 86400000) + 1;
+    const elapsedDays = Math.max(0, Math.min(totalDays, rawElapsed3));
 
     return dayDates.map((dayDate, index) => {
       const dayInMonth = index + 1;
@@ -2347,6 +2353,17 @@ export function MonthAnalytics({
                       content={(props) => <BurndownTooltip {...props} metric={metric} />}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
+                    {(() => {
+                      const todayRow = monthBurndownWithDueTarget.find((d) => d.isCalendarToday);
+                      return todayRow?.axisLabel ? (
+                        <ReferenceLine
+                          x={String(todayRow.axisLabel)}
+                          stroke="#94a3b8"
+                          strokeDasharray="4 2"
+                          label={{ value: "Today", position: "insideTopRight", fontSize: 10, fill: "#94a3b8" }}
+                        />
+                      ) : null;
+                    })()}
                     {burndownFocusedEpicOption && burndownVisibleKeys.includes(burndownFocusedEpicOption.epic.id) ? (
                       <Line
                         type="monotone"
@@ -2862,6 +2879,17 @@ export function MonthAnalytics({
                       content={(props) => <CumulativeFlowTooltip {...props} metric={cfdMetric} />}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
+                    {(() => {
+                      const todayRow = cfdDataResolved.find((d) => d.isToday);
+                      return todayRow?.labelShort ? (
+                        <ReferenceLine
+                          x={String(todayRow.labelShort)}
+                          stroke="#94a3b8"
+                          strokeDasharray="4 2"
+                          label={{ value: "Today", position: "insideTopRight", fontSize: 10, fill: "#94a3b8" }}
+                        />
+                      ) : null;
+                    })()}
                     {CFD_FLOW_SEGMENTS.map(({ key, label, color }) =>
                       cfdVisibleKeys.includes(key) ? (
                       <Area
@@ -3195,6 +3223,17 @@ export function MonthAnalytics({
                         }}
                         cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                       />
+                      {(() => {
+                        const todayRow = burnUpData.find((d) => d.isToday);
+                        return todayRow?.labelShort ? (
+                          <ReferenceLine
+                            x={todayRow.labelShort}
+                            stroke="#94a3b8"
+                            strokeDasharray="4 2"
+                            label={{ value: "Today", position: "insideTopRight", fontSize: 10, fill: "#94a3b8" }}
+                          />
+                        ) : null;
+                      })()}
                       <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                       <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
                       <Line type="monotone" dataKey="completed" name="Completed" stroke="#10b981" strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />

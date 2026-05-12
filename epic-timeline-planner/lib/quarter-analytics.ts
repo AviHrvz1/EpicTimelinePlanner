@@ -126,6 +126,17 @@ export function buildQuarterBurndownSeries(
   });
   const horizon = Math.max(quarterDays.length, 1);
 
+  // Use the actual calendar position of today in the period, not a progress-derived position.
+  const todayCalendarDay = (() => {
+    const idx = quarterDays.findIndex((d) => d.isCalendarToday);
+    if (idx >= 0) return idx + 1;
+    // Today is after the period ends → show all days
+    if (todayMs > startOfLocalDay(new Date(planYear, quarterMonths[quarterMonths.length - 1] - 1,
+        MONTH_DAY_COUNTS[quarterMonths[quarterMonths.length - 1]] ?? 31))) return horizon;
+    // Today is before the period starts → show nothing
+    return 0;
+  })();
+
   const series = selectedEpics.map((epic) => {
     const stories = epic.userStories ?? [];
     const start =
@@ -136,9 +147,7 @@ export function buildQuarterBurndownSeries(
       metric === "daysLeft"
         ? stories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)
         : stories.filter((s) => s.status !== "done" && s.status !== "approved").length;
-    const progress = start > 0 ? Math.max(0, Math.min(1, 1 - actualRemaining / start)) : 0;
-    const today = Math.max(1, Math.min(horizon, Math.round(progress * horizon)));
-    return { key: epic.id, start, actualRemaining, today };
+    return { key: epic.id, start, actualRemaining };
   });
 
   return Array.from({ length: horizon }, (_, idx) => {
@@ -157,13 +166,11 @@ export function buildQuarterBurndownSeries(
     };
     const startTotal = series.reduce((sum, s) => sum + s.start, 0);
     const remainingTotal = series.reduce((sum, s) => sum + s.actualRemaining, 0);
-    const progressTotal = startTotal > 0 ? Math.max(0, Math.min(1, 1 - remainingTotal / startTotal)) : 0;
-    const todayTotal = Math.max(1, Math.min(horizon, Math.round(progressTotal * horizon)));
-    const idealRaw = startTotal * (1 - idx / (horizon - 1));
-    const actualRaw =
-      dayIdx <= todayTotal
-        ? startTotal - (startTotal - remainingTotal) * ((dayIdx - 1) / Math.max(todayTotal - 1, 1))
-        : null;
+    const idealRaw = startTotal * (1 - idx / Math.max(horizon - 1, 1));
+    const inPast = todayCalendarDay > 0 && dayIdx <= todayCalendarDay;
+    const actualRaw = inPast
+      ? startTotal - (startTotal - remainingTotal) * ((dayIdx - 1) / Math.max(todayCalendarDay - 1, 1))
+      : null;
     row.ideal = metric === "storyCount" ? Math.round(idealRaw) : Number(idealRaw.toFixed(1));
     row.actual =
       actualRaw == null ? null : metric === "storyCount" ? Math.round(actualRaw) : Number(actualRaw.toFixed(1));
@@ -171,10 +178,9 @@ export function buildQuarterBurndownSeries(
       return row;
     }
     for (const s of series) {
-      const value =
-        dayIdx <= s.today
-          ? s.start - (s.start - s.actualRemaining) * ((dayIdx - 1) / Math.max(s.today - 1, 1))
-          : null;
+      const value = inPast
+        ? s.start - (s.start - s.actualRemaining) * ((dayIdx - 1) / Math.max(todayCalendarDay - 1, 1))
+        : null;
       row[s.key] =
         value == null ? null : metric === "storyCount" ? Math.round(value) : Number(value.toFixed(1));
     }
