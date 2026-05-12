@@ -199,6 +199,7 @@ model DashboardChart {
   config      String
   position    Int       @default(0)
   colSpan     Int       @default(1)
+  rowSpan     Int       @default(1)
   createdAt   DateTime  @default(now())
 }
 
