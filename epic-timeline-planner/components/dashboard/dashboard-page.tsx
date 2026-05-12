@@ -32,6 +32,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const [context, setContext] = useState<WorkspaceContext | null>(null);
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   // Save modal
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -168,7 +169,16 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, charts: chartsPayload }),
       });
-      const created: DashboardItem = await res.json();
+      const rawText = await res.text();
+      let created: Record<string, unknown> = {};
+      try { created = JSON.parse(rawText); } catch { /* non-JSON body */ }
+      if (!res.ok || !created?.id) {
+        console.error("[confirmSave] API error status:", res.status, "body:", rawText.slice(0, 500));
+        setSaveError(created?.error as string ?? `Save failed (HTTP ${res.status}) — check the server logs.`);
+        setSaving(false);
+        return;
+      }
+      setSaveError(null);
       // Replace draft with saved dashboard, then spawn a fresh blank draft
       setDashboards((prev) => {
         const withoutDraft = prev.filter((d) => d.id !== activeDashboardId);
@@ -291,7 +301,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
       <div className="flex items-end gap-0 border-b border-slate-200 bg-slate-50 pl-3 pr-4 pt-2">
         {/* Tabs */}
         <div className="flex flex-1 items-end gap-0 overflow-x-auto">
-          {dashboards.filter((d) => !d.id.startsWith("draft-")).map((d) => {
+          {dashboards.filter((d) => d.id && !d.id.startsWith("draft-")).map((d) => {
             const isActive = d.id === activeDashboardId;
             const isConfirming = confirmDeleteId === d.id;
             return (
@@ -345,8 +355,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           })}
         </div>
 
-        {/* Right-side actions — sit on the tab bar baseline */}
-        <div className="flex shrink-0 items-center gap-2 pb-1.5">
+        {/* Right-side actions */}
+        <div className="flex shrink-0 items-center gap-2 self-center mb-0.5">
           <button
             onClick={() => setBuilderOpen(true)}
             disabled={builderOpen}
@@ -442,6 +452,9 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
               placeholder="Dashboard name…"
               className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
             />
+            {saveError && (
+              <p className="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">{saveError}</p>
+            )}
             <div className="mt-4 flex gap-2.5">
               <button
                 onClick={confirmSave}

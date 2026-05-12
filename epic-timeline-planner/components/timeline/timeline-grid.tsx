@@ -106,9 +106,8 @@ function GanttLaneSprintBackdrop({ columnCount, className }: { columnCount: numb
         <div
           key={i}
           className={cn(
-            "min-h-full min-w-0 flex-1 border-r border-slate-200/45 last:border-r-0",
-            Math.floor(i / 2) % 2 === 0 ? "bg-slate-50/40" : "bg-white/55",
-            (i + 1) % 2 === 0 && i < columnCount - 1 && "border-slate-300/40",
+            "min-h-full min-w-0 flex-1",
+            i < columnCount - 1 && "border-r border-slate-100/60",
           )}
         />
       ))}
@@ -118,16 +117,7 @@ function GanttLaneSprintBackdrop({ columnCount, className }: { columnCount: numb
 
 /** Faint horizontal rules in the roadmap lane “tail” (empty space below the last row). */
 function StripedGanttHorizontalGuides() {
-  return (
-    <div
-      className="pointer-events-none absolute inset-0 z-[1]"
-      aria-hidden
-      style={{
-        backgroundImage:
-          "repeating-linear-gradient(to bottom, transparent 0, transparent calc(2.75rem - 1px), rgba(203, 213, 225, 0.42) calc(2.75rem - 1px), rgba(203, 213, 225, 0.42) 2.75rem)",
-      }}
-    />
-  );
+  return null;
 }
 
 /** Scrollable roadmap lane: each row should include GanttLaneSprintBackdrop with the same column count. */

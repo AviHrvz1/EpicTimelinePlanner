@@ -6,14 +6,11 @@ import {
   Bot,
   Check,
   ChevronLeft,
+  Flag,
   Map,
-  Monitor,
   PieChart,
   RotateCcw,
-  Server,
-  Smartphone,
   TrendingDown,
-  TrendingUp,
   Users,
   Users2,
   X,
@@ -29,23 +26,39 @@ import type { ChartType, DashboardChartConfig, DashboardChartItem, LLMChartPropo
 
 // ─── Team icon / color map ────────────────────────────────────────────────────
 
-const TEAM_META: Record<string, { icon: React.ReactNode; dot: string }> = {
-  platform:   { icon: <Server    className="size-3.5" />, dot: "bg-sky-400"     },
-  experience: { icon: <Monitor   className="size-3.5" />, dot: "bg-violet-400"  },
-  data:       { icon: <BarChart2 className="size-3.5" />, dot: "bg-amber-400"   },
-  mobile:     { icon: <Smartphone className="size-3.5" />, dot: "bg-emerald-400" },
-  growth:     { icon: <TrendingUp className="size-3.5" />, dot: "bg-rose-400"    },
+const TEAM_COLOR: Record<string, string> = {
+  platform:   "bg-sky-100 text-sky-700 ring-sky-200",
+  experience: "bg-violet-100 text-violet-700 ring-violet-200",
+  data:       "bg-amber-100 text-amber-700 ring-amber-200",
+  mobile:     "bg-emerald-100 text-emerald-700 ring-emerald-200",
+  growth:     "bg-rose-100 text-rose-700 ring-rose-200",
 };
 
 function teamIconNode(teamId: string): React.ReactNode {
-  const meta = TEAM_META[teamId];
-  if (!meta) return <span className="size-2 rounded-full bg-slate-300 shrink-0" />;
+  const color = TEAM_COLOR[teamId] ?? "bg-slate-100 text-slate-500 ring-slate-200";
   return (
-    <span className={cn(
-      "flex size-5 shrink-0 items-center justify-center rounded-md text-white",
-      meta.dot.replace("bg-", "bg-").replace("-400", "-500"),
-    )}>
-      {meta.icon}
+    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-md ring-1", color)}>
+      <Users className="size-3" />
+    </span>
+  );
+}
+
+const ROADMAP_COLORS = [
+  "bg-sky-100 text-sky-700 ring-sky-200",
+  "bg-violet-100 text-violet-700 ring-violet-200",
+  "bg-emerald-100 text-emerald-700 ring-emerald-200",
+  "bg-amber-100 text-amber-700 ring-amber-200",
+  "bg-rose-100 text-rose-700 ring-rose-200",
+  "bg-cyan-100 text-cyan-700 ring-cyan-200",
+  "bg-fuchsia-100 text-fuchsia-700 ring-fuchsia-200",
+  "bg-lime-100 text-lime-700 ring-lime-200",
+];
+
+function roadmapIconNode(index: number): React.ReactNode {
+  const color = ROADMAP_COLORS[index % ROADMAP_COLORS.length];
+  return (
+    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-md ring-1", color)}>
+      <Map className="size-3" />
     </span>
   );
 }
@@ -192,7 +205,7 @@ function AutocompleteMultiSelect<T extends string>({
               key={v}
               type="button"
               onClick={() => onToggle(v)}
-              className="inline-flex items-center gap-1 rounded-full bg-indigo-600 py-1 pl-3 pr-2 text-[11px] font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full bg-slate-100 ring-1 ring-slate-200 py-1 pl-3 pr-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-200 hover:ring-slate-300 transition-colors"
             >
               {renderLabel(v)}
               <X className="size-2.5 shrink-0 opacity-75" />
@@ -382,15 +395,15 @@ function SprintChartForm({
           {meta.icon}
         </div>
         <div className="min-w-0">
-          <p className="text-[13px] font-bold text-slate-800 leading-tight">{meta.label}</p>
-          <p className="text-[11px] text-slate-400 leading-tight mt-0.5">Select roadmaps &amp; teams</p>
+          <p className="text-[15px] font-bold text-slate-800 leading-tight">{meta.label}</p>
+          <p className="text-[12px] text-slate-400 leading-tight mt-0.5">Select roadmaps &amp; teams</p>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
         {/* Current sprint */}
         <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5">Current Sprint</p>
+          <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5"><Flag className="size-3" />Current Sprint</p>
           <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3 shadow-sm">
             <span className="relative flex size-2 shrink-0">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
@@ -408,7 +421,7 @@ function SprintChartForm({
                 <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                   <Map className="size-3.5" />
                 </span>
-                <p className="text-[13px] font-bold text-slate-700">Roadmaps</p>
+                <p className="text-[15px] font-bold text-slate-700">Roadmaps</p>
               </div>
               {selectedRoadmapIds.size > 0 && (
                 <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-600">{selectedRoadmapIds.size}</span>
@@ -419,6 +432,7 @@ function SprintChartForm({
               selected={selectedRoadmapIds}
               onToggle={(id) => setSelectedRoadmapIds((prev) => toggle(prev, id))}
               renderLabel={(id) => roadmaps.find((r) => r.id === id)?.name ?? id}
+              renderIcon={(id) => roadmapIconNode(roadmaps.findIndex((r) => r.id === id))}
               placeholder="Search roadmaps…"
             />
           </div>
@@ -432,7 +446,7 @@ function SprintChartForm({
                 <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                   <Users2 className="size-3.5" />
                 </span>
-                <p className="text-[13px] font-bold text-slate-700">Teams</p>
+                <p className="text-[15px] font-bold text-slate-700">Teams</p>
               </div>
               {selectedTeamIds.size > 0 && (
                 <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-600">{selectedTeamIds.size}</span>
