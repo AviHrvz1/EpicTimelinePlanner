@@ -4560,7 +4560,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             >
               <div
                 className={cn(
-                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2",
+                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 ml-0.5",
                   !isResizingPanel && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
