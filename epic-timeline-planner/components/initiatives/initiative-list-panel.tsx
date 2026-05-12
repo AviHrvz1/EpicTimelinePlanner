@@ -2367,7 +2367,7 @@ export function InitiativeListPanel({
 
       <div
         className={cn(
-          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white [direction:rtl] [scrollbar-gutter:stable]",
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white [direction:rtl] [scrollbar-gutter:stable] mr-1.5",
         )}
       >
         <div className="min-h-0 bg-white ps-3 pe-3 [direction:ltr]">

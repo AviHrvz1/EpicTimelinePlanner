@@ -6024,12 +6024,11 @@ export function TimelineGrid({
               >
                 <div
                   className={cn(
-                    "relative",
+                    "relative pb-1",
                     yearRoadmapHScroll ? "w-max max-w-full" : "w-full",
-                    !yearRoadmapHScroll && "overflow-hidden",
                   )}
                 >
-                  <div className="relative z-[1] grid min-w-0 gap-2" style={yearQuarterHeaderGridStyle}>
+                  <div className="relative z-[1] grid min-w-0 gap-2 px-0.5" style={yearQuarterHeaderGridStyle}>
                     {visibleQuarterHeaders.map((quarter) => (
                       <button
                         key={quarter.label}
@@ -6054,9 +6053,8 @@ export function TimelineGrid({
                 </div>
                 <div
                   className={cn(
-                    "relative mb-0",
+                    "relative mb-0 pb-1",
                     yearRoadmapHScroll ? "w-max max-w-full" : "w-full",
-                    !yearRoadmapHScroll && "overflow-hidden",
                   )}
                 >
                   <GanttTodayMarker
@@ -6067,7 +6065,7 @@ export function TimelineGrid({
                     showLine={false}
                   />
                   <div
-                    className={cn("grid min-w-0 gap-2", !yearRoadmapHScroll && "grid-cols-4")}
+                    className={cn("grid min-w-0 gap-2 px-0.5", !yearRoadmapHScroll && "grid-cols-4")}
                     style={yearFullYearMonthStripGridStyle}
                   >
                     {QUARTERS.map((quarter) => (
