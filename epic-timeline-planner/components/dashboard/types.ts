@@ -26,7 +26,7 @@ export type DashboardChartItem = {
   /** JSON-serialised DashboardChartConfig["params"] */
   config: string;
   position: number;
-  colSpan: 1 | 2;
+  colSpan: 1 | 2 | 3;
   rowSpan: number;
   createdAt: string;
 };

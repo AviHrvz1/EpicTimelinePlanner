@@ -293,7 +293,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
 
   function handleToggleSpan(chartId: string) {
     setCharts((prev) =>
-      prev.map((c) => (c.id === chartId ? { ...c, colSpan: c.colSpan === 2 ? 1 : 2 } : c)),
+      prev.map((c) => (c.id === chartId ? { ...c, colSpan: ((c.colSpan ?? 1) % 3) + 1 as 1 | 2 | 3 } : c)),
     );
     setDirty(true);
   }

@@ -182,7 +182,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
       style={style}
       className={cn(
         "group relative flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden",
-        chart.colSpan === 2 ? "col-span-2" : "col-span-1",
+        chart.colSpan === 3 ? "col-span-3" : chart.colSpan === 2 ? "col-span-2" : "col-span-1",
       )}
     >
       {/* Header */}
@@ -241,9 +241,9 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
             <button
               onClick={() => onToggleSpan(chart.id)}
               className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              title={chart.colSpan === 2 ? "Shrink to 1 column" : "Expand to 2 columns"}
+              title={chart.colSpan === 3 ? "Shrink to 1 col" : chart.colSpan === 2 ? "Expand to 3 cols" : "Expand to 2 cols"}
             >
-              {chart.colSpan === 2 ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+              {chart.colSpan === 3 ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
             </button>
             <button
               onClick={() => onEdit(chart)}

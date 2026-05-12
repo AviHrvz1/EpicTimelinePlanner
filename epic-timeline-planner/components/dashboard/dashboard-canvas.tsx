@@ -44,7 +44,7 @@ export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, on
   }
 
   const grid = (
-    <div className="grid auto-rows-auto grid-cols-2 gap-3 p-1">
+    <div className="grid auto-rows-auto grid-cols-3 gap-3 p-1">
       {charts.map((chart) => (
         <DashboardChartCard
           key={chart.id}
