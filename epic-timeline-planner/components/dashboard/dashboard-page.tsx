@@ -40,10 +40,10 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   // Delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // Builder panel resize
-  const [panelWidth, setPanelWidth] = useState(300);
+  const [panelWidth, setPanelWidth] = useState(380);
   const isDraggingPanel = useRef(false);
   const dragStartX = useRef(0);
-  const dragStartWidth = useRef(300);
+  const dragStartWidth = useRef(380);
   // Full cross-roadmap initiative dataset for charts (not filtered to active roadmap)
   const [allInitiatives, setAllInitiatives] = useState<InitiativeItem[]>(passedInitiatives);
 
@@ -352,7 +352,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           <button
             onClick={openSaveModal}
             disabled={saving}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
           >
             <Save className="size-3.5" />
             {saving ? "Saving…" : "Save"}
@@ -428,7 +428,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
               <button
                 onClick={confirmSave}
                 disabled={!saveNameDraft.trim()}
-                className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                className="flex-1 rounded-xl border-0 bg-gradient-to-r from-violet-600 to-indigo-600 py-2.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
               >
                 Save
               </button>
