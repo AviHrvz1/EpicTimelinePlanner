@@ -5108,7 +5108,7 @@ export function TimelineGrid({
                 : cn(
                     "overflow-hidden",
                     monthPlanTab === "epic-gantt" || monthPlanTab === "sprint-retrospective"
-                      ? "min-h-[56rem]"
+                      ? "min-h-[72rem]"
                       : "min-h-0",
                   ),
             )}
@@ -5211,9 +5211,17 @@ export function TimelineGrid({
                   </div>
                 </div>
                 <MonthEpicDropArea month={activeMonth}>
-                  <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
+                  <div className={cn("relative flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4", monthEpicGanttTodayLeft != null && "pt-5 sm:pt-6")}>
+                    {monthEpicGanttTodayLeft != null && (
+                      <div className="pointer-events-none absolute inset-x-3 bottom-0 sm:inset-x-4 overflow-visible" style={{ top: "10px" }}>
+                        <GanttTodayMarker
+                          leftPercent={monthEpicGanttTodayLeft}
+                          showBadge={false}
+                          badgePlacement="above"
+                        />
+                      </div>
+                    )}
                     <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
-                      <YearRoadmapTodayLine leftPercent={monthEpicGanttTodayLeft} />
                       {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
                         <p className="sr-only">
                           No initiatives are planned in {MONTHS[activeMonth - 1]} yet. Plan epics from the initiative list
@@ -5230,7 +5238,7 @@ export function TimelineGrid({
                         columnCount={2}
                         rowGapClass="space-y-2"
                         noScrollbar
-                        minHeightStyle={{ minHeight: "max(100%, calc(100dvh - 34rem))" }}
+                        minHeightStyle={{ minHeight: "max(100%, calc(100dvh - 20rem))" }}
                       >
                         {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
