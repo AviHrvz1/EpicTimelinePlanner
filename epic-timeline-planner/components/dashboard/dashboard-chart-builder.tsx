@@ -152,46 +152,46 @@ function AutocompleteMultiSelect<T extends string>({
     : options;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       {/* Selected chips */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap gap-1 pb-0.5">
+        <div className="flex flex-wrap gap-1.5">
           {[...selected].map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => onToggle(v)}
-              className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-800 hover:bg-indigo-100 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full bg-indigo-600 py-1 pl-3 pr-2 text-[11px] font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
             >
               {renderLabel(v)}
-              <X className="size-2.5 shrink-0" />
+              <X className="size-2.5 shrink-0 opacity-75" />
             </button>
           ))}
         </div>
       )}
       {/* Search input */}
-      <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-200">
-        <svg className="size-3.5 shrink-0 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+        <svg className="size-3.5 shrink-0 text-slate-300" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
         </svg>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder ?? "Search…"}
-          className="flex-1 bg-transparent text-xs text-slate-700 placeholder:text-slate-400 outline-none"
+          className="flex-1 bg-transparent text-[13px] text-slate-700 placeholder:text-slate-400 outline-none"
         />
         {query && (
-          <button type="button" onClick={() => setQuery("")} className="shrink-0 text-slate-300 hover:text-slate-500">
-            <X className="size-3" />
+          <button type="button" onClick={() => setQuery("")} className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors">
+            <X className="size-3.5" />
           </button>
         )}
       </div>
       {/* Filtered options */}
       {filtered.length === 0 ? (
-        <p className="px-1 py-1.5 text-[11px] text-slate-400">No results</p>
+        <p className="px-1 py-2 text-xs text-slate-400">No results</p>
       ) : (
-        <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
-          {filtered.map((opt) => {
+        <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm max-h-44 overflow-y-auto">
+          {filtered.map((opt, i) => {
             const active = selected.has(opt);
             return (
               <button
@@ -199,17 +199,18 @@ function AutocompleteMultiSelect<T extends string>({
                 type="button"
                 onClick={() => onToggle(opt)}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                  "flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[13px] transition-colors",
+                  i > 0 && "border-t border-slate-50",
                   active
-                    ? "border-indigo-300 bg-indigo-50 font-semibold text-indigo-800"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-slate-50",
+                    ? "bg-indigo-50 font-semibold text-indigo-800"
+                    : "text-slate-700 hover:bg-slate-50",
                 )}
               >
                 <span className={cn(
-                  "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
-                  active ? "border-indigo-500 bg-indigo-500" : "border-slate-300 bg-white",
+                  "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-all",
+                  active ? "border-indigo-500 bg-indigo-500 shadow-sm" : "border-slate-200 bg-white",
                 )}>
-                  {active && <Check className="size-2.5 text-white" strokeWidth={3} />}
+                  {active && <Check className="size-2.5 text-white" strokeWidth={3.5} />}
                 </span>
                 <span className="truncate">{renderLabel(opt)}</span>
               </button>
@@ -339,34 +340,43 @@ function SprintChartForm({
   const meta = CHART_META[chartType];
 
   return (
-    <div className="flex h-full flex-col">
-      <div className={cn("flex items-center gap-3 border-b border-slate-200 px-4 py-3", "bg-white")}>
-        <button type="button" onClick={onBack} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+    <div className="flex h-full flex-col bg-slate-50">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+        <button type="button" onClick={onBack} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
           <ChevronLeft className="size-4" />
         </button>
-        <div className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg border", meta.accent)}>
+        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-xl border shadow-sm", meta.accent)}>
           {meta.icon}
         </div>
-        <div>
-          <p className="text-sm font-semibold text-slate-800">{meta.label}</p>
-          <p className="text-[11px] text-slate-400">Current sprint · pick roadmaps &amp; teams</p>
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-slate-800 leading-tight">{meta.label}</p>
+          <p className="text-[11px] text-slate-400 leading-tight mt-0.5">Select roadmaps &amp; teams</p>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-        {/* Current sprint badge */}
+      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+        {/* Current sprint */}
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-400">Sprint (current)</p>
-          <div className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
-            <span className="size-2 rounded-full bg-indigo-400 shrink-0" />
-            <span className="text-xs font-semibold text-indigo-700">{sprintInfo.label}</span>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Current Sprint</p>
+          <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3 shadow-sm">
+            <span className="relative flex size-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+              <span className="relative inline-flex size-2 rounded-full bg-indigo-500" />
+            </span>
+            <span className="text-[13px] font-semibold text-indigo-700 tracking-tight">{sprintInfo.label}</span>
           </div>
         </div>
 
         {/* Roadmaps */}
         {roadmaps.length > 0 && (
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-400">Roadmaps</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Roadmaps</p>
+              {selectedRoadmapIds.size > 0 && (
+                <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">{selectedRoadmapIds.size}</span>
+              )}
+            </div>
             <AutocompleteMultiSelect
               options={roadmaps.map((r) => r.id)}
               selected={selectedRoadmapIds}
@@ -380,7 +390,12 @@ function SprintChartForm({
         {/* Teams */}
         {teamOptions.length > 0 && (
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-400">Teams</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Teams</p>
+              {selectedTeamIds.size > 0 && (
+                <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">{selectedTeamIds.size}</span>
+              )}
+            </div>
             <AutocompleteMultiSelect
               options={teamOptions.map((t) => t.id)}
               selected={selectedTeamIds}
@@ -392,18 +407,21 @@ function SprintChartForm({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3 space-y-2">
+      {/* Footer */}
+      <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 space-y-2">
         <button
           type="button"
           disabled={chartCount === 0}
           onClick={handleAdd}
           className={cn(
-            "w-full rounded-xl py-2.5 text-sm font-semibold transition-colors",
-            chartCount > 0 ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm" : "bg-slate-100 text-slate-400 cursor-not-allowed",
+            "w-full rounded-xl py-3 text-[13px] font-bold tracking-tight transition-all shadow-sm",
+            chartCount > 0
+              ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-500 hover:to-violet-500 shadow-indigo-200"
+              : "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none",
           )}
         >
           {chartCount === 0
-            ? "Select roadmap or team"
+            ? "Select a roadmap or team"
             : isEditing
               ? "Update chart"
               : `Add ${chartCount} chart${chartCount !== 1 ? "s" : ""}`}
@@ -417,7 +435,7 @@ function SprintChartForm({
           <button
             type="button"
             onClick={() => { onCancelEdit?.(); onBack(); }}
-            className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
+            className="w-full rounded-xl border border-slate-200 py-2.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
