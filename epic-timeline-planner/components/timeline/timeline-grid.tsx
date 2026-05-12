@@ -5238,7 +5238,7 @@ export function TimelineGrid({
                         columnCount={2}
                         rowGapClass="space-y-2"
                         noScrollbar
-                        minHeightStyle={{ minHeight: "max(100%, calc(100dvh - 20rem))" }}
+                        minHeightStyle={{ minHeight: "72rem" }}
                       >
                         {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
@@ -5669,10 +5669,7 @@ export function TimelineGrid({
                     badgePlacement="above"
                   />
                   <div
-                    className={cn(
-                      "relative flex min-h-0 w-full basis-0 flex-1 flex-col",
-                      !yearRoadmapHScroll && "overflow-hidden",
-                    )}
+                    className="relative flex min-h-0 w-full basis-0 flex-1 flex-col"
                   >
                   {roadmapBarMode === "initiatives" ? (
                     quarterRoadmapInitiativeRows.length === 0 ? (
@@ -5685,7 +5682,7 @@ export function TimelineGrid({
                           id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                           columnCount={ganttLaneColumnCount}
                           rowGapClass="space-y-2"
-                          noScrollbar
+                          minHeightStyle={{ minHeight: "72rem" }}
                         >
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         </StripedGanttLaneScrollArea>
@@ -5705,7 +5702,7 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={ganttLaneColumnCount}
                         rowGapClass="space-y-2"
-                        noScrollbar
+                        minHeightStyle={{ minHeight: "72rem" }}
                       >
                         {quarterRoadmapInitiativeRows.map((group, idx) => (
                           <div
@@ -5760,7 +5757,7 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={ganttLaneColumnCount}
                         rowGapClass="space-y-0.5"
-                        noScrollbar
+                        minHeightStyle={{ minHeight: "72rem" }}
                       >
                         <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                       </StripedGanttLaneScrollArea>
@@ -5780,7 +5777,7 @@ export function TimelineGrid({
                       id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                       columnCount={ganttLaneColumnCount}
                       rowGapClass="space-y-0.5"
-                      noScrollbar
+                      minHeightStyle={{ minHeight: "72rem" }}
                     >
                       {filteredQuarterRoadmapEpicRows.map((group, idx) => (
                         <div
