@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Plus, Save, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -39,6 +39,11 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const saveNameRef = useRef<HTMLInputElement>(null);
   // Delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Builder panel resize
+  const [panelWidth, setPanelWidth] = useState(300);
+  const isDraggingPanel = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(300);
   // Full cross-roadmap initiative dataset for charts (not filtered to active roadmap)
   const [allInitiatives, setAllInitiatives] = useState<InitiativeItem[]>(passedInitiatives);
 
@@ -230,6 +235,26 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     setDirty(true);
   }
 
+  const startPanelDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingPanel.current = true;
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = panelWidth;
+
+    function onMouseMove(ev: MouseEvent) {
+      if (!isDraggingPanel.current) return;
+      const next = Math.max(200, Math.min(560, dragStartWidth.current + ev.clientX - dragStartX.current));
+      setPanelWidth(next);
+    }
+    function onMouseUp() {
+      isDraggingPanel.current = false;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [panelWidth]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-md ring-1 ring-slate-200/60">
       {/* Top bar */}
@@ -318,7 +343,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
       {/* Main split */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Builder panel */}
-        <div className="flex w-[300px] shrink-0 flex-col border-r border-slate-200 bg-white">
+        <div className="flex shrink-0 flex-col bg-white" style={{ width: panelWidth }}>
           <DashboardChartBuilder
             key={editTarget?.id ?? "new"}
             roadmaps={roadmaps}
@@ -328,6 +353,15 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
             editTarget={editTarget}
             onCancelEdit={() => setEditTarget(null)}
           />
+        </div>
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={startPanelDrag}
+          className="group relative flex w-2 shrink-0 cursor-col-resize items-center justify-center border-r border-slate-200 bg-white hover:bg-indigo-50 transition-colors"
+          title="Drag to resize panel"
+        >
+          <div className="h-8 w-0.5 rounded-full bg-slate-300 group-hover:bg-indigo-400 transition-colors" />
         </div>
 
         {/* Canvas */}
