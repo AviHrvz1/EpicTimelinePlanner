@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, LayoutDashboard, Plus, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, LayoutDashboard, Plus, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
@@ -70,6 +70,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
         const draftId = `draft-${Date.now()}`;
         const draft: DashboardItem = {
           id: draftId,
+          slug: "",
           name: `Dashboard ${list.length + 1}`,
           charts: [],
           createdAt: new Date().toISOString(),
@@ -89,6 +90,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     const list = savedList ?? dashboards;
     const draft: DashboardItem = {
       id: draftId,
+      slug: "",
       name: `Dashboard ${list.filter((d) => !d.id.startsWith("draft-")).length + 1}`,
       charts: [],
       createdAt: new Date().toISOString(),
@@ -108,6 +110,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     const draftId = `draft-${Date.now()}`;
     const draft: DashboardItem = {
       id: draftId,
+      slug: "",
       name: `Dashboard ${dashboards.filter((d) => !d.id.startsWith("draft-")).length + 1}`,
       charts: [],
       createdAt: new Date().toISOString(),
@@ -179,23 +182,24 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
         return;
       }
       setSaveError(null);
-      // Replace draft with saved dashboard, then spawn a fresh blank draft
+      // Replace draft with saved dashboard; select the saved tab; spawn a new blank draft
       setDashboards((prev) => {
         const withoutDraft = prev.filter((d) => d.id !== activeDashboardId);
         const newDraftId = `draft-${Date.now()}`;
         const newDraft: DashboardItem = {
           id: newDraftId,
-          name: `Dashboard ${withoutDraft.length + 1}`,
+          slug: "",
+          name: `Dashboard ${withoutDraft.length + 2}`,
           charts: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
         setTimeout(() => {
-          setActiveDashboardId(newDraftId);
-          setCharts([]);
+          setActiveDashboardId(created.id as string);
+          setCharts((created.charts ?? []) as DashboardChartItem[]);
           setDirty(false);
         }, 0);
-        return [...withoutDraft, created, newDraft];
+        return [...withoutDraft, created as unknown as DashboardItem, newDraft];
       });
     } else {
       await fetch(`/api/dashboard/${activeDashboardId}`, {
@@ -357,6 +361,21 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
 
         {/* Right-side actions */}
         <div className="flex shrink-0 items-center gap-2 self-center mb-0.5">
+          {(() => {
+            const activeSlug = dashboards.find((d) => d.id === activeDashboardId)?.slug;
+            return activeSlug ? (
+              <a
+                href={`/dashboard/${activeSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open full view"
+                className="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+              >
+                <ExternalLink className="size-3.5" />
+                Full view
+              </a>
+            ) : null;
+          })()}
           <button
             onClick={() => setBuilderOpen(true)}
             disabled={builderOpen}

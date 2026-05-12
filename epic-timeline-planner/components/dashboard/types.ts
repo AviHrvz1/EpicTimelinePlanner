@@ -33,6 +33,7 @@ export type DashboardChartItem = {
 
 export type DashboardItem = {
   id: string;
+  slug: string;
   name: string;
   charts: DashboardChartItem[];
   createdAt: string;

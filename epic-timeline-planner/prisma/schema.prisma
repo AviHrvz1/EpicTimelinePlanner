@@ -184,6 +184,7 @@ model StoryDailySnapshot {
 
 model Dashboard {
   id        String           @id @default(uuid())
+  slug      String           @unique @default("")
   name      String
   charts    DashboardChart[]
   createdAt DateTime         @default(now())

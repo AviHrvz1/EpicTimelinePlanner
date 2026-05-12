@@ -21,9 +21,13 @@ export async function POST(req: NextRequest) {
       position: number; colSpan: number; rowSpan: number;
     }> : [];
 
+    const count = await db.dashboard.count();
+    const slug = `DASH-${String(count + 1).padStart(2, "0")}`;
+
     const dashboard = await db.dashboard.create({
       data: {
         name,
+        slug,
         charts: charts.length > 0 ? {
           create: charts.map((c) => ({
             chartType: c.chartType,
