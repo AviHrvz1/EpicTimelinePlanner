@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Trash2, X } from "lucide-react";
+import { Check, LayoutDashboard, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
@@ -39,7 +39,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const saveNameRef = useRef<HTMLInputElement>(null);
   // Delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  // Builder panel resize
+  // Builder panel open/collapsed + resize
+  const [builderOpen, setBuilderOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(380);
   const isDraggingPanel = useRef(false);
   const dragStartX = useRef(0);
@@ -199,6 +200,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
 
     setSaving(false);
     setDirty(false);
+    setBuilderOpen(false);
   }
 
   function handleAddCharts(configs: DashboardChartConfig[]) {
@@ -348,40 +350,55 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           })}
         </div>
 
-        {activeDashboardId && (dirty || activeDashboardId.startsWith("draft-")) && (
+        <div className="flex shrink-0 items-center gap-2">
           <button
-            onClick={openSaveModal}
-            disabled={saving}
-            className="rounded-lg border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
+            onClick={() => setBuilderOpen(true)}
+            disabled={builderOpen}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200/60 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            {saving ? "Saving…" : "Save"}
+            <LayoutDashboard className="size-3.5" />
+            Create Dashboard
           </button>
-        )}
+
+          {activeDashboardId && charts.length > 0 && (dirty || activeDashboardId.startsWith("draft-")) && (
+            <button
+              onClick={openSaveModal}
+              disabled={saving}
+              className="rounded-lg border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main split */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Builder panel */}
-        <div className="flex shrink-0 flex-col bg-white" style={{ width: panelWidth }}>
-          <DashboardChartBuilder
-            key={editTarget?.id ?? "new"}
-            roadmaps={roadmaps}
-            workspaceDirectoryUsers={workspaceDirectoryUsers}
-            context={context}
-            onAddCharts={handleAddCharts}
-            editTarget={editTarget}
-            onCancelEdit={() => setEditTarget(null)}
-          />
-        </div>
+        {/* Builder panel — only mounted/visible when open */}
+        {builderOpen && (
+          <>
+            <div className="flex shrink-0 flex-col bg-white" style={{ width: panelWidth }}>
+              <DashboardChartBuilder
+                key={editTarget?.id ?? "new"}
+                roadmaps={roadmaps}
+                workspaceDirectoryUsers={workspaceDirectoryUsers}
+                context={context}
+                onAddCharts={handleAddCharts}
+                editTarget={editTarget}
+                onCancelEdit={() => setEditTarget(null)}
+              />
+            </div>
 
-        {/* Resize handle */}
-        <div
-          onMouseDown={startPanelDrag}
-          className="group relative flex w-2 shrink-0 cursor-col-resize items-center justify-center border-r border-slate-200 bg-white hover:bg-indigo-50 transition-colors"
-          title="Drag to resize panel"
-        >
-          <div className="h-8 w-0.5 rounded-full bg-slate-300 group-hover:bg-indigo-400 transition-colors" />
-        </div>
+            {/* Resize handle */}
+            <div
+              onMouseDown={startPanelDrag}
+              className="group relative flex w-2 shrink-0 cursor-col-resize items-center justify-center border-r border-slate-200 bg-white hover:bg-indigo-50 transition-colors"
+              title="Drag to resize panel"
+            >
+              <div className="h-8 w-0.5 rounded-full bg-slate-300 group-hover:bg-indigo-400 transition-colors" />
+            </div>
+          </>
+        )}
 
         {/* Canvas */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
