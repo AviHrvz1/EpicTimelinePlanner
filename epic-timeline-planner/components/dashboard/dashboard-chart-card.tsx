@@ -22,6 +22,7 @@ import { DashboardChartItem } from "./types";
 type Props = {
   chart: DashboardChartItem;
   initiatives: InitiativeItem[];
+  isEditMode: boolean;
   onRemove: (id: string) => void;
   onEdit: (chart: DashboardChartItem) => void;
   onToggleSpan: (id: string) => void;
@@ -149,8 +150,8 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, onRemove, onEdit, onToggleSpan, onChangeHeight }: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id });
+export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onChangeHeight }: Props) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
   const minHeight = 260 + (rowSpan - 1) * 220;
 
@@ -172,53 +173,57 @@ export function DashboardChartCard({ chart, initiatives, onRemove, onEdit, onTog
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
-        <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab touch-none text-slate-300 hover:text-slate-500 active:cursor-grabbing"
-        >
-          <GripVertical className="size-4" />
-        </button>
+        {isEditMode && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab touch-none text-slate-300 hover:text-slate-500 active:cursor-grabbing"
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
         <span className="flex-1 truncate text-sm font-semibold text-slate-700">{chart.title}</span>
-        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            onClick={() => onChangeHeight(chart.id, -1)}
-            disabled={rowSpan <= 1}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
-            title="Decrease height"
-          >
-            <ChevronDown className="size-3.5" />
-          </button>
-          <button
-            onClick={() => onChangeHeight(chart.id, 1)}
-            disabled={rowSpan >= 4}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
-            title="Increase height"
-          >
-            <ChevronUp className="size-3.5" />
-          </button>
-          <button
-            onClick={() => onToggleSpan(chart.id)}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            title={chart.colSpan === 2 ? "Shrink to 1 column" : "Expand to 2 columns"}
-          >
-            {chart.colSpan === 2 ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-          </button>
-          <button
-            onClick={() => onEdit(chart)}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-            title="Edit chart"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-          <button
-            onClick={() => onRemove(chart.id)}
-            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
-            title="Remove chart"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
+        {isEditMode && (
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              onClick={() => onChangeHeight(chart.id, -1)}
+              disabled={rowSpan <= 1}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
+              title="Decrease height"
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
+            <button
+              onClick={() => onChangeHeight(chart.id, 1)}
+              disabled={rowSpan >= 4}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed"
+              title="Increase height"
+            >
+              <ChevronUp className="size-3.5" />
+            </button>
+            <button
+              onClick={() => onToggleSpan(chart.id)}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title={chart.colSpan === 2 ? "Shrink to 1 column" : "Expand to 2 columns"}
+            >
+              {chart.colSpan === 2 ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            </button>
+            <button
+              onClick={() => onEdit(chart)}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title="Edit chart"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+            <button
+              onClick={() => onRemove(chart.id)}
+              className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
+              title="Remove chart"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Chart body */}

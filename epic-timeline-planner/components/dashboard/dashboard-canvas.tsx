@@ -11,6 +11,7 @@ import { DashboardChartItem } from "./types";
 type Props = {
   charts: DashboardChartItem[];
   initiatives: InitiativeItem[];
+  isEditMode: boolean;
   onReorder: (next: DashboardChartItem[]) => void;
   onRemove: (id: string) => void;
   onEdit: (chart: DashboardChartItem) => void;
@@ -18,10 +19,11 @@ type Props = {
   onChangeHeight: (id: string, delta: 1 | -1) => void;
 };
 
-export function DashboardCanvas({ charts, initiatives, onReorder, onRemove, onEdit, onToggleSpan, onChangeHeight }: Props) {
+export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onChangeHeight }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function handleDragEnd(event: DragEndEvent) {
+    if (!isEditMode) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = charts.findIndex((c) => c.id === active.id);
@@ -35,27 +37,34 @@ export function DashboardCanvas({ charts, initiatives, onReorder, onRemove, onEd
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
         <LayoutDashboard className="size-10 opacity-25" />
-        <p className="text-sm font-medium">Use the chart builder to add your first chart</p>
+        <p className="text-sm font-medium">{isEditMode ? "Use the chart builder to add your first chart" : "No charts yet — click Edit to add charts"}</p>
       </div>
     );
   }
 
+  const grid = (
+    <div className="grid auto-rows-auto grid-cols-2 gap-3 p-1">
+      {charts.map((chart) => (
+        <DashboardChartCard
+          key={chart.id}
+          chart={chart}
+          initiatives={initiatives}
+          isEditMode={isEditMode}
+          onRemove={onRemove}
+          onEdit={onEdit}
+          onToggleSpan={onToggleSpan}
+          onChangeHeight={onChangeHeight}
+        />
+      ))}
+    </div>
+  );
+
+  if (!isEditMode) return grid;
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={charts.map((c) => c.id)} strategy={rectSortingStrategy}>
-        <div className="grid auto-rows-auto grid-cols-2 gap-3 p-1">
-          {charts.map((chart) => (
-            <DashboardChartCard
-              key={chart.id}
-              chart={chart}
-              initiatives={initiatives}
-              onRemove={onRemove}
-              onEdit={onEdit}
-              onToggleSpan={onToggleSpan}
-              onChangeHeight={onChangeHeight}
-            />
-          ))}
-        </div>
+        {grid}
       </SortableContext>
     </DndContext>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, LayoutDashboard, Plus, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, LayoutDashboard, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
@@ -31,6 +31,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const [charts, setCharts] = useState<DashboardChartItem[]>([]);
   const [context, setContext] = useState<WorkspaceContext | null>(null);
   const [editTarget, setEditTarget] = useState<DashboardChartItem | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -215,8 +216,12 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
         body: JSON.stringify({ name, charts: chartsPayload }),
       });
       setDashboards((prev) => prev.map((d) => d.id === activeDashboardId ? { ...d, name } : d));
-      // Spawn fresh blank draft for next dashboard
-      spawnBlankDraft();
+      setSaving(false);
+      setDirty(false);
+      setIsEditMode(false);
+      setBuilderOpen(false);
+      setEditTarget(null);
+      return;
     }
 
     setSaving(false);
@@ -306,6 +311,9 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     window.addEventListener("mouseup", onMouseUp);
   }, [panelWidth]);
 
+  const isSavedDashboard = !!activeDashboardId && !activeDashboardId.startsWith("draft-");
+  const effectiveEditMode = activeDashboardId?.startsWith("draft-") || isEditMode;
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-md ring-1 ring-slate-200/60">
       {/* Tab bar — browser-style */}
@@ -342,6 +350,9 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                       setCharts(d.charts as DashboardChartItem[]);
                       setConfirmDeleteId(null);
                       setDirty(false);
+                      setIsEditMode(false);
+                      setBuilderOpen(false);
+                      setEditTarget(null);
                     }}
                     className={cn(
                       "group/tab mb-[-1px] inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-t-md border border-b-0 px-4 text-[13px] font-medium leading-none transition-colors",
@@ -376,15 +387,38 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Open full view"
-                className="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+                className="flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold text-white shadow-none transition-all bg-gradient-to-br from-slate-400 to-slate-500 hover:from-slate-500 hover:to-slate-600 [&_svg]:text-white"
               >
                 <ExternalLink className="size-3.5" />
                 Full view
               </a>
             ) : null;
           })()}
+
+          {/* Edit button — only for saved dashboards when not already editing */}
+          {isSavedDashboard && !isEditMode && (
+            <button
+              onClick={() => { setIsEditMode(true); setBuilderOpen(true); }}
+              className="flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold text-white shadow-none transition-all bg-gradient-to-br from-indigo-400 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 [&_svg]:text-white"
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </button>
+          )}
+
+          {/* Done button — exit edit mode on a saved dashboard */}
+          {isSavedDashboard && isEditMode && (
+            <button
+              onClick={() => { setIsEditMode(false); setBuilderOpen(false); setEditTarget(null); }}
+              className="flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold text-white shadow-none transition-all bg-gradient-to-br from-teal-400 to-teal-500 hover:from-teal-500 hover:to-teal-600 [&_svg]:text-white"
+            >
+              <Check className="size-3.5" />
+              Done
+            </button>
+          )}
+
           <button
-            onClick={() => setBuilderOpen(true)}
+            onClick={() => { setBuilderOpen(true); if (isSavedDashboard) setIsEditMode(true); }}
             disabled={builderOpen}
             className={cn(
               "flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold shadow-none transition-all",
@@ -412,8 +446,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
 
       {/* Main split */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Builder panel — only mounted/visible when open */}
-        {builderOpen && (
+        {/* Builder panel — only mounted/visible when open and in edit mode */}
+        {builderOpen && effectiveEditMode && (
           <>
             <div className="flex shrink-0 flex-col bg-white" style={{ width: panelWidth }}>
               <DashboardChartBuilder
@@ -449,6 +483,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
             <DashboardCanvas
               charts={charts}
               initiatives={allInitiatives}
+              isEditMode={!!effectiveEditMode}
               onReorder={handleReorder}
               onRemove={handleRemove}
               onEdit={handleEdit}

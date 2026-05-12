@@ -4486,7 +4486,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         )}
       >
         {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid */}
-        <div className="-mx-2 mb-2 flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
+        <div className="-mx-2 flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
           <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2" />
         </div>
         <div
@@ -4509,7 +4509,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           >
             <div
               className={cn(
-                "absolute top-0 left-0 flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-slate-200/80 bg-white shadow-[2px_0_12px_-2px_rgba(15,23,42,0.14),0_4px_16px_-4px_rgba(15,23,42,0.10)] transition-[width,box-shadow] duration-200 ease-out",
+                "absolute top-0 left-0 flex h-full min-h-0 flex-col overflow-hidden rounded-b-md border-x border-b border-slate-200/80 bg-white [clip-path:inset(0_-40px_-40px_-40px)] shadow-[2px_0_12px_-2px_rgba(15,23,42,0.14),0_4px_16px_-4px_rgba(15,23,42,0.10)] transition-[width,box-shadow] duration-200 ease-out",
                 isModeRailExpanded
                   ? "z-50 w-[244px] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.22)] ring-1 ring-slate-200/70"
                   : "z-30 w-[58px]",
@@ -4539,7 +4539,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           </div>
           <div
             className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col gap-5",
+              "flex min-h-0 min-w-0 flex-1 flex-col gap-5 pt-2",
               topMode === "backlog"
                 ? "h-full min-h-0 overflow-x-hidden overflow-y-hidden"
                 : "overflow-x-hidden overflow-y-visible",
@@ -5508,7 +5508,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               </Button>
               <Button
                 size="sm"
-                className="h-8 px-3 text-xs font-medium bg-slate-900 text-white hover:bg-slate-800"
+                className="h-8 px-3 text-xs font-medium bg-slate-900 text-white hover:bg-[#6878b8]"
                 disabled={isConfirmingDialog}
                 onClick={async () => {
                   setIsConfirmingDialog(true);
