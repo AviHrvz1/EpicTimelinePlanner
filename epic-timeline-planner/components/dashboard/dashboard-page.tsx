@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Save, Trash2, X } from "lucide-react";
+import { Check, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
@@ -352,9 +352,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           <button
             onClick={openSaveModal}
             disabled={saving}
-            className="flex items-center gap-1.5 rounded-lg border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
+            className="rounded-lg border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
           >
-            <Save className="size-3.5" />
             {saving ? "Saving…" : "Save"}
           </button>
         )}
