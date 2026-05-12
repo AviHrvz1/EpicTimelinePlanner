@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Plus, Save, Trash2, X } from "lucide-react";
+import { Check, Save, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
@@ -60,28 +60,53 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     fetch("/api/dashboard/context").then((r) => r.json()).then(setContext).catch(() => null);
   }, []);
 
-  // Load dashboards
+  // Load dashboards, then spawn a blank draft as the active working area
   useEffect(() => {
     fetch("/api/dashboard")
       .then((r) => r.json())
       .then((list: DashboardItem[]) => {
-        setDashboards(list);
-        if (list.length > 0 && !activeDashboardId) {
-          setActiveDashboardId(list[0].id);
-          setCharts(list[0].charts as DashboardChartItem[]);
-        }
+        const draftId = `draft-${Date.now()}`;
+        const draft: DashboardItem = {
+          id: draftId,
+          name: `Dashboard ${list.length + 1}`,
+          charts: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setDashboards([...list, draft]);
+        setActiveDashboardId(draftId);
       })
       .catch(() => null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Spawn a hidden blank draft and make it the active working area.
+  // The draft does not appear as a tab — only saved dashboards show tabs.
+  function spawnBlankDraft(savedList?: DashboardItem[]) {
+    const draftId = `draft-${Date.now()}`;
+    const list = savedList ?? dashboards;
+    const draft: DashboardItem = {
+      id: draftId,
+      name: `Dashboard ${list.filter((d) => !d.id.startsWith("draft-")).length + 1}`,
+      charts: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setDashboards((prev) => {
+      const withoutOldDrafts = prev.filter((d) => !d.id.startsWith("draft-"));
+      return [...withoutOldDrafts, draft];
+    });
+    setActiveDashboardId(draftId);
+    setCharts([]);
+    setDirty(false);
+  }
+
   function ensureDashboard(): string {
     if (activeDashboardId) return activeDashboardId;
-    // No active dashboard — create a local draft
     const draftId = `draft-${Date.now()}`;
     const draft: DashboardItem = {
       id: draftId,
-      name: `Dashboard ${dashboards.length + 1}`,
+      name: `Dashboard ${dashboards.filter((d) => !d.id.startsWith("draft-")).length + 1}`,
       charts: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -91,33 +116,20 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     return draftId;
   }
 
-  function createDraftDashboard() {
-    const draftId = `draft-${Date.now()}`;
-    const draft: DashboardItem = {
-      id: draftId,
-      name: `Dashboard ${dashboards.length + 1}`,
-      charts: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setDashboards((prev) => [...prev, draft]);
-    setActiveDashboardId(draftId);
-    setCharts([]);
-    setDirty(false);
-  }
-
   async function deleteDashboard(id: string) {
-    // Drafts are local-only — no API call needed
     if (!id.startsWith("draft-")) {
       await fetch(`/api/dashboard/${id}`, { method: "DELETE" });
     }
     setDashboards((prev) => prev.filter((d) => d.id !== id));
     setConfirmDeleteId(null);
     if (activeDashboardId === id) {
+      // Switch to the existing draft if there is one, else the first saved dashboard
       const remaining = dashboards.filter((d) => d.id !== id);
-      if (remaining.length > 0) {
-        setActiveDashboardId(remaining[0].id);
-        setCharts(remaining[0].charts as DashboardChartItem[]);
+      const draft = remaining.find((d) => d.id.startsWith("draft-"));
+      const fallback = draft ?? remaining[0];
+      if (fallback) {
+        setActiveDashboardId(fallback.id);
+        setCharts(fallback.charts as DashboardChartItem[]);
       } else {
         setActiveDashboardId(null);
         setCharts([]);
@@ -150,16 +162,30 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     }));
 
     if (activeDashboardId.startsWith("draft-")) {
-      // Create new dashboard in DB with all charts
       const res = await fetch("/api/dashboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, charts: chartsPayload }),
       });
       const created: DashboardItem = await res.json();
-      setDashboards((prev) => prev.map((d) => d.id === activeDashboardId ? created : d));
-      setActiveDashboardId(created.id);
-      setCharts(created.charts as DashboardChartItem[]);
+      // Replace draft with saved dashboard, then spawn a fresh blank draft
+      setDashboards((prev) => {
+        const withoutDraft = prev.filter((d) => d.id !== activeDashboardId);
+        const newDraftId = `draft-${Date.now()}`;
+        const newDraft: DashboardItem = {
+          id: newDraftId,
+          name: `Dashboard ${withoutDraft.length + 1}`,
+          charts: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setTimeout(() => {
+          setActiveDashboardId(newDraftId);
+          setCharts([]);
+          setDirty(false);
+        }, 0);
+        return [...withoutDraft, created, newDraft];
+      });
     } else {
       await fetch(`/api/dashboard/${activeDashboardId}`, {
         method: "PUT",
@@ -167,6 +193,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
         body: JSON.stringify({ name, charts: chartsPayload }),
       });
       setDashboards((prev) => prev.map((d) => d.id === activeDashboardId ? { ...d, name } : d));
+      // Spawn fresh blank draft for next dashboard
+      spawnBlankDraft();
     }
 
     setSaving(false);
@@ -260,10 +288,10 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
       {/* Top bar */}
       <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <div className="flex flex-1 items-center gap-1.5 overflow-x-auto">
-          {dashboards.map((d) => {
+          {/* Only show saved (non-draft) dashboards as tabs */}
+          {dashboards.filter((d) => !d.id.startsWith("draft-")).map((d) => {
             const isActive = d.id === activeDashboardId;
             const isConfirming = confirmDeleteId === d.id;
-            const isDraft = d.id.startsWith("draft-");
             return (
               <div key={d.id} className="group relative shrink-0">
                 {isConfirming ? (
@@ -299,7 +327,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                         : "bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-900 ring-blue-300/75 hover:from-blue-300 hover:via-blue-400 hover:to-blue-400",
                     )}
                   >
-                    {isDraft ? <span className="italic opacity-75">{d.name}</span> : d.name}
+                    {d.name}
                     <span
                       role="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(d.id); }}
@@ -318,17 +346,9 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
               </div>
             );
           })}
-
-          <button
-            onClick={createDraftDashboard}
-            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-2.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:px-3 sm:text-[12px] bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-500 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 hover:text-slate-700"
-          >
-            <Plus className="size-3" />
-            New
-          </button>
         </div>
 
-        {(dirty || activeDashboardId?.startsWith("draft-")) && activeDashboardId && (
+        {activeDashboardId && (dirty || activeDashboardId.startsWith("draft-")) && (
           <button
             onClick={openSaveModal}
             disabled={saving}
