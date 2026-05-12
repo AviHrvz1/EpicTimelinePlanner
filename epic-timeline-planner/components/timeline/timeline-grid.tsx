@@ -5213,7 +5213,7 @@ export function TimelineGrid({
                 <MonthEpicDropArea month={activeMonth}>
                   <div className={cn("relative flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4", monthEpicGanttTodayLeft != null && "pt-5 sm:pt-6")}>
                     {monthEpicGanttTodayLeft != null && (
-                      <div className="pointer-events-none absolute inset-x-3 bottom-0 sm:inset-x-4 overflow-visible" style={{ top: "10px" }}>
+                      <div className="pointer-events-none absolute inset-x-3 bottom-0 sm:inset-x-4 overflow-visible" style={{ top: "1px" }}>
                         <GanttTodayMarker
                           leftPercent={monthEpicGanttTodayLeft}
                           showBadge={false}
