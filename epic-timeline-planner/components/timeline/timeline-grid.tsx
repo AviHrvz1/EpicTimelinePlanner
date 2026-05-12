@@ -126,6 +126,7 @@ function StripedGanttLaneScrollArea({
   columnCount,
   rowGapClass,
   minHeightStyle = { minHeight: "max(100%, calc(100dvh - 26rem))" },
+  noScrollbar = false,
   children,
 }: {
   id?: string;
@@ -133,12 +134,16 @@ function StripedGanttLaneScrollArea({
   rowGapClass: string;
   /** Override when the surrounding chrome differs (e.g. month sprint header). */
   minHeightStyle?: CSSProperties;
+  noScrollbar?: boolean;
   children: ReactNode;
 }) {
   return (
     <div
       id={id}
-      className="relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+      className={cn(
+        "relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+        noScrollbar && "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+      )}
     >
       <div className="relative isolate flex w-full flex-shrink-0 flex-col" style={minHeightStyle}>
         <div className={cn("relative z-[2] shrink-0", rowGapClass)}>{children}</div>
@@ -5224,6 +5229,7 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={2}
                         rowGapClass="space-y-2"
+                        noScrollbar
                         minHeightStyle={{ minHeight: "max(100%, calc(100dvh - 34rem))" }}
                       >
                         {roadmapBarMode === "initiatives" && monthInitiativeGanttRows.length === 0 ? (
@@ -5671,6 +5677,7 @@ export function TimelineGrid({
                           id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                           columnCount={ganttLaneColumnCount}
                           rowGapClass="space-y-2"
+                          noScrollbar
                         >
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         </StripedGanttLaneScrollArea>
@@ -5690,6 +5697,7 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={ganttLaneColumnCount}
                         rowGapClass="space-y-2"
+                        noScrollbar
                       >
                         {quarterRoadmapInitiativeRows.map((group, idx) => (
                           <div
@@ -5744,6 +5752,7 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={ganttLaneColumnCount}
                         rowGapClass="space-y-0.5"
+                        noScrollbar
                       >
                         <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                       </StripedGanttLaneScrollArea>
@@ -5763,6 +5772,7 @@ export function TimelineGrid({
                       id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                       columnCount={ganttLaneColumnCount}
                       rowGapClass="space-y-0.5"
+                      noScrollbar
                     >
                       {filteredQuarterRoadmapEpicRows.map((group, idx) => (
                         <div

@@ -2370,7 +2370,7 @@ export function InitiativeListPanel({
           "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white [direction:rtl] [scrollbar-gutter:stable] mr-1.5 shadow-[inset_-4px_0_8px_-4px_rgba(15,23,42,0.09)] [scrollbar-color:theme(colors.slate.300)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-slate-100 [&::-webkit-scrollbar-thumb]:via-zinc-100 [&::-webkit-scrollbar-thumb]:to-slate-200",
         )}
       >
-        <div className="min-h-0 bg-white ps-3 pe-3 [direction:ltr]">
+        <div className="min-h-0 bg-white ps-5 pe-3 [direction:ltr]">
       {epicPlanPanelMode ? (
         <div className="space-y-2">
           <div className="relative">
