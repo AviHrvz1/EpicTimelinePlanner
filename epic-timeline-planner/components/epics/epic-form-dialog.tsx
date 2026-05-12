@@ -57,6 +57,7 @@ import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/us
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { EpicDeleteDialog } from "@/components/epics/epic-delete-dialog";
 
 function quarterNumFromMonth(month: number): 1 | 2 | 3 | 4 {
   if (month <= 3) return 1;
@@ -200,6 +201,8 @@ export function EpicFormDialog({
   const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(64);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
@@ -687,11 +690,17 @@ export function EpicFormDialog({
     }
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!epic || !onDelete) return;
-    const confirmed = window.confirm("Delete this epic? This will also delete all its user stories.");
-    if (!confirmed) return;
+    setPendingDelete(true);
+  }
+
+  async function confirmDelete() {
+    if (!epic || !onDelete) return;
+    setIsDeleting(true);
     await onDelete(epic.id);
+    setIsDeleting(false);
+    setPendingDelete(false);
     onClose();
   }
 
@@ -981,7 +990,7 @@ export function EpicFormDialog({
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  onClick={() => void handleDelete()}
+                  onClick={handleDelete}
                   aria-label="Delete epic"
                   className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                 >
@@ -1922,6 +1931,14 @@ export function EpicFormDialog({
             document.body,
           )
         : null}
+      {pendingDelete && epic && (
+        <EpicDeleteDialog
+          epic={epic}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setPendingDelete(false)}
+          deleting={isDeleting}
+        />
+      )}
     </div>
   );
 }

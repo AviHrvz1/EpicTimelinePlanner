@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   Search,
   Eraser,
+  Trash2,
   User,
   Users,
   X,
@@ -262,7 +263,7 @@ function IconFilterSelect<T extends string>({
     >
       <summary
         className={cn(
-          "flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[13px] font-semibold text-slate-700 outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
+          "flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[13px] outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
           disabled ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50 focus:ring-2 focus:ring-ring/40",
         )}
         aria-label={ariaLabel}
@@ -280,7 +281,7 @@ function IconFilterSelect<T extends string>({
       >
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0">{selected.icon}</span>
-          <span className="truncate">{selectedLabel}</span>
+          <span className={cn("truncate", isAllSelected ? "font-normal text-slate-400" : "font-semibold text-slate-700")}>{selectedLabel}</span>
         </span>
         <ChevronDown className="size-3.5 shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden />
       </summary>
@@ -407,7 +408,7 @@ function TeamFilterAutocomplete({
           open && "ring-2 ring-ring/40",
         )}
       >
-        <Users className="size-3.5 shrink-0 text-slate-500" />
+        <Users className="size-3.5 shrink-0 text-sky-400" />
         <input
           ref={inputRef}
           type="text"
@@ -1194,6 +1195,14 @@ function InitiativeTreeCard({
                         {initiative.title}
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onDeleteInitiative(initiative.id); }}
+                      className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition-all group-hover/init:opacity-100 hover:bg-red-50 hover:text-red-500"
+                      title="Delete initiative"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
                   </div>
                   {initiative.description ? (
                     <p className="line-clamp-2 text-[13px] leading-5 text-slate-600">{initiative.description}</p>
@@ -1829,7 +1838,7 @@ export function InitiativeListPanel({
   }, [inlineNewEpicOpen]);
 
   const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
-    { value: "all", label: "All quarters", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
+    { value: "all", label: "All Quarters", icon: <CalendarDays className="size-3.5 text-violet-400" /> },
     { value: "Q1", label: "1st Quarter", icon: <QuarterProgressGlyph steps={1} /> },
     { value: "Q2", label: "2nd Quarter", icon: <QuarterProgressGlyph steps={2} /> },
     { value: "Q3", label: "3rd Quarter", icon: <QuarterProgressGlyph steps={3} /> },
@@ -1866,7 +1875,7 @@ export function InitiativeListPanel({
         icon: <span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />,
       }));
     return [
-      { value: "all", label: "All Teams", icon: <Users className="size-3.5 text-slate-500" /> },
+      { value: "all", label: "All Teams", icon: <Users className="size-3.5 text-sky-400" /> },
       ...MONTH_TEAM_COLUMNS.map((team) => ({
         value: team.id,
         label: team.label,
@@ -1889,7 +1898,7 @@ export function InitiativeListPanel({
   const statusFilterOptions: IconFilterOption<
     "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
   >[] = [
-    { value: "all", label: "All Statuses", icon: <ListFilter className="size-3.5 text-slate-500" /> },
+    { value: "all", label: "All Statuses", icon: <ListFilter className="size-3.5 text-emerald-400" /> },
     { value: "Scheduled", label: "Scheduled", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
     { value: "Unscheduled", label: "Unscheduled", icon: <Circle className="size-3.5 text-slate-500" /> },
     { value: "To Do", label: "To Do", icon: <ListTodo className="size-3.5 text-slate-500" /> },

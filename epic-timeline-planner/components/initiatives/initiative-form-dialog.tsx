@@ -24,6 +24,7 @@ import {
   MessageSquare,
   Quote,
   Tag,
+  Trash2,
   Type,
   UserRound,
   Zap,
@@ -84,6 +85,7 @@ type InitiativeFormDialogProps = {
     startMonth: number | null;
     endMonth: number | null;
   }) => Promise<void> | void;
+  onDelete?: (id: string) => void;
   onOpenEpic?: (epicId: string) => void;
   onRequestCreateEpic?: (initiativeId: string) => void;
   onPatchEpic?: (
@@ -112,6 +114,7 @@ export function InitiativeFormDialog({
   onClose,
   onExitComplete,
   onSubmit,
+  onDelete,
   onOpenEpic,
   onRequestCreateEpic,
   onPatchEpic,
@@ -677,6 +680,16 @@ export function InitiativeFormDialog({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              {initiative && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => { onDelete(initiative.id); onClose(); }}
+                  className="flex h-8 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-[13px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </button>
+              )}
               <Button
                 type="button"
                 size="sm"

@@ -77,7 +77,14 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           updatedAt: new Date().toISOString(),
         };
         setDashboards([...list, draft]);
-        setActiveDashboardId(draftId);
+        // Select first saved dashboard if any, otherwise fall back to the blank draft
+        const firstSaved = list[0];
+        if (firstSaved) {
+          setActiveDashboardId(firstSaved.id);
+          setCharts(firstSaved.charts);
+        } else {
+          setActiveDashboardId(draftId);
+        }
       })
       .catch(() => null);
   // eslint-disable-next-line react-hooks/exhaustive-deps

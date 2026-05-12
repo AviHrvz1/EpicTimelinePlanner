@@ -1460,7 +1460,7 @@ function RoadmapSelector({
             onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
             className="h-7 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[11px] font-semibold leading-none text-blue-950 outline-none sm:text-[12px]"
-            style={{ width: `${Math.max(4, Math.min(13, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.38) + 2.5))}rem` }}
+            style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
             aria-label="Select roadmap"
           />
           <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-600/80 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
@@ -1468,7 +1468,7 @@ function RoadmapSelector({
 
         {/* Dropdown */}
         {dropdownOpen && (
-          <div className="absolute top-full left-0 z-50 mt-1 min-w-[14rem] rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+          <div className="absolute top-full left-0 z-50 mt-1 min-w-[22rem] rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
             {/* Create form — always first */}
             <div className="mb-1 border-b border-slate-100 pb-1">
               {!showCreateForm ? (

@@ -12,6 +12,8 @@ import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
+import { EpicDeleteDialog } from "@/components/epics/epic-delete-dialog";
+import { InitiativeDeleteDialog } from "@/components/initiatives/initiative-delete-dialog";
 import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-dialog";
 import { InitiativeListPanel } from "@/components/initiatives/initiative-list-panel";
 import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
@@ -876,6 +878,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     return initialRoadmapId;
   });
   const selectedRoadmap = roadmaps.find((r) => r.id === selectedRoadmapId) ?? roadmaps[0] ?? null;
+
+  // If the client restored a different roadmap from localStorage than the server pre-fetched,
+  // the displayed initiatives belong to the server roadmap — re-fetch the correct ones.
+  useEffect(() => {
+    if (selectedRoadmapId !== initialRoadmapId) {
+      void refresh(year, selectedRoadmapId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [selectedYear, setSelectedYear] = useState(year);
   const [initiativeDialogOpen, setInitiativeDialogOpen] = useState(false);
   const [editingInitiative, setEditingInitiative] = useState<InitiativeItem | undefined>(undefined);
@@ -2488,8 +2500,39 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     };
   }, [initiatives, selectedYear]);
 
-  async function handleDeleteInitiative(id: string) {
-    await fetch(`/api/initiatives/${id}`, { method: "DELETE" });
+  const [deleteInitiativeTarget, setDeleteInitiativeTarget] = useState<InitiativeItem | null>(null);
+  const [deletingInitiative, setDeletingInitiative] = useState(false);
+
+  function requestDeleteInitiative(id: string) {
+    const initiative = initiatives.find((i) => i.id === id);
+    if (initiative) setDeleteInitiativeTarget(initiative);
+  }
+
+  async function confirmDeleteInitiative() {
+    if (!deleteInitiativeTarget) return;
+    setDeletingInitiative(true);
+    await fetch(`/api/initiatives/${deleteInitiativeTarget.id}`, { method: "DELETE" });
+    setDeletingInitiative(false);
+    setDeleteInitiativeTarget(null);
+    await refresh();
+  }
+
+  const [deleteEpicTarget, setDeleteEpicTarget] = useState<EpicItem | null>(null);
+  const [deletingEpic, setDeletingEpic] = useState(false);
+
+  function requestDeleteEpic(id: string) {
+    for (const initiative of initiatives) {
+      const epic = (initiative.epics ?? []).find((e) => e.id === id);
+      if (epic) { setDeleteEpicTarget(epic); return; }
+    }
+  }
+
+  async function confirmDeleteEpic() {
+    if (!deleteEpicTarget) return;
+    setDeletingEpic(true);
+    await fetch(`/api/epics/${deleteEpicTarget.id}`, { method: "DELETE" });
+    setDeletingEpic(false);
+    setDeleteEpicTarget(null);
     await refresh();
   }
 
@@ -2560,10 +2603,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     await refresh();
   }
 
-  async function handleDeleteEpic(epicId: string) {
-    await fetch(`/api/epics/${epicId}`, { method: "DELETE" });
-    await refresh();
-  }
+
 
   async function createEpicQuick(initiativeId: string, title: string) {
     const response = await fetch(`/api/initiatives/${initiativeId}/epics`, {
@@ -4579,8 +4619,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       onOpenStory={(storyId) => {
                         setSelectedStoryId(storyId);
                       }}
-                      onDeleteEpic={handleDeleteEpic}
-                      onDeleteInitiative={handleDeleteInitiative}
+                      onDeleteEpic={requestDeleteEpic}
+                      onDeleteInitiative={requestDeleteInitiative}
                       onCreateEpicQuick={async (initiativeId, title) => {
                         try {
                           await createEpicQuick(initiativeId, title);
@@ -5281,6 +5321,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           setEditingInitiative(undefined);
         }}
         onSubmit={handleUpsertInitiative}
+        onDelete={requestDeleteInitiative}
         surfaceAnchorRef={planningRightSurfaceRef}
         roadmaps={roadmaps}
         selectedRoadmapId={selectedRoadmapId}
@@ -5349,14 +5390,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         }}
         onSubmit={handleUpsertEpic}
         storyRefById={storyRefMaps.byId}
-        onDelete={async (epicId) => {
-          try {
-            await handleDeleteEpic(epicId);
-            toast.success("Epic deleted");
-          } catch {
-            toast.error("Failed to delete epic");
-          }
-        }}
+        onDelete={requestDeleteEpic}
         workspaceDirectoryUsers={workspaceDirectoryUsers}
         surfaceAnchorRef={planningRightSurfaceRef}
         roadmaps={roadmaps}
@@ -5492,6 +5526,22 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           </div>
         </div>
       ) : null}
+      {deleteInitiativeTarget && (
+        <InitiativeDeleteDialog
+          initiative={deleteInitiativeTarget}
+          onConfirm={confirmDeleteInitiative}
+          onCancel={() => setDeleteInitiativeTarget(null)}
+          deleting={deletingInitiative}
+        />
+      )}
+      {deleteEpicTarget && (
+        <EpicDeleteDialog
+          epic={deleteEpicTarget}
+          onConfirm={() => void confirmDeleteEpic()}
+          onCancel={() => setDeleteEpicTarget(null)}
+          deleting={deletingEpic}
+        />
+      )}
       <DebugLogPanel />
     </DragContext>
   );
