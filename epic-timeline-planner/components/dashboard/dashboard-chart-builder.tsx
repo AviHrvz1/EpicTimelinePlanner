@@ -6,10 +6,16 @@ import {
   Bot,
   Check,
   ChevronLeft,
+  Map,
+  Monitor,
   PieChart,
   RotateCcw,
+  Server,
+  Smartphone,
   TrendingDown,
+  TrendingUp,
   Users,
+  Users2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +26,29 @@ import type { RoadmapItem } from "@/lib/types";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { capacityPlanTeamCatalogFromDirectory } from "@/lib/workspace-users";
 import type { ChartType, DashboardChartConfig, DashboardChartItem, LLMChartProposal, LLMQuestion } from "./types";
+
+// ─── Team icon / color map ────────────────────────────────────────────────────
+
+const TEAM_META: Record<string, { icon: React.ReactNode; dot: string }> = {
+  platform:   { icon: <Server    className="size-3.5" />, dot: "bg-sky-400"     },
+  experience: { icon: <Monitor   className="size-3.5" />, dot: "bg-violet-400"  },
+  data:       { icon: <BarChart2 className="size-3.5" />, dot: "bg-amber-400"   },
+  mobile:     { icon: <Smartphone className="size-3.5" />, dot: "bg-emerald-400" },
+  growth:     { icon: <TrendingUp className="size-3.5" />, dot: "bg-rose-400"    },
+};
+
+function teamIconNode(teamId: string): React.ReactNode {
+  const meta = TEAM_META[teamId];
+  if (!meta) return <span className="size-2 rounded-full bg-slate-300 shrink-0" />;
+  return (
+    <span className={cn(
+      "flex size-5 shrink-0 items-center justify-center rounded-md text-white",
+      meta.dot.replace("bg-", "bg-").replace("-400", "-500"),
+    )}>
+      {meta.icon}
+    </span>
+  );
+}
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -138,12 +167,14 @@ function AutocompleteMultiSelect<T extends string>({
   selected,
   onToggle,
   renderLabel,
+  renderIcon,
   placeholder,
 }: {
   options: T[];
   selected: Set<T>;
   onToggle: (v: T) => void;
   renderLabel: (v: T) => string;
+  renderIcon?: (v: T) => React.ReactNode;
   placeholder?: string;
 }) {
   const [query, setQuery] = useState("");
@@ -212,6 +243,7 @@ function AutocompleteMultiSelect<T extends string>({
                 )}>
                   {active && <Check className="size-2.5 text-white" strokeWidth={3.5} />}
                 </span>
+                {renderIcon && renderIcon(opt)}
                 <span className="truncate">{renderLabel(opt)}</span>
               </button>
             );
@@ -358,7 +390,7 @@ function SprintChartForm({
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
         {/* Current sprint */}
         <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Current Sprint</p>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5">Current Sprint</p>
           <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3 shadow-sm">
             <span className="relative flex size-2 shrink-0">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
@@ -371,10 +403,15 @@ function SprintChartForm({
         {/* Roadmaps */}
         {roadmaps.length > 0 && (
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Roadmaps</p>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  <Map className="size-3.5" />
+                </span>
+                <p className="text-[13px] font-bold text-slate-700">Roadmaps</p>
+              </div>
               {selectedRoadmapIds.size > 0 && (
-                <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">{selectedRoadmapIds.size}</span>
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-600">{selectedRoadmapIds.size}</span>
               )}
             </div>
             <AutocompleteMultiSelect
@@ -390,10 +427,15 @@ function SprintChartForm({
         {/* Teams */}
         {teamOptions.length > 0 && (
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Teams</p>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  <Users2 className="size-3.5" />
+                </span>
+                <p className="text-[13px] font-bold text-slate-700">Teams</p>
+              </div>
               {selectedTeamIds.size > 0 && (
-                <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">{selectedTeamIds.size}</span>
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-600">{selectedTeamIds.size}</span>
               )}
             </div>
             <AutocompleteMultiSelect
@@ -401,6 +443,7 @@ function SprintChartForm({
               selected={selectedTeamIds}
               onToggle={(id) => setSelectedTeamIds((prev) => toggle(prev, id))}
               renderLabel={(id) => teamOptions.find((t) => t.id === id)?.label ?? id}
+              renderIcon={(id) => teamIconNode(id)}
               placeholder="Search teams…"
             />
           </div>
