@@ -115,7 +115,7 @@ function GanttLaneSprintBackdrop({ columnCount, className }: { columnCount: numb
   );
 }
 
-/** Faint horizontal rules in the roadmap lane “tail” (empty space below the last row). */
+/** Faint horizontal rules in the roadmap lane "tail" (empty space below the last row). */
 function StripedGanttHorizontalGuides() {
   return null;
 }
@@ -193,16 +193,27 @@ function yearRoadmapGanttMinWidthPx(columnCount: number, minSprintPx: number = Y
   return columnCount * minSprintPx + Math.max(0, columnCount - 1) * YEAR_ROADMAP_GANTT_GAP_PX;
 }
 
-/** Full-year / all-quarters Gantt: vertical “today” line with a down-pointing triangle at the top. */
+/** Full-year / all-quarters Gantt: vertical "today" line with triangles at top and bottom. */
 function YearRoadmapTodayLine({ leftPercent }: { leftPercent: number | null }) {
   if (leftPercent == null || Number.isNaN(leftPercent)) return null;
   const x = Math.min(100, Math.max(0, leftPercent));
   return (
     <div
-      className="pointer-events-none absolute inset-y-0 z-[5] w-px -translate-x-1/2 bg-emerald-500/95"
+      className="pointer-events-none absolute inset-y-0 z-10 overflow-visible"
       style={{ left: `${x}%` }}
       aria-hidden
-    />
+    >
+      {/* vertical line */}
+      <div
+        className="absolute w-px -translate-x-1/2 bg-emerald-500/85"
+        style={{ left: 0, top: 0, bottom: 0 }}
+      />
+      {/* up-pointing triangle at bottom */}
+      <div
+        className="absolute h-[10px] w-[12px] -translate-x-1/2 bg-emerald-500"
+        style={{ left: 0, bottom: 0, clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)" }}
+      />
+    </div>
   );
 }
 
@@ -400,7 +411,7 @@ function epicPlanOverlapsMonth(epic: EpicItem, month: number): boolean {
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
 }
 
-/** Epic is scheduled on the Gantt (matches “Scheduled” quick-filter semantics). */
+/** Epic is scheduled on the Gantt (matches "Scheduled" quick-filter semantics). */
 function epicIsScheduledOnGantt(epic: EpicItem): boolean {
   return epic.planSprint != null && epic.planStartMonth != null && epic.planEndMonth != null;
 }
@@ -513,12 +524,12 @@ function todayLeftPercentInSingleMonth(planYear: number, month: number): number 
   return ((t.getDate() - 0.5) / dim) * 100;
 }
 
-/** Full-year / all-quarters roadmap: compact “S” + global sprint number. */
+/** Full-year / all-quarters roadmap: compact "S" + global sprint number. */
 function sprintLabelYearRoadmap(globalSprint: number): string {
   return `S${globalSprint}`;
 }
 
-/** Quarter or month drill-in views: full word “Sprint”. */
+/** Quarter or month drill-in views: full word "Sprint". */
 function sprintLabelQuarterOrMonth(globalSprint: number): string {
   return `Sprint ${globalSprint}`;
 }
@@ -547,7 +558,7 @@ function estimatePanelAssigneeLabel(value: string | null | undefined): string {
 
 type TodayBadgePlacement = "above" | "inside";
 
-/** “Today” badge + vertical dashed marker, always aligned (same parent coordinate space). */
+/** "Today" badge + vertical dashed marker, always aligned (same parent coordinate space). */
 function GanttTodayMarker({
   leftPercent,
   showBadge = true,
@@ -605,7 +616,7 @@ function GanttTodayMarker({
     <div
       className={cn(
         "pointer-events-none absolute inset-x-0 overflow-visible [isolation:isolate]",
-        prioritizeLabel ? "z-30" : "z-0",
+        prioritizeLabel ? "z-30" : "z-10",
         bleedToPaddedPanel ? "-top-12 -bottom-3 sm:-top-13 sm:-bottom-4" : "inset-y-0",
       )}
       aria-hidden
@@ -652,8 +663,18 @@ function GanttTodayMarker({
       ) : null}
       {showLine ? (
         <div
-          className="absolute bottom-0 w-px -translate-x-1/2 bg-emerald-500/85"
-          style={{ left: `${x}%`, top: `calc(${arrowTopY}% + 10px)` }}
+          className="absolute w-px -translate-x-1/2 bg-emerald-500/85"
+          style={{ left: `${x}%`, top: `calc(${arrowTopY}% + 10px)`, bottom: "0px" }}
+        />
+      ) : null}
+      {showArrow ? (
+        <div
+          className="absolute h-[10px] w-[12px] -translate-x-1/2 bg-emerald-500"
+          style={{
+            left: `${x}%`,
+            bottom: 0,
+            clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)",
+          }}
         />
       ) : null}
     </div>
@@ -1156,13 +1177,13 @@ type TimelineGridProps = {
   ganttEmphasis?: { initiativeId: string; tick: number } | null;
   /** Pulse an epic bar after it is dropped onto the month plan from the left panel. */
   ganttEpicEmphasis?: { epicId: string; tick: number } | null;
-  /** Pulse all Gantt-scheduled epic bars when the “Scheduled” summary filter is turned on. */
+  /** Pulse all Gantt-scheduled epic bars when the "Scheduled" summary filter is turned on. */
   ganttScheduledFilterEmphasis?: { tick: number } | null;
   /** Pulse all sprint-kanban user story cards for an expanded epic accordion. */
   sprintEpicAccordionEmphasis?: { epicId: string; tick: number } | null;
-  /** Pulse Kanban cards for stories on the active sprint when “Scheduled” filter is turned on (sprint board). */
+  /** Pulse Kanban cards for stories on the active sprint when "Scheduled" filter is turned on (sprint board). */
   sprintKanbanScheduledStoriesEmphasis?: { tick: number } | null;
-  /** Toggled by the Roadmap header “Progress” chip; shows Gantt bar progress rows and left-panel story progress. */
+  /** Toggled by the Roadmap header "Progress" chip; shows Gantt bar progress rows and left-panel story progress. */
   showRoadmapProgress: boolean;
   onShowRoadmapProgressChange: (next: boolean) => void;
   /** Pre-selected epic in the insights scope picker (from URL on first load). */
@@ -5213,7 +5234,7 @@ export function TimelineGrid({
                 <MonthEpicDropArea month={activeMonth}>
                   <div className={cn("relative flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4", monthEpicGanttTodayLeft != null && "pt-5 sm:pt-6")}>
                     {monthEpicGanttTodayLeft != null && (
-                      <div className="pointer-events-none absolute inset-x-3 bottom-0 sm:inset-x-4 overflow-visible" style={{ top: "1px" }}>
+                      <div className="pointer-events-none absolute inset-x-3 sm:inset-x-4 overflow-visible" style={{ top: "1px", height: "calc(100svh - 18rem)" }}>
                         <GanttTodayMarker
                           leftPercent={monthEpicGanttTodayLeft}
                           showBadge={false}

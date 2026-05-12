@@ -4560,7 +4560,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             >
               <div
                 className={cn(
-                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 ml-0.5 shadow-xl",
+                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-0.5 shadow-xl",
                   !isResizingPanel && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
@@ -4719,6 +4719,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     <polygon points="0,0 14,0 7,10" fill="white" />
                     <path d="M0,0 L7,10 L14,0" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
                   </svg>
+                  {/* Upward triangle tip at bottom of separator */}
+                  <svg
+                    className="pointer-events-none absolute bottom-0 left-[65%] z-20 -translate-x-1/2 drop-shadow-sm"
+                    width="14"
+                    height="10"
+                    viewBox="0 0 14 10"
+                    aria-hidden
+                  >
+                    <polygon points="0,10 14,10 7,0" fill="white" />
+                    <path d="M0,10 L7,0 L14,10" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+                  </svg>
                   {/* Drag pill */}
                   <div
                     className="pointer-events-none absolute left-[65%] top-1/2 z-40 -translate-x-1/2 -translate-y-1/2 flex h-10 w-[7px] flex-col items-center justify-center gap-[3px] rounded-full bg-white shadow-[0_1px_4px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/80 transition-all duration-150 group-hover:shadow-[0_2px_8px_rgba(15,23,42,0.16)] group-hover:ring-slate-300 group-active:bg-slate-50"
@@ -4732,7 +4743,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               )}
               <div
                 ref={planningRightSurfaceRef}
-                className="mt-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-xl"
+                className="mt-2 mb-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-xl"
               >
                 <TimelineGrid
                 initiatives={initiatives}

@@ -2315,8 +2315,8 @@ export function InitiativeListPanel({
   }, [inlineNewEpicInitiativeId, inlineNewEpicTitle, onCreateEpicQuick]);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-7 pb-4 pl-0 pr-4 shadow-xl ring-1 ring-black/8">
-      <div className="z-10 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-4 pb-5">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white pt-10 pb-4 pl-0 pr-4 shadow-xl ring-1 ring-black/8">
+      <div className="z-10 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-4 pb-2">
         <div className="min-w-0 pl-5">
           <h2 className="inline-flex items-center gap-2 text-[20px] font-semibold leading-tight tracking-[-0.02em] text-slate-800">
             {epicPlanPanelMode ? (
@@ -2372,7 +2372,8 @@ export function InitiativeListPanel({
       >
         <div className="min-h-0 bg-white ps-5 pe-3 [direction:ltr]">
       {epicPlanPanelMode ? (
-        <div className="space-y-2">
+        <div className="pt-5 pb-4">
+          <div className="pb-5">
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 z-10 size-4.5 -translate-y-1/2 text-slate-400"
@@ -2422,7 +2423,7 @@ export function InitiativeListPanel({
               </div>
             ) : null}
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             {activeMonth != null ? (
               <IconFilterSelect
                 values={["current"]}
@@ -2471,6 +2472,7 @@ export function InitiativeListPanel({
             >
               <Eraser className="size-4" aria-hidden />
             </button>
+          </div>
           </div>
           {inlineNewEpicOpen && onCreateEpicQuick && (initiativePickerOptions.length > 0 || onCreateInitiativeQuick) ? (
             <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white to-violet-50/35 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/50">
