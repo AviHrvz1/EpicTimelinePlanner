@@ -1444,7 +1444,7 @@ function RoadmapSelector({
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
         <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
-          <MapIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+          <MapIcon className="size-3 shrink-0 opacity-35 sm:size-3.5" aria-hidden />
           Roadmap
         </span>
         <div className="relative flex items-center">
@@ -2381,7 +2381,7 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex h-7 max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:gap-1.5 sm:px-2.5 sm:text-[12px] lg:px-3";
+    "inline-flex h-8 max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-semibold leading-none tracking-wide ring-1 transition sm:gap-1.5 sm:px-3 sm:text-[13.5px] lg:px-3.5 [&_svg]:opacity-35";
   const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-50 via-violet-100 to-violet-100 text-violet-950 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
   const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-100 via-violet-200 to-violet-200 text-violet-950 ring-violet-300/75 shadow-sm hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50`;
   const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-100 text-orange-950 ring-orange-200/75 hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40`;

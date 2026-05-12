@@ -4560,7 +4560,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             >
               <div
                 className={cn(
-                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 ml-0.5",
+                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 ml-0.5 shadow-xl",
                   !isResizingPanel && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
@@ -4732,7 +4732,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               )}
               <div
                 ref={planningRightSurfaceRef}
-                className="mt-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl"
+                className="mt-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-xl"
               >
                 <TimelineGrid
                 initiatives={initiatives}
