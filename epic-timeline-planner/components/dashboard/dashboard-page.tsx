@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, LayoutDashboard, Trash2, X } from "lucide-react";
+import { Check, LayoutDashboard, Plus, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
@@ -287,28 +287,28 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-md ring-1 ring-slate-200/60">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
-        <div className="flex flex-1 items-center gap-1.5 overflow-x-auto">
-          {/* Only show saved (non-draft) dashboards as tabs */}
+      {/* Tab bar — browser-style */}
+      <div className="flex items-end gap-0 border-b border-slate-200 bg-slate-50 pl-3 pr-4 pt-2">
+        {/* Tabs */}
+        <div className="flex flex-1 items-end gap-0 overflow-x-auto">
           {dashboards.filter((d) => !d.id.startsWith("draft-")).map((d) => {
             const isActive = d.id === activeDashboardId;
             const isConfirming = confirmDeleteId === d.id;
             return (
               <div key={d.id} className="group relative shrink-0">
                 {isConfirming ? (
-                  <div className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-2.5 text-[11.5px] font-semibold text-red-700 ring-1 ring-red-200 sm:px-3 sm:text-[12px]">
+                  <div className="mb-[-1px] inline-flex h-9 items-center gap-1.5 rounded-t-md border border-b-0 border-red-300 bg-red-50 px-3 text-[12px] font-semibold text-red-700">
                     <span className="whitespace-nowrap">Delete "{d.name}"?</span>
                     <button
                       onClick={() => deleteDashboard(d.id)}
-                      className="ml-0.5 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600 transition-colors"
+                      className="rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600 transition-colors"
                       title="Confirm delete"
                     >
                       <Check className="size-2.5" strokeWidth={3} />
                     </button>
                     <button
                       onClick={() => setConfirmDeleteId(null)}
-                      className="rounded-full p-0.5 text-red-400 hover:text-red-600 transition-colors"
+                      className="rounded p-0.5 text-red-400 hover:text-red-600 transition-colors"
                       title="Cancel"
                     >
                       <X className="size-2.5" strokeWidth={3} />
@@ -323,25 +323,20 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                       setDirty(false);
                     }}
                     className={cn(
-                      "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full border-0 pl-2.5 pr-1.5 text-[11.5px] font-semibold leading-none tracking-wide ring-1 transition sm:pl-3 sm:text-[12px]",
+                      "group/tab mb-[-1px] inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-t-md border border-b-0 px-4 text-[13px] font-medium leading-none transition-colors",
                       isActive
-                        ? "bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600 text-white ring-blue-500/75 shadow-sm"
-                        : "bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-900 ring-blue-300/75 hover:from-blue-300 hover:via-blue-400 hover:to-blue-400",
+                        ? "border-slate-200 bg-white text-slate-800 shadow-[0_-1px_0_0_white]"
+                        : "border-transparent bg-transparent text-slate-500 hover:bg-white/60 hover:text-slate-700",
                     )}
                   >
                     {d.name}
                     <span
                       role="button"
                       onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(d.id); }}
-                      className={cn(
-                        "ml-0.5 rounded-full p-0.5 transition-all",
-                        isActive
-                          ? "text-blue-200 opacity-0 group-hover:opacity-100 hover:bg-blue-700/40 hover:text-white"
-                          : "text-blue-600/50 opacity-0 group-hover:opacity-100 hover:bg-blue-200 hover:text-blue-800",
-                      )}
+                      className="ml-0.5 rounded p-0.5 text-slate-300 opacity-0 transition-all group-hover/tab:opacity-100 hover:bg-slate-100 hover:text-slate-500"
                       title="Delete dashboard"
                     >
-                      <Trash2 className="size-2.5" />
+                      <X className="size-3" />
                     </span>
                   </button>
                 )}
@@ -350,21 +345,28 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           })}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        {/* Right-side actions — sit on the tab bar baseline */}
+        <div className="flex shrink-0 items-center gap-2 pb-1.5">
           <button
             onClick={() => setBuilderOpen(true)}
             disabled={builderOpen}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200/60 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            className={cn(
+              "flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold shadow-none transition-all",
+              "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white",
+              "hover:from-sky-500 hover:via-blue-600 hover:to-sky-600",
+              "disabled:opacity-40 disabled:cursor-not-allowed",
+              "[&_svg]:text-white",
+            )}
           >
-            <LayoutDashboard className="size-3.5" />
-            Create Dashboard
+            <Plus className="size-3.5" />
+            Dashboard
           </button>
 
           {activeDashboardId && charts.length > 0 && (dirty || activeDashboardId.startsWith("draft-")) && (
             <button
               onClick={openSaveModal}
               disabled={saving}
-              className="rounded-lg border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
+              className="h-8 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
             >
               {saving ? "Saving…" : "Save"}
             </button>
