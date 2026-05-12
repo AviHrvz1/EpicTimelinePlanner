@@ -2372,7 +2372,7 @@ export function InitiativeListPanel({
       >
         <div className="min-h-0 bg-white ps-5 pe-3 [direction:ltr]">
       {epicPlanPanelMode ? (
-        <div className="pt-5 pb-4">
+        <div className="pt-1 pb-4">
           <div className="pb-5">
           <div className="relative">
             <Search
@@ -2672,7 +2672,8 @@ export function InitiativeListPanel({
           </div>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="pt-1 pb-4">
+          <div className="pb-5">
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 z-10 size-4.5 -translate-y-1/2 text-slate-400"
@@ -2722,7 +2723,7 @@ export function InitiativeListPanel({
               </div>
             ) : null}
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
             <IconFilterSelect
               values={panelQuarterFilters}
               onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
@@ -2760,6 +2761,7 @@ export function InitiativeListPanel({
             >
               <Eraser className="size-4" aria-hidden />
             </button>
+          </div>
           </div>
           {inlineNewInitiativeOpen && onCreateInitiativeQuick ? (
             <div className="overflow-hidden rounded-xl border border-sky-200/80 bg-gradient-to-br from-sky-50/95 via-white to-white shadow-[0_2px_8px_rgba(14,165,233,0.12)] ring-1 ring-sky-100/60">
