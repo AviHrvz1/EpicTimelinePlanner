@@ -1464,8 +1464,8 @@ function RoadmapSelector({
     <div className="inline-flex h-7 shrink-0 items-stretch overflow-visible rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 ring-1 ring-blue-200/75 select-none">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
-        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[10px] font-semibold tracking-[0.05em] uppercase text-blue-950 sm:px-2 sm:text-[11px]">
-          <MapIcon className="size-3 shrink-0 opacity-35 sm:size-3.5" aria-hidden />
+        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[13.5px] font-semibold tracking-[0.01em] text-blue-950 sm:px-2">
+          <MapIcon className="size-3.5 shrink-0 opacity-35" aria-hidden />
           Roadmap
         </span>
         <div className="relative flex items-center">
@@ -1478,7 +1478,7 @@ function RoadmapSelector({
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
             onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-7 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[11px] font-semibold leading-none text-blue-950 outline-none sm:text-[12px]"
+            className="h-7 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[13.5px] font-semibold leading-none text-blue-950 outline-none"
             style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
             aria-label="Select roadmap"
           />
