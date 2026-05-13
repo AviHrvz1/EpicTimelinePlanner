@@ -3957,7 +3957,7 @@ export function TimelineGrid({
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (
           <div
             className={cn(
-              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
+              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-white pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
               !yearRoadmapHScroll && "overflow-x-hidden",
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
@@ -4025,7 +4025,7 @@ export function TimelineGrid({
         ) : (
           <div
             className={cn(
-              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-slate-50/35 pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
+              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-white pl-2 pr-1 pb-3 ring-1 ring-slate-100/80 sm:pl-2 sm:pr-1 sm:pb-4",
               !yearRoadmapHScroll && "overflow-x-hidden",
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}

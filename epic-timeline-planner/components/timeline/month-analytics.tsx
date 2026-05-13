@@ -1885,7 +1885,13 @@ export function MonthAnalytics({
     "absolute -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
 
   return (
-    <section className="mb-2 flex flex-col gap-3.5">
+    <section
+      className="mb-2 flex flex-col gap-3.5 rounded-xl p-4"
+      style={{
+        backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
+        backgroundSize: "24px 24px",
+      }}
+    >
       <div className="-mt-1 rounded-xl bg-slate-100/70 px-4 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
@@ -2007,7 +2013,7 @@ export function MonthAnalytics({
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
@@ -2280,7 +2286,7 @@ export function MonthAnalytics({
         )}
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
@@ -2517,7 +2523,7 @@ export function MonthAnalytics({
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
         <div className={cn("flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW, isMultiPeriodInsights ? "mb-3" : "mb-2")}>
           <h3
             className={cn(
@@ -2814,7 +2820,7 @@ export function MonthAnalytics({
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
@@ -2983,7 +2989,7 @@ export function MonthAnalytics({
                 }));
             if (loadRows.length === 0 && !monthLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
-              <div className="flex min-h-0 flex-col lg:col-span-1">
+              <div className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
                 <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
                   <h3 className={cn("inline-flex items-center gap-1.5 font-semibold text-slate-800", isMultiPeriodInsights ? "text-[16px]" : "text-[15px]")}>
                     <Users className="size-4 text-slate-600" />
@@ -3137,7 +3143,7 @@ export function MonthAnalytics({
           })()}
 
           {/* Burn Up chart + right-side epic legend */}
-          <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full">
+          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
             <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
               <h3
                 className={cn(

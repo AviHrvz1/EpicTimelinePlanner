@@ -422,9 +422,15 @@ export function SprintAnalytics({
     "flex items-center justify-between rounded-md px-1 py-1 text-left text-[13px] font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-700";
 
   return (
-    <section className="mb-2 flex flex-col gap-4">
+    <section
+      className="mb-2 flex flex-col gap-4 rounded-xl p-4"
+      style={{
+        backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
+        backgroundSize: "24px 24px",
+      }}
+    >
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <PieChartIcon className="size-4 text-slate-600" />
@@ -596,7 +602,7 @@ export function SprintAnalytics({
         )}
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:h-full lg:pl-4">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
         <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
           <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
@@ -721,7 +727,7 @@ export function SprintAnalytics({
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
         <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <ChartNoAxesCombined className="size-4 text-slate-600" />
@@ -886,7 +892,7 @@ export function SprintAnalytics({
         ) : null}
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:pl-4">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:pl-4">
         <h3 className="mb-2.5 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative Flow
@@ -1066,7 +1072,7 @@ export function SprintAnalytics({
                 }));
             if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
-              <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-1">
+              <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
                 <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
                   <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                     <Users className="size-4 text-slate-600" />
@@ -1189,7 +1195,7 @@ export function SprintAnalytics({
           })()}
 
           {/* Burn Up — right col */}
-          <article className="flex min-h-0 min-w-0 flex-col p-1 lg:col-span-2 lg:pl-4">
+          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:pl-4">
             <div className="mb-2 flex shrink-0 items-center gap-2">
               <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                 <Activity className="size-4 text-slate-600" />
