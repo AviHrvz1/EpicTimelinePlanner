@@ -4499,9 +4499,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-2",
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-white",
           topMode === "roadmap" &&
-            "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-gray-100 via-slate-50 to-zinc-100",
+            "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "backlog" &&
-            "overflow-hidden bg-gradient-to-br from-gray-100 via-slate-50 to-zinc-100",
+            "overflow-hidden bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
         )}
       >
         {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid */}
