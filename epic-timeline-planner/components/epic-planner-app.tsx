@@ -4491,12 +4491,44 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     </aside>
   );
 
+  const rightEdgeSeparator = (
+    <div
+      className="pointer-events-none relative flex h-full min-h-0 w-6 shrink-0 items-center justify-center self-stretch"
+      aria-hidden
+    >
+      <div
+        className="pointer-events-none absolute inset-y-0 left-[21px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]"
+        aria-hidden
+      />
+      <svg
+        className="pointer-events-none absolute top-0 left-[21px] z-20 -translate-x-1/2 drop-shadow-sm"
+        width="22"
+        height="16"
+        viewBox="0 0 22 16"
+        aria-hidden
+      >
+        <polygon points="0,0 22,0 11,16" fill="white" />
+        <path d="M0,0 L11,16 L22,0" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+      </svg>
+      <svg
+        className="pointer-events-none absolute bottom-0 left-[21px] z-20 -translate-x-1/2 drop-shadow-sm"
+        width="22"
+        height="16"
+        viewBox="0 0 22 16"
+        aria-hidden
+      >
+        <polygon points="0,16 22,16 11,0" fill="white" />
+        <path d="M0,16 L11,0 L22,16" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+
   return (
     <DragContext onDragEnd={onDragEnd}>
       <main
         className={cn(
           "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-5",
-          topMode === "users" && "overflow-x-hidden overflow-y-auto bg-white",
+          topMode === "users" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "roadmap" &&
             "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "backlog" &&
@@ -4504,7 +4536,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         )}
       >
         {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid */}
-        <div className="-mr-2 flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
+        <div className="-mr-[5px] flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
           <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
         </div>
         <div
@@ -4558,7 +4590,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           <div
             className={cn(
               "flex min-h-0 min-w-0 flex-1 flex-col gap-5",
-              topMode !== "roadmap" && "pt-2",
+              topMode === "dashboard" && "pt-2",
               topMode === "backlog"
                 ? "h-full min-h-0 overflow-x-hidden overflow-y-hidden"
                 : "overflow-x-hidden overflow-y-visible",
@@ -4573,7 +4605,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 isResizingPanel && "select-none",
               )}
               style={{
-                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 16px" : "auto 20px minmax(0, 1fr) 16px",
+                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 24px" : "auto 20px minmax(0, 1fr) 24px",
               }}
             >
               <div
@@ -4723,30 +4755,30 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 >
                   {/* Separator line — always visible, centered */}
                   <div
-                    className="pointer-events-none absolute inset-y-0 left-[65%] z-30 w-[3px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)] transition-all duration-150 group-hover:shadow-[0_0_0_1px_rgba(15,23,42,0.18)]"
+                    className="pointer-events-none absolute inset-y-0 left-[65%] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)] transition-all duration-150 group-hover:shadow-[0_0_0_1px_rgba(15,23,42,0.18)]"
                     aria-hidden
                   />
                   {/* Downward triangle tip at top of separator */}
                   <svg
                     className="pointer-events-none absolute top-0 left-[65%] z-20 -translate-x-1/2 drop-shadow-sm"
-                    width="14"
-                    height="10"
-                    viewBox="0 0 14 10"
+                    width="22"
+                    height="16"
+                    viewBox="0 0 22 16"
                     aria-hidden
                   >
-                    <polygon points="0,0 14,0 7,10" fill="white" />
-                    <path d="M0,0 L7,10 L14,0" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+                    <polygon points="0,0 22,0 11,16" fill="white" />
+                    <path d="M0,0 L11,16 L22,0" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
                   </svg>
                   {/* Upward triangle tip at bottom of separator */}
                   <svg
                     className="pointer-events-none absolute bottom-0 left-[65%] z-20 -translate-x-1/2 drop-shadow-sm"
-                    width="14"
-                    height="10"
-                    viewBox="0 0 14 10"
+                    width="22"
+                    height="16"
+                    viewBox="0 0 22 16"
                     aria-hidden
                   >
-                    <polygon points="0,10 14,10 7,0" fill="white" />
-                    <path d="M0,10 L7,0 L14,10" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+                    <polygon points="0,16 22,16 11,0" fill="white" />
+                    <path d="M0,16 L11,0 L22,16" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
                   </svg>
                   {/* Drag pill */}
                   <div
@@ -5119,51 +5151,26 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               />
               </div>
               {/* Decorative mirror of the left-side panel separator (no resize) */}
-              <div
-                className="pointer-events-none relative flex h-full min-h-0 w-4 shrink-0 items-center justify-center self-stretch"
-                aria-hidden
-              >
-                <div
-                  className="pointer-events-none absolute inset-y-0 left-[78%] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]"
-                  aria-hidden
-                />
-                <svg
-                  className="pointer-events-none absolute top-0 left-[78%] z-20 -translate-x-1/2 drop-shadow-sm"
-                  width="22"
-                  height="16"
-                  viewBox="0 0 22 16"
-                  aria-hidden
-                >
-                  <polygon points="0,0 22,0 11,16" fill="white" />
-                  <path d="M0,0 L11,16 L22,0" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
-                </svg>
-                <svg
-                  className="pointer-events-none absolute bottom-0 left-[78%] z-20 -translate-x-1/2 drop-shadow-sm"
-                  width="22"
-                  height="16"
-                  viewBox="0 0 22 16"
-                  aria-hidden
-                >
-                  <polygon points="0,16 22,16 11,0" fill="white" />
-                  <path d="M0,16 L11,0 L22,16" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
-                </svg>
-              </div>
+              {rightEdgeSeparator}
             </div>
           ) : topMode === "dashboard" ? (
             <div className="min-h-0 min-w-0 flex-1">
               <DashboardPage initiatives={initiatives} planYear={selectedYear} roadmaps={roadmaps} workspaceDirectoryUsers={workspaceDirectoryUsers} />
             </div>
           ) : topMode === "users" ? (
-            <div className="min-h-0 min-w-0 flex-1">
-              <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
-                <UsersWorkspacePanel />
+            <div className="flex min-h-0 min-w-0 flex-1 flex-row">
+              <div className="mt-3 mb-4 min-h-0 min-w-0 flex-1">
+                <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
+                  <UsersWorkspacePanel />
+                </div>
               </div>
+              {rightEdgeSeparator}
             </div>
           ) : (
-            <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex h-full min-h-0 min-w-0 flex-1 flex-row">
               <div
                 ref={planningRightSurfaceRef}
-                className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden"
+                className="mt-3 mb-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden"
               >
                 <BacklogPlanningPanel
                 summaryBarPortalElement={summaryBarEl}
@@ -5258,6 +5265,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 }}
               />
               </div>
+              {rightEdgeSeparator}
             </div>
           )}
           </div>

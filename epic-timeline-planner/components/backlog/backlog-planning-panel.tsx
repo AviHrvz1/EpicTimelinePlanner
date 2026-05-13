@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   ListTodo,
   Lock,
+  Map as MapIcon,
   Plus,
   Save,
   Search,
@@ -2636,6 +2637,7 @@ export function BacklogPlanningPanel({
     count: number,
     indentPx: number,
     renderChildren: () => React.ReactNode,
+    leadingIcon?: React.ReactNode,
   ) {
     const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
     const renderedChildren = isOpen ? renderChildren() : null;
@@ -2659,6 +2661,7 @@ export function BacklogPlanningPanel({
                   style={{ paddingLeft: indentPx }}
                 >
                   {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+                  {leadingIcon}
                   <span className="truncate">{label}</span>
                   <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
                 </button>
@@ -3271,6 +3274,9 @@ export function BacklogPlanningPanel({
           group.rows.length + group.standaloneRows.length,
           levelIndex * 14,
           () => <>{renderGroupedTree(group.rows, group.standaloneRows, levelIndex + 1, `${path}${level}:${key}/`)}</>,
+          level === "roadmap"
+            ? <MapIcon className="size-4 shrink-0 text-indigo-500" aria-hidden />
+            : undefined,
         ),
       );
   }
@@ -4117,7 +4123,7 @@ export function BacklogPlanningPanel({
       </div>
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
 
-      <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [contain:inline-size] [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
+      <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50 px-4 pb-9 pt-9 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
           style={{ gridTemplateColumns: "auto auto repeat(11, minmax(0, 1fr)) auto" }}
