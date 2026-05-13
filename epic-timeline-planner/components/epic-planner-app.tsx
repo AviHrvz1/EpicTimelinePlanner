@@ -869,6 +869,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const router = useRouter();
   const pathname = usePathname();
   const [initiatives, setInitiatives] = useState(initialInitiatives);
+  /** Workspace-wide (all roadmaps) initiatives — loaded only when the Backlog Workspace is active. */
+  const [backlogInitiatives, setBacklogInitiatives] = useState<InitiativeItem[] | null>(null);
   const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>(initialRoadmaps);
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -1747,6 +1749,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
     );
   }, [topMode]);
+
+  // Backlog Workspace shows initiatives across all roadmaps; refetch with roadmapId=all when entering it.
+  useEffect(() => {
+    if (topMode !== "backlog") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await parseJson<InitiativeItem[]>(
+          await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all`, { cache: "no-store" }),
+        );
+        if (!cancelled) setBacklogInitiatives(data);
+      } catch {
+        if (!cancelled) setBacklogInitiatives([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [topMode, selectedYear]);
 
   const activeMonthTeamCapacityKey = useMemo(() => {
     if (activeTimelineMonth == null) return null;
@@ -5120,7 +5139,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 <BacklogPlanningPanel
                 summaryBarPortalElement={summaryBarEl}
                 suppressInlineChips
-                initiatives={initiatives}
+                initiatives={backlogInitiatives ?? initiatives}
+                roadmaps={roadmaps}
                 storyRefById={storyRefMaps.byId}
                 onOpenInitiative={(initiativeId) => {
                   const initiative = initiatives.find((item) => item.id === initiativeId);

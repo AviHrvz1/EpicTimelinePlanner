@@ -1180,10 +1180,12 @@ function InitiativeTreeCard({
                 />
               </button>
               <div className="min-w-0 flex-1">
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onEditInitiative(initiative)}
-                  className="w-full rounded-md px-0.5 text-left hover:bg-white/90"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEditInitiative(initiative); } }}
+                  className="w-full cursor-pointer rounded-md px-0.5 text-left hover:bg-white/90"
                   aria-label={`Open initiative ${initiative.title}`}
                 >
                   <div className="flex w-full min-w-0 items-center gap-1">
@@ -1207,7 +1209,7 @@ function InitiativeTreeCard({
                   {initiative.description ? (
                     <p className="line-clamp-2 text-[13px] leading-5 text-slate-600">{initiative.description}</p>
                   ) : null}
-                </button>
+                </div>
                 <div className="mt-2 space-y-2 px-0.5">
                   <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
                     <span className="min-w-0 shrink-0 text-left">

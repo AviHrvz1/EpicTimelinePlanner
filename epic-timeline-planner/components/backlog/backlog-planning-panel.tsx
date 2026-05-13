@@ -53,7 +53,7 @@ import {
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { defaultMembersForTeam } from "@/lib/sprint-capacity";
-import { InitiativeItem, UserStoryItem } from "@/lib/types";
+import { InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
@@ -63,6 +63,7 @@ const BACKLOG_TABLE_BASE_BG = "#ffffff";
 
 type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
+  roadmaps?: RoadmapItem[];
   storyRefById: Record<string, string>;
   onOpenInitiative: (initiativeId: string) => void;
   onOpenEpic: (epicId: string) => void;
@@ -106,7 +107,7 @@ type BacklogColumnKey =
   | "epicOriginalEst"
   | "daysLeft"
   | "progress";
-type GroupLevel = "year" | "quarter" | "month" | "sprint";
+type GroupLevel = "roadmap" | "year" | "quarter" | "month" | "sprint";
 type WorkflowStatus = "todo" | "inProgress" | "done" | "approved";
 type InlineEditableStoryField = "status" | "sprint" | "assignee" | "labels" | "estimatedDays" | "daysLeft";
 type WorkItemKindFilter = "initiative" | "epic" | "story";
@@ -123,6 +124,7 @@ type BacklogFilterSnapshot = {
   teamFilter: string[];
   assigneeFilter: string[];
   labelFilter: string[];
+  roadmapFilter: string[];
   workItemFilter: WorkItemKindFilter[];
   groupLevels: GroupLevel[];
 };
@@ -501,8 +503,9 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
     </div>
   );
 }
-const GROUP_LEVEL_ORDER: GroupLevel[] = ["year", "quarter", "month", "sprint"];
+const GROUP_LEVEL_ORDER: GroupLevel[] = ["roadmap", "year", "quarter", "month", "sprint"];
 const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
+  roadmap: "Roadmap",
   year: "Year",
   quarter: "Quarter",
   month: "Month",
@@ -581,7 +584,7 @@ function isWorkItemKindFilterValue(v: unknown): v is WorkItemKindFilter {
 }
 
 function isGroupLevelValue(v: unknown): v is GroupLevel {
-  return v === "year" || v === "quarter" || v === "month" || v === "sprint";
+  return v === "roadmap" || v === "year" || v === "quarter" || v === "month" || v === "sprint";
 }
 
 function isBacklogSortByValue(v: unknown): v is BacklogSortBy {
@@ -639,6 +642,7 @@ function backlogFilterSnapshotFromUnknown(raw: unknown): BacklogFilterSnapshot |
     teamFilter,
     assigneeFilter: Array.isArray(s.assigneeFilter) ? s.assigneeFilter.filter((x): x is string => typeof x === "string") : [],
     labelFilter: Array.isArray(s.labelFilter) ? s.labelFilter.filter((x): x is string => typeof x === "string") : [],
+    roadmapFilter: Array.isArray(s.roadmapFilter) ? s.roadmapFilter.filter((x): x is string => typeof x === "string") : [],
     workItemFilter,
     groupLevels,
   };
@@ -1313,6 +1317,7 @@ function MultiCheckboxFilter({
 
 export function BacklogPlanningPanel({
   initiatives,
+  roadmaps,
   storyRefById,
   onOpenInitiative,
   onOpenEpic,
@@ -1337,6 +1342,7 @@ export function BacklogPlanningPanel({
   const [teamFilter, setTeamFilter] = useState<string[]>([]);
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
+  const [roadmapFilter, setRoadmapFilter] = useState<string[]>([]);
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
   const [sortBy, setSortBy] = useState<BacklogSortBy>("titleAsc");
   const [openCreateMenuKey, setOpenCreateMenuKey] = useState<string | null>(null);
@@ -1351,7 +1357,7 @@ export function BacklogPlanningPanel({
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["year", "quarter"]);
+  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["roadmap", "year"]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
@@ -1632,6 +1638,25 @@ export function BacklogPlanningPanel({
       .map((year) => ({ id: year, label: year }));
   }, [initiatives]);
 
+  const roadmapOptions = useMemo(() => {
+    // Only surface roadmaps that have at least one initiative loaded — the parent
+    // pre-filters by the active roadmap, so other roadmaps would appear empty.
+    const ids = new Set<string>();
+    for (const i of initiatives) if (i.roadmapId) ids.add(i.roadmapId);
+    if (ids.size === 0) return [];
+    const byId = new Map<string, string>();
+    for (const r of roadmaps ?? []) byId.set(r.id, r.name);
+    return [...ids]
+      .map((id) => ({ id, label: byId.get(id) ?? id }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [roadmaps, initiatives]);
+
+  const roadmapNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of roadmaps ?? []) map.set(r.id, r.name);
+    return map;
+  }, [roadmaps]);
+
   const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
 
   const storyLabelSuggestions = useMemo(() => {
@@ -1705,6 +1730,7 @@ export function BacklogPlanningPanel({
   const backlogFilteredBeforeWorkItem = useMemo(() => {
     return filteredWithControls
       .map((initiative) => {
+        if (roadmapFilter.length > 0 && (!initiative.roadmapId || !roadmapFilter.includes(initiative.roadmapId))) return null;
         if (yearFilter.length > 0 && !yearFilter.includes(String(initiative.year))) return null;
         const initiativeQuarterMatch = matchesAnySelectedQuarterByRange(
           quarterFilter,
@@ -1744,7 +1770,7 @@ export function BacklogPlanningPanel({
         return { ...initiative, epics };
       })
       .filter(Boolean) as typeof filteredWithControls;
-  }, [filteredWithControls, yearFilter, quarterFilter, teamFilter, assigneeFilter]);
+  }, [filteredWithControls, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter]);
 
   const fullyFiltered = useMemo(
     () => applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter),
@@ -1960,6 +1986,8 @@ export function BacklogPlanningPanel({
             initiativeId: initiative.id,
             initiativeTitle: initiative.title,
             initiativeYear: String(initiative.year),
+            initiativeRoadmapId: initiative.roadmapId ?? "",
+            initiativeRoadmapLabel: initiative.roadmapId ? (roadmapNameById.get(initiative.roadmapId) ?? initiative.roadmapId) : "No roadmap",
             initiativeStatus: rollupWorkflowStatus((initiative.epics ?? []).flatMap((epic) => epic.userStories ?? [])),
             initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
             initiativeMonthNum,
@@ -1986,6 +2014,8 @@ export function BacklogPlanningPanel({
         initiativeId: initiative.id,
         initiativeTitle: initiative.title,
         initiativeYear: String(initiative.year),
+        initiativeRoadmapId: initiative.roadmapId ?? "",
+        initiativeRoadmapLabel: initiative.roadmapId ? (roadmapNameById.get(initiative.roadmapId) ?? initiative.roadmapId) : "No roadmap",
         initiativeStatus: rollupWorkflowStatus([]),
         initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
         initiativeMonthNum: initiative.startMonth ?? null,
@@ -2012,6 +2042,7 @@ export function BacklogPlanningPanel({
     teamFilter.length > 0 ||
     assigneeFilter.length > 0 ||
     labelFilter.length > 0 ||
+    roadmapFilter.length > 0 ||
     workItemFilter.length > 0 ||
     groupLevels.length > 0 ||
     query.trim().length > 0 ||
@@ -2036,6 +2067,7 @@ export function BacklogPlanningPanel({
     setTeamFilter([]);
     setAssigneeFilter([]);
     setLabelFilter([]);
+    setRoadmapFilter([]);
     setWorkItemFilter([]);
     setGroupLevels([]);
     setGroupMenuOpen(false);
@@ -2053,6 +2085,7 @@ export function BacklogPlanningPanel({
       teamFilter,
       assigneeFilter,
       labelFilter,
+      roadmapFilter,
       workItemFilter,
       groupLevels,
     };
@@ -2065,6 +2098,7 @@ export function BacklogPlanningPanel({
     teamFilter,
     assigneeFilter,
     labelFilter,
+    roadmapFilter,
     workItemFilter,
     groupLevels,
   ]);
@@ -2088,6 +2122,7 @@ export function BacklogPlanningPanel({
     setTeamFilter(snapshot.teamFilter.filter((v) => MONTH_TEAM_COLUMNS.some((c) => c.id === v)));
     setAssigneeFilter([...snapshot.assigneeFilter]);
     setLabelFilter([...snapshot.labelFilter]);
+    setRoadmapFilter([...(snapshot.roadmapFilter ?? [])]);
     setWorkItemFilter([...snapshot.workItemFilter]);
     setGroupLevels([...snapshot.groupLevels]);
     setGroupMenuOpen(false);
@@ -2208,6 +2243,11 @@ export function BacklogPlanningPanel({
   }
 
   function keyForLevel(row: (typeof groupedStoryRows)[number], level: GroupLevel): { key: string; label: string; sort: string } {
+    if (level === "roadmap") {
+      const key = row.initiativeRoadmapId || "__no_roadmap__";
+      const label = row.initiativeRoadmapLabel;
+      return { key, label, sort: row.initiativeRoadmapId ? label.toLowerCase() : "zzzz" };
+    }
     if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
     if (level === "quarter") {
       const q = quarterLabelOrUnscheduled(row.initiativeQuarterLabelValue);
@@ -2227,6 +2267,11 @@ export function BacklogPlanningPanel({
     row: (typeof groupedStandaloneInitiatives)[number],
     level: GroupLevel,
   ): { key: string; label: string; sort: string } {
+    if (level === "roadmap") {
+      const key = row.initiativeRoadmapId || "__no_roadmap__";
+      const label = row.initiativeRoadmapLabel;
+      return { key, label, sort: row.initiativeRoadmapId ? label.toLowerCase() : "zzzz" };
+    }
     if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
     if (level === "quarter") {
       const q = quarterLabelOrUnscheduled(row.initiativeQuarterLabelValue);
@@ -3185,14 +3230,37 @@ export function BacklogPlanningPanel({
       });
   }
 
-  function renderGroupedTree(rows: typeof groupedStoryRows, levelIndex = 0, path = ""): React.ReactNode {
-    if (levelIndex >= groupLevels.length) return renderLeafRows(rows, levelIndex * 14, path);
+  function renderGroupedTree(
+    rows: typeof groupedStoryRows,
+    standaloneRows: typeof groupedStandaloneInitiatives = [],
+    levelIndex = 0,
+    path = "",
+  ): React.ReactNode {
+    if (levelIndex >= groupLevels.length) {
+      return (
+        <>
+          {renderLeafRows(rows, levelIndex * 14, path)}
+          {standaloneRows.length > 0 ? renderStandaloneInitiativeRows(standaloneRows, levelIndex * 14) : null}
+        </>
+      );
+    }
     const level = groupLevels[levelIndex];
-    const groups = new Map<string, { label: string; sort: string; rows: typeof groupedStoryRows }>();
+    type Bucket = {
+      label: string;
+      sort: string;
+      rows: typeof groupedStoryRows;
+      standaloneRows: typeof groupedStandaloneInitiatives;
+    };
+    const groups = new Map<string, Bucket>();
     for (const row of rows) {
       const { key, label, sort } = keyForLevel(row, level);
-      if (!groups.has(key)) groups.set(key, { label, sort, rows: [] });
+      if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
       groups.get(key)!.rows.push(row);
+    }
+    for (const row of standaloneRows) {
+      const { key, label, sort } = keyForStandaloneLevel(row, level);
+      if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
+      groups.get(key)!.standaloneRows.push(row);
     }
     return Array.from(groups.entries())
       .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
@@ -3200,9 +3268,9 @@ export function BacklogPlanningPanel({
         renderFolderRow(
           `${path}${level}:${key}`,
           group.label,
-          group.rows.length,
+          group.rows.length + group.standaloneRows.length,
           levelIndex * 14,
-          () => <>{renderGroupedTree(group.rows, levelIndex + 1, `${path}${level}:${key}/`)}</>,
+          () => <>{renderGroupedTree(group.rows, group.standaloneRows, levelIndex + 1, `${path}${level}:${key}/`)}</>,
         ),
       );
   }
@@ -3658,6 +3726,7 @@ export function BacklogPlanningPanel({
         teamFilter?: unknown;
         assigneeFilter?: unknown;
         labelFilter?: unknown;
+        roadmapFilter?: unknown;
         groupLevels?: unknown;
       };
       if (Array.isArray(parsed.statusFilter)) setStatusFilter(parsed.statusFilter.filter((v): v is string => typeof v === "string"));
@@ -3675,10 +3744,10 @@ export function BacklogPlanningPanel({
         setAssigneeFilter(parsed.assigneeFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.labelFilter))
         setLabelFilter(parsed.labelFilter.filter((v): v is string => typeof v === "string"));
+      if (Array.isArray(parsed.roadmapFilter))
+        setRoadmapFilter(parsed.roadmapFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.groupLevels)) {
-        const validLevels = parsed.groupLevels.filter(
-          (v): v is GroupLevel => v === "year" || v === "quarter" || v === "month" || v === "sprint",
-        );
+        const validLevels = parsed.groupLevels.filter(isGroupLevelValue);
         setGroupLevels(validLevels);
       }
     } catch {
@@ -3701,13 +3770,14 @@ export function BacklogPlanningPanel({
           teamFilter,
           assigneeFilter,
           labelFilter,
+          roadmapFilter,
           groupLevels,
         }),
       );
     } catch {
       // Ignore write failures (private mode, quotas, etc.)
     }
-  }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, labelFilter, groupLevels]);
+  }, [hasLoadedViewState, statusFilter, sprintFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, labelFilter, roadmapFilter, groupLevels]);
 
   useEffect(() => {
     try {
@@ -4050,9 +4120,9 @@ export function BacklogPlanningPanel({
       <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-b from-slate-50 to-slate-100/70 px-4 pb-9 pt-9 [contain:inline-size] [box-shadow:3px_3px_8px_0px_rgba(148,163,184,0.35)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
-          style={{ gridTemplateColumns: "auto auto repeat(10, minmax(0, 1fr)) auto" }}
+          style={{ gridTemplateColumns: "auto auto repeat(11, minmax(0, 1fr)) auto" }}
         >
-          <div className="relative col-span-13 col-start-1 row-start-1 min-w-0">
+          <div className="relative col-span-14 col-start-1 row-start-1 min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
@@ -4085,7 +4155,7 @@ export function BacklogPlanningPanel({
             ) : null}
           </div>
           <div
-            className="relative col-start-11 row-start-2 min-w-0"
+            className="relative col-start-12 row-start-2 min-w-0"
             ref={savedFilterMenuRef}
           >
             <button
@@ -4163,7 +4233,7 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div className="relative col-start-12 row-start-2 min-w-0" ref={savedViewMenuRef}>
+          <div className="relative col-start-13 row-start-2 min-w-0" ref={savedViewMenuRef}>
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
@@ -4282,6 +4352,15 @@ export function BacklogPlanningPanel({
           </div>
           <div className="col-start-4 row-start-2 min-w-0">
             <MultiCheckboxFilter
+              label="Roadmap"
+              options={roadmapOptions}
+              selected={roadmapFilter}
+              onChange={setRoadmapFilter}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+            />
+          </div>
+          <div className="col-start-5 row-start-2 min-w-0">
+            <MultiCheckboxFilter
               label="Year"
               options={yearOptions}
               selected={yearFilter}
@@ -4289,7 +4368,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-5 row-start-2 min-w-0">
+          <div className="col-start-6 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Quarter"
               options={quarterOptions}
@@ -4298,7 +4377,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-6 row-start-2 min-w-0">
+          <div className="col-start-7 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Status"
               options={statusOptions}
@@ -4307,7 +4386,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-7 row-start-2 min-w-0">
+          <div className="col-start-8 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Sprint"
               options={sprintOptions}
@@ -4316,14 +4395,14 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-8 row-start-2 min-w-0">
+          <div className="col-start-9 row-start-2 min-w-0">
             <BacklogTeamFilterControl
               selectedIds={teamFilter}
               onChange={setTeamFilter}
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-9 row-start-2 min-w-0">
+          <div className="col-start-10 row-start-2 min-w-0">
             <BacklogAssigneeFilterControl
               selected={assigneeFilter}
               onChange={setAssigneeFilter}
@@ -4331,7 +4410,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-10 row-start-2 min-w-0">
+          <div className="col-start-11 row-start-2 min-w-0">
             <BacklogLabelsFilterControl
               selected={labelFilter}
               onChange={setLabelFilter}
@@ -4339,7 +4418,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-13 row-start-2 flex min-w-0 justify-start">
+          <div className="col-start-14 row-start-2 flex min-w-0 justify-start">
             <span className="group relative inline-flex h-[34px] w-[34px] shrink-0">
             <button
               type="button"
@@ -4490,10 +4569,7 @@ export function BacklogPlanningPanel({
         ) : (
           <div className="min-w-max bg-white" ref={backlogRowsRootRef}>
             {groupLevels.length > 0 ? (
-              <>
-                {renderGroupedTree(groupedStoryRows)}
-                {renderStandaloneGroupedTree(groupedStandaloneInitiatives)}
-              </>
+              renderGroupedTree(groupedStoryRows, groupedStandaloneInitiatives)
             ) : (
             <>
             {fullyFiltered.map((initiative) => {
