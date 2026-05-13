@@ -4487,7 +4487,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       >
         {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid */}
         <div className="-mr-2 flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
-          <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2" />
+          <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
         </div>
         <div
           className={cn(

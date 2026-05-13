@@ -12,6 +12,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   ClipboardList,
+  FileText,
   FileWarning,
   Flag,
   Folder,
@@ -1461,10 +1462,10 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-7 shrink-0 items-stretch overflow-visible rounded-full border-0 bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-slate-800 ring-1 ring-blue-200/75 select-none">
+    <div className="inline-flex h-[26px] shrink-0 items-stretch overflow-visible rounded-full border-0 bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-slate-800 ring-1 ring-blue-200/75 select-none">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
-        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 pt-0.5 text-[13.5px] font-semibold tracking-[0.01em] text-blue-950 sm:px-2">
+        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 text-[12.5px] font-semibold tracking-[0.01em] text-blue-800 sm:px-2 [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]">
           <MapIcon className="size-3.5 shrink-0 opacity-35" aria-hidden />
           Roadmap
         </span>
@@ -1478,7 +1479,7 @@ function RoadmapSelector({
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
             onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-7 cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[13.5px] font-semibold leading-none text-blue-950 outline-none"
+            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12.5px] font-semibold leading-none text-blue-800 outline-none [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]"
             style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
             aria-label="Select roadmap"
           />
@@ -1519,7 +1520,7 @@ function RoadmapSelector({
                           key={y}
                           type="button"
                           onClick={() => setNewYears((prev) => checked ? prev.filter((x) => x !== y) : [...prev, y].sort())}
-                          className={cn("rounded-md border px-2 py-0.5 text-[12px] font-medium transition", checked ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50")}
+                          className={cn("rounded-md border px-2 py-0.5 text-[12px] font-medium transition", checked ? "border-blue-400 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-500 hover:bg-slate-50")}
                         >{y}</button>
                       );
                     })}
@@ -1653,7 +1654,7 @@ function RoadmapSelector({
           <select
             value={year}
             onChange={(e) => void onYearChange(Number(e.target.value))}
-            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold tabular-nums text-blue-950 outline-none hover:bg-blue-100/60 sm:text-[12px]"
+            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold tabular-nums text-blue-800 outline-none hover:bg-blue-100/60 sm:text-[12px]"
           >
             {years.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -2469,21 +2470,21 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex h-8 max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-semibold leading-none tracking-wide ring-1 transition sm:gap-1.5 sm:px-3 sm:text-[13.5px] lg:px-3.5 [&_svg]:opacity-35";
-  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-50 via-violet-100 to-violet-100 text-violet-950 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
-  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-100 via-violet-200 to-violet-200 text-violet-950 ring-violet-300/75 shadow-sm hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50`;
-  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-100 text-orange-950 ring-orange-200/75 hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40`;
-  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-100 via-orange-200 to-orange-200 text-orange-950 ring-orange-300/75 shadow-sm hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50`;
-  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40`;
-  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50`;
-  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-50 via-green-100 to-green-100 text-green-950 ring-green-200/75 hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/40`;
-  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-100 via-green-200 to-green-200 text-green-950 ring-green-300/75 shadow-sm hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50`;
-  const summaryChipTeamsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-50 via-slate-100 to-slate-100 text-slate-950 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40`;
-  const summaryChipTeamsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-100 via-slate-200 to-slate-200 text-slate-950 ring-slate-300/75 shadow-sm hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50`;
-  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-sky-50 via-sky-100 to-sky-100 text-sky-950 ring-sky-200/75 hover:from-sky-100 hover:via-sky-200 hover:to-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40`;
-  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40`;
+    "inline-flex h-[26px] max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[12px] font-semibold leading-none tracking-[0.01em] ring-1 transition sm:gap-1.5 sm:px-2 sm:text-[12.5px] lg:px-2.5 [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill] [&_svg]:opacity-35";
+  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-800 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
+  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-800 ring-violet-300/75 shadow-sm hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50`;
+  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-800 ring-orange-200/75 hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40`;
+  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-800 ring-orange-300/75 shadow-sm hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50`;
+  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-800 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40`;
+  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-800 ring-indigo-300/75 shadow-sm hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50`;
+  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-800 ring-green-200/75 hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/40`;
+  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-800 ring-green-300/75 shadow-sm hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50`;
+  const summaryChipTeamsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-700 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40`;
+  const summaryChipTeamsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-700 ring-slate-300/75 shadow-sm hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50`;
+  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-sky-200 via-sky-300 to-sky-300 text-sky-800 ring-sky-200/75 hover:from-sky-100 hover:via-sky-200 hover:to-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40`;
+  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-800 ring-blue-200/75 hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40`;
   const summaryChipStoriesStaticClass = summaryChipStoriesClass;
-  const summaryChipUnscheduledClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-50 via-orange-100 to-orange-100 text-orange-950 ring-orange-200/75`;
+  const summaryChipUnscheduledClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-800 ring-orange-200/75`;
   const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
   const estimatePanelScopeLabel = activeMonth
@@ -2609,7 +2610,7 @@ export function TimelineGrid({
                           closeEstEpicsPanel();
                           onOpenEpic(row.epic.id);
                         }}
-                        className="inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
+                        className="inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-800"
                       >
                         <span className="truncate">{row.epic.title}</span>
                       </button>
@@ -2622,7 +2623,7 @@ export function TimelineGrid({
                         closeEstEpicsPanel();
                         onOpenInitiative(row.initiative.id);
                       }}
-                      className="inline-flex max-w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                      className="inline-flex max-w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-800"
                     >
                       <span className="truncate">{row.initiative.title}</span>
                     </button>
@@ -2798,7 +2799,7 @@ export function TimelineGrid({
                         <button
                           type="button"
                           onClick={() => { closeEstEpicsPanel(); onOpenEpic(row.epic.id); }}
-                          className="inline-flex min-w-0 max-w-full rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700"
+                          className="inline-flex min-w-0 max-w-full rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-800"
                         >
                           <span className="truncate">{row.epic.title}</span>
                         </button>
@@ -2817,7 +2818,7 @@ export function TimelineGrid({
                       <button
                         type="button"
                         onClick={() => { closeEstEpicsPanel(); onOpenInitiative(row.initiative.id); }}
-                        className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                        className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-800"
                       >
                         <span className="truncate">{row.initiative.title}</span>
                       </button>
@@ -2917,7 +2918,7 @@ export function TimelineGrid({
                     }}
                     disabled={!onOpenStory}
                     className={cn(
-                      "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-700",
+                      "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-800",
                       !onOpenStory && "cursor-default opacity-60 hover:bg-transparent hover:text-slate-900",
                     )}
                   >
@@ -2941,7 +2942,7 @@ export function TimelineGrid({
                       closeEstEpicsPanel();
                       onOpenEpic(row.epic.id);
                     }}
-                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-700"
+                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-800"
                   >
                     <span className="truncate">{row.epic.title}</span>
                   </button>
@@ -3706,7 +3707,7 @@ export function TimelineGrid({
   const railLabelBaseClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[14px] font-semibold tracking-[0.01em] transition-all duration-150";
   /** Month / quarter plan rail only (between center and right panel). Flat indigo — not shared with roadmap summary chips. */
-  const planRailTabActiveClass = "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 ring-1 ring-indigo-200/80";
+  const planRailTabActiveClass = "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-800 ring-1 ring-indigo-200/80";
 
   const runSurfaceTransition = useCallback(() => {
     const el = timelineContentScrollRef.current;
@@ -4225,7 +4226,7 @@ export function TimelineGrid({
         {("totalEpics" in summaryBadgesForScope ? summaryBadgesForScope.totalEpics : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}Epics
       </button>
       <div className={summaryChipStoriesStaticClass}>
-        <UserStoryIcon className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        <FileText className="size-3 shrink-0 sm:size-3.5" aria-hidden />
         <span className="truncate">{summaryBadgesForScope.totalStories}</span>
         <span className="hidden xl:inline">User Stories</span>
         <span className="xl:hidden">Stories</span>
@@ -4357,7 +4358,7 @@ export function TimelineGrid({
   const ganttSearchJsx = (
     <div
       ref={ganttSearchRef}
-      className="relative ml-2 flex shrink-0 items-center"
+      className="relative ml-2 mr-1 flex shrink-0 items-center"
       onBlur={(e) => { if (!ganttSearchRef.current?.contains(e.relatedTarget as Node)) setGanttSearchOpen(false); }}
     >
       <Search className="pointer-events-none absolute left-2 z-10 size-3.5 text-slate-400" aria-hidden />
@@ -4368,7 +4369,7 @@ export function TimelineGrid({
         onChange={(e) => { setGanttSearchQuery(e.target.value); setGanttSearchFilter(null); setGanttSearchOpen(true); }}
         onFocus={() => setGanttSearchOpen(true)}
         placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
-        className="h-7 w-36 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13px] text-slate-700 placeholder:text-slate-400 outline-none focus:w-52 focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200"
+        className="h-7 w-[27rem] rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13px] text-slate-700 placeholder:text-slate-400 outline-none focus:w-[33rem] focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200"
       />
       {(ganttSearchQuery || ganttSearchFilter) ? (
         <button
@@ -4448,7 +4449,7 @@ export function TimelineGrid({
                       runSurfaceTransition();
                       item.onClick?.();
                     }}
-                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[16px] font-semibold leading-snug tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -4456,10 +4457,10 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "whitespace-nowrap px-1 py-0.5 text-[16px] font-semibold leading-snug tracking-[0.01em]",
+                      "whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em]",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
-                        : "text-slate-900",
+                        : "text-slate-800",
                     )}
                   >
                     {item.label}
@@ -4479,7 +4480,7 @@ export function TimelineGrid({
                     <button
                       type="button"
                       onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[16px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[16px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter sprint views by team"
                       aria-expanded={isSprintTeamMenuOpen}
                     >
@@ -4559,7 +4560,7 @@ export function TimelineGrid({
                     <button
                       type="button"
                       onClick={() => setIsGanttTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter Gantt by team"
                       aria-expanded={isGanttTeamMenuOpen}
                     >
@@ -4634,7 +4635,7 @@ export function TimelineGrid({
                     <button
                       type="button"
                       onClick={() => setIsInsightsTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter insights by team"
                       aria-expanded={isInsightsTeamMenuOpen}
                     >
@@ -4709,7 +4710,7 @@ export function TimelineGrid({
               style={ganttLaneGridStyle}
             >
               <div
-                className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2"
+                className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3 sm:gap-4 md:gap-5"
                 style={{ gridColumn: "1 / -1" }}
               >
                 {summaryYearChipsJsx}
@@ -4719,7 +4720,7 @@ export function TimelineGrid({
           ) : (
             <div
               className={cn(
-                "flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 md:gap-2",
+                "flex min-w-0 flex-wrap items-center justify-end gap-3 sm:gap-4 md:gap-5",
                 hasBreadcrumbs ? "flex-1" : "w-full",
               )}
             >
@@ -4730,7 +4731,7 @@ export function TimelineGrid({
         ) : activeMonth ? (
           <div
             className={cn(
-              "flex min-w-0 flex-wrap items-center justify-end gap-1 pr-2 sm:gap-3 md:gap-2",
+              "flex min-w-0 flex-wrap items-center justify-end gap-3 pr-2 sm:gap-4 md:gap-5",
               hasBreadcrumbs ? "flex-1" : "w-full",
             )}
           >
@@ -4791,8 +4792,8 @@ export function TimelineGrid({
                                 >
                                   <span className={cn(
                                     "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                                    s.kind === "story" && "bg-sky-100 text-sky-700",
-                                    s.kind === "epic" && "bg-violet-100 text-violet-700",
+                                    s.kind === "story" && "bg-sky-100 text-sky-800",
+                                    s.kind === "epic" && "bg-violet-100 text-violet-800",
                                     s.kind === "initiative" && "bg-amber-100 text-amber-700",
                                   )}>
                                     {s.kind === "story" ? "Story" : s.kind === "epic" ? "Epic" : "Initiative"}
@@ -5591,7 +5592,7 @@ export function TimelineGrid({
                       <button
                         type="button"
                         onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
-                        className="inline-flex h-7 min-w-[9.25rem] items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                        className="inline-flex h-7 min-w-[9.25rem] items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                         aria-label="Filter sprint capacity by team"
                         aria-expanded={isSprintTeamMenuOpen}
                       >

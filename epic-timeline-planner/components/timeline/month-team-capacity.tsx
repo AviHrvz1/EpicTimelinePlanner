@@ -220,7 +220,7 @@ export function MonthTeamCapacityBoard({
         loadBasis={loadBasis}
         onLoadBasisChange={onLoadBasisChange}
       />
-      <div className="flex flex-wrap gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {visibleTeams.map((team) => {
           if (expandedTeamId != null && expandedTeamId !== team.id) {
             return null;
@@ -249,8 +249,8 @@ export function MonthTeamCapacityBoard({
             <div
               key={team.id}
               className={cn(
-                "box-border w-full max-w-full min-w-[min(100%,23rem)] grow basis-[23rem]",
-                expandedTeamId === team.id && "min-w-0 basis-full max-w-none",
+                "box-border w-full min-w-0 max-w-full",
+                expandedTeamId === team.id && "col-span-full",
               )}
             >
               <MonthTeamCapacityColumnChrome

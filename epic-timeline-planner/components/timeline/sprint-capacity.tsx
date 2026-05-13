@@ -985,7 +985,7 @@ export function SprintCapacityBoard({
         </div>
       ) : null}
       {/* flex-wrap + min width so columns drop to the next row when the panel is narrow (not only by viewport breakpoint). */}
-      <div className="flex min-w-0 flex-wrap gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {visibleMembers.map((member) => {
           if (expandedMemberKey != null && expandedMemberKey !== member) {
             return null;
@@ -1000,8 +1000,8 @@ export function SprintCapacityBoard({
             <div
               key={member}
               className={cn(
-                "box-border max-w-full min-w-[min(100%,22rem)] grow basis-[22rem]",
-                expandedMemberKey === member && "min-w-0 basis-full max-w-none",
+                "box-border w-full min-w-0 max-w-full",
+                expandedMemberKey === member && "col-span-full",
               )}
             >
               <SprintCapacityColumnChrome
