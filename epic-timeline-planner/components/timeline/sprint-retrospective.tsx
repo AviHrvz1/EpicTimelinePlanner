@@ -1,20 +1,26 @@
 "use client";
 
 import {
+  Activity,
   CalendarDays,
+  CheckCircle2,
   MoreHorizontal,
-  Plus,
+  PieChart as PieChartIcon,
   Save,
-  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   User,
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { BurndownChart } from "@/components/dashboard/charts/burndown-chart";
+import { StoryStatusChart } from "@/components/dashboard/charts/story-status-chart";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
+import type { InitiativeItem } from "@/lib/types";
 import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +47,10 @@ type SprintRetrospectiveEditorProps = {
   initialDoc: SprintRetrospectiveDoc | null;
   updatedAt: string | null;
   onSave: (doc: SprintRetrospectiveDoc) => void;
+  /** Required for the sprint recap charts (story status + burndown) below the board. */
+  initiatives?: InitiativeItem[];
+  planYear?: number;
+  yearSprint?: number | null;
 };
 
 // ─── HTML <-> card helpers ───────────────────────────────────────────────────
@@ -129,9 +139,9 @@ function CardComposer({
             submit();
           }
         }}
-        rows={2}
+        rows={7}
         placeholder={placeholder}
-        className="block min-h-[2.5rem] w-full resize-none border-0 bg-transparent text-[14px] text-slate-700 outline-none placeholder:text-slate-400"
+        className="block min-h-[9.5rem] w-full resize-none border-0 bg-transparent text-[14px] text-slate-700 outline-none placeholder:text-slate-400"
       />
       <div className="mt-1 flex items-center justify-between">
         <div className="flex items-center gap-1.5">{trailing}</div>
@@ -243,6 +253,9 @@ export function SprintRetrospectiveEditor({
   initialDoc,
   updatedAt,
   onSave,
+  initiatives,
+  planYear,
+  yearSprint,
 }: SprintRetrospectiveEditorProps) {
   const [wentWell, setWentWell] = useState<RetroCard[]>(() => htmlToCards(initialDoc?.wentWellHtml));
   const [improve, setImprove] = useState<RetroCard[]>(() => htmlToCards(initialDoc?.improveHtml));
@@ -322,13 +335,6 @@ export function SprintRetrospectiveEditor({
     setEditingAction((cur) => (cur === id ? null : cur));
   }
 
-  // AI placeholder: derives a simple action from the first "improve" note.
-  function generateAIAction() {
-    const firstImprove = improve[0]?.text?.trim();
-    const seed = firstImprove ? `Address: ${firstImprove}` : "Discuss top blocker in next standup";
-    addAction(seed);
-  }
-
   return (
     <section
       className="flex min-h-0 min-w-0 flex-1 flex-col"
@@ -360,7 +366,12 @@ export function SprintRetrospectiveEditor({
         <div className="grid gap-5 px-5 pb-6 sm:px-7 lg:grid-cols-3">
           {/* Went Well */}
           <RetroColumn
-            title="Went Well"
+            title={
+              <span className="inline-flex items-center gap-2">
+                <ThumbsUp className="size-4 text-emerald-500" aria-hidden />
+                Went Well
+              </span>
+            }
             count={wentWell.length}
             columnTint="bg-white/55 ring-emerald-100"
           >
@@ -385,7 +396,12 @@ export function SprintRetrospectiveEditor({
 
           {/* To Improve */}
           <RetroColumn
-            title="To Improve"
+            title={
+              <span className="inline-flex items-center gap-2">
+                <ThumbsDown className="size-4 text-violet-500" aria-hidden />
+                To Improve
+              </span>
+            }
             count={improve.length}
             columnTint="bg-white/55 ring-violet-100"
           >
@@ -412,10 +428,8 @@ export function SprintRetrospectiveEditor({
           <RetroColumn
             title={
               <span className="inline-flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-sky-500" aria-hidden />
                 Take Action
-                <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white ring-1 ring-sky-300">
-                  <Sparkles className="size-3" /> With AI
-                </span>
               </span>
             }
             count={actionItems.length}
@@ -425,16 +439,6 @@ export function SprintRetrospectiveEditor({
               placeholder="Describe the next concrete step…"
               accentButton="bg-sky-500 text-white hover:bg-sky-600"
               onAdd={addAction}
-              trailing={
-                <button
-                  type="button"
-                  onClick={generateAIAction}
-                  title="Generate an action from your To Improve notes"
-                  className="inline-flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-sm ring-1 ring-sky-200 transition hover:from-sky-400 hover:to-indigo-400"
-                >
-                  <Sparkles className="size-3.5" />
-                </button>
-              }
             />
             <div className="mt-4 space-y-3">
               {actionItems.map((item) => (
@@ -451,6 +455,42 @@ export function SprintRetrospectiveEditor({
             </div>
           </RetroColumn>
         </div>
+
+        {/* Sprint recap charts (filtered by current sprint + team) */}
+        {initiatives && planYear != null && yearSprint != null ? (
+          <div className="grid gap-5 px-5 pb-6 sm:px-7 lg:grid-cols-2">
+            <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
+              <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+                <PieChartIcon className="size-4 text-slate-600" aria-hidden />
+                User Stories Status
+              </h3>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <StoryStatusChart
+                  initiatives={initiatives}
+                  year={planYear}
+                  quarter={Math.ceil(yearSprint / 6)}
+                  sprint={yearSprint}
+                  team={teamId ?? null}
+                />
+              </div>
+            </article>
+            <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
+              <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+                <Activity className="size-4 text-slate-600" aria-hidden />
+                Burndown
+              </h3>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <BurndownChart
+                  initiatives={initiatives}
+                  year={planYear}
+                  quarter={Math.ceil(yearSprint / 6)}
+                  sprint={yearSprint}
+                  team={teamId ?? null}
+                />
+              </div>
+            </article>
+          </div>
+        ) : null}
       </div>
 
       {/* Footer */}
@@ -495,7 +535,7 @@ function RetroColumn({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-3xl p-4 ring-1 backdrop-blur-sm sm:p-5", columnTint)}>
+    <div className={cn("flex min-h-[19rem] flex-col rounded-3xl p-4 ring-1 backdrop-blur-sm sm:p-5", columnTint)}>
       <div className="mb-4 flex items-center justify-center gap-2">
         <h3 className="text-center text-[16px] font-semibold text-slate-700">{title}</h3>
         {count > 0 ? (
@@ -504,7 +544,7 @@ function RetroColumn({
           </span>
         ) : null}
       </div>
-      {children}
+      <div className="flex-1">{children}</div>
     </div>
   );
 }

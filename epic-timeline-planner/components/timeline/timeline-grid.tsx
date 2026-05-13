@@ -2422,6 +2422,11 @@ export function TimelineGrid({
   const isQuarterGanttLayout =
     activeMonth == null && focusedQuarter != null && quarterViewTab === "gantt";
   const portfolioRoadmapGanttHScrollMeasure = isFullYearGanttLayout || isQuarterGanttLayout;
+  /** Search field is Gantt-only: shown on year/quarter Gantt and on the month Epic-Gantt tab; hidden on Kanban, Capacity, Insights, Retro, Status. */
+  const showGanttSearch =
+    isFullYearGanttLayout ||
+    isQuarterGanttLayout ||
+    (activeMonth != null && monthPlanTab === "epic-gantt");
   const scopedEpicsForEstimatePanel = useMemo(() => {
     let scopedRows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     if (activeMonth) {
@@ -4715,7 +4720,7 @@ export function TimelineGrid({
                 style={{ gridColumn: "1 / -1" }}
               >
                 {summaryYearChipsJsx}
-                {ganttSearchJsx}
+                {showGanttSearch ? ganttSearchJsx : null}
               </div>
             </div>
           ) : (
@@ -4726,7 +4731,7 @@ export function TimelineGrid({
               )}
             >
               {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
-              {ganttSearchJsx}
+              {showGanttSearch ? ganttSearchJsx : null}
             </div>
           )
         ) : activeMonth ? (
@@ -4813,12 +4818,12 @@ export function TimelineGrid({
                   ) : null}
                 </>
               ) : ((suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx)}
-              {ganttSearchJsx}
+              {showGanttSearch ? ganttSearchJsx : null}
           </div>
         ) : focusedQuarter ? (
-          <div className="flex items-center gap-2">{ganttSearchJsx}</div>
+          <div className="flex items-center gap-2">{showGanttSearch ? ganttSearchJsx : null}</div>
         ) : (
-          <div className="flex items-center gap-2">{ganttSearchJsx}</div>
+          <div className="flex items-center gap-2">{showGanttSearch ? ganttSearchJsx : null}</div>
         )}
       </div>
   );
@@ -5680,6 +5685,9 @@ export function TimelineGrid({
                           initialDoc={teamDoc}
                           updatedAt={teamDoc?.updatedAt ?? null}
                           onSave={(doc) => onSaveSprintRetrospective?.(doc, teamId)}
+                          initiatives={initiatives}
+                          planYear={currentYear}
+                          yearSprint={resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}
                         />
                       </div>
                     );
@@ -5691,6 +5699,9 @@ export function TimelineGrid({
                     initialDoc={sprintRetrospective}
                     updatedAt={sprintRetrospective?.updatedAt ?? null}
                     onSave={(doc) => onSaveSprintRetrospective?.(doc)}
+                    initiatives={initiatives}
+                    planYear={currentYear}
+                    yearSprint={resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}
                   />
                 )}
               </div>
