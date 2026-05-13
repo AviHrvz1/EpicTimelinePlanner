@@ -219,7 +219,12 @@ export function QuarterTeamCapacityBoard({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-300/60 bg-slate-200/60 p-4 shadow-sm">
+    <div
+      className="rounded-2xl border border-slate-300/60 p-4 shadow-sm"
+      style={{
+        backgroundImage: "linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #fdf2f8 100%)",
+      }}
+    >
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
         teamLabel={

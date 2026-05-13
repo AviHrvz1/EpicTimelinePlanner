@@ -4496,7 +4496,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     <DragContext onDragEnd={onDragEnd}>
       <main
         className={cn(
-          "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-2",
+          "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-5",
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-white",
           topMode === "roadmap" &&
             "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",

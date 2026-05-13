@@ -442,11 +442,14 @@ export function TeamCapacityBucket({
         <div
           ref={setNodeRef}
           className={cn(
-            "relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300/60 bg-slate-200/60 p-2",
+            "relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300/60 p-2 shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10)]",
             "transition-[background-color,box-shadow,border-color] duration-200 ease-out",
             bucketColumnShellClass,
             isOver && "border-violet-300/70 bg-violet-100/50 ring-1 ring-violet-200/50",
           )}
+          style={{
+            backgroundImage: "linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #fdf2f8 100%)",
+          }}
         >
           {/* Bucket SVG hidden for now — remove `hidden` from className to show again */}
           <img

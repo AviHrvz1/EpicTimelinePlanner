@@ -82,12 +82,13 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
   --scrollbar-track: transparent;
-  --scrollbar-thumb-from: #e2e8f0;
-  --scrollbar-thumb-to: #a1a1aa;
-  --scrollbar-thumb-from-hover: #cbd5e1;
-  --scrollbar-thumb-to-hover: #71717a;
-  --scrollbar-thumb-from-active: #94a3b8;
-  --scrollbar-thumb-to-active: #52525b;
+  /* Exact retro/main panel gradient — blue-50 → violet-50 → pink-50. */
+  --scrollbar-thumb-from: #eff6ff; /* blue-50 */
+  --scrollbar-thumb-to: #fdf2f8; /* pink-50 */
+  --scrollbar-thumb-from-hover: #dbeafe; /* blue-100 */
+  --scrollbar-thumb-to-hover: #fce7f3; /* pink-100 */
+  --scrollbar-thumb-from-active: #bfdbfe; /* blue-200 */
+  --scrollbar-thumb-to-active: #fbcfe8; /* pink-200 */
 }
 
 .dark {
@@ -263,7 +264,7 @@
   .capacity-bucket-scroll {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: #a1a1aa transparent;
+    scrollbar-color: #f5f3ff transparent;
   }
   .capacity-bucket-scroll::-webkit-scrollbar {
     width: 6px;
@@ -295,7 +296,7 @@
   body,
   * {
     scrollbar-width: thin;
-    scrollbar-color: #a1a1aa transparent;
+    scrollbar-color: #f5f3ff transparent;
   }
   *::-webkit-scrollbar {
     width: 6px;

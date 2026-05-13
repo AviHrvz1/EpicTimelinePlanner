@@ -4433,8 +4433,7 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-0 bg-gradient-to-r from-blue-50 via-violet-50 to-pink-50 py-2 pr-4 shadow-[inset_0_4px_6px_-4px_rgba(15,23,42,0.10),inset_0_-4px_6px_-4px_rgba(15,23,42,0.08)] ring-0",
-          hasContextSideMenu ? "pl-[4.5rem]" : "pl-5",
+          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-0 bg-gradient-to-r from-blue-50 via-violet-50 to-pink-50 py-2 pl-5 pr-4 shadow-[inset_0_4px_6px_-4px_rgba(15,23,42,0.10),inset_0_-4px_6px_-4px_rgba(15,23,42,0.08)] ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
