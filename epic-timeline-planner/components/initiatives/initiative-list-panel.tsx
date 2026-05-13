@@ -554,7 +554,7 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
 
 /** Shared base for all status/tag chips in the middle panel — consistent height, size, and spacing. */
 const statusBadgeBase =
-  "inline-flex items-center rounded px-2 py-0.5 text-[12px] font-semibold leading-none tracking-[0.01em]";
+  "inline-flex items-center rounded px-2.5 py-1 text-[13px] font-semibold leading-none tracking-[0.01em]";
 
 /** Left-panel initiative/epic cards: track grows to fill the row; summary stays on the same line (nowrap). */
 const leftPanelProgressTrackClass =
@@ -924,7 +924,7 @@ function InitiativeTreeEpicRow({
               <span className="min-w-0 shrink-0 text-left">
                 {completion.total === 0 ? "No stories yet" : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
               </span>
-              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
+              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
                 {epicTeamChip ? (
                   <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
                     <Users className="size-2.5 shrink-0" aria-hidden />
@@ -1215,7 +1215,7 @@ function InitiativeTreeCard({
                         ? "No epics"
                         : `${epics.length} epic${epics.length !== 1 ? "s" : ""}`}
                     </span>
-                    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
+                    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
                       {initiative.status === "scheduled" && initiative.startMonth != null ? (
                         <span className={cn(statusBadgeBase, "bg-violet-100 text-violet-700")}>
                           {quarterFromMonth(initiative.startMonth)}
@@ -1543,7 +1543,7 @@ function SprintEpicCard({
                       ? "No stories yet"
                       : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
                   </span>
-                  <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5">
+                  <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
                     {epicTeamChip ? (
                       <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
                         <Users className="size-2.5 shrink-0" aria-hidden />

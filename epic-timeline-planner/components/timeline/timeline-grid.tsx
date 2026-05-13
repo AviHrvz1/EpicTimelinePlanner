@@ -1469,7 +1469,7 @@ function RoadmapSelector({
           <MapIcon className="size-3.5 shrink-0 opacity-35" aria-hidden />
           Roadmap
         </span>
-        <div className="relative flex items-center">
+        <div className="relative flex items-center bg-sky-200">
           <input
             ref={inputRef}
             type="text"
