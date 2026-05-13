@@ -1307,7 +1307,7 @@ function RoadmapDeleteConfirm({
             <p className="text-[15px] font-bold text-slate-800">Delete &ldquo;{roadmapName}&rdquo;?</p>
             <p className="text-[12px] text-slate-400">This action cannot be undone.</p>
           </div>
-          <button type="button" onClick={cancel} className="ml-auto flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+          <button type="button" onClick={cancel} className="ml-auto flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-950">
             <X className="size-4" />
           </button>
         </div>
@@ -1462,10 +1462,10 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-[26px] shrink-0 items-stretch overflow-visible rounded-full border-0 bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-slate-800 ring-1 ring-blue-200/75 select-none">
+    <div className="inline-flex h-[26px] shrink-0 items-stretch overflow-visible rounded-full border-0 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-100 text-slate-800 ring-1 ring-blue-200/75 select-none">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
-        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 text-[12.5px] font-semibold tracking-[0.01em] text-blue-800 sm:px-2 [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]">
+        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 text-[12.5px] font-semibold tracking-[0.01em] text-blue-950 sm:px-2 [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]">
           <MapIcon className="size-3.5 shrink-0 opacity-35" aria-hidden />
           Roadmap
         </span>
@@ -1479,7 +1479,7 @@ function RoadmapSelector({
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
             onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12.5px] font-semibold leading-none text-blue-800 outline-none [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]"
+            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12.5px] font-semibold leading-none text-blue-950 outline-none [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]"
             style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
             aria-label="Select roadmap"
           />
@@ -1520,7 +1520,7 @@ function RoadmapSelector({
                           key={y}
                           type="button"
                           onClick={() => setNewYears((prev) => checked ? prev.filter((x) => x !== y) : [...prev, y].sort())}
-                          className={cn("rounded-md border px-2 py-0.5 text-[12px] font-medium transition", checked ? "border-blue-400 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-500 hover:bg-slate-50")}
+                          className={cn("rounded-md border px-2 py-0.5 text-[12px] font-medium transition", checked ? "border-blue-400 bg-blue-50 text-blue-950" : "border-slate-200 text-slate-500 hover:bg-slate-50")}
                         >{y}</button>
                       );
                     })}
@@ -1550,8 +1550,8 @@ function RoadmapSelector({
                   inputRef.current?.blur();
                 }}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
-                  r.id === selectedRoadmap?.id && "bg-blue-50 text-blue-800",
+                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-950 hover:bg-slate-100",
+                  r.id === selectedRoadmap?.id && "bg-blue-50 text-blue-950",
                 )}
               >
                 <MapIcon className="size-3.5 shrink-0 text-slate-400" />
@@ -1573,7 +1573,7 @@ function RoadmapSelector({
           <button
             type="button"
             onClick={() => setManageOpen((v) => !v)}
-            className="flex h-7 w-6 items-center justify-center text-blue-600/70 transition hover:bg-blue-100/60 hover:text-blue-800"
+            className="flex h-7 w-6 items-center justify-center text-blue-600/70 transition hover:bg-blue-100/60 hover:text-blue-950"
             title="Manage roadmap"
           >
             <Pencil className="size-3" />
@@ -1607,7 +1607,7 @@ function RoadmapSelector({
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Years in scope</p>
                 <div className="flex flex-wrap gap-1.5">
                   {years.map((y) => (
-                    <div key={y} className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[12px] font-medium text-blue-800">
+                    <div key={y} className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[12px] font-medium text-blue-950">
                       {y}
                       <button
                         type="button"
@@ -1654,7 +1654,7 @@ function RoadmapSelector({
           <select
             value={year}
             onChange={(e) => void onYearChange(Number(e.target.value))}
-            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold tabular-nums text-blue-800 outline-none hover:bg-blue-100/60 sm:text-[12px]"
+            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold tabular-nums text-blue-950 outline-none hover:bg-blue-100/60 sm:text-[12px]"
           >
             {years.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -2470,21 +2470,21 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex h-[26px] max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[12px] font-semibold leading-none tracking-[0.01em] ring-1 transition sm:gap-1.5 sm:px-2 sm:text-[12.5px] lg:px-2.5 [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill] [&_svg]:opacity-35";
-  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-800 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
-  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-800 ring-violet-300/75 shadow-sm hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50`;
-  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-800 ring-orange-200/75 hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40`;
-  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-800 ring-orange-300/75 shadow-sm hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50`;
-  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-800 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40`;
-  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-800 ring-indigo-300/75 shadow-sm hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50`;
-  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-800 ring-green-200/75 hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/40`;
-  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-800 ring-green-300/75 shadow-sm hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50`;
-  const summaryChipTeamsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-700 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40`;
-  const summaryChipTeamsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-700 ring-slate-300/75 shadow-sm hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50`;
-  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-sky-200 via-sky-300 to-sky-300 text-sky-800 ring-sky-200/75 hover:from-sky-100 hover:via-sky-200 hover:to-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40`;
-  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-800 ring-blue-200/75 hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40`;
+    "inline-flex h-7 max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition [&_svg]:opacity-35";
+  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-950 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
+  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-950 ring-violet-300/75 shadow-sm hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50`;
+  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-950 ring-orange-200/75 hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40`;
+  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-950 ring-orange-300/75 shadow-sm hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50`;
+  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40`;
+  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-950 ring-indigo-300/75 shadow-sm hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50`;
+  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-950 ring-green-200/75 hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/40`;
+  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-950 ring-green-300/75 shadow-sm hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50`;
+  const summaryChipTeamsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-950 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40`;
+  const summaryChipTeamsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-950 ring-slate-300/75 shadow-sm hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50`;
+  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-sky-200 via-sky-300 to-sky-300 text-sky-950 ring-sky-200/75 hover:from-sky-100 hover:via-sky-200 hover:to-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40`;
+  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-950 ring-blue-200/75 hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40`;
   const summaryChipStoriesStaticClass = summaryChipStoriesClass;
-  const summaryChipUnscheduledClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-800 ring-orange-200/75`;
+  const summaryChipUnscheduledClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-950 ring-orange-200/75`;
   const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
   const estimatePanelScopeLabel = activeMonth
@@ -2505,7 +2505,7 @@ export function TimelineGrid({
   }, [estEpicsPanelOpen, estimatePanelScopeLabel, scopedEpicsForEstimatePanel.all]);
 
   const estimatePanelTableClass =
-    "w-full table-fixed border-collapse text-[15px] text-slate-700";
+    "w-full table-fixed border-collapse text-[15px] text-slate-950";
   const estimatePanelHeadCellClass =
     "px-3 py-2.5 text-left text-[13px] font-semibold uppercase tracking-wide text-slate-600";
   const estimatePanelBodyRowClass =
@@ -2610,7 +2610,7 @@ export function TimelineGrid({
                           closeEstEpicsPanel();
                           onOpenEpic(row.epic.id);
                         }}
-                        className="inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-800"
+                        className="inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                       >
                         <span className="truncate">{row.epic.title}</span>
                       </button>
@@ -2623,26 +2623,26 @@ export function TimelineGrid({
                         closeEstEpicsPanel();
                         onOpenInitiative(row.initiative.id);
                       }}
-                      className="inline-flex max-w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-800"
+                      className="inline-flex max-w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                     >
                       <span className="truncate">{row.initiative.title}</span>
                     </button>
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                     {estimatePanelEpicSprintLabel(row.epic)}
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                     {estimatePanelTeamLabel(row.epic.team)}
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                     {estimatePanelAssigneeLabel(row.epic.assignee)}
                   </td>
-                  <td className={cn(estimatePanelCellClass, "text-center text-[14px] font-semibold tabular-nums text-slate-700")}>
+                  <td className={cn(estimatePanelCellClass, "text-center text-[14px] font-semibold tabular-nums text-slate-950")}>
                     {Math.max(0, Number(row.epic.originalEstimateDays ?? 0))}d
                   </td>
                   {showEstimatedColumns ? (
                     <>
-                      <td className={cn(estimatePanelCellClass, "text-center text-[14px] font-semibold tabular-nums text-slate-700")}>
+                      <td className={cn(estimatePanelCellClass, "text-center text-[14px] font-semibold tabular-nums text-slate-950")}>
                         {childEstimateSum}d
                       </td>
                       <td className={cn(estimatePanelCellClass, "text-center")}>
@@ -2698,7 +2698,7 @@ export function TimelineGrid({
                             <span className="absolute left-8 top-1/2 h-px w-3.5 -translate-y-px bg-indigo-300" />
                             <span className="inline-flex min-w-0 items-center gap-1.5">
                               <UserStoryIcon className="size-3.5 shrink-0 text-slate-400" />
-                              <span className="truncate text-[14px] font-medium text-slate-700">{story.title}</span>
+                              <span className="truncate text-[14px] font-medium text-slate-950">{story.title}</span>
                             </span>
                           </td>
                           <td className={cn(estimatePanelCellClass, "text-[13px] text-slate-400")}>—</td>
@@ -2711,7 +2711,7 @@ export function TimelineGrid({
                           <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
                             {estimatePanelAssigneeLabel(story.assignee)}
                           </td>
-                          <td className={cn(estimatePanelCellClass, "text-center text-[13px] font-semibold tabular-nums text-slate-700")}>
+                          <td className={cn(estimatePanelCellClass, "text-center text-[13px] font-semibold tabular-nums text-slate-950")}>
                             {Math.max(0, Number(story.estimatedDays ?? 0))}d
                           </td>
                           {showEstimatedColumns ? (
@@ -2799,26 +2799,26 @@ export function TimelineGrid({
                         <button
                           type="button"
                           onClick={() => { closeEstEpicsPanel(); onOpenEpic(row.epic.id); }}
-                          className="inline-flex min-w-0 max-w-full rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-800"
+                          className="inline-flex min-w-0 max-w-full rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                         >
                           <span className="truncate">{row.epic.title}</span>
                         </button>
                       </div>
                     </td>
-                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                       {estimatePanelEpicSprintLabel(row.epic)}
                     </td>
-                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                       {estimatePanelTeamLabel(row.epic.team)}
                     </td>
-                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                    <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                       {estimatePanelAssigneeLabel(row.epic.assignee)}
                     </td>
                     <td className={cn(estimatePanelCellClass, "text-slate-600")}>
                       <button
                         type="button"
                         onClick={() => { closeEstEpicsPanel(); onOpenInitiative(row.initiative.id); }}
-                        className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-800"
+                        className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                       >
                         <span className="truncate">{row.initiative.title}</span>
                       </button>
@@ -2850,7 +2850,7 @@ export function TimelineGrid({
                               <span className="absolute left-8 top-1/2 h-px w-3.5 -translate-y-px bg-indigo-300" />
                               <span className="inline-flex min-w-0 items-center gap-1.5">
                                 <UserStoryIcon className="size-3.5 shrink-0 text-slate-400" />
-                                <span className="truncate text-[14px] font-medium text-slate-700">{story.title}</span>
+                                <span className="truncate text-[14px] font-medium text-slate-950">{story.title}</span>
                               </span>
                             </td>
                             <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
@@ -2918,7 +2918,7 @@ export function TimelineGrid({
                     }}
                     disabled={!onOpenStory}
                     className={cn(
-                      "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-800",
+                      "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950",
                       !onOpenStory && "cursor-default opacity-60 hover:bg-transparent hover:text-slate-900",
                     )}
                   >
@@ -2926,13 +2926,13 @@ export function TimelineGrid({
                     <span className="truncate">{row.story.title}</span>
                   </button>
                 </td>
-                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                   {estimatePanelStorySprintLabel(row.story)}
                 </td>
-                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                   {estimatePanelTeamLabel(row.epic.team)}
                 </td>
-                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-700")}>
+                <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
                   {estimatePanelAssigneeLabel(row.story.assignee)}
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-slate-600")}>
@@ -2942,7 +2942,7 @@ export function TimelineGrid({
                       closeEstEpicsPanel();
                       onOpenEpic(row.epic.id);
                     }}
-                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/70 hover:text-blue-800"
+                    className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                   >
                     <span className="truncate">{row.epic.title}</span>
                   </button>
@@ -3324,7 +3324,7 @@ export function TimelineGrid({
       active:
         "border-blue-400 bg-gradient-to-r from-blue-500 to-sky-500 text-white shadow-md ring-2 ring-blue-200",
       idle:
-        "border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50 text-blue-800 shadow-sm hover:from-blue-100 hover:to-sky-100",
+        "border-blue-200 bg-gradient-to-r from-blue-50 to-sky-50 text-blue-950 shadow-sm hover:from-blue-100 hover:to-sky-100",
     },
     Q2: {
       active:
@@ -3342,14 +3342,14 @@ export function TimelineGrid({
       active:
         "border-violet-400 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-md ring-2 ring-violet-200",
       idle:
-        "border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50 text-violet-800 shadow-sm hover:from-violet-100 hover:to-fuchsia-100",
+        "border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50 text-violet-950 shadow-sm hover:from-violet-100 hover:to-fuchsia-100",
     },
   };
   const monthToneByQuarter: Record<string, string> = {
-    Q1: "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
+    Q1: "border-blue-200 bg-blue-50 text-blue-950 hover:bg-blue-100",
     Q2: "border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100",
     Q3: "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
-    Q4: "border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100",
+    Q4: "border-violet-200 bg-violet-50 text-violet-950 hover:bg-violet-100",
   };
   const quarterPanelTone: Record<string, string> = {
     Q1: "bg-blue-50/45 ring-blue-100",
@@ -3707,7 +3707,7 @@ export function TimelineGrid({
   const railLabelBaseClass =
     "pointer-events-none overflow-hidden whitespace-nowrap text-[14px] font-semibold tracking-[0.01em] transition-all duration-150";
   /** Month / quarter plan rail only (between center and right panel). Flat indigo — not shared with roadmap summary chips. */
-  const planRailTabActiveClass = "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-800 ring-1 ring-indigo-200/80";
+  const planRailTabActiveClass = "bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-950 ring-1 ring-indigo-200/80";
 
   const runSurfaceTransition = useCallback(() => {
     const el = timelineContentScrollRef.current;
@@ -3950,7 +3950,7 @@ export function TimelineGrid({
               isDragging={isAnyDragActive}
             />
           ) : (
-            <p className="bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-700">
+            <p className="bg-gradient-to-r from-slate-100 via-slate-50 to-white p-3.5 text-[14px] leading-6 text-slate-950">
               Create an initiative, then drag its epics onto the timeline. You can also stretch or shorten a scheduled bar
               by dragging its ends to match your start and due dates.
             </p>
@@ -4369,7 +4369,7 @@ export function TimelineGrid({
         onChange={(e) => { setGanttSearchQuery(e.target.value); setGanttSearchFilter(null); setGanttSearchOpen(true); }}
         onFocus={() => setGanttSearchOpen(true)}
         placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
-        className="h-8 w-[30rem] rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-700 placeholder:text-slate-400 outline-none focus:w-[36rem] focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200"
+        className="h-8 w-[30rem] rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:w-[36rem] focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200"
       />
       {(ganttSearchQuery || ganttSearchFilter) ? (
         <button
@@ -4395,7 +4395,7 @@ export function TimelineGrid({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => { setGanttSearchFilter({ type: "initiative", id: init.id, label: init.title }); setGanttSearchQuery(init.title); setGanttSearchOpen(false); }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-700 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
                 >
                   <Zap className="size-3.5 shrink-0 text-violet-400" aria-hidden />
                   <span className="truncate">{init.title}</span>
@@ -4412,7 +4412,7 @@ export function TimelineGrid({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => { setGanttSearchFilter({ type: "epic", id: epic.id, label: epic.title }); setGanttSearchQuery(epic.title); setGanttSearchOpen(false); }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-700 hover:bg-slate-50"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
                 >
                   <Folder className="size-3.5 shrink-0 text-indigo-400" aria-hidden />
                   <span className="truncate">{epic.title}</span>
@@ -4450,7 +4450,7 @@ export function TimelineGrid({
                       runSurfaceTransition();
                       item.onClick?.();
                     }}
-                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-950 underline-offset-4 transition hover:text-slate-900 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -4509,7 +4509,7 @@ export function TimelineGrid({
                             value={sprintTeamSearch}
                             onChange={(e) => setSprintTeamSearch(e.target.value)}
                             placeholder="Search teams…"
-                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
                         {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => {
@@ -4534,7 +4534,7 @@ export function TimelineGrid({
                                 }
                               }}
                               className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-950 hover:bg-slate-100",
                                 checked && !isAll && "bg-slate-50",
                               )}
                             >
@@ -4589,7 +4589,7 @@ export function TimelineGrid({
                             value={ganttTeamSearch}
                             onChange={(e) => setGanttTeamSearch(e.target.value)}
                             placeholder="Search teams…"
-                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
                         {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(ganttTeamSearch.toLowerCase())).map((option) => {
@@ -4609,7 +4609,7 @@ export function TimelineGrid({
                                 }
                               }}
                               className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-950 hover:bg-slate-100",
                                 checked && !isAll && "bg-slate-50",
                               )}
                             >
@@ -4664,7 +4664,7 @@ export function TimelineGrid({
                             value={insightsTeamSearch}
                             onChange={(e) => setInsightsTeamSearch(e.target.value)}
                             placeholder="Search teams…"
-                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                           />
                         </div>
                         {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(insightsTeamSearch.toLowerCase())).map((option) => {
@@ -4684,7 +4684,7 @@ export function TimelineGrid({
                                 }
                               }}
                               className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-950 hover:bg-slate-100",
                                 checked && !isAll && "bg-slate-50",
                               )}
                             >
@@ -4793,8 +4793,8 @@ export function TimelineGrid({
                                 >
                                   <span className={cn(
                                     "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                                    s.kind === "story" && "bg-sky-100 text-sky-800",
-                                    s.kind === "epic" && "bg-violet-100 text-violet-800",
+                                    s.kind === "story" && "bg-sky-100 text-sky-950",
+                                    s.kind === "epic" && "bg-violet-100 text-violet-950",
                                     s.kind === "initiative" && "bg-amber-100 text-amber-700",
                                   )}>
                                     {s.kind === "story" ? "Story" : s.kind === "epic" ? "Epic" : "Initiative"}
@@ -5320,7 +5320,7 @@ export function TimelineGrid({
                               key={dayLabel.key}
                               className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
                             >
-                              <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-700">
+                              <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-950">
                                 {dayLabel.weekday}
                               </span>
                               <span className="w-full truncate text-[11px] font-medium leading-none text-slate-500 tabular-nums">
@@ -5358,7 +5358,7 @@ export function TimelineGrid({
                               key={dayLabel.key}
                               className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
                             >
-                              <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-700">
+                              <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-950">
                                 {dayLabel.weekday}
                               </span>
                               <span className="w-full truncate text-[11px] font-medium leading-none text-slate-500 tabular-nums">
@@ -5621,7 +5621,7 @@ export function TimelineGrid({
                               value={sprintTeamSearch}
                               onChange={(e) => setSprintTeamSearch(e.target.value)}
                               placeholder="Search teams…"
-                              className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
+                              className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-950 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-300/70"
                             />
                           </div>
                           {sprintTeamOptions.filter((o) => o.label.toLowerCase().includes(sprintTeamSearch.toLowerCase())).map((option) => {
@@ -5646,7 +5646,7 @@ export function TimelineGrid({
                                   }
                                 }}
                                 className={cn(
-                                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-950 hover:bg-slate-100",
                                   checked && !isAll && "bg-slate-50",
                                 )}
                               >
@@ -5775,7 +5775,7 @@ export function TimelineGrid({
                             activeMonth === month
                               ? "bg-gradient-to-br from-blue-100 to-indigo-50 text-blue-900 ring-blue-200/80"
                               : monthToneByQuarter[quarterLabelByMonth.get(month) ?? ""] ??
-                                  "bg-slate-100 text-slate-700 ring-slate-200/80 hover:-translate-y-px hover:shadow-md",
+                                  "bg-slate-100 text-slate-950 ring-slate-200/80 hover:-translate-y-px hover:shadow-md",
                           )}
                           onClick={() => {
                             if (isPostDragClickSuppressed()) return;
@@ -6268,7 +6268,7 @@ export function TimelineGrid({
                                 type="button"
                                 className={cn(
                                   "flex w-full items-center justify-center gap-1.5 rounded-xl border py-1.5 text-center text-[15px] font-bold tracking-tight ring-1 ring-black/[0.04] transition hover:-translate-y-px",
-                                  monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                                  monthToneByQuarter[quarter.label] ?? "bg-slate-100 text-slate-950 hover:bg-slate-200",
                                 )}
                                 onClick={() => {
                                   if (isPostDragClickSuppressed()) return;
