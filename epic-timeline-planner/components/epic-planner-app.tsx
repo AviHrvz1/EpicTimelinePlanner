@@ -71,7 +71,6 @@ import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, QUARTERS } from
 import { EpicItem, InitiativeItem, RoadmapItem } from "@/lib/types";
 import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
-import { DebugLogPanel } from "@/components/debug-log-panel";
 import {
   SPRINT_CAPACITY_OTHER_BUCKET,
   SPRINT_CAPACITY_STORAGE_KEY,
@@ -4574,7 +4573,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 isResizingPanel && "select-none",
               )}
               style={{
-                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr)" : "auto 20px minmax(0, 1fr)",
+                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 16px" : "auto 20px minmax(0, 1fr) 16px",
               }}
             >
               <div
@@ -5119,6 +5118,36 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onSprintModeChange={handleSprintModeChange}
               />
               </div>
+              {/* Decorative mirror of the left-side panel separator (no resize) */}
+              <div
+                className="pointer-events-none relative flex h-full min-h-0 w-4 shrink-0 items-center justify-center self-stretch"
+                aria-hidden
+              >
+                <div
+                  className="pointer-events-none absolute inset-y-0 left-[78%] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]"
+                  aria-hidden
+                />
+                <svg
+                  className="pointer-events-none absolute top-0 left-[78%] z-20 -translate-x-1/2 drop-shadow-sm"
+                  width="22"
+                  height="16"
+                  viewBox="0 0 22 16"
+                  aria-hidden
+                >
+                  <polygon points="0,0 22,0 11,16" fill="white" />
+                  <path d="M0,0 L11,16 L22,0" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+                </svg>
+                <svg
+                  className="pointer-events-none absolute bottom-0 left-[78%] z-20 -translate-x-1/2 drop-shadow-sm"
+                  width="22"
+                  height="16"
+                  viewBox="0 0 22 16"
+                  aria-hidden
+                >
+                  <polygon points="0,16 22,16 11,0" fill="white" />
+                  <path d="M0,16 L11,0 L22,16" fill="none" stroke="rgba(15,23,42,0.13)" strokeWidth="1" strokeLinejoin="round" />
+                </svg>
+              </div>
             </div>
           ) : topMode === "dashboard" ? (
             <div className="min-h-0 min-w-0 flex-1">
@@ -5585,7 +5614,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           deleting={deletingEpic}
         />
       )}
-      <DebugLogPanel />
+      {/* <DebugLogPanel /> hidden in production look */}
     </DragContext>
   );
 }
