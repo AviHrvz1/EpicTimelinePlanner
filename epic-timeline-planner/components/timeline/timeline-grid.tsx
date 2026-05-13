@@ -204,10 +204,15 @@ function YearRoadmapTodayLine({ leftPercent }: { leftPercent: number | null }) {
       style={{ left: `${x}%` }}
       aria-hidden
     >
-      {/* vertical line */}
+      {/* down-pointing triangle at top */}
+      <div
+        className="absolute h-[10px] w-[12px] -translate-x-1/2 bg-emerald-500"
+        style={{ left: 0, top: 0, clipPath: "polygon(0 0, 100% 0, 50% 100%)" }}
+      />
+      {/* vertical line — starts right under the down triangle */}
       <div
         className="absolute w-px -translate-x-1/2 bg-emerald-500/85"
-        style={{ left: 0, top: 0, bottom: 0 }}
+        style={{ left: 0, top: 8, bottom: 0 }}
       />
       {/* up-pointing triangle at bottom */}
       <div
@@ -600,10 +605,10 @@ function GanttTodayMarker({
           style={{ left: `${x}%` }}
         >
           {showLine ? (
-            <div className="absolute left-1/2 top-[75px] bottom-0 w-px -translate-x-1/2 bg-emerald-500/95" />
+            <div className="absolute left-1/2 bottom-0 top-[14px] w-px -translate-x-1/2 bg-emerald-500/95" />
           ) : null}
           {showArrow ? (
-            <div className="absolute top-[62px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
+            <div className="absolute bottom-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[8px] border-t-emerald-500" />
           ) : null}
         </div>
       </div>
@@ -6248,13 +6253,7 @@ export function TimelineGrid({
                     yearRoadmapHScroll ? "w-max max-w-full" : "w-full",
                   )}
                 >
-                  <GanttTodayMarker
-                    leftPercent={roadmapLaneTodayLeft}
-                    showBadge={false}
-                    badgePlacement="above"
-                    prioritizeLabel
-                    showLine={false}
-                  />
+                  {/* Today marker (line + top/bottom triangles) is rendered by YearRoadmapTodayLine inside the gantt lane area below. */}
                   <div
                     className={cn("grid min-w-0 gap-2 px-0.5", !yearRoadmapHScroll && "grid-cols-4")}
                     style={yearFullYearMonthStripGridStyle}

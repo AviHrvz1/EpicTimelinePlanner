@@ -4307,7 +4307,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] transition hover:from-indigo-100 hover:to-violet-100"
+              className="flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg border border-slate-300 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-indigo-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2} aria-hidden />

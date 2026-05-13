@@ -1503,7 +1503,7 @@ export function UsersWorkspacePanel() {
             <button
               type="button"
               onClick={() => setUserDirGroupMenuOpen((prev) => !prev)}
-              className="flex h-10 min-w-[11rem] items-center justify-between rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] transition hover:from-indigo-100 hover:to-violet-100"
+              className="flex h-10 min-w-[11rem] items-center justify-between rounded-lg border border-slate-300 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80"
             >
               <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
