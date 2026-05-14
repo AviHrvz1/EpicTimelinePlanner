@@ -755,7 +755,7 @@ export function InitiativeFormDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[1px]",
+        "fixed inset-0 z-[70] bg-slate-900/30 backdrop-blur-[1px]",
         !anchored && "flex items-stretch justify-end p-0",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",
@@ -1209,7 +1209,7 @@ export function InitiativeFormDialog({
                   <p className="text-[15px] font-normal text-slate-700">Color</p>
                   <InitiativeColorPicker value={color} onChange={setColor} />
                 </div>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-400" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-500 shadow-sm" /></label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Year</p>
                   <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
@@ -1234,7 +1234,7 @@ export function InitiativeFormDialog({
                     <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-3">
                       <p className="mt-1.5 text-[15px] font-normal text-slate-700">Roadmap</p>
                       <div className="relative">
-                        <div className="flex h-7 items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm focus-within:ring-2 focus-within:ring-blue-400/40">
+                        <div className="flex h-7 items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.08)] focus-within:ring-2 focus-within:ring-blue-400/40">
                           <MapIcon className="ml-2 size-3.5 shrink-0 text-slate-400" aria-hidden />
                           <input
                             ref={roadmapInputRef}

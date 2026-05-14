@@ -1006,7 +1006,7 @@ export function StoryDetailsDialog({
             </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Status</p>
-              <div className="flex h-7 items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2">
+              <div className="flex h-7 items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2 shadow-sm transition-colors hover:border-blue-400">
                 {(() => {
                   const Icon = statusMeta[status].Icon;
                   return <Icon className="size-3.5 shrink-0 text-slate-600" />;
@@ -1136,7 +1136,7 @@ export function StoryDetailsDialog({
                   value={epicId}
                   title=""
                   onChange={(event) => setEpicId(event.target.value)}
-                  className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
+                  className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
                   disabled={Boolean(lockParentEpicId)}
                 >
                   <option value="">Select epic</option>

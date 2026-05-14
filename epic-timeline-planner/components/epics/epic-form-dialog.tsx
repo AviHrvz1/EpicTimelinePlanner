@@ -534,6 +534,23 @@ export function EpicFormDialog({
   const totalUserStoryEstimate = useMemo(() => {
     return (epic?.userStories ?? []).reduce((sum, row) => sum + (row.estimatedDays ?? 0), 0);
   }, [epic?.userStories]);
+
+  // Roll-up status derived from the epic's user stories.
+  // Empty: "—". All approved: "Approved". All done/approved: "Done". Any in-progress (or mixed done+todo): "In progress". Else "To do".
+  const derivedEpicStatus = useMemo<{ label: string; key: "todo" | "inProgress" | "done" | "approved" | "empty" }>(() => {
+    const stories = epic?.userStories ?? [];
+    if (stories.length === 0) return { label: "—", key: "empty" };
+    const counts = { todo: 0, inProgress: 0, done: 0, approved: 0 };
+    for (const s of stories) {
+      const k = s.status as keyof typeof counts;
+      if (k in counts) counts[k] += 1;
+    }
+    if (counts.approved === stories.length) return { label: "Approved", key: "approved" };
+    if (counts.inProgress > 0) return { label: "In progress", key: "inProgress" };
+    if (counts.done + counts.approved === stories.length) return { label: "Done", key: "done" };
+    if (counts.done > 0 || counts.approved > 0) return { label: "In progress", key: "inProgress" };
+    return { label: "To do", key: "todo" };
+  }, [epic?.userStories]);
   const infoTooltipClass =
     "pointer-events-none absolute left-1/2 top-0 z-[320] w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
 
@@ -1560,9 +1577,27 @@ export function EpicFormDialog({
                     disabled={isSaving}
                     placeholder="Search, pick, or create an initiative"
                     aria-label="Parent initiative"
-                    className="h-7 w-full min-w-0 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800"
+                    className="h-7 w-full min-w-0 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm px-1.5 text-[14px] text-slate-800"
                   />
                 </label>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                  <div className="inline-flex items-center gap-1">
+                    <p className="text-[15px] font-normal text-slate-700">Status</p>
+                    <span className="group relative inline-flex items-center">
+                      <Info className="size-3.5 text-slate-400" aria-label="Status is derived from the epic's user stories" />
+                      <span role="tooltip" className={infoTooltipClass}>
+                        Status is rolled up from this epic&rsquo;s user stories.
+                      </span>
+                    </span>
+                  </div>
+                  <input
+                    value={derivedEpicStatus.label}
+                    readOnly
+                    aria-label="Status (read-only)"
+                    title="Status is calculated from the user stories"
+                    className="h-7 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-medium text-slate-500 shadow-sm"
+                  />
+                </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Team</p>
                   <div className="group/team relative flex min-w-0 w-full items-center">
@@ -1615,7 +1650,7 @@ export function EpicFormDialog({
                   <input
                     value={totalUserStoryEstimate}
                     readOnly
-                    className="h-6 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] font-medium text-slate-700 shadow-sm"
+                    className="h-6 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-500 shadow-sm"
                   />
                 </label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
