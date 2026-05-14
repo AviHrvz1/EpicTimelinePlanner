@@ -2,20 +2,36 @@
 
 import {
   Activity,
+  AreaChart as AreaChartIcon,
+  Bold,
   CalendarDays,
   CheckCircle2,
+  Heading2,
+  Heading3,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
   MoreHorizontal,
   PieChart as PieChartIcon,
+  Quote,
   Save,
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  Underline as UnderlineIcon,
   User,
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import Underline from "@tiptap/extension-underline";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 
 import { BurndownChart } from "@/components/dashboard/charts/burndown-chart";
+import { CfdChart } from "@/components/dashboard/charts/cfd-chart";
 import { StoryStatusChart } from "@/components/dashboard/charts/story-status-chart";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
@@ -79,17 +95,21 @@ function stripTags(html: string): string {
 function htmlToCards(html: string | undefined | null): RetroCard[] {
   const raw = (html ?? "").trim();
   if (!raw) return [];
+  // Split on top-level block separators: outer <p>, <li>, or <div>. Inner HTML (b/i/u/links) is preserved.
   const matches = [...raw.matchAll(/<(p|li|div)[^>]*>([\s\S]*?)<\/\1>/gi)];
-  const texts =
+  const innerHtmls =
     matches.length > 0
-      ? matches.map((m) => stripTags(m[2] ?? ""))
-      : [stripTags(raw)];
-  return texts.filter(Boolean).map((text) => ({ id: cryptoRandomId(), text }));
+      ? matches.map((m) => (m[2] ?? "").trim())
+      : [raw];
+  return innerHtmls
+    .filter((s) => stripTags(s).length > 0)
+    .map((text) => ({ id: cryptoRandomId(), text }));
 }
 
 function cardsToHtml(cards: RetroCard[]): string {
   if (cards.length === 0) return "<p></p>";
-  return cards.map((c) => `<p>${escapeHtml(c.text)}</p>`).join("");
+  // text is rich HTML; wrap each as a paragraph block so it round-trips through htmlToCards.
+  return cards.map((c) => `<p>${c.text}</p>`).join("");
 }
 
 function cryptoRandomId(): string {
@@ -116,42 +136,99 @@ function CardComposer({
 }: {
   placeholder: string;
   accentButton: string;
-  onAdd: (text: string) => void;
+  /** Receives rich HTML (e.g. "Did <strong>X</strong>") — not plain text. */
+  onAdd: (html: string) => void;
   trailing?: React.ReactNode;
 }) {
-  const [text, setText] = useState("");
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { class: "text-blue-600 underline decoration-blue-600/40 underline-offset-2" },
+      }),
+      Placeholder.configure({ placeholder }),
+    ],
+    content: "<p></p>",
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "outline-none min-h-[7rem] px-2 py-1.5 text-[14px] text-slate-700",
+      },
+    },
+  });
 
   function submit() {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    onAdd(trimmed);
-    setText("");
+    if (!editor || editor.isEmpty) return;
+    // Strip the outermost <p>…</p> wrapper so each card stores inline-rich content; htmlToCards re-adds blocks.
+    let html = editor.getHTML().trim();
+    if (html.startsWith("<p>") && html.endsWith("</p>") && html.indexOf("<p>", 3) === -1) {
+      html = html.slice(3, -4);
+    }
+    if (!stripTags(html)) return;
+    onAdd(html);
+    editor.commands.setContent("<p></p>", { emitUpdate: false });
+  }
+
+  const isEmpty = !editor || editor.isEmpty;
+
+  function tbBtn(active: boolean, onClick: () => void, icon: React.ReactNode) {
+    return (
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onClick}
+        className={cn(
+          "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+          active ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
+        )}
+      >
+        {icon}
+      </button>
+    );
   }
 
   return (
     <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200/70">
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
+      {/* Toolbar — same style as Description panel */}
+      <div className="mb-2 flex flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
+        {tbBtn(!!editor?.isActive("bold"), () => editor?.chain().focus().toggleBold().run(), <Bold className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("italic"), () => editor?.chain().focus().toggleItalic().run(), <Italic className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("underline"), () => editor?.chain().focus().toggleUnderline().run(), <UnderlineIcon className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("bulletList"), () => editor?.chain().focus().toggleBulletList().run(), <List className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("orderedList"), () => editor?.chain().focus().toggleOrderedList().run(), <ListOrdered className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("blockquote"), () => editor?.chain().focus().toggleBlockquote().run(), <Quote className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("heading", { level: 2 }), () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("heading", { level: 3 }), () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), <Heading3 className="size-3.5" />)}
+        {tbBtn(!!editor?.isActive("link"), () => {
+          const prev = (editor?.getAttributes("link").href as string | undefined) ?? "";
+          const url = window.prompt("Link URL", prev || "https://");
+          if (!editor || url == null) return;
+          const trimmed = url.trim();
+          if (!trimmed) { editor.chain().focus().extendMarkRange("link").unsetLink().run(); return; }
+          editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+        }, <LinkIcon className="size-3.5" />)}
+      </div>
+      <EditorContent
+        editor={editor}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             submit();
           }
         }}
-        rows={7}
-        placeholder={placeholder}
-        className="block min-h-[9.5rem] w-full resize-none border-0 bg-transparent text-[14px] text-slate-700 outline-none placeholder:text-slate-400"
+        className="focus-within:outline-none [&_.ProseMirror]:outline-none"
       />
-      <div className="mt-1 flex items-center justify-between">
+      <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5">{trailing}</div>
         <button
           type="button"
           onClick={submit}
-          disabled={!text.trim()}
+          disabled={isEmpty}
           className={cn(
             "inline-flex h-7 items-center justify-center rounded-full px-3 text-[12px] font-semibold transition",
-            text.trim() ? accentButton : "bg-slate-100 text-slate-400 cursor-not-allowed",
+            !isEmpty ? accentButton : "bg-slate-100 text-slate-400 cursor-not-allowed",
           )}
         >
           Add
@@ -189,7 +266,10 @@ function StickyCard({
         bgClass,
       )}
     >
-      <p className="whitespace-pre-wrap break-words">{text}</p>
+      <div
+        className="whitespace-pre-wrap break-words [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:border-white/40 [&_blockquote]:pl-2 [&_h2]:text-[16px] [&_h2]:font-semibold [&_h3]:text-[15px] [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+        dangerouslySetInnerHTML={{ __html: text }}
+      />
       {detail ? <div className="mt-2 text-[12px] text-white/80">{detail}</div> : null}
       <div className="mt-2 flex items-center justify-between">
         <span
@@ -458,7 +538,7 @@ export function SprintRetrospectiveEditor({
 
         {/* Sprint recap charts (filtered by current sprint + team) */}
         {initiatives && planYear != null && yearSprint != null ? (
-          <div className="grid gap-5 px-5 pb-6 sm:px-7 lg:grid-cols-2">
+          <div className="grid gap-5 px-5 pb-6 sm:px-7 lg:grid-cols-3">
             <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
               <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                 <PieChartIcon className="size-4 text-slate-600" aria-hidden />
@@ -466,6 +546,21 @@ export function SprintRetrospectiveEditor({
               </h3>
               <div className="min-h-0 flex-1 overflow-hidden">
                 <StoryStatusChart
+                  initiatives={initiatives}
+                  year={planYear}
+                  quarter={Math.ceil(yearSprint / 6)}
+                  sprint={yearSprint}
+                  team={teamId ?? null}
+                />
+              </div>
+            </article>
+            <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
+              <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+                <AreaChartIcon className="size-4 text-slate-600" aria-hidden />
+                Cumulative Flow
+              </h3>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <CfdChart
                   initiatives={initiatives}
                   year={planYear}
                   quarter={Math.ceil(yearSprint / 6)}
