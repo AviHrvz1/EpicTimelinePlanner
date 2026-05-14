@@ -46,10 +46,17 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team 
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={barData} barCategoryGap="20%" margin={{ top: 16, right: 4, left: -12, bottom: 0 }}>
+      <BarChart data={barData} barCategoryGap="20%" margin={{ top: 16, right: 4, left: 16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
         <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+        <YAxis
+          tick={{ fontSize: 10 }}
+          axisLine={false}
+          tickLine={false}
+          allowDecimals={false}
+          width={44}
+          label={{ value: "Stories", angle: -90, position: "insideLeft", offset: 0, style: { fontSize: 11, fill: "#475569", fontWeight: 600 } }}
+        />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
         {SEGMENTS.map((s) => (
