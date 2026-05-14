@@ -15,20 +15,24 @@ type Props = {
 export function SprintBurnupChart({ initiatives, year, quarter, sprint, team }: Props) {
   const month = Math.ceil(sprint / 2);
   const analytics = buildSprintAnalytics(initiatives, month, sprint, "storyCount", year, team ? [team] : null);
-  const days = analytics.flowSprintTrendData;
+  const allDays = analytics.burndown;
+  const pastDays = analytics.flowSprintTrendData;
 
-  if (days.length === 0) {
+  if (allDays.length === 0) {
     return <p className="flex h-[180px] items-center justify-center text-xs text-slate-400">No data for this sprint</p>;
   }
 
-  const finalScope = days[days.length - 1]!.todo + days[days.length - 1]!.inProgress + days[days.length - 1]!.done + days[days.length - 1]!.approved;
-  const data = days.map((d, i) => ({
-    labelShort: d.labelShort,
-    scope: d.todo + d.inProgress + d.done + d.approved,
-    completed: d.done + d.approved,
-    ideal: finalScope > 0 ? Math.round((finalScope * i) / Math.max(days.length - 1, 1)) : 0,
-    isToday: d.isToday,
-  }));
+  // Extend to full sprint x-axis. Future days have null actuals so the line stops at today.
+  const pastByLabel = new Map(pastDays.map((d) => [d.labelShort, d]));
+  const lastPast = pastDays[pastDays.length - 1];
+  const finalScope = lastPast ? lastPast.todo + lastPast.inProgress + lastPast.done + lastPast.approved : 0;
+  const data = allDays.map((bd, i) => {
+    const past = pastByLabel.get(bd.labelShort);
+    const scope = past ? past.todo + past.inProgress + past.done + past.approved : finalScope;
+    const completed = past != null ? past.done + past.approved : null;
+    const ideal = finalScope > 0 ? Math.round((finalScope * i) / Math.max(allDays.length - 1, 1)) : 0;
+    return { labelShort: bd.labelShort, scope, completed, ideal, isToday: bd.isToday };
+  });
 
   const todayPoint = data.find((d) => d.isToday);
 
@@ -36,7 +40,12 @@ export function SprintBurnupChart({ initiatives, year, quarter, sprint, team }: 
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="labelShort" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+        <XAxis
+          dataKey="labelShort"
+          tick={{ fontSize: 10 }}
+          interval={0}
+          tickFormatter={(v: string) => v.replace(/\s*\([^)]*\)\s*$/, "")}
+        />
         <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
         {todayPoint && (

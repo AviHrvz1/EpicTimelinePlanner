@@ -7,6 +7,7 @@ import { GripVertical, Pencil, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
+import { currentCalendarYearSprint } from "@/lib/year-sprint";
 import { BurndownChart } from "./charts/burndown-chart";
 import { EpicBurndownChart } from "./charts/epic-burndown-chart";
 import { CfdChart } from "./charts/cfd-chart";
@@ -62,9 +63,49 @@ function ResizePad({
   );
 }
 
+// Sprint-scoped charts always render the current calendar sprint (auto-roll forward
+// when the originally-saved sprint window has ended).
+const SPRINT_SCOPED_CHART_TYPES = new Set<string>([
+  "burndown",
+  "epic-burndown",
+  "cfd",
+  "story-status",
+  "workload-balance",
+  "sprint-load",
+  "sprint-burnup",
+  "epic-burnup",
+  "workload",
+]);
+
+function resolveCurrentSprintParams(): { year: number; quarter: number; sprint: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return { year, quarter: Math.ceil(month / 3), sprint: currentCalendarYearSprint(now) };
+}
+
+export function resolveDisplayTitle(chart: DashboardChartItem): string {
+  if (!SPRINT_SCOPED_CHART_TYPES.has(chart.chartType)) return chart.title;
+  let savedSprint: number | null = null;
+  try {
+    const parsed = JSON.parse(chart.config) as Record<string, unknown>;
+    if (typeof parsed.sprint === "number") savedSprint = parsed.sprint;
+  } catch { /* ignore */ }
+  const current = resolveCurrentSprintParams().sprint;
+  if (savedSprint != null && savedSprint !== current) {
+    return chart.title.replace(/Sprint\s+\d+/i, `Sprint ${current}`);
+  }
+  return chart.title;
+}
+
 function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiatives: InitiativeItem[] }) {
   let params: Record<string, unknown> = {};
   try { params = JSON.parse(chart.config); } catch { /* ignore */ }
+
+  if (SPRINT_SCOPED_CHART_TYPES.has(chart.chartType)) {
+    const current = resolveCurrentSprintParams();
+    params = { ...params, year: current.year, quarter: current.quarter, sprint: current.sprint };
+  }
 
   const scopedInitiatives = params.roadmapId
     ? initiatives.filter((i) => i.roadmapId === params.roadmapId)
@@ -189,16 +230,17 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
   const cardHeight = 300 + (rowSpan - 1) * 220;
+  const displayTitle = resolveDisplayTitle(chart);
   const [renamingTitle, setRenamingTitle] = useState(false);
-  const [titleValue, setTitleValue] = useState(chart.title);
+  const [titleValue, setTitleValue] = useState(displayTitle);
   const titleInputRef = useRef<HTMLInputElement>(null);
   // Keep local value in sync if parent updates the chart title (e.g. after save/reload)
-  if (!renamingTitle && titleValue !== chart.title) setTitleValue(chart.title);
+  if (!renamingTitle && titleValue !== displayTitle) setTitleValue(displayTitle);
 
   function commitRename() {
     const trimmed = titleValue.trim();
-    if (trimmed && trimmed !== chart.title) onRenameChart(chart.id, trimmed);
-    else setTitleValue(chart.title);
+    if (trimmed && trimmed !== displayTitle) onRenameChart(chart.id, trimmed);
+    else setTitleValue(displayTitle);
     setRenamingTitle(false);
   }
 
@@ -235,7 +277,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
             value={titleValue}
             onChange={(e) => setTitleValue(e.target.value)}
             onBlur={commitRename}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } else if (e.key === "Escape") { setTitleValue(chart.title); setRenamingTitle(false); } }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } else if (e.key === "Escape") { setTitleValue(displayTitle); setRenamingTitle(false); } }}
             className="flex-1 rounded border border-indigo-300 bg-white px-1.5 py-0.5 text-sm font-semibold text-slate-700 outline-none ring-1 ring-indigo-300 focus:ring-indigo-500"
             autoFocus
           />
@@ -243,9 +285,9 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
           <span
             className="group/title flex flex-1 items-center gap-1 truncate text-sm font-semibold text-slate-700"
           >
-            <span className="truncate">{chart.title}</span>
+            <span className="truncate">{displayTitle}</span>
             <button
-              onClick={() => { setTitleValue(chart.title); setRenamingTitle(true); setTimeout(() => titleInputRef.current?.select(), 0); }}
+              onClick={() => { setTitleValue(displayTitle); setRenamingTitle(true); setTimeout(() => titleInputRef.current?.select(), 0); }}
               className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition-all group-hover/title:opacity-100 hover:bg-slate-100 hover:text-slate-500"
               title="Rename chart"
             >

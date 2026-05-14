@@ -23,7 +23,12 @@ export function BurndownChart({ initiatives, year, quarter, sprint, metric, team
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="labelShort" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+        <XAxis
+          dataKey="labelShort"
+          tick={{ fontSize: 10 }}
+          interval={0}
+          tickFormatter={(v: string) => v.replace(/\s*\([^)]*\)\s*$/, "")}
+        />
         <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
         {data.findIndex((d) => d.isToday) >= 0 && (
