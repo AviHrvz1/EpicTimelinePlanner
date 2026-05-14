@@ -97,6 +97,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          epicId={params.epicId as string | null}
         />
       );
     case "cfd":
@@ -176,6 +177,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          epicId={params.epicId as string | null}
         />
       );
     default:

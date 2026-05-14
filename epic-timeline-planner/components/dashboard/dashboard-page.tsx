@@ -526,6 +526,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                 roadmaps={roadmaps}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
                 context={context}
+                initiatives={allInitiatives}
                 onAddCharts={handleAddCharts}
                 editTarget={editTarget}
                 onCancelEdit={() => setEditTarget(null)}

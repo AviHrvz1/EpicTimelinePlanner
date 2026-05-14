@@ -10,11 +10,24 @@ type Props = {
   quarter: number;
   sprint: number;
   team?: string | null;
+  /** Restrict the burnup to a single epic. */
+  epicId?: string | null;
 };
 
-export function EpicBurnupChart({ initiatives, year, quarter, sprint, team }: Props) {
+export function EpicBurnupChart({ initiatives, year, quarter, sprint, team, epicId }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "storyCount", year, team ? [team] : null);
+  const scoped = epicId
+    ? initiatives
+        .map((initiative) => {
+          const filteredEpics = (initiative.epics ?? []).filter((epic) => epic.id === epicId);
+          return filteredEpics.length > 0 ? { ...initiative, epics: filteredEpics } : null;
+        })
+        .filter((value): value is InitiativeItem => value !== null)
+    : initiatives;
+  if (epicId && scoped.length === 0) {
+    return <p className="flex h-full min-h-[180px] items-center justify-center text-xs text-slate-400">Selected epic not found</p>;
+  }
+  const analytics = buildSprintAnalytics(scoped, month, sprint, "storyCount", year, team ? [team] : null);
   const days = analytics.flowSprintTrendData;
 
   if (days.length === 0) {

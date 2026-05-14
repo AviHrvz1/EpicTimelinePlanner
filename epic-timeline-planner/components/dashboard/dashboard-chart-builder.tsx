@@ -7,19 +7,21 @@ import {
   Check,
   ChevronLeft,
   Flag,
-  Map,
+  Folder,
+  Map as MapIcon,
   PieChart,
   RotateCcw,
   TrendingDown,
   Users,
   Users2,
   X,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
-import type { RoadmapItem } from "@/lib/types";
+import type { EpicItem, InitiativeItem, RoadmapItem } from "@/lib/types";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { capacityPlanTeamCatalogFromDirectory } from "@/lib/workspace-users";
 import type { ChartType, DashboardChartConfig, DashboardChartItem, LLMChartProposal, LLMQuestion } from "./types";
@@ -58,7 +60,7 @@ function roadmapIconNode(index: number): React.ReactNode {
   const color = ROADMAP_COLORS[index % ROADMAP_COLORS.length];
   return (
     <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-md ring-1", color)}>
-      <Map className="size-3" />
+      <MapIcon className="size-3" />
     </span>
   );
 }
@@ -191,12 +193,23 @@ function AutocompleteMultiSelect<T extends string>({
   placeholder?: string;
 }) {
   const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const filtered = query.trim()
     ? options.filter((o) => renderLabel(o).toLowerCase().includes(query.toLowerCase()))
     : options;
 
+  useEffect(() => {
+    if (!isOpen) return;
+    function onDown(e: globalThis.MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setIsOpen(false);
+    }
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [isOpen]);
+
   return (
-    <div className="flex flex-col gap-2">
+    <div ref={containerRef} className="flex flex-col gap-2">
       {/* Selected chips */}
       {selected.size > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -213,54 +226,254 @@ function AutocompleteMultiSelect<T extends string>({
           ))}
         </div>
       )}
-      {/* Search input */}
-      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+      {/* Search input — clicking opens the list */}
+      <div
+        className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all cursor-pointer"
+        onClick={() => setIsOpen(true)}
+      >
         <svg className="size-3.5 shrink-0 text-slate-300" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
         </svg>
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
+          onFocus={() => setIsOpen(true)}
           placeholder={placeholder ?? "Search…"}
           className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
         />
         {query && (
-          <button type="button" onClick={() => setQuery("")} className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setQuery(""); }}
+            className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+          >
             <X className="size-3.5" />
           </button>
         )}
       </div>
-      {/* Filtered options */}
-      {filtered.length === 0 ? (
-        <p className="px-1 py-2 text-sm text-slate-400">No results</p>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm max-h-44 overflow-y-auto">
-          {filtered.map((opt, i) => {
-            const active = selected.has(opt);
-            return (
+      {/* Filtered options — only shown when the picker is open */}
+      {isOpen ? (
+        filtered.length === 0 ? (
+          <p className="px-1 py-2 text-sm text-slate-400">No results</p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm max-h-44 overflow-y-auto">
+            {filtered.map((opt, i) => {
+              const active = selected.has(opt);
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => onToggle(opt)}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-sm transition-colors",
+                    i > 0 && "border-t border-slate-50",
+                    active
+                      ? "bg-indigo-50 font-semibold text-indigo-800"
+                      : "text-slate-700 hover:bg-slate-50",
+                  )}
+                >
+                  <span className={cn(
+                    "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-all",
+                    active ? "border-indigo-500 bg-indigo-500 shadow-sm" : "border-slate-200 bg-white",
+                  )}>
+                    {active && <Check className="size-2.5 text-white" strokeWidth={3.5} />}
+                  </span>
+                  {renderIcon && renderIcon(opt)}
+                  <span className="truncate">{renderLabel(opt)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Epic autocomplete (single-select; epics grouped by initiative) ─────────
+
+function EpicAutocomplete({
+  options,
+  selectedEpicIds,
+  onToggle,
+  onClearAll,
+}: {
+  options: Array<{ epic: EpicItem; initiative: InitiativeItem }>;
+  selectedEpicIds: Set<string>;
+  onToggle: (epicId: string) => void;
+  onClearAll: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const filtered = query.trim()
+    ? options.filter((o) => {
+        const q = query.toLowerCase();
+        return (
+          o.epic.title.toLowerCase().includes(q) ||
+          o.initiative.title.toLowerCase().includes(q) ||
+          (o.epic.team ?? "").toLowerCase().includes(q)
+        );
+      })
+    : options;
+
+  const selectedRows = options.filter((o) => selectedEpicIds.has(o.epic.id));
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function onDown(e: globalThis.MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setIsOpen(false);
+    }
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} className="flex flex-col gap-2">
+      {selectedRows.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          {selectedRows.map((row) => (
+            <div
+              key={row.epic.id}
+              className="flex items-center gap-2 rounded-xl bg-indigo-50 ring-1 ring-indigo-200 py-2 pl-3 pr-2 text-[13px]"
+            >
+              <Folder className="size-3.5 shrink-0 text-indigo-500" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-semibold text-indigo-900">{row.epic.title}</div>
+                <div className="truncate text-[11px] text-indigo-700/80">
+                  {row.initiative.title}
+                  {row.epic.team ? ` · ${monthTeamLabelForId(row.epic.team) ?? row.epic.team}` : ""}
+                </div>
+              </div>
               <button
-                key={opt}
                 type="button"
-                onClick={() => onToggle(opt)}
-                className={cn(
-                  "flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-sm transition-colors",
-                  i > 0 && "border-t border-slate-50",
-                  active
-                    ? "bg-indigo-50 font-semibold text-indigo-800"
-                    : "text-slate-700 hover:bg-slate-50",
-                )}
+                onClick={() => onToggle(row.epic.id)}
+                className="shrink-0 rounded p-1 text-indigo-400 hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
+                aria-label={`Remove ${row.epic.title}`}
               >
-                <span className={cn(
-                  "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-all",
-                  active ? "border-indigo-500 bg-indigo-500 shadow-sm" : "border-slate-200 bg-white",
-                )}>
-                  {active && <Check className="size-2.5 text-white" strokeWidth={3.5} />}
-                </span>
-                {renderIcon && renderIcon(opt)}
-                <span className="truncate">{renderLabel(opt)}</span>
+                <X className="size-3.5" />
               </button>
-            );
-          })}
+            </div>
+          ))}
+          {selectedRows.length > 1 ? (
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="self-end rounded px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            >
+              Clear all
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all cursor-pointer"
+        onClick={() => setIsOpen(true)}
+      >
+        <svg className="size-3.5 shrink-0 text-slate-300" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+        </svg>
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setIsOpen(true); }}
+          onFocus={() => setIsOpen(true)}
+          placeholder={selectedRows.length > 0 ? "Add another epic…" : "Search epic, initiative, or team…"}
+          className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setQuery(""); }}
+            className="shrink-0 text-slate-300 hover:text-slate-500 transition-colors"
+            aria-label="Clear search"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+
+      {!isOpen ? null : options.length === 0 ? (
+        <p className="px-1 py-2 text-sm text-slate-400">
+          No epics in scope. Adjust the Roadmap or Team filter above.
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="px-1 py-2 text-sm text-slate-400">No epics match “{query}”.</p>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm max-h-64 overflow-y-auto">
+          {(() => {
+            // Group matched rows by initiative, preserving sort order
+            const groups = new Map<string, { initiative: InitiativeItem; epics: EpicItem[] }>();
+            for (const row of filtered.slice(0, 120)) {
+              const existing = groups.get(row.initiative.id);
+              if (existing) existing.epics.push(row.epic);
+              else groups.set(row.initiative.id, { initiative: row.initiative, epics: [row.epic] });
+            }
+            return Array.from(groups.values()).map((group, gIdx) => {
+              const initiativeIcon = group.initiative.icon?.trim();
+              return (
+                <div key={group.initiative.id} className={cn(gIdx > 0 && "border-t border-slate-100")}>
+                  {/* Initiative header row */}
+                  <div className="flex items-center gap-2 bg-slate-50/70 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                    {initiativeIcon && initiativeIcon !== "🎯" ? (
+                      <span className="text-[13px] leading-none" aria-hidden>{initiativeIcon}</span>
+                    ) : (
+                      <span
+                        className="inline-flex size-4 shrink-0 items-center justify-center rounded"
+                        style={{ backgroundColor: group.initiative.color }}
+                        aria-hidden
+                      >
+                        <Zap className="size-2.5 text-white" strokeWidth={2.5} />
+                      </span>
+                    )}
+                    <span className="truncate normal-case tracking-normal text-[12px] font-semibold text-slate-700">{group.initiative.title}</span>
+                  </div>
+                  {/* Epic rows — indented under the initiative */}
+                  {group.epics.map((epic) => {
+                    const active = selectedEpicIds.has(epic.id);
+                    const teamLabel = epic.team ? monthTeamLabelForId(epic.team) ?? epic.team : null;
+                    const epicIcon = epic.icon?.trim();
+                    return (
+                      <button
+                        key={epic.id}
+                        type="button"
+                        onClick={() => onToggle(epic.id)}
+                        className={cn(
+                          "flex w-full items-center gap-2 pl-7 pr-3 py-2 text-left text-sm transition-colors",
+                          active
+                            ? "bg-indigo-50 font-semibold text-indigo-800"
+                            : "text-slate-700 hover:bg-slate-50",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "flex size-3.5 shrink-0 items-center justify-center rounded-[3px] border transition-all",
+                            active ? "border-indigo-500 bg-indigo-500 shadow-sm" : "border-slate-300 bg-white",
+                          )}
+                        >
+                          {active && <Check className="size-2 text-white" strokeWidth={3.5} />}
+                        </span>
+                        {epicIcon && epicIcon !== "📁" ? (
+                          <span className="text-[13px] leading-none shrink-0" aria-hidden>{epicIcon}</span>
+                        ) : (
+                          <Folder className={cn("size-3.5 shrink-0", active ? "text-indigo-500" : "text-slate-400")} aria-hidden />
+                        )}
+                        <span className="min-w-0 flex-1 truncate">{epic.title}</span>
+                        {teamLabel ? (
+                          <span className={cn(
+                            "shrink-0 text-[11px]",
+                            active ? "text-indigo-600/90" : "text-slate-400",
+                          )}>
+                            {teamLabel}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
     </div>
@@ -294,6 +507,7 @@ function SprintChartForm({
   chartType,
   roadmaps,
   workspaceDirectoryUsers,
+  initiatives,
   onAdd,
   onBack,
   editTarget,
@@ -302,6 +516,7 @@ function SprintChartForm({
   chartType: ChartType;
   roadmaps: RoadmapItem[];
   workspaceDirectoryUsers: readonly SprintWorkspaceDirectoryUser[];
+  initiatives: InitiativeItem[];
   onAdd: (configs: DashboardChartConfig[]) => void;
   onBack: () => void;
   editTarget?: DashboardChartItem | null;
@@ -319,13 +534,77 @@ function SprintChartForm({
     return cfg.team ? new Set([cfg.team as string]) : new Set<string>();
   }, [editTarget]);
 
+  const initEpicIds = useMemo(() => {
+    if (!editTarget) return new Set<string>();
+    const cfg = parseChartItemConfig(editTarget);
+    return typeof cfg.epicId === "string" ? new Set([cfg.epicId]) : new Set<string>();
+  }, [editTarget]);
+
   const [selectedRoadmapIds, setSelectedRoadmapIds] = useState<Set<string>>(initRoadmapIds);
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(initTeamIds);
+  const [selectedEpicIds, setSelectedEpicIds] = useState<Set<string>>(initEpicIds);
 
   useEffect(() => {
     setSelectedRoadmapIds(initRoadmapIds);
     setSelectedTeamIds(initTeamIds);
-  }, [initRoadmapIds, initTeamIds]);
+    setSelectedEpicIds(initEpicIds);
+  }, [initRoadmapIds, initTeamIds, initEpicIds]);
+
+  const isEpicChart = chartType === "epic-burndown" || chartType === "epic-burnup";
+
+  /** Epic options filtered by selected roadmap(s) and team(s), grouped by initiative for display. */
+  const epicOptions = useMemo(() => {
+    if (!isEpicChart) return [] as Array<{ epic: EpicItem; initiative: InitiativeItem }>;
+    const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+    for (const initiative of initiatives) {
+      if (selectedRoadmapIds.size > 0 && (!initiative.roadmapId || !selectedRoadmapIds.has(initiative.roadmapId))) continue;
+      for (const epic of initiative.epics ?? []) {
+        if (selectedTeamIds.size > 0) {
+          const teamId = epic.team?.trim();
+          if (!teamId || !selectedTeamIds.has(teamId)) continue;
+        }
+        rows.push({ epic, initiative });
+      }
+    }
+    return rows.sort(
+      (a, b) =>
+        a.initiative.title.localeCompare(b.initiative.title) ||
+        a.epic.title.localeCompare(b.epic.title),
+    );
+  }, [isEpicChart, initiatives, selectedRoadmapIds, selectedTeamIds]);
+
+  const selectedEpicMetaList = useMemo(() => {
+    if (selectedEpicIds.size === 0) return [] as Array<{ epic: EpicItem; initiative: InitiativeItem }>;
+    const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        if (selectedEpicIds.has(epic.id)) rows.push({ epic, initiative });
+      }
+    }
+    return rows;
+  }, [selectedEpicIds, initiatives]);
+
+  // Drop any selected epic that no longer matches the current filter scope.
+  useEffect(() => {
+    if (!isEpicChart || selectedEpicIds.size === 0) return;
+    const validIds = new Set(epicOptions.map((row) => row.epic.id));
+    let changed = false;
+    const next = new Set<string>();
+    for (const id of selectedEpicIds) {
+      if (validIds.has(id)) next.add(id);
+      else changed = true;
+    }
+    if (changed) setSelectedEpicIds(next);
+  }, [isEpicChart, epicOptions, selectedEpicIds]);
+
+  function toggleEpic(epicId: string) {
+    setSelectedEpicIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(epicId)) next.delete(epicId);
+      else next.add(epicId);
+      return next;
+    });
+  }
 
   const teamOptions = useMemo(
     () => capacityPlanTeamCatalogFromDirectory(workspaceDirectoryUsers),
@@ -335,10 +614,12 @@ function SprintChartForm({
 
   const isEditing = !!editTarget;
   const chartCount = isEditing
-    ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0) ? 0 : 1)
-    : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
-      ? 0
-      : (selectedRoadmapIds.size || 1) * (selectedTeamIds.size || 1);
+    ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0 && selectedEpicIds.size === 0) ? 0 : 1)
+    : isEpicChart
+      ? selectedEpicIds.size
+      : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
+        ? 0
+        : (selectedRoadmapIds.size || 1) * (selectedTeamIds.size || 1);
 
   function toggle<T>(set: Set<T>, v: T): Set<T> {
     const next = new Set(set);
@@ -348,6 +629,36 @@ function SprintChartForm({
   }
 
   function handleAdd() {
+    if (isEpicChart) {
+      if (selectedEpicMetaList.length === 0) return;
+      const configs: DashboardChartConfig[] = selectedEpicMetaList.map(({ epic, initiative }) => {
+        const teamId = epic.team?.trim() || null;
+        const teamLabel = teamId ? (monthTeamLabelForId(teamId) ?? teamId) : null;
+        const parts = [
+          CHART_META[chartType].label,
+          initiative.title,
+          epic.title,
+          teamLabel,
+          `Sprint ${sprintInfo.sprint}`,
+        ].filter(Boolean);
+        return {
+          chartType,
+          title: parts.join(" · "),
+          params: {
+            year: sprintInfo.year,
+            quarter: sprintInfo.quarter,
+            sprint: sprintInfo.sprint,
+            epicId: epic.id,
+            ...(initiative.roadmapId ? { roadmapId: initiative.roadmapId } : {}),
+            ...(teamId ? { team: teamId } : {}),
+          },
+        };
+      });
+      onAdd(configs);
+      setSelectedEpicIds(new Set());
+      return;
+    }
+
     const roadmapEntries = selectedRoadmapIds.size > 0
       ? roadmaps.filter((r) => selectedRoadmapIds.has(r.id))
       : [null];
@@ -419,7 +730,7 @@ function SprintChartForm({
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                  <Map className="size-3.5" />
+                  <MapIcon className="size-3.5" />
                 </span>
                 <p className="text-[15px] font-bold text-slate-700">Roadmaps</p>
               </div>
@@ -462,6 +773,31 @@ function SprintChartForm({
             />
           </div>
         )}
+
+        {/* Epic picker — only for epic-burndown / epic-burnup; filtered by selected roadmaps + teams. */}
+        {isEpicChart ? (
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  <Folder className="size-3.5" />
+                </span>
+                <p className="text-[15px] font-bold text-slate-700">Epic</p>
+              </div>
+              {selectedEpicIds.size > 0 ? (
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-600">
+                  {selectedEpicIds.size}
+                </span>
+              ) : null}
+            </div>
+            <EpicAutocomplete
+              options={epicOptions}
+              selectedEpicIds={selectedEpicIds}
+              onToggle={toggleEpic}
+              onClearAll={() => setSelectedEpicIds(new Set())}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* Footer */}
@@ -849,12 +1185,14 @@ type Props = {
   roadmaps: RoadmapItem[];
   workspaceDirectoryUsers: readonly SprintWorkspaceDirectoryUser[];
   context: WorkspaceContext | null;
+  /** Full initiatives data — needed by the Epic Burndown / Epic Burnup epic picker. */
+  initiatives?: InitiativeItem[];
   onAddCharts: (configs: DashboardChartConfig[]) => void;
   editTarget?: DashboardChartItem | null;
   onCancelEdit?: () => void;
 };
 
-export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, context, onAddCharts, editTarget, onCancelEdit }: Props) {
+export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, context, initiatives = [], onAddCharts, editTarget, onCancelEdit }: Props) {
   const [selectedType, setSelectedType] = useState<ChartType | null>(null);
 
   useEffect(() => {
@@ -871,6 +1209,7 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
         chartType={selectedType}
         roadmaps={roadmaps}
         workspaceDirectoryUsers={workspaceDirectoryUsers}
+        initiatives={initiatives}
         onAdd={onAddCharts}
         onBack={() => setSelectedType(null)}
         editTarget={editTarget}
