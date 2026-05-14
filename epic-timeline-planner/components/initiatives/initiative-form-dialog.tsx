@@ -815,7 +815,7 @@ export function InitiativeFormDialog({
                 <button
                   type="button"
                   onClick={() => { onDelete(initiative.id); onClose(); }}
-                  className="flex h-8 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-[13px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-red-200 px-3.5 text-[12px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
                 >
                   <Trash2 className="size-3.5" />
                   Delete
@@ -825,21 +825,22 @@ export function InitiativeFormDialog({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-8 min-w-[100px] px-4 text-sm font-medium"
+                className="inline-flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold [&_svg]:text-slate-500"
                 onClick={onClose}
               >
+                <X className="size-3.5" />
                 Cancel
               </Button>
               <Button
                 type="button"
                 size="sm"
-                className="h-8 min-w-[100px] gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 text-[12px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                 onClick={handleSave}
                 disabled={isSaving}
               >
+                <Check className="size-3.5" />
                 {isSaving ? "Saving..." : initiative ? "Save" : "Create"}
               </Button>
-              <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close initiative details"><X /></Button>
             </div>
           </div>
 
@@ -852,7 +853,7 @@ export function InitiativeFormDialog({
                     <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                     Title
                   </p>
-                  <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
+                  <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm focus-within:ring-2 focus-within:ring-slate-300/70">
                     <input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full bg-transparent px-3 py-2 text-base outline-none" placeholder="Initiative title" />
                   </div>
                 </label>
@@ -879,7 +880,7 @@ export function InitiativeFormDialog({
                     role="region"
                     aria-labelledby="initiative-form-description-accordion-trigger"
                     hidden={!descriptionAccordionOpen}
-                    className="flex flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200"
+                    className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200"
                   >
                     <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
@@ -901,7 +902,7 @@ export function InitiativeFormDialog({
                   </div>
                 </div>
 
-                <section className="mt-5 flex shrink-0 flex-col gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                <section className="mt-5 flex shrink-0 flex-col gap-3 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
                   <div className="flex shrink-0 items-center justify-between">
                     <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
                       <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
@@ -1204,22 +1205,22 @@ export function InitiativeFormDialog({
                   <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-3">
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Color</p>
                   <InitiativeColorPicker value={color} onChange={setColor} />
                 </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700" /></label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Year</p>
-                  <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                  <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
                 </div>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Quarter</p>
-                  <input readOnly value={initiativePlanningQuarter} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                  <input readOnly value={initiativePlanningQuarter} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
                 </div>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Month</p>
-                  <input readOnly value={initiativePlanningMonth} className="h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[14px] text-slate-800" />
+                  <input readOnly value={initiativePlanningMonth} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
                 </div>
                 {(() => {
                   const selectedRoadmap = roadmaps.find((r) => r.id === formRoadmapId);
@@ -1233,7 +1234,7 @@ export function InitiativeFormDialog({
                     <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-3">
                       <p className="mt-1.5 text-[15px] font-normal text-slate-700">Roadmap</p>
                       <div className="relative">
-                        <div className="flex h-7 items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-blue-400/40">
+                        <div className="flex h-7 items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm focus-within:ring-2 focus-within:ring-blue-400/40">
                           <MapIcon className="ml-2 size-3.5 shrink-0 text-slate-400" aria-hidden />
                           <input
                             ref={roadmapInputRef}
@@ -1356,7 +1357,7 @@ export function InitiativeFormDialog({
                       onChange={setAssignee}
                       suggestions={assigneeNameSuggestions}
                       placeholder="Type or pick a name"
-                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                     />
                     {assignee ? (
                       <button
@@ -1374,7 +1375,8 @@ export function InitiativeFormDialog({
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
-                    <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
+                    <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 py-0.5 shadow-sm">
+                      <Tag className="size-3 shrink-0 text-slate-400" aria-hidden />
                       {labelsDraft.map((label) => (
                         <span key={label} className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-700">
                           <Tag className="size-2.5 shrink-0" />
@@ -1465,7 +1467,7 @@ export function InitiativeFormDialog({
             ) : null}
             <section
               className={cn(
-                "flex min-h-0 flex-col rounded-xl bg-white",
+                "flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)]",
                 activityOpen ? "space-y-3 p-3" : "p-3",
               )}
               style={

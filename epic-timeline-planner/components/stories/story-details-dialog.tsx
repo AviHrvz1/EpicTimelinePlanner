@@ -10,6 +10,7 @@ import {
   Activity as ActivityIcon,
   Bot,
   Bold,
+  Check,
   CheckCheck,
   CheckCircle2,
   ChevronDown,
@@ -794,35 +795,47 @@ export function StoryDetailsDialog({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-8 min-w-[100px] px-4 text-sm font-medium"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold [&_svg]:text-slate-500"
                   onClick={onClose}
                 >
+                  <X className="size-3.5" />
                   Cancel
                 </Button>
                 <Button
                   type="button"
                   size="sm"
-                  className="h-8 min-w-[100px] gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 text-[12px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                   onClick={handleSave}
                   disabled={saving}
                 >
+                  <Check className="size-3.5" />
                   {saving ? "Saving..." : "Save"}
                 </Button>
               </>
             ) : (
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 min-w-[100px] gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? "Creating..." : "Create"}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold [&_svg]:text-slate-500"
+                  onClick={onClose}
+                >
+                  <X className="size-3.5" />
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 text-[12px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  <Check className="size-3.5" />
+                  {saving ? "Creating..." : "Create"}
+                </Button>
+              </>
             )}
-            <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close story details">
-              <X />
-            </Button>
           </div>
         </div>
 
@@ -839,7 +852,7 @@ export function StoryDetailsDialog({
                 <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Title
               </p>
-              <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white focus-within:ring-2 focus-within:ring-slate-300/70">
+              <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm focus-within:ring-2 focus-within:ring-slate-300/70">
                 <input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
@@ -852,7 +865,7 @@ export function StoryDetailsDialog({
                 <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Description
               </p>
-                <div className="flex flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                <div className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
                 <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                   <button
                     type="button"
@@ -1040,7 +1053,7 @@ export function StoryDetailsDialog({
                   }}
                   suggestions={assigneeNameSuggestions}
                   placeholder="Type or pick a name"
-                  className={cn("h-7 w-full rounded-md border border-slate-300 bg-white pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                  className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                 />
                 {assignee ? (
                   <button
@@ -1063,7 +1076,7 @@ export function StoryDetailsDialog({
                   onTeamIdChange={setEpicTeamDraft}
                   disabled={!epicId}
                   placeholder="Type or pick a team"
-                  className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
+                  className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm disabled:bg-muted/40"
                 />
                 {epicTeamDraft && !(!epicId) ? (
                   <button
@@ -1093,7 +1106,7 @@ export function StoryDetailsDialog({
                 min={0}
                 value={estimatedDays}
                 onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
               />
             </div>
             <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -1103,12 +1116,12 @@ export function StoryDetailsDialog({
                 min={0}
                 value={daysLeft}
                 onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800"
+                className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
               />
             </div>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Priority</p>
-              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800">
+              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm">
                 <option value="">Not set</option>
                 <option value="P0">P0</option>
                 <option value="P1">P1</option>
@@ -1123,7 +1136,7 @@ export function StoryDetailsDialog({
                   value={epicId}
                   title=""
                   onChange={(event) => setEpicId(event.target.value)}
-                  className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
+                  className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
                   disabled={Boolean(lockParentEpicId)}
                 >
                   <option value="">Select epic</option>
@@ -1153,7 +1166,8 @@ export function StoryDetailsDialog({
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Labels</p>
               <div className="relative z-30">
-                <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5">
+                <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 py-0.5 shadow-sm">
+                  <Tag className="size-3 shrink-0 text-slate-400" aria-hidden />
                   {labelsDraft.map((label) => (
                     <span key={label} className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-700">
                       <Tag className="size-2.5" />
@@ -1250,7 +1264,7 @@ export function StoryDetailsDialog({
           ) : null}
           <section
             className={cn(
-              "flex min-h-0 flex-col rounded-xl bg-white",
+              "flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)]",
               activityOpen ? "space-y-3 p-3" : "p-3",
             )}
             style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
