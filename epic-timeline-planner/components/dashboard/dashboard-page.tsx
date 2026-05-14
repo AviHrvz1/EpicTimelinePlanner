@@ -95,26 +95,33 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Spawn a hidden blank draft and make it the active working area.
-  // The draft does not appear as a tab — only saved dashboards show tabs.
+  /**
+   * Create a fresh blank dashboard tab and make it active.
+   * Drafts now show as tabs (prepended as the first tab) so users immediately see the new
+   * empty dashboard rather than continuing to see whichever dashboard was previously selected.
+   */
   function spawnBlankDraft(savedList?: DashboardItem[]) {
     const draftId = `draft-${Date.now()}`;
     const list = savedList ?? dashboards;
     const draft: DashboardItem = {
       id: draftId,
       slug: "",
-      name: `Dashboard ${list.filter((d) => !d.id.startsWith("draft-")).length + 1}`,
+      name: `New Dashboard ${list.filter((d) => !d.id.startsWith("draft-")).length + 1}`,
       charts: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     setDashboards((prev) => {
       const withoutOldDrafts = prev.filter((d) => !d.id.startsWith("draft-"));
-      return [...withoutOldDrafts, draft];
+      return [draft, ...withoutOldDrafts];
     });
     setActiveDashboardId(draftId);
     setCharts([]);
     setDirty(false);
+    setIsEditMode(true);
+    setBuilderOpen(true);
+    setEditTarget(null);
+    setConfirmDeleteId(null);
   }
 
   function ensureDashboard(): string {
@@ -352,7 +359,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
       <div className="flex items-end gap-0 border-b border-slate-200 bg-slate-50 pl-3 pr-4 pt-2">
         {/* Tabs */}
         <div className="flex flex-1 items-end gap-0 overflow-x-auto">
-          {dashboards.filter((d) => d.id && !d.id.startsWith("draft-")).map((d) => {
+          {dashboards.filter((d) => Boolean(d.id)).map((d) => {
             const isActive = d.id === activeDashboardId;
             const isConfirming = confirmDeleteId === d.id;
             return (
@@ -483,15 +490,14 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           )}
 
           <button
-            onClick={() => { setBuilderOpen(true); if (isSavedDashboard) setIsEditMode(true); }}
-            disabled={builderOpen}
+            onClick={() => spawnBlankDraft()}
             className={cn(
               "flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold shadow-none transition-all",
               "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white",
               "hover:from-sky-500 hover:via-blue-600 hover:to-sky-600",
-              "disabled:opacity-40 disabled:cursor-not-allowed",
               "[&_svg]:text-white",
             )}
+            title="Create a new empty dashboard"
           >
             <Plus className="size-3.5" />
             Dashboard

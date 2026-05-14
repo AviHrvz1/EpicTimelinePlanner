@@ -1069,6 +1069,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     }
   });
   const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "dashboard" | "users">("roadmap");
+  /**
+   * Once the user opens the Dashboard mode at least once, keep <DashboardPage /> mounted (just visually hidden when not active).
+   * That preserves unsaved drafts and in-progress chart layouts in memory across mode switches without writing them to the DB.
+   */
+  const [hasMountedDashboard, setHasMountedDashboard] = useState(false);
+  useEffect(() => {
+    if (topMode === "dashboard") setHasMountedDashboard(true);
+  }, [topMode]);
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
@@ -5221,9 +5229,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               {rightEdgeSeparator}
             </div>
           ) : topMode === "dashboard" ? (
-            <div className="min-h-0 min-w-0 flex-1">
-              <DashboardPage initiatives={initiatives} planYear={selectedYear} roadmaps={roadmaps} workspaceDirectoryUsers={workspaceDirectoryUsers} />
-            </div>
+            null
           ) : topMode === "users" ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-row">
               <div className="mt-3 mb-4 min-h-0 min-w-0 flex-1">
@@ -5335,6 +5341,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               {rightEdgeSeparator}
             </div>
           )}
+          {/* Dashboard stays mounted once visited so unsaved drafts persist when the user temporarily navigates to another mode. */}
+          {hasMountedDashboard ? (
+            <div className={cn("min-h-0 min-w-0 flex-1", topMode !== "dashboard" && "hidden")}>
+              <DashboardPage
+                initiatives={initiatives}
+                planYear={selectedYear}
+                roadmaps={roadmaps}
+                workspaceDirectoryUsers={workspaceDirectoryUsers}
+              />
+            </div>
+          ) : null}
           </div>
         </div>
         {dndDropInspector ? (

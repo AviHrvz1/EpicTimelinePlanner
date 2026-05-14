@@ -71,6 +71,85 @@ type ChildEpicDraft = {
   color: string;
 };
 
+/** Curated, gantt-friendly palette — even brightness, good legibility against white panels. */
+const SUGGESTED_INITIATIVE_COLORS: ReadonlyArray<{ hex: string; label: string }> = [
+  { hex: "#6366f1", label: "Indigo" },
+  { hex: "#8b5cf6", label: "Violet" },
+  { hex: "#a855f7", label: "Purple" },
+  { hex: "#d946ef", label: "Fuchsia" },
+  { hex: "#ec4899", label: "Pink" },
+  { hex: "#f43f5e", label: "Rose" },
+  { hex: "#ef4444", label: "Red" },
+  { hex: "#f97316", label: "Orange" },
+  { hex: "#f59e0b", label: "Amber" },
+  { hex: "#84cc16", label: "Lime" },
+  { hex: "#22c55e", label: "Green" },
+  { hex: "#10b981", label: "Emerald" },
+  { hex: "#14b8a6", label: "Teal" },
+  { hex: "#06b6d4", label: "Cyan" },
+  { hex: "#0ea5e9", label: "Sky" },
+  { hex: "#3b82f6", label: "Blue" },
+  { hex: "#64748b", label: "Slate" },
+  { hex: "#475569", label: "Charcoal" },
+];
+
+function normalizeHex(value: string): string {
+  const v = value.trim().toLowerCase();
+  return v.startsWith("#") ? v : `#${v}`;
+}
+
+function InitiativeColorPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const normalized = normalizeHex(value);
+  const matched = SUGGESTED_INITIATIVE_COLORS.find((c) => c.hex.toLowerCase() === normalized);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-[repeat(9,minmax(0,1fr))] gap-1.5">
+        {SUGGESTED_INITIATIVE_COLORS.map((c) => {
+          const isActive = c.hex.toLowerCase() === normalized;
+          return (
+            <button
+              key={c.hex}
+              type="button"
+              onClick={() => onChange(c.hex)}
+              aria-label={`${c.label} (${c.hex})`}
+              title={`${c.label}\n${c.hex}`}
+              className={cn(
+                "relative h-6 w-full rounded-md ring-1 ring-slate-200 transition-all duration-150 hover:scale-110 hover:ring-slate-300",
+                isActive && "scale-110 ring-2 ring-offset-1 ring-violet-500 shadow-sm",
+              )}
+              style={{ backgroundColor: c.hex }}
+            />
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2 text-[12px] text-slate-500">
+        <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1 hover:bg-slate-50">
+          <span
+            className="inline-block size-3.5 rounded-sm ring-1 ring-slate-300"
+            style={{ backgroundColor: normalized }}
+            aria-hidden
+          />
+          <span className="font-medium text-slate-700">{matched ? matched.label : "Custom"}</span>
+          <input
+            type="color"
+            value={normalized}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute h-0 w-0 opacity-0"
+            aria-label="Pick any color"
+          />
+        </label>
+        <span className="font-mono text-[11px] uppercase tracking-wider text-slate-400">{normalized}</span>
+      </div>
+    </div>
+  );
+}
+
 type InitiativeFormDialogProps = {
   open: boolean;
   initiatives: InitiativeItem[];
@@ -1073,7 +1152,10 @@ export function InitiativeFormDialog({
                   <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><p className="text-[15px] font-normal text-slate-700">Color</p><input type="color" className="h-7 w-full rounded-md border border-slate-300 bg-white px-1.5" value={color} onChange={(event) => setColor(event.target.value)} /></label>
+                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Color</p>
+                  <InitiativeColorPicker value={color} onChange={setColor} />
+                </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700" /></label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Year</p>
