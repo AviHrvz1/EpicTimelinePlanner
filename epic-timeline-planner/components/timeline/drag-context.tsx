@@ -315,7 +315,11 @@ function DragOverlayLayer() {
     ),
   );
   return (
-    <DragOverlay zIndex={9999}>
+    <DragOverlay
+      zIndex={9999}
+      /** Force the overlay to size to its child instead of the source draggable's rect, so dragging from the wide middle-panel card doesn't render a giant bar across the gantt. */
+      style={{ width: "fit-content", height: "fit-content", pointerEvents: "none" }}
+    >
       <PlannerDragOverlayBody payloadSnapshot={payloadSnapshot} />
     </DragOverlay>
   );

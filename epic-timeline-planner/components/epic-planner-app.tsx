@@ -588,6 +588,20 @@ function computeEpicMonthLanePlacement(
     placementEndMonth = newEnd.month;
     placementStartSprint = planSprint;
     placementEndSprint = newEnd.lane;
+  } else if (isFirstSchedule) {
+    /**
+     * First-time schedule: span exactly one month (2 sprints) starting at the dropped sprint.
+     * Dropping on S1 of May → S1–S2 of May; dropping on S2 of May → S2 of May to S1 of June.
+     */
+    const FIRST_SCHEDULE_SPRINT_SPAN = 2;
+    const newStartGlobal = globalSprintFromMonthLane(month, planSprint);
+    let newEndGlobal = newStartGlobal + FIRST_SCHEDULE_SPRINT_SPAN - 1;
+    if (newEndGlobal > 24) newEndGlobal = 24;
+    const newEnd = monthLaneFromGlobalSprint(newEndGlobal);
+    placementStartMonth = month;
+    placementEndMonth = newEnd.month;
+    placementStartSprint = planSprint;
+    placementEndSprint = newEnd.lane;
   }
   const scheduledAll = collectScheduledEpicRows(prev);
   const others = scheduledAll.filter((row) => row.epicId !== epicId);

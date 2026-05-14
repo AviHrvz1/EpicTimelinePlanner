@@ -46,6 +46,7 @@ import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/ep
 import {
   EPICS_UNPLAN_DROP_ID,
   backlogSlotDropId,
+  type EpicPlanCompactDragData,
   epicBacklogSlotDropId,
   epicListDraggableId,
   storyListDraggableId,
@@ -836,9 +837,16 @@ function InitiativeTreeEpicRow({
   const isEpicScheduledOnGantt = planContextMonth != null
     ? epicIsOnPlanForMonth(epic, planContextMonth)
     : epic.planStartMonth != null && epic.planEndMonth != null;
+  const epicDragData = {
+    kind: "epic-plan-compact",
+    title: epic.title,
+    color: initiative.color,
+    icon: epic.icon,
+  } satisfies EpicPlanCompactDragData;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
     disabled: isCapacityMode ? Boolean(epicTeamId) : (!epicPlanDragEnabled || isEpicScheduledOnGantt),
+    data: epicDragData,
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
   const completion = epicCompletionMeta(epic);
@@ -1407,9 +1415,16 @@ function SprintEpicCard({
   const isEpicScheduledOnGantt = planContextMonth != null
     ? epicIsOnPlanForMonth(epic, planContextMonth)
     : epic.planStartMonth != null && epic.planEndMonth != null;
+  const epicDragData = {
+    kind: "epic-plan-compact",
+    title: epic.title,
+    color: initiative.color,
+    icon: epic.icon,
+  } satisfies EpicPlanCompactDragData;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: epicListDraggableId(epic.id),
     disabled: isCapacityMode ? Boolean(epicTeamId) : (!epicPlanDragEnabled || isEpicScheduledOnGantt),
+    data: epicDragData,
   });
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
     id: backlogDropSlot ? epicBacklogSlotDropId(backlogDropSlot.month, backlogDropSlot.index) : `epic-card:${epic.id}`,
