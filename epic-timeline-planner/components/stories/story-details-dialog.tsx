@@ -212,7 +212,7 @@ export function StoryDetailsDialog({
   const [dialogWidthVw, setDialogWidthVw] = useState(60);
   const [activityOpen, setActivityOpen] = useState(true);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(264);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(280);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(240);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
@@ -865,7 +865,7 @@ export function StoryDetailsDialog({
                 <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
                 Description
               </p>
-                <div className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
+                <div className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
                 <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                   <button
                     type="button"
@@ -1252,7 +1252,7 @@ export function StoryDetailsDialog({
         <div className="relative z-0 mt-3 shrink-0">
           {activityOpen ? (
             <div
-              className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
+              className="group relative mb-3 flex h-3 cursor-row-resize items-center justify-center"
               onPointerDown={beginActivityPanelResize}
               title="Resize activity panel height"
               aria-label="Resize activity panel height"
@@ -1264,7 +1264,7 @@ export function StoryDetailsDialog({
           ) : null}
           <section
             className={cn(
-              "flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)]",
+              "mx-3 flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
               activityOpen ? "space-y-3 p-3" : "p-3",
             )}
             style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}

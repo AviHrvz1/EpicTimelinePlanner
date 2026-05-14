@@ -45,7 +45,7 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
   }
 
   return (
-    <div className="mt-2 space-y-1.5">
+    <div className="mt-2 space-y-3">
       <div className="flex flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
       <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
         <button

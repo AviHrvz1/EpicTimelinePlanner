@@ -281,7 +281,7 @@ export function InitiativeFormDialog({
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(68);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(220);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(190);
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
@@ -352,7 +352,7 @@ export function InitiativeFormDialog({
       setIsDraggingDialog(false);
       setDialogWidthVw(68);
       setDetailsPanelWidthPx(296);
-      setActivityPanelHeightPx(220);
+      setActivityPanelHeightPx(190);
       setActivityOpen((initiative?.epics?.length ?? 0) === 0);
       setDescriptionAccordionOpen(true);
       dragStartRef.current = null;
@@ -880,7 +880,7 @@ export function InitiativeFormDialog({
                     role="region"
                     aria-labelledby="initiative-form-description-accordion-trigger"
                     hidden={!descriptionAccordionOpen}
-                    className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200"
+                    className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]"
                   >
                     <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
@@ -1209,7 +1209,7 @@ export function InitiativeFormDialog({
                   <p className="text-[15px] font-normal text-slate-700">Color</p>
                   <InitiativeColorPicker value={color} onChange={setColor} />
                 </div>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700" /></label>
+                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-400" /></label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Year</p>
                   <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
@@ -1460,14 +1460,14 @@ export function InitiativeFormDialog({
 
           <div className="relative z-0 mt-3 shrink-0">
             {activityOpen ? (
-              <div className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center" onPointerDown={beginActivityPanelResize} title="Resize activity panel height" aria-label="Resize activity panel height" role="separator">
+              <div className="group relative mb-3 flex h-3 cursor-row-resize items-center justify-center" onPointerDown={beginActivityPanelResize} title="Resize activity panel height" aria-label="Resize activity panel height" role="separator">
                 <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
                 <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
               </div>
             ) : null}
             <section
               className={cn(
-                "flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)]",
+                "mx-3 flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
                 activityOpen ? "space-y-3 p-3" : "p-3",
               )}
               style={

@@ -207,7 +207,7 @@ export function EpicFormDialog({
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(340);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(300);
   const [childStoryDrafts, setChildStoryDrafts] = useState<Record<string, ChildStoryDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
@@ -1065,7 +1065,7 @@ export function EpicFormDialog({
                     role="region"
                     aria-labelledby="epic-form-description-accordion-trigger"
                     hidden={!descriptionAccordionOpen}
-                    className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200"
+                    className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]"
                   >
                     <div className="flex flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
@@ -1593,7 +1593,7 @@ export function EpicFormDialog({
                     min={0}
                     max={5000}
                     step={1}
-                    className="h-6 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
                     placeholder="e.g. 40"
                     value={originalEstimateDaysDraft}
                     onChange={(event) => setOriginalEstimateDaysDraft(event.target.value)}
@@ -1615,7 +1615,7 @@ export function EpicFormDialog({
                   <input
                     value={totalUserStoryEstimate}
                     readOnly
-                    className="h-6 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] font-medium text-slate-700"
+                    className="h-6 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] font-medium text-slate-700 shadow-sm"
                   />
                 </label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -1769,7 +1769,7 @@ export function EpicFormDialog({
           <div className="relative z-0 mt-0 shrink-0">
             {activityOpen ? (
               <div
-                className="group relative mb-1 flex h-3 cursor-row-resize items-center justify-center"
+                className="group relative mb-3 flex h-3 cursor-row-resize items-center justify-center"
                 onPointerDown={beginActivityPanelResize}
                 title="Resize activity panel height"
                 aria-label="Resize activity panel height"
@@ -1781,7 +1781,7 @@ export function EpicFormDialog({
             ) : null}
             <section
               className={cn(
-                "flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)]",
+                "mx-3 flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
                 activityOpen ? "space-y-3 p-3" : "p-3",
               )}
               style={
