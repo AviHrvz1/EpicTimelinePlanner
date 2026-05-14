@@ -33,8 +33,27 @@ function ReadOnlyChartBody({ chart, initiatives }: { chart: DashboardChartItem; 
     : initiatives;
 
   switch (chart.chartType) {
-    case "velocity":
-      return <VelocityChart initiatives={scopedInitiatives} quarter={(params.quarter as string) ?? "2025-Q1"} team={params.team as string | null} />;
+    case "velocity": {
+      let velocityYear = (params.year as number) ?? new Date().getFullYear();
+      let startYS = params.startYearSprint as number | undefined;
+      let endYS = params.endYearSprint as number | undefined;
+      if (startYS == null || endYS == null) {
+        const q = params.quarter;
+        if (typeof q === "string") {
+          const m = q.match(/(\d{4})-Q(\d)/);
+          if (m) {
+            velocityYear = parseInt(m[1]!, 10);
+            const qn = parseInt(m[2]!, 10);
+            startYS = (qn - 1) * 6 + 1;
+            endYS = qn * 6;
+          }
+        } else if (typeof q === "number") {
+          startYS = (q - 1) * 6 + 1;
+          endYS = q * 6;
+        }
+      }
+      return <VelocityChart initiatives={scopedInitiatives} year={velocityYear} startYearSprint={startYS ?? 1} endYearSprint={endYS ?? 24} team={params.team as string | null} />;
+    }
     case "burndown":
       return <BurndownChart initiatives={scopedInitiatives} year={(params.year as number) ?? new Date().getFullYear()} quarter={(params.quarter as number) ?? 1} sprint={(params.sprint as number) ?? 1} team={params.team as string | null} />;
     case "epic-burndown":

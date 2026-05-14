@@ -164,7 +164,8 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
   },
 };
 
-const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
+// Chart types that use the structured SprintChartForm flow (vs. the chat-style OtherChartFlow).
+const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup", "velocity"]);
 
 // Display order: burndowns first, burnups next, then other sprint types, then quarter-level
 const CHART_TYPE_ORDER: ChartType[] = [
@@ -558,6 +559,7 @@ function SprintChartForm({
   }, [initRoadmapIds, initTeamIds, initEpicIds]);
 
   const isEpicChart = chartType === "epic-burndown" || chartType === "epic-burnup" || chartType === "epic-cfd";
+  const isVelocityChart = chartType === "velocity";
   const supportsMetricPicker = chartType === "burndown" || chartType === "epic-burndown" || chartType === "sprint-burnup" || chartType === "epic-burnup";
   const defaultMetric: "daysLeft" | "storyCount" = chartType === "sprint-burnup" || chartType === "epic-burnup" ? "storyCount" : "daysLeft";
   const initMetric: "daysLeft" | "storyCount" = useMemo(() => {
@@ -568,6 +570,31 @@ function SprintChartForm({
   }, [editTarget, defaultMetric]);
   const [metric, setMetric] = useState<"daysLeft" | "storyCount">(initMetric);
   useEffect(() => { setMetric(initMetric); }, [initMetric]);
+
+  // ─── Velocity period state ───────────────────────────────────────────────
+  const initVelocityRange = useMemo((): { start: number; end: number } => {
+    const now = new Date();
+    const currentSprint = (now.getMonth()) * 2 + (now.getDate() <= 15 ? 1 : 2);
+    let cfg: Record<string, unknown> = {};
+    if (editTarget) {
+      try { cfg = JSON.parse(editTarget.config); } catch { /* ignore */ }
+    }
+    const startRaw = cfg.startYearSprint;
+    const endRaw = cfg.endYearSprint;
+    const start = typeof startRaw === "number" && startRaw >= 1 && startRaw <= 24 ? startRaw : 1;
+    const end = typeof endRaw === "number" && endRaw >= 1 && endRaw <= 24 ? endRaw : Math.min(24, Math.max(1, currentSprint));
+    return { start, end };
+  }, [editTarget]);
+  const [velocityStart, setVelocityStart] = useState<number>(initVelocityRange.start);
+  const [velocityEnd, setVelocityEnd] = useState<number>(initVelocityRange.end);
+  useEffect(() => { setVelocityStart(initVelocityRange.start); setVelocityEnd(initVelocityRange.end); }, [initVelocityRange]);
+
+  const SPRINT_OPTIONS = useMemo(() => Array.from({ length: 24 }, (_, i) => {
+    const ys = i + 1;
+    const month = Math.ceil(ys / 2);
+    const monName = MONTH_NAMES[month - 1] ?? `M${month}`;
+    return { value: ys, label: `${monName} · S${ys}` };
+  }), []);
 
   /** Epic options filtered by selected roadmap(s) and team(s), grouped by initiative for display. */
   const epicOptions = useMemo(() => {
@@ -634,9 +661,12 @@ function SprintChartForm({
     ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0 && selectedEpicIds.size === 0) ? 0 : 1)
     : isEpicChart
       ? selectedEpicIds.size
-      : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
-        ? 0
-        : (selectedRoadmapIds.size || 1) * (selectedTeamIds.size || 1);
+      : isVelocityChart
+        // Velocity requires at least one team — "all teams" is not allowed.
+        ? (selectedTeamIds.size === 0 ? 0 : (selectedRoadmapIds.size || 1) * selectedTeamIds.size)
+        : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
+          ? 0
+          : (selectedRoadmapIds.size || 1) * (selectedTeamIds.size || 1);
 
   function toggle<T>(set: Set<T>, v: T): Set<T> {
     const next = new Set(set);
@@ -679,9 +709,14 @@ function SprintChartForm({
     const roadmapEntries = selectedRoadmapIds.size > 0
       ? roadmaps.filter((r) => selectedRoadmapIds.has(r.id))
       : [null];
+    // Velocity requires a team — never fall back to a null "all teams" entry.
+    if (isVelocityChart && selectedTeamIds.size === 0) return;
     const teamEntries = selectedTeamIds.size > 0 ? [...selectedTeamIds] : [null];
 
     const configs: DashboardChartConfig[] = [];
+    const velocityStartLo = Math.min(velocityStart, velocityEnd);
+    const velocityEndHi = Math.max(velocityStart, velocityEnd);
+    const velocityPeriodLabel = `${SPRINT_OPTIONS[velocityStartLo - 1]?.label ?? `S${velocityStartLo}`} → ${SPRINT_OPTIONS[velocityEndHi - 1]?.label ?? `S${velocityEndHi}`}`;
     for (const roadmap of roadmapEntries) {
       for (const teamId of teamEntries) {
         const teamLabel = teamId ? (monthTeamLabelForId(teamId) ?? teamId) : null;
@@ -690,15 +725,16 @@ function SprintChartForm({
           CHART_META[chartType].label,
           roadmapLabel,
           teamLabel,
-          `Sprint ${sprintInfo.sprint}`,
+          isVelocityChart ? velocityPeriodLabel : `Sprint ${sprintInfo.sprint}`,
         ].filter(Boolean);
         configs.push({
           chartType,
           title: parts.join(" · "),
           params: {
             year: sprintInfo.year,
-            quarter: sprintInfo.quarter,
-            sprint: sprintInfo.sprint,
+            ...(isVelocityChart
+              ? { startYearSprint: velocityStartLo, endYearSprint: velocityEndHi }
+              : { quarter: sprintInfo.quarter, sprint: sprintInfo.sprint }),
             ...(roadmap ? { roadmapId: roadmap.id } : {}),
             ...(teamId ? { team: teamId } : {}),
             ...(supportsMetricPicker ? { metric } : {}),
@@ -730,17 +766,58 @@ function SprintChartForm({
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
-        {/* Current sprint */}
-        <div>
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5"><Flag className="size-3" />Current Sprint</p>
-          <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3 shadow-sm">
-            <span className="relative flex size-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
-              <span className="relative inline-flex size-2 rounded-full bg-indigo-500" />
-            </span>
-            <span className="text-sm font-semibold text-indigo-700 tracking-tight">{sprintInfo.label}</span>
+        {/* Current sprint — for sprint-scoped charts only */}
+        {!isVelocityChart && (
+          <div>
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5"><Flag className="size-3" />Current Sprint</p>
+            <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3 shadow-sm">
+              <span className="relative flex size-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                <span className="relative inline-flex size-2 rounded-full bg-indigo-500" />
+              </span>
+              <span className="text-sm font-semibold text-indigo-700 tracking-tight">{sprintInfo.label}</span>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Period — Velocity only */}
+        {isVelocityChart && (
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <Flag className="size-3.5" />
+              </span>
+              <p className="text-[15px] font-bold text-slate-700">Period</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">From</span>
+                <select
+                  value={velocityStart}
+                  onChange={(e) => setVelocityStart(parseInt(e.target.value, 10))}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  {SPRINT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">To</span>
+                <select
+                  value={velocityEnd}
+                  onChange={(e) => setVelocityEnd(parseInt(e.target.value, 10))}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  {SPRINT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-400 pl-0.5">Defaults to start of year through the current sprint.</p>
+          </div>
+        )}
 
         {/* Roadmaps */}
         {roadmaps.length > 0 && (
@@ -866,7 +943,7 @@ function SprintChartForm({
           )}
         >
           {chartCount === 0
-            ? "Select a roadmap or team"
+            ? (isVelocityChart ? "Pick at least one team" : "Select a roadmap or team")
             : isEditing
               ? "Update chart"
               : `Add ${chartCount} chart${chartCount !== 1 ? "s" : ""}`}

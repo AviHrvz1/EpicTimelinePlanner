@@ -140,14 +140,37 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
     : initiatives;
 
   switch (chart.chartType) {
-    case "velocity":
+    case "velocity": {
+      // Legacy: configs may have a string quarter "YYYY-QN" instead of year + sprint range.
+      let velocityYear = (params.year as number) ?? new Date().getFullYear();
+      let startYS = params.startYearSprint as number | undefined;
+      let endYS = params.endYearSprint as number | undefined;
+      if (startYS == null || endYS == null) {
+        const q = params.quarter;
+        if (typeof q === "string") {
+          const m = q.match(/(\d{4})-Q(\d)/);
+          if (m) {
+            const y = parseInt(m[1]!, 10);
+            const qn = parseInt(m[2]!, 10);
+            velocityYear = y;
+            startYS = (qn - 1) * 6 + 1;
+            endYS = qn * 6;
+          }
+        } else if (typeof q === "number") {
+          startYS = (q - 1) * 6 + 1;
+          endYS = q * 6;
+        }
+      }
       return (
         <VelocityChart
           initiatives={scopedInitiatives}
-          quarter={(params.quarter as string) ?? "2025-Q1"}
+          year={velocityYear}
+          startYearSprint={startYS ?? 1}
+          endYearSprint={endYS ?? 24}
           team={params.team as string | null}
         />
       );
+    }
     case "burndown":
       return (
         <BurndownChart
