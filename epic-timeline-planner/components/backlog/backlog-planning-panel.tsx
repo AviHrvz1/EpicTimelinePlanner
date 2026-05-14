@@ -485,7 +485,7 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
     </button>
   );
   return (
-    <div ref={setNodeRef} style={style} className={cn(className, "group/col w-full min-w-0")}>
+    <div ref={setNodeRef} style={style} className={cn(className, "group/col w-full min-w-0 transition-colors hover:text-amber-200")}>
       {/* pr-2.5 reserves the resize strip; overflow-hidden keeps label from painting past the column edge */}
       {centered ? (
         <span className="flex min-h-[1.25rem] w-full min-w-0 justify-center overflow-hidden pr-2.5">
@@ -4440,7 +4440,7 @@ export function BacklogPlanningPanel({
             ) : null}
             <span
               role="tooltip"
-              className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
+              className="pointer-events-none absolute right-full top-1/2 z-30 mr-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
             >
               Erases all filters: search, group-by, and every filter selection.
             </span>
@@ -4519,7 +4519,7 @@ export function BacklogPlanningPanel({
                       ) : null;
                     if (key === "workItem") {
                       return (
-                        <div key={key} className={cellClass}>
+                        <div key={key} className={cn(cellClass, "group/col transition-colors hover:text-amber-200")}>
                           <span className="flex items-center justify-between gap-2">
                             <span className="flex items-center gap-1.5 truncate pl-10">
                               <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>

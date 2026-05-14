@@ -931,7 +931,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[0] }}>
                                     <button
                                       type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
                                       onClick={() => toggleChildEpicSort("id")}
                                     >
                                       ID
@@ -954,7 +954,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[1] }}>
                                     <button
                                       type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
                                       onClick={() => toggleChildEpicSort("title")}
                                     >
                                       Epic
@@ -977,7 +977,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[2] }}>
                                     <button
                                       type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
                                       onClick={() => toggleChildEpicSort("team")}
                                     >
                                       Team
@@ -1000,7 +1000,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[3] }}>
                                     <button
                                       type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
                                       onClick={() => toggleChildEpicSort("assignee")}
                                     >
                                       Assignee
@@ -1023,7 +1023,7 @@ export function InitiativeFormDialog({
                                   <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[4] }}>
                                     <button
                                       type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
                                       onClick={() => toggleChildEpicSort("originalEstimateDays")}
                                     >
                                       Days Est
@@ -1050,7 +1050,7 @@ export function InitiativeFormDialog({
                                   >
                                     <button
                                       type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left hover:text-slate-900"
+                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
                                       onClick={() => toggleChildEpicSort("childSum")}
                                     >
                                       Σ Child Est.
