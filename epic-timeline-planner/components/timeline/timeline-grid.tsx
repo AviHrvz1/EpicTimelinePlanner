@@ -1983,6 +1983,44 @@ export function TimelineGrid({
   const [ganttSearchFilter, setGanttSearchFilter] = useState<{ type: "initiative" | "epic"; id: string; label: string } | null>(null);
   const ganttSearchRef = useRef<HTMLDivElement | null>(null);
   const ganttSearchInputRef = useRef<HTMLInputElement | null>(null);
+  // Q4 panel in the all-quarters Gantt header strip — its width + left position drive the Gantt search box.
+  const [quarter4PanelMetrics, setQuarter4PanelMetrics] = useState<{ width: number; left: number } | null>(null);
+  const quarter4NodeRef = useRef<HTMLElement | null>(null);
+  const measureQuarter4 = useCallback(() => {
+    const node = quarter4NodeRef.current;
+    const searchEl = ganttSearchRef.current;
+    if (!node || !searchEl) return;
+    const rect = node.getBoundingClientRect();
+    const parent = searchEl.parentElement;
+    if (!parent) return;
+    const parentRect = parent.getBoundingClientRect();
+    const width = Math.round(rect.width);
+    const left = Math.max(0, Math.round(rect.left - parentRect.left));
+    if (width > 0) setQuarter4PanelMetrics({ width, left });
+  }, []);
+  const quarter4ResizeObserverRef = useRef<ResizeObserver | null>(null);
+  if (typeof window !== "undefined" && !quarter4ResizeObserverRef.current) {
+    quarter4ResizeObserverRef.current = new ResizeObserver(() => { measureQuarter4(); });
+  }
+  // Re-measure on window resize too (the search and Q4 don't share a parent so a resize on either side matters).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => measureQuarter4();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [measureQuarter4]);
+  const setQuarter4PanelRef = useCallback((node: HTMLElement | null) => {
+    quarter4NodeRef.current = node;
+    const ro = quarter4ResizeObserverRef.current;
+    if (!ro) return;
+    ro.disconnect();
+    if (node) {
+      ro.observe(node);
+      measureQuarter4();
+    } else {
+      setQuarter4PanelMetrics(null);
+    }
+  }, [measureQuarter4]);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -4368,7 +4406,11 @@ export function TimelineGrid({
   const ganttSearchJsx = (
     <div
       ref={ganttSearchRef}
-      className="relative ml-2 mr-1 flex shrink-0 items-center"
+      className={cn(
+        "relative mr-1 flex shrink-0 items-center transition-[margin] duration-200",
+        !quarter4PanelMetrics && "ml-2",
+      )}
+      style={quarter4PanelMetrics ? { marginLeft: `${quarter4PanelMetrics.left}px` } : undefined}
       onBlur={(e) => { if (!ganttSearchRef.current?.contains(e.relatedTarget as Node)) setGanttSearchOpen(false); }}
     >
       <Search className="pointer-events-none absolute left-2 z-10 size-3.5 text-slate-400" aria-hidden />
@@ -4379,7 +4421,11 @@ export function TimelineGrid({
         onChange={(e) => { setGanttSearchQuery(e.target.value); setGanttSearchFilter(null); setGanttSearchOpen(true); }}
         onFocus={() => setGanttSearchOpen(true)}
         placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
-        className="h-8 w-[30rem] rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:w-[36rem] focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200"
+        style={quarter4PanelMetrics ? { width: `${quarter4PanelMetrics.width}px` } : undefined}
+        className={cn(
+          "h-8 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200",
+          !quarter4PanelMetrics && "w-[30rem] focus:w-[36rem]",
+        )}
       />
       {(ganttSearchQuery || ganttSearchFilter) ? (
         <button
@@ -6261,6 +6307,7 @@ export function TimelineGrid({
                     {QUARTERS.map((quarter) => (
                       <section
                         key={quarter.label}
+                        ref={quarter.label === "Q4" ? setQuarter4PanelRef : undefined}
                         className={cn(
                           "space-y-1 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 pt-1.5 pb-0.5 shadow-sm ring-1 ring-black/[0.03]",
                           yearRoadmapHScroll ? "px-0" : "px-2.5",
