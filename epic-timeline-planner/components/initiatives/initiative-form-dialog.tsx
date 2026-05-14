@@ -107,45 +107,97 @@ function InitiativeColorPicker({
 }) {
   const normalized = normalizeHex(value);
   const matched = SUGGESTED_INITIATIVE_COLORS.find((c) => c.hex.toLowerCase() === normalized);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const nativePickerRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocMouseDown(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-[repeat(9,minmax(0,1fr))] gap-1.5">
-        {SUGGESTED_INITIATIVE_COLORS.map((c) => {
-          const isActive = c.hex.toLowerCase() === normalized;
-          return (
-            <button
-              key={c.hex}
-              type="button"
-              onClick={() => onChange(c.hex)}
-              aria-label={`${c.label} (${c.hex})`}
-              title={`${c.label}\n${c.hex}`}
-              className={cn(
-                "relative h-6 w-full rounded-md ring-1 ring-slate-200 transition-all duration-150 hover:scale-110 hover:ring-slate-300",
-                isActive && "scale-110 ring-2 ring-offset-1 ring-violet-500 shadow-sm",
-              )}
-              style={{ backgroundColor: c.hex }}
-            />
-          );
-        })}
-      </div>
-      <div className="flex items-center gap-2 text-[12px] text-slate-500">
-        <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1 hover:bg-slate-50">
-          <span
-            className="inline-block size-3.5 rounded-sm ring-1 ring-slate-300"
-            style={{ backgroundColor: normalized }}
-            aria-hidden
-          />
-          <span className="font-medium text-slate-700">{matched ? matched.label : "Custom"}</span>
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-lg border bg-white px-2.5 py-1.5 text-left text-[13px] shadow-sm transition-all",
+          open ? "border-violet-400 ring-2 ring-violet-100" : "border-slate-300 hover:border-slate-400",
+        )}
+      >
+        <span
+          className="inline-block size-4 shrink-0 rounded-md ring-1 ring-slate-300"
+          style={{ backgroundColor: normalized }}
+          aria-hidden
+        />
+        <span className="flex-1 truncate font-medium text-slate-700">{matched ? matched.label : "Custom"}</span>
+        <span className="font-mono text-[11px] uppercase tracking-wider text-slate-400">{normalized}</span>
+        <ChevronDown className={cn("size-3.5 shrink-0 text-slate-400 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Initiative color"
+          className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl ring-1 ring-black/5"
+        >
+          {SUGGESTED_INITIATIVE_COLORS.map((c) => {
+            const isActive = c.hex.toLowerCase() === normalized;
+            return (
+              <button
+                key={c.hex}
+                type="button"
+                role="option"
+                aria-selected={isActive}
+                onClick={() => { onChange(c.hex); setOpen(false); }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
+                  isActive ? "bg-violet-50 text-violet-700" : "text-slate-700 hover:bg-slate-50",
+                )}
+              >
+                <span
+                  className="inline-block size-4 shrink-0 rounded-md ring-1 ring-slate-300"
+                  style={{ backgroundColor: c.hex }}
+                  aria-hidden
+                />
+                <span className="flex-1 truncate font-medium">{c.label}</span>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-slate-400">{c.hex}</span>
+                {isActive && <Check className="size-3.5 shrink-0 text-violet-600" />}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => nativePickerRef.current?.click()}
+            className="mt-1 flex w-full items-center gap-2.5 rounded-md border-t border-slate-100 px-2 py-1.5 text-left text-[13px] text-slate-700 hover:bg-slate-50"
+          >
+            <span className="inline-block size-4 shrink-0 rounded-md bg-gradient-to-br from-rose-400 via-amber-400 to-sky-400 ring-1 ring-slate-300" aria-hidden />
+            <span className="flex-1 font-medium">Custom…</span>
+          </button>
           <input
+            ref={nativePickerRef}
             type="color"
             value={normalized}
             onChange={(e) => onChange(e.target.value)}
-            className="absolute h-0 w-0 opacity-0"
+            className="pointer-events-none absolute h-0 w-0 opacity-0"
             aria-label="Pick any color"
+            tabIndex={-1}
           />
-        </label>
-        <span className="font-mono text-[11px] uppercase tracking-wider text-slate-400">{normalized}</span>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
