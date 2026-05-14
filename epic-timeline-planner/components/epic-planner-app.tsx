@@ -5625,15 +5625,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         surfaceAnchorRef={planningRightSurfaceRef}
       />
       {confirmDialog ? (
-        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/35 backdrop-blur-[1px] p-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-2xl ring-1 ring-black/10">
-            <h3 className="text-base font-semibold text-slate-900">{confirmDialog.title}</h3>
-            <p className="mt-2 text-sm text-slate-600">{confirmDialog.message}</p>
-            <div className="mt-4 flex items-center justify-end gap-2">
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4">
+          <div
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl ring-1 ring-slate-200/60"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50 px-5 py-4 border-b border-slate-200/70">
+              <h3 className="text-[15px] font-semibold tracking-tight text-slate-800">{confirmDialog.title}</h3>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[13.5px] leading-relaxed text-slate-600">{confirmDialog.message}</p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200/70 bg-slate-50/40 px-5 py-3">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 px-3 text-xs font-medium"
+                className="h-8 border-slate-200 px-4 text-[13px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800"
                 disabled={isConfirmingDialog}
                 onClick={() => setConfirmDialog(null)}
               >
@@ -5641,7 +5649,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               </Button>
               <Button
                 size="sm"
-                className="h-8 px-3 text-xs font-medium bg-slate-900 text-white hover:bg-[#6878b8]"
+                className="h-8 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
                 disabled={isConfirmingDialog}
                 onClick={async () => {
                   setIsConfirmingDialog(true);
@@ -5653,7 +5661,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   }
                 }}
               >
-                {isConfirmingDialog ? "Working..." : confirmDialog.confirmLabel}
+                {isConfirmingDialog ? "Working…" : confirmDialog.confirmLabel}
               </Button>
             </div>
           </div>
