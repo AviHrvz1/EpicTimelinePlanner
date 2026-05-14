@@ -19,9 +19,11 @@ export function BurndownChart({ initiatives, year, quarter, sprint, metric, team
   const analytics = buildSprintAnalytics(initiatives, month, sprint, metric ?? "daysLeft", year, team ? [team] : null);
   const data = analytics.burndown;
 
+  const yLabel = (metric ?? "daysLeft") === "storyCount" ? "Stories" : "Days left";
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+      <LineChart data={data} margin={{ top: 8, right: 16, left: 16, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="labelShort"
@@ -29,7 +31,12 @@ export function BurndownChart({ initiatives, year, quarter, sprint, metric, team
           interval={0}
           tickFormatter={(v: string) => v.replace(/\s*\([^)]*\)\s*$/, "")}
         />
-        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+        <YAxis
+          tick={{ fontSize: 11 }}
+          width={44}
+          allowDecimals={false}
+          label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 0, style: { fontSize: 11, fill: "#475569", fontWeight: 600 } }}
+        />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
         {data.findIndex((d) => d.isToday) >= 0 && (
           <ReferenceLine

@@ -3,6 +3,7 @@ export type ChartType =
   | "burndown"
   | "epic-burndown"
   | "cfd"
+  | "epic-cfd"
   | "workload"
   | "quarter-status"
   | "story-status"

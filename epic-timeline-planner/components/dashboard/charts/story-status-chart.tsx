@@ -23,35 +23,30 @@ type LabelArgs = {
   cx?: number;
   cy?: number;
   midAngle?: number;
-  innerRadius?: number;
   outerRadius?: number;
   percent?: number;
-  value?: number;
+  name?: string;
 };
 
-function PieSlicePercentLabel(props: LabelArgs) {
-  const cx = props.cx ?? 0;
-  const cy = props.cy ?? 0;
-  const midAngle = props.midAngle ?? 0;
-  const innerR = props.innerRadius ?? 0;
-  const outerR = props.outerRadius ?? 0;
-  const pct = (props.percent ?? 0) * 100;
-  if (pct < 4) return null; // hide labels on very thin slices
+// External "% · Name" label, matching the insights pie chart.
+function PieSliceOutsideLabel(props: LabelArgs) {
+  const { cx, cy, midAngle, outerRadius, percent, name } = props;
+  if (cx == null || cy == null || midAngle == null || outerRadius == null || percent == null) return null;
+  if (percent < 0.04) return null; // hide labels on very thin slices
   const RAD = Math.PI / 180;
-  const r = innerR + (outerR - innerR) * 0.55;
+  const r = outerRadius + 16;
   const x = cx + r * Math.cos(-midAngle * RAD);
   const y = cy + r * Math.sin(-midAngle * RAD);
+  const anchor = x > cx ? "start" : "end";
   return (
-    <text
-      x={x}
-      y={y}
-      textAnchor="middle"
-      dominantBaseline="central"
-      className="fill-white"
-      style={{ fontSize: 12, fontWeight: 700, paintOrder: "stroke", stroke: "rgba(15,23,42,0.25)", strokeWidth: 0.6 }}
-    >
-      {`${Math.round(pct)}%`}
-    </text>
+    <g>
+      <text x={x} y={y - 8} fill="#334155" textAnchor={anchor} dominantBaseline="central" fontSize={13} fontWeight={700}>
+        {`${Math.round(percent * 100)}%`}
+      </text>
+      <text x={x} y={y + 8} fill="#64748b" textAnchor={anchor} dominantBaseline="central" fontSize={11} fontWeight={500}>
+        {name ?? ""}
+      </text>
+    </g>
   );
 }
 
@@ -81,13 +76,13 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team }: P
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius="38%"
-              outerRadius="68%"
+              innerRadius="32%"
+              outerRadius="55%"
               paddingAngle={3}
               cornerRadius={8}
               stroke="#ffffff"
               strokeWidth={2}
-              label={PieSlicePercentLabel}
+              label={PieSliceOutsideLabel}
               labelLine={false}
               filter="url(#storyStatusPieShadow)"
             >

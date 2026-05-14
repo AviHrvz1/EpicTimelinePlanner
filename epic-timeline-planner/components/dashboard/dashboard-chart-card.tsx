@@ -1,16 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Pencil, X } from "lucide-react";
+import { Flag, GripVertical, Pencil, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
+import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { currentCalendarYearSprint } from "@/lib/year-sprint";
 import { BurndownChart } from "./charts/burndown-chart";
 import { EpicBurndownChart } from "./charts/epic-burndown-chart";
 import { CfdChart } from "./charts/cfd-chart";
+import { EpicCfdChart } from "./charts/epic-cfd-chart";
 import { EpicBurnupChart } from "./charts/epic-burnup-chart";
 import { QuarterStatusChart } from "./charts/quarter-status-chart";
 import { SprintBurnupChart } from "./charts/sprint-burnup-chart";
@@ -65,15 +67,15 @@ function ResizePad({
 
 // Sprint-scoped charts always render the current calendar sprint (auto-roll forward
 // when the originally-saved sprint window has ended).
+// Sprint-scoped chart types only. Epic charts (epic-burndown, epic-burnup) span
+// the epic's own plan start→due range — they're not affected by the dashboard sprint.
 const SPRINT_SCOPED_CHART_TYPES = new Set<string>([
   "burndown",
-  "epic-burndown",
   "cfd",
   "story-status",
   "workload-balance",
   "sprint-load",
   "sprint-burnup",
-  "epic-burnup",
   "workload",
 ]);
 
@@ -96,6 +98,32 @@ export function resolveDisplayTitle(chart: DashboardChartItem): string {
     return chart.title.replace(/Sprint\s+\d+/i, `Sprint ${current}`);
   }
   return chart.title;
+}
+
+function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
+  let teamLabel: string | null = null;
+  try {
+    const parsed = JSON.parse(chart.config) as Record<string, unknown>;
+    if (typeof parsed.team === "string" && parsed.team.length > 0) {
+      teamLabel = monthTeamLabelForId(parsed.team) ?? parsed.team;
+    }
+  } catch { /* ignore */ }
+
+  const parts = displayTitle.split(" · ");
+  return parts.map((segment, idx) => {
+    const isSprint = /^Sprint\s+\d+$/i.test(segment);
+    const isTeam = teamLabel != null && segment === teamLabel;
+    return (
+      <Fragment key={`${idx}-${segment}`}>
+        {idx > 0 && <span className="mx-1 shrink-0 text-slate-300">·</span>}
+        <span className="inline-flex shrink-0 items-center gap-1">
+          {isSprint && <Flag className="size-3 text-rose-500" aria-hidden />}
+          {isTeam && <Users className="size-3 text-indigo-500" aria-hidden />}
+          <span className={cn(idx === 0 ? "text-slate-800" : "text-slate-600")}>{segment}</span>
+        </span>
+      </Fragment>
+    );
+  });
 }
 
 function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiatives: InitiativeItem[] }) {
@@ -128,6 +156,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          metric={params.metric === "storyCount" ? "storyCount" : "daysLeft"}
         />
       );
     case "epic-burndown":
@@ -139,6 +168,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
           epicId={params.epicId as string | null}
+          metric={params.metric === "storyCount" ? "storyCount" : "daysLeft"}
         />
       );
     case "cfd":
@@ -149,6 +179,17 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+        />
+      );
+    case "epic-cfd":
+      return (
+        <EpicCfdChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          team={params.team as string | null}
+          epicId={params.epicId as string | null}
         />
       );
     case "workload":
@@ -208,6 +249,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          metric={params.metric === "daysLeft" ? "daysLeft" : "storyCount"}
         />
       );
     case "epic-burnup":
@@ -219,6 +261,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
           epicId={params.epicId as string | null}
+          metric={params.metric === "daysLeft" ? "daysLeft" : "storyCount"}
         />
       );
     default:
@@ -283,9 +326,11 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
           />
         ) : (
           <span
-            className="group/title flex flex-1 items-center gap-1 truncate text-sm font-semibold text-slate-700"
+            className="group/title flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold text-slate-700"
           >
-            <span className="truncate">{displayTitle}</span>
+            <span className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
+              {renderTitleNodes(chart, displayTitle)}
+            </span>
             <button
               onClick={() => { setTitleValue(displayTitle); setRenamingTitle(true); setTimeout(() => titleInputRef.current?.select(), 0); }}
               className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition-all group-hover/title:opacity-100 hover:bg-slate-100 hover:text-slate-500"

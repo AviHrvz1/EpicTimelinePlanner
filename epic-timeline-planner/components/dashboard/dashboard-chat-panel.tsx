@@ -42,6 +42,11 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     icon: <AreaChart className="size-4 text-emerald-500" />,
     description: "Story status stacked over time in a sprint",
   },
+  "epic-cfd": {
+    label: "Epic Cumulative Flow",
+    icon: <AreaChart className="size-4 text-cyan-500" />,
+    description: "Story status stacked over time across an epic's plan range",
+  },
   workload: {
     label: "Workload",
     icon: <Users className="size-4 text-amber-500" />,

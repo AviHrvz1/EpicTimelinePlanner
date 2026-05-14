@@ -450,7 +450,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
         </div>
 
         {/* Right-side actions */}
-        <div className="flex shrink-0 items-center gap-2 self-center mb-0.5">
+        <div className="flex shrink-0 items-center gap-2 self-center">
           {(() => {
             const activeSlug = dashboards.find((d) => d.id === activeDashboardId)?.slug;
             return activeSlug ? (
@@ -459,7 +459,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Open full view"
-                className="flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold text-white shadow-none transition-all bg-gradient-to-br from-slate-400 to-slate-500 hover:from-slate-500 hover:to-slate-600 [&_svg]:text-white"
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 px-2.5 text-[12px] font-semibold text-white shadow-none transition-all bg-gradient-to-br from-slate-400 to-slate-500 hover:from-slate-500 hover:to-slate-600 [&_svg]:text-white"
               >
                 <ExternalLink className="size-3.5" />
                 Full view
@@ -471,7 +471,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           {isSavedDashboard && !isEditMode && (
             <button
               onClick={() => { setIsEditMode(true); setBuilderOpen(true); }}
-              className="flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold text-white shadow-none transition-all bg-gradient-to-br from-indigo-400 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 [&_svg]:text-white"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-[12px] font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-400 [&_svg]:text-slate-500"
             >
               <Pencil className="size-3.5" />
               Edit
@@ -482,7 +482,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           {isSavedDashboard && isEditMode && (
             <button
               onClick={() => { setIsEditMode(false); setBuilderOpen(false); setEditTarget(null); }}
-              className="flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold text-white shadow-none transition-all bg-gradient-to-br from-teal-400 to-teal-500 hover:from-teal-500 hover:to-teal-600 [&_svg]:text-white"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 px-2.5 text-[12px] font-semibold text-white shadow-none transition-all bg-gradient-to-br from-teal-400 to-teal-500 hover:from-teal-500 hover:to-teal-600 [&_svg]:text-white"
             >
               <Check className="size-3.5" />
               Done
@@ -492,7 +492,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           <button
             onClick={() => spawnBlankDraft()}
             className={cn(
-              "flex h-8 items-center gap-1.5 rounded-md border-0 px-3 text-[13px] font-bold shadow-none transition-all",
+              "inline-flex h-7 items-center gap-1.5 rounded-md border-0 px-2.5 text-[12px] font-semibold shadow-none transition-all",
               "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white",
               "hover:from-sky-500 hover:via-blue-600 hover:to-sky-600",
               "[&_svg]:text-white",
@@ -507,8 +507,9 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
             <button
               onClick={openSaveModal}
               disabled={saving}
-              className="h-8 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3 text-[12px] font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all [&_svg]:text-white"
             >
+              <Check className="size-3.5" />
               {saving ? "Saving…" : "Save"}
             </button>
           )}

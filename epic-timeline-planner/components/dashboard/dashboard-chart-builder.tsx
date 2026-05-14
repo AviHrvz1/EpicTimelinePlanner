@@ -3,7 +3,6 @@
 import {
   AreaChart,
   BarChart2,
-  Bot,
   Check,
   ChevronLeft,
   Flag,
@@ -14,6 +13,7 @@ import {
   TrendingDown,
   Users,
   Users2,
+  Wand2,
   X,
   Zap,
 } from "lucide-react";
@@ -108,6 +108,12 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     description: "Story status stacked over time in a sprint",
     accent: "border-emerald-200 bg-emerald-50 text-emerald-700",
   },
+  "epic-cfd": {
+    label: "Epic Cumulative Flow",
+    icon: <AreaChart className="size-4 text-cyan-500" />,
+    description: "Story status stacked over time across an epic's plan range",
+    accent: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  },
   "story-status": {
     label: "User Stories Status",
     icon: <PieChart className="size-4 text-sky-500" />,
@@ -158,7 +164,7 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
   },
 };
 
-const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
+const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup"]);
 
 // Display order: burndowns first, burnups next, then other sprint types, then quarter-level
 const CHART_TYPE_ORDER: ChartType[] = [
@@ -167,6 +173,7 @@ const CHART_TYPE_ORDER: ChartType[] = [
   "sprint-burnup",
   "epic-burnup",
   "cfd",
+  "epic-cfd",
   "story-status",
   "workload-balance",
   "sprint-load",
@@ -550,7 +557,17 @@ function SprintChartForm({
     setSelectedEpicIds(initEpicIds);
   }, [initRoadmapIds, initTeamIds, initEpicIds]);
 
-  const isEpicChart = chartType === "epic-burndown" || chartType === "epic-burnup";
+  const isEpicChart = chartType === "epic-burndown" || chartType === "epic-burnup" || chartType === "epic-cfd";
+  const supportsMetricPicker = chartType === "burndown" || chartType === "epic-burndown" || chartType === "sprint-burnup" || chartType === "epic-burnup";
+  const defaultMetric: "daysLeft" | "storyCount" = chartType === "sprint-burnup" || chartType === "epic-burnup" ? "storyCount" : "daysLeft";
+  const initMetric: "daysLeft" | "storyCount" = useMemo(() => {
+    if (!editTarget) return defaultMetric;
+    let cfg: Record<string, unknown> = {};
+    try { cfg = JSON.parse(editTarget.config); } catch { /* ignore */ }
+    return cfg.metric === "storyCount" || cfg.metric === "daysLeft" ? cfg.metric : defaultMetric;
+  }, [editTarget, defaultMetric]);
+  const [metric, setMetric] = useState<"daysLeft" | "storyCount">(initMetric);
+  useEffect(() => { setMetric(initMetric); }, [initMetric]);
 
   /** Epic options filtered by selected roadmap(s) and team(s), grouped by initiative for display. */
   const epicOptions = useMemo(() => {
@@ -634,12 +651,11 @@ function SprintChartForm({
       const configs: DashboardChartConfig[] = selectedEpicMetaList.map(({ epic, initiative }) => {
         const teamId = epic.team?.trim() || null;
         const teamLabel = teamId ? (monthTeamLabelForId(teamId) ?? teamId) : null;
+        // Epic charts span the epic's own plan range, not a sprint — drop the "Sprint N" segment.
         const parts = [
           CHART_META[chartType].label,
-          initiative.title,
           epic.title,
           teamLabel,
-          `Sprint ${sprintInfo.sprint}`,
         ].filter(Boolean);
         return {
           chartType,
@@ -651,6 +667,7 @@ function SprintChartForm({
             epicId: epic.id,
             ...(initiative.roadmapId ? { roadmapId: initiative.roadmapId } : {}),
             ...(teamId ? { team: teamId } : {}),
+            ...(supportsMetricPicker ? { metric } : {}),
           },
         };
       });
@@ -684,6 +701,7 @@ function SprintChartForm({
             sprint: sprintInfo.sprint,
             ...(roadmap ? { roadmapId: roadmap.id } : {}),
             ...(teamId ? { team: teamId } : {}),
+            ...(supportsMetricPicker ? { metric } : {}),
           },
         });
       }
@@ -774,7 +792,41 @@ function SprintChartForm({
           </div>
         )}
 
-        {/* Epic picker — only for epic-burndown / epic-burnup; filtered by selected roadmaps + teams. */}
+        {/* Metric — Burndown/Burnup only */}
+        {supportsMetricPicker && (
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <TrendingDown className="size-3.5" />
+              </span>
+              <p className="text-[15px] font-bold text-slate-700">Measure by</p>
+            </div>
+            <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setMetric("daysLeft")}
+                className={cn(
+                  "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all",
+                  metric === "daysLeft" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                Days left
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetric("storyCount")}
+                className={cn(
+                  "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all",
+                  metric === "storyCount" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                Stories
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Epic picker — only for epic-burndown / epic-burnup / epic-cfd; filtered by selected roadmaps + teams. */}
         {isEpicChart ? (
           <div>
             <div className="mb-3 flex items-center justify-between">
@@ -1236,8 +1288,8 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 px-4 py-4">
         <div className="flex items-center gap-2.5 mb-0.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 shadow-sm">
-            <Bot className="size-4 text-white" />
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm">
+            <Wand2 className="size-4 text-white" />
           </div>
           <p className="text-lg font-bold text-slate-800">Chart Builder</p>
         </div>

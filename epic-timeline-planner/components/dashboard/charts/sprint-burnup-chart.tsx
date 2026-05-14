@@ -10,11 +10,12 @@ type Props = {
   quarter: number;
   sprint: number;
   team?: string | null;
+  metric?: "daysLeft" | "storyCount";
 };
 
-export function SprintBurnupChart({ initiatives, year, quarter, sprint, team }: Props) {
+export function SprintBurnupChart({ initiatives, year, quarter, sprint, team, metric = "storyCount" }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "storyCount", year, team ? [team] : null);
+  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric, year, team ? [team] : null);
   const allDays = analytics.burndown;
   const pastDays = analytics.flowSprintTrendData;
 
@@ -38,7 +39,7 @@ export function SprintBurnupChart({ initiatives, year, quarter, sprint, team }: 
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+      <LineChart data={data} margin={{ top: 8, right: 16, left: 16, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="labelShort"
@@ -46,7 +47,12 @@ export function SprintBurnupChart({ initiatives, year, quarter, sprint, team }: 
           interval={0}
           tickFormatter={(v: string) => v.replace(/\s*\([^)]*\)\s*$/, "")}
         />
-        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+        <YAxis
+          tick={{ fontSize: 10 }}
+          width={44}
+          allowDecimals={metric === "daysLeft"}
+          label={{ value: metric === "daysLeft" ? "Days completed" : "Stories", angle: -90, position: "insideLeft", offset: 0, style: { fontSize: 11, fill: "#475569", fontWeight: 600 } }}
+        />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
         {todayPoint && (
           <ReferenceLine x={todayPoint.labelShort} stroke="#94a3b8" strokeDasharray="4 2"
