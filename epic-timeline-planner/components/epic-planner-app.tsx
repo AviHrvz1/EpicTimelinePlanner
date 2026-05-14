@@ -557,17 +557,63 @@ function computeEpicMonthLanePlacement(
   }
 
   const { startMonth: sm, endMonth: em } = monthRangeForEpicDrop(currentEpic, month, isFirstSchedule);
+  /**
+   * Preserve the original sprint-level span when moving an existing epic.
+   * `monthRangeForEpicDrop` only thinks in whole months, and the placement code below used to
+   * hardcode `planEndSprint: 2`. That caused a 2-sprint epic dropped onto sprint 2 of the same
+   * month to collapse to 1 sprint. Calculate the end sprint from the original sprint span instead.
+   */
+  let placementStartMonth = sm;
+  let placementEndMonth = em;
+  let placementStartSprint: 1 | 2 = planSprint;
+  let placementEndSprint: 1 | 2 = 2;
+  if (
+    !isFirstSchedule &&
+    currentEpic.planStartMonth != null &&
+    currentEpic.planEndMonth != null &&
+    currentEpic.planSprint != null &&
+    currentEpic.planEndSprint != null
+  ) {
+    const origStartSprint = currentEpic.planSprint === 2 ? 2 : 1;
+    const origEndSprint = currentEpic.planEndSprint === 1 ? 1 : 2;
+    const origSprintSpan =
+      (currentEpic.planEndMonth - currentEpic.planStartMonth) * 2 +
+      (origEndSprint - origStartSprint) +
+      1;
+    const newStartGlobal = globalSprintFromMonthLane(month, planSprint);
+    let newEndGlobal = newStartGlobal + Math.max(1, origSprintSpan) - 1;
+    if (newEndGlobal > 24) newEndGlobal = 24;
+    const newEnd = monthLaneFromGlobalSprint(newEndGlobal);
+    placementStartMonth = month;
+    placementEndMonth = newEnd.month;
+    placementStartSprint = planSprint;
+    placementEndSprint = newEnd.lane;
+  }
   const scheduledAll = collectScheduledEpicRows(prev);
   const others = scheduledAll.filter((row) => row.epicId !== epicId);
-  const overlapsPlacedRange = (row: ScheduledEpicPlacementRow) => !(row.endMonth < sm || row.startMonth > em);
+  const overlapsPlacedRange = (row: ScheduledEpicPlacementRow) =>
+    !(row.endMonth < placementStartMonth || row.startMonth > placementEndMonth);
   const overlappingOthers = others.filter(overlapsPlacedRange);
   const currentRow = Number.isFinite(currentEpic.timelineRow) ? currentEpic.timelineRow : 0;
 
   if (isFirstSchedule) {
-    const insertAt = laneIndex !== undefined ? Math.max(0, Math.min(laneIndex, others.length)) : others.length;
+    /**
+     * Prefer the precise insert slot from pointer Y. If that inference returns nothing, fall back
+     * to the hovered lane index (also pointer-derived) so the new epic lands on the row the user
+     * dropped onto instead of jumping to the bottom of the stack.
+     */
+    let resolvedInsertIndex = laneIndex;
+    if (resolvedInsertIndex === undefined && hoveredLaneIndex !== undefined) {
+      resolvedInsertIndex = hoveredLaneIndex;
+    }
+    if (resolvedInsertIndex === undefined && hoveredTimelineRow != null) {
+      const idx = others.findIndex((row) => row.timelineRow === hoveredTimelineRow);
+      if (idx >= 0) resolvedInsertIndex = idx;
+    }
+    const insertAt = resolvedInsertIndex !== undefined ? Math.max(0, Math.min(resolvedInsertIndex, others.length)) : others.length;
     const newOrder = [
       ...others.slice(0, insertAt),
-      { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: 0, startMonth: sm, endMonth: em },
+      { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: 0, startMonth: placementStartMonth, endMonth: placementEndMonth },
       ...others.slice(insertAt),
     ];
     const rowByEpicId = new Map(newOrder.map((row, idx) => [row.epicId, idx]));
@@ -590,10 +636,10 @@ function computeEpicMonthLanePlacement(
         epic.id === epicId
           ? {
               ...epic,
-              planSprint,
-              planStartMonth: sm,
-              planEndMonth: em,
-              planEndSprint: 2,
+              planSprint: placementStartSprint,
+              planStartMonth: placementStartMonth,
+              planEndMonth: placementEndMonth,
+              planEndSprint: placementEndSprint,
               timelineRow: rowByEpicId.get(epic.id) ?? 0,
             }
           : rowByEpicId.has(epic.id)
@@ -676,7 +722,14 @@ function computeEpicMonthLanePlacement(
       ...initiative,
       epics: (initiative.epics ?? []).map((epic) =>
         epic.id === epicId
-          ? { ...epic, planSprint, planStartMonth: sm, planEndMonth: em, planEndSprint: 2, timelineRow: movedTimelineRow }
+          ? {
+              ...epic,
+              planSprint: placementStartSprint,
+              planStartMonth: placementStartMonth,
+              planEndMonth: placementEndMonth,
+              planEndSprint: placementEndSprint,
+              timelineRow: movedTimelineRow,
+            }
           : epic,
       ),
     }));
@@ -695,7 +748,7 @@ function computeEpicMonthLanePlacement(
   }
   const overlapOrder = [
     ...overlappingOthers.slice(0, insertAtOverlap),
-    { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: currentRow, startMonth: sm, endMonth: em },
+    { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: currentRow, startMonth: placementStartMonth, endMonth: placementEndMonth },
     ...overlappingOthers.slice(insertAtOverlap),
   ];
   const rowByEpicId = new Map<string, number>();
@@ -719,10 +772,10 @@ function computeEpicMonthLanePlacement(
       epic.id === epicId
         ? {
             ...epic,
-            planSprint,
-            planStartMonth: sm,
-            planEndMonth: em,
-            planEndSprint: 2,
+            planSprint: placementStartSprint,
+            planStartMonth: placementStartMonth,
+            planEndMonth: placementEndMonth,
+            planEndSprint: placementEndSprint,
             timelineRow: rowByEpicId.get(epic.id) ?? epic.timelineRow,
           }
         : rowByEpicId.has(epic.id)
@@ -4029,8 +4082,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
       try {
         const planPatch: Parameters<typeof patchEpicQuarterPlan>[1] = {
-          planSprint,
-          planEndSprint: updatedEpic?.planEndSprint ?? 2,
+          planSprint: (updatedEpic?.planSprint as 1 | 2 | undefined) ?? planSprint,
+          planEndSprint: (updatedEpic?.planEndSprint as 1 | 2 | undefined) ?? 2,
           planStartMonth: updatedEpic?.planStartMonth ?? month,
           planEndMonth: updatedEpic?.planEndMonth ?? month,
         };

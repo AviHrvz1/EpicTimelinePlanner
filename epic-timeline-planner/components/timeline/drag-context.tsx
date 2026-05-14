@@ -274,9 +274,10 @@ function EpicPlanCompactDragPreview({
   color: string;
   icon?: string | null;
 }) {
+  /** Fixed compact size — roughly one month on the year gantt — so the preview doesn't span 3 columns when dragged from the wide middle panel. */
   return (
     <div
-      className="flex h-full w-full cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-md ring-1 ring-black/15"
+      className="flex h-7 w-44 cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-semibold text-white shadow-md ring-1 ring-black/15"
       style={{ backgroundColor: color }}
     >
       <span className="min-w-0 flex-1 truncate px-2.5 text-center">
