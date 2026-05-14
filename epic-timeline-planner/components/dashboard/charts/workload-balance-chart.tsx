@@ -46,14 +46,22 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team 
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={barData} barCategoryGap="20%" margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
+      <BarChart data={barData} barCategoryGap="20%" margin={{ top: 16, right: 4, left: -12, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
         <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
         {SEGMENTS.map((s) => (
-          <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={12} />
+          <Bar
+            key={s.key}
+            dataKey={s.label}
+            fill={s.color}
+            radius={[3, 3, 0, 0]}
+            maxBarSize={12}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
+          />
         ))}
       </BarChart>
     </ResponsiveContainer>
