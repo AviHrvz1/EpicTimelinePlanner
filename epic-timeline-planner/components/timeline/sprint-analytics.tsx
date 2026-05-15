@@ -1,7 +1,8 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon, User, UserRound, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon, User, UserRound, Users } from "lucide-react";
+import { SprintTimelinePopup } from "@/components/timeline/sprint-end-countdown";
 import {
   Area,
   AreaChart,
@@ -209,6 +210,7 @@ export function SprintAnalytics({
   const [workloadDrilldownIsTeam, setWorkloadDrilldownIsTeam] = useState(false);
   const [sprintLoadDrilldownAssignee, setSprintLoadDrilldownAssignee] = useState<string | null>(null);
   const [sprintLoadDrilldownIsTeam, setSprintLoadDrilldownIsTeam] = useState(false);
+  const [sprintTimelinePopupOpen, setSprintTimelinePopupOpen] = useState(false);
   const analytics = useMemo(
     () =>
       buildSprintAnalytics(
@@ -1090,6 +1092,27 @@ export function SprintAnalytics({
                     </button>
                   ) : null}
                 </div>
+                {!sprintLoadDrilldownAssignee && (
+                  <button
+                    type="button"
+                    onClick={() => setSprintTimelinePopupOpen(true)}
+                    title="View sprint timeline"
+                    className={cn(
+                      "mb-1.5 flex w-full shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[12px] font-semibold ring-1 transition-all hover:-translate-y-px",
+                      sprintEnded
+                        ? "bg-rose-50/80 text-rose-700 ring-rose-200/70 hover:ring-rose-300"
+                        : sprintDaysLeft <= 2
+                          ? "bg-amber-50/80 text-amber-800 ring-amber-200/70 hover:ring-amber-300"
+                          : "bg-slate-50 text-slate-600 ring-slate-200/70 hover:ring-slate-300",
+                    )}
+                  >
+                    <CalendarDays className="size-3.5 shrink-0" aria-hidden />
+                    <span>{sprintEnded ? "Sprint has ended" : `Sprint ends in ${sprintDaysLeft}d`}</span>
+                  </button>
+                )}
+                {sprintTimelinePopupOpen && (
+                  <SprintTimelinePopup planYear={planYear} yearSprint={yearSprint} onClose={() => setSprintTimelinePopupOpen(false)} />
+                )}
                 {sprintLoadDrilldownAssignee ? (
                   <div className="mt-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
                     <div className="relative">
@@ -1147,38 +1170,69 @@ export function SprintAnalytics({
                         const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                         const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
                         const atRisk = sprintDaysLeft > 0 && row.daysLeft > sprintDaysLeft;
+                        const showEnded = sprintEnded && row.daysLeft > 0;
+                        const overByDays = atRisk ? row.daysLeft - sprintDaysLeft : 0;
+                        const allDone = row.daysLeft === 0 && row.estTotal > 0;
                         return (
                           <button
                             key={row.key}
                             type="button"
                             onClick={row.onRowClick}
-                            className="w-full rounded-lg bg-white px-2 py-1 text-left transition hover:bg-slate-50"
+                            className={cn(
+                              "w-full rounded-lg bg-white px-2 py-1.5 text-left ring-1 transition-colors hover:bg-slate-50/60",
+                              atRisk
+                                ? "ring-amber-200/70 hover:ring-amber-300"
+                                : showEnded
+                                  ? "ring-rose-200/70 hover:ring-rose-300"
+                                  : "ring-slate-200/70 hover:ring-slate-300",
+                            )}
                           >
-                            <div className="flex items-center gap-1.5">
-                              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1",
+                                  atRisk
+                                    ? "bg-amber-100 text-amber-800 ring-amber-200/80"
+                                    : allDone
+                                      ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
+                                      : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                                )}
+                              >
                                 {row.initials || <User className="size-3" />}
                               </span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-1 mb-0.5">
-                                  <span className="truncate text-[11px] font-semibold text-slate-800">{row.label}</span>
-                                  <div className="flex shrink-0 items-center gap-1">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
+                                  <div className="flex shrink-0 items-center gap-1.5">
                                     {atRisk && (
-                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80" title={`${row.daysLeft}d of work left but only ${sprintDaysLeft}d remain in the sprint`}>
+                                      <span
+                                        className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200/80"
+                                        title={`${row.daysLeft}d of work left but only ${sprintDaysLeft}d remain in the sprint — ${overByDays}d over capacity`}
+                                      >
                                         <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
-                                        {row.daysLeft - sprintDaysLeft}d over
+                                        +{overByDays}d over
                                       </span>
                                     )}
-                                    {sprintEnded && row.daysLeft > 0 && (
-                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200/80">
+                                    {showEnded && (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 rounded bg-rose-50 px-1.5 py-px text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200/80"
+                                        title={`Sprint has ended with ${row.daysLeft}d of work still open`}
+                                      >
                                         <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
-                                        Ended
+                                        {row.daysLeft}d unfinished
                                       </span>
                                     )}
-                                    <span className="text-[12px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
+                                    <span className="text-[11.5px] tabular-nums text-slate-600">
+                                      <span className="font-semibold text-slate-800">{doneDays}d</span>
+                                      <span className="ml-0.5 text-slate-400">done</span>
+                                      <span className="mx-1 text-slate-300">·</span>
+                                      <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
+                                      <span className="ml-0.5 text-slate-400">left</span>
+                                    </span>
                                   </div>
                                 </div>
-                                <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
-                                  <div className={cn("absolute inset-y-0 left-0 rounded-full transition-all", atRisk ? "bg-amber-400" : row.daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400")} style={{ width: `${donePct}%` }} />
+                                <div className="mt-1 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                                  <div className={cn("absolute inset-y-0 left-0 rounded-full transition-all", atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : "bg-indigo-400")} style={{ width: `${donePct}%` }} />
                                 </div>
                               </div>
                             </div>
