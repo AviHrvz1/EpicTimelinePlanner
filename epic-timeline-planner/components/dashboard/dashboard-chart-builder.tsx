@@ -165,7 +165,7 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
 };
 
 // Chart types that use the structured SprintChartForm flow (vs. the chat-style OtherChartFlow).
-const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "sprint-load", "sprint-burnup", "epic-burnup", "velocity"]);
+const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "workload", "sprint-load", "sprint-burnup", "epic-burnup", "velocity"]);
 
 // Display order: burndowns first, burnups next, then other sprint types, then quarter-level
 const CHART_TYPE_ORDER: ChartType[] = [
@@ -560,8 +560,8 @@ function SprintChartForm({
 
   const isEpicChart = chartType === "epic-burndown" || chartType === "epic-burnup" || chartType === "epic-cfd";
   const isVelocityChart = chartType === "velocity";
-  const supportsMetricPicker = chartType === "burndown" || chartType === "epic-burndown" || chartType === "sprint-burnup" || chartType === "epic-burnup";
-  const defaultMetric: "daysLeft" | "storyCount" = chartType === "sprint-burnup" || chartType === "epic-burnup" ? "storyCount" : "daysLeft";
+  const supportsMetricPicker = chartType === "burndown" || chartType === "epic-burndown" || chartType === "sprint-burnup" || chartType === "epic-burnup" || chartType === "workload" || chartType === "workload-balance";
+  const defaultMetric: "daysLeft" | "storyCount" = chartType === "sprint-burnup" || chartType === "epic-burnup" || chartType === "workload-balance" ? "storyCount" : "daysLeft";
   const initMetric: "daysLeft" | "storyCount" = useMemo(() => {
     if (!editTarget) return defaultMetric;
     let cfg: Record<string, unknown> = {};

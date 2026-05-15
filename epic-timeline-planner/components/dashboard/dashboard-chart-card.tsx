@@ -223,6 +223,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          metric={params.metric === "storyCount" ? "storyCount" : "daysLeft"}
         />
       );
     case "quarter-status":
@@ -252,6 +253,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          metric={params.metric === "daysLeft" ? "daysLeft" : "storyCount"}
         />
       );
     case "sprint-load":

@@ -1,9 +1,10 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AlertTriangle, CalendarDays, User } from "lucide-react";
 
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
 import { InitiativeItem } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type Props = {
   initiatives: InitiativeItem[];
@@ -11,30 +12,174 @@ type Props = {
   quarter: number;
   sprint: number;
   team?: string | null;
+  metric?: "daysLeft" | "storyCount";
 };
 
-export function WorkloadChart({ initiatives, year, quarter, sprint, team }: Props) {
+/**
+ * Workload — dashboard view mirroring the insights "Sprint Load" panel:
+ * per-assignee (or per-team when no team filter) row with avatar initials, label,
+ * days/stories breakdown, and a progress bar. Color flips to amber when work
+ * exceeds the sprint days remaining, emerald when nothing is left.
+ */
+export function WorkloadChart({ initiatives, year, quarter, sprint, team, metric = "daysLeft" }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ? [team] : null);
-  const data = analytics.workloadByAssignee.map((row) => ({
-    name: row.assignee,
-    days: row.daysLeftTotal,
-    stories: row.openCount,
-  }));
+  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric, year, team ? [team] : null);
+
+  const teamMode = !team;
+  const sprintDaysLeft = analytics.workloadSprintCalendarDaysLeft;
+  const sprintEnded = sprintDaysLeft === 0;
+  const useDays = metric === "daysLeft";
+
+  type Row = {
+    key: string;
+    label: string;
+    initials: string;
+    // Days mode
+    daysLeft: number;
+    estTotal: number;
+    // Stories mode
+    openCount: number;
+    totalStories: number;
+  };
+  const rows: Row[] = teamMode
+    ? analytics.workloadByTeam.map((t) => ({
+        key: t.teamLabel,
+        label: t.teamLabel,
+        initials: t.teamLabel.slice(0, 2).toUpperCase(),
+        daysLeft: t.daysLeftTotal,
+        estTotal: t.estimatedTotal,
+        openCount: t.openCount,
+        totalStories: t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.done + t.storiesByStatus.approved,
+      }))
+    : analytics.workloadByAssignee.map((r) => ({
+        key: r.assignee,
+        label: r.assignee,
+        initials: r.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join(""),
+        daysLeft: r.daysLeftTotal,
+        estTotal: r.estimatedTotal,
+        openCount: r.openCount,
+        totalStories: r.storiesByStatus.todo + r.storiesByStatus.inProgress + r.storiesByStatus.done + r.storiesByStatus.approved,
+      }));
+
+  if (rows.length === 0) {
+    return <p className="flex h-full min-h-[180px] items-center justify-center text-xs text-slate-400">No workload for this sprint</p>;
+  }
+
+  // Sprint capacity banner copy. In stories mode the calendar info still helps frame the over-capacity warnings.
+  const sprintBannerText = sprintEnded
+    ? "Sprint has ended"
+    : `Sprint ends in ${sprintDaysLeft}d`;
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart layout="vertical" data={data} margin={{ top: 4, right: 24, left: 4, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-        <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
-        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-        <Bar dataKey="days" name="Days left" radius={[0, 3, 3, 0]}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={i % 2 === 0 ? "#818cf8" : "#a5b4fc"} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      {/* Sprint banner — single source of truth for calendar days remaining */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] font-semibold ring-1 transition-colors",
+          sprintEnded
+            ? "bg-rose-50/80 text-rose-700 ring-rose-200/70"
+            : sprintDaysLeft <= 2
+              ? "bg-amber-50/80 text-amber-800 ring-amber-200/70"
+              : "bg-slate-50 text-slate-600 ring-slate-200/70",
+        )}
+      >
+        <CalendarDays className="size-3.5 shrink-0" aria-hidden />
+        <span>{sprintBannerText}</span>
+      </div>
+
+      {/* Per-assignee / per-team rows */}
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+        {rows.map((row) => {
+          const remaining = useDays ? row.daysLeft : row.openCount;
+          const total = useDays ? row.estTotal : row.totalStories;
+          const done = Math.max(0, total - remaining);
+          const rawPct = total > 0 ? (done / total) * 100 : 100;
+          const donePct = Math.max(0, Math.min(100, Math.round(rawPct)));
+          const atRisk = useDays && sprintDaysLeft > 0 && row.daysLeft > sprintDaysLeft;
+          const showEnded = useDays && sprintEnded && row.daysLeft > 0;
+          const overByDays = atRisk ? row.daysLeft - sprintDaysLeft : 0;
+          const allDone = remaining === 0 && total > 0;
+          return (
+            <div
+              key={row.key}
+              className={cn(
+                "rounded-xl bg-white px-3 py-2.5 ring-1 transition-all hover:-translate-y-px hover:bg-slate-50/60",
+                atRisk
+                  ? "ring-amber-200/70 hover:ring-amber-300"
+                  : showEnded
+                    ? "ring-rose-200/70 hover:ring-rose-300"
+                    : "ring-slate-200/70 hover:ring-slate-300",
+              )}
+            >
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={cn(
+                    "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ring-1",
+                    atRisk
+                      ? "bg-amber-100 text-amber-800 ring-amber-200/80"
+                      : allDone
+                        ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
+                        : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                  )}
+                >
+                  {row.initials || <User className="size-3.5" />}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  {/* Row 1: name + summary numbers */}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-[13px] font-semibold text-slate-800">{row.label}</span>
+                    <span className="shrink-0 text-[12px] tabular-nums text-slate-600">
+                      <span className="font-semibold text-slate-800">{useDays ? `${done}d` : done}</span>
+                      <span className="ml-0.5 text-slate-400">done</span>
+                      <span className="mx-1.5 text-slate-300">·</span>
+                      <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>
+                        {useDays ? `${remaining}d` : remaining}
+                      </span>
+                      <span className="ml-0.5 text-slate-400">left</span>
+                    </span>
+                  </div>
+
+                  {/* Row 2: progress bar */}
+                  <div className="mt-1.5 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                    <div
+                      className={cn(
+                        "absolute inset-y-0 left-0 rounded-full transition-all",
+                        atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : "bg-indigo-400",
+                      )}
+                      style={{ width: `${donePct}%` }}
+                    />
+                  </div>
+
+                  {/* Row 3: warning chip — only when relevant */}
+                  {(atRisk || showEnded) && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {atRisk && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200/80"
+                          title={`${row.daysLeft}d of work left but only ${sprintDaysLeft}d remain in the sprint`}
+                        >
+                          <AlertTriangle className="size-3 shrink-0" aria-hidden />
+                          {overByDays}d over sprint capacity
+                        </span>
+                      )}
+                      {showEnded && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200/80"
+                          title={`Sprint has ended with ${row.daysLeft}d of work still open`}
+                        >
+                          <AlertTriangle className="size-3 shrink-0" aria-hidden />
+                          Ended with {row.daysLeft}d unfinished
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

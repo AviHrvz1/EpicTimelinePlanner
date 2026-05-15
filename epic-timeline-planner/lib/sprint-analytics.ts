@@ -50,6 +50,8 @@ export type WorkloadTeamRow = {
   teamId: string | null;
   teamLabel: string;
   storiesByStatus: WorkloadStoriesByStatus;
+  /** Sum of estimatedDays per status — for the days-left view of Workload Balance. */
+  daysByStatus: WorkloadStoriesByStatus;
   daysLeftTotal: number;
   estimatedTotal: number;
   openCount: number;
@@ -64,6 +66,7 @@ export type SprintAnalyticsData = {
     daysLeftTotal: number;
     estimatedTotal: number;
     storiesByStatus: WorkloadStoriesByStatus;
+    daysByStatus: WorkloadStoriesByStatus;
   }>;
   /** Team-level aggregation — only populated when filterEpicTeamId is null (All Teams). */
   workloadByTeam: WorkloadTeamRow[];
@@ -314,7 +317,7 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
   });
   const byAssignee = new Map<
     string,
-    { openCount: number; daysLeftTotal: number; estimatedTotal: number; storiesByStatus: WorkloadStoriesByStatus }
+    { openCount: number; daysLeftTotal: number; estimatedTotal: number; storiesByStatus: WorkloadStoriesByStatus; daysByStatus: WorkloadStoriesByStatus }
   >();
   for (const story of sprintStories) {
     const assignee = story.assignee?.trim() || "Unassigned";
@@ -324,12 +327,14 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
         daysLeftTotal: 0,
         estimatedTotal: 0,
         storiesByStatus: emptyStatus(),
+        daysByStatus: emptyStatus(),
       };
-    if (story.status === "todo") row.storiesByStatus.todo += 1;
-    else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
-    else if (story.status === "done") row.storiesByStatus.done += 1;
-    else if (story.status === "approved") row.storiesByStatus.approved += 1;
-    row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+    const estDays = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+    if (story.status === "todo") { row.storiesByStatus.todo += 1; row.daysByStatus.todo += estDays; }
+    else if (story.status === "inProgress") { row.storiesByStatus.inProgress += 1; row.daysByStatus.inProgress += estDays; }
+    else if (story.status === "done") { row.storiesByStatus.done += 1; row.daysByStatus.done += estDays; }
+    else if (story.status === "approved") { row.storiesByStatus.approved += 1; row.daysByStatus.approved += estDays; }
+    row.estimatedTotal += estDays;
     if (story.status === "todo" || story.status === "inProgress") {
       row.openCount += 1;
       row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
@@ -343,6 +348,7 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
       daysLeftTotal: v.daysLeftTotal,
       estimatedTotal: v.estimatedTotal,
       storiesByStatus: v.storiesByStatus,
+      daysByStatus: v.daysByStatus,
     }))
     .sort((a, b) => b.daysLeftTotal - a.daysLeftTotal || b.openCount - a.openCount || a.assignee.localeCompare(b.assignee));
   const workloadMaxDays = Math.max(1, ...workload.map((item) => item.daysLeftTotal));
@@ -386,12 +392,13 @@ function buildWorkloadByTeam(
       const teamLabel = teamId ? teamLabelForWorkspaceUser(teamId) : "Unassigned";
       for (const story of epic.userStories ?? []) {
         if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
-        const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: emptyStatus(), daysLeftTotal: 0, estimatedTotal: 0, openCount: 0 };
-        if (story.status === "todo") row.storiesByStatus.todo += 1;
-        else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
-        else if (story.status === "done") row.storiesByStatus.done += 1;
-        else if (story.status === "approved") row.storiesByStatus.approved += 1;
-        row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+        const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: emptyStatus(), daysByStatus: emptyStatus(), daysLeftTotal: 0, estimatedTotal: 0, openCount: 0 };
+        const estDays = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+        if (story.status === "todo") { row.storiesByStatus.todo += 1; row.daysByStatus.todo += estDays; }
+        else if (story.status === "inProgress") { row.storiesByStatus.inProgress += 1; row.daysByStatus.inProgress += estDays; }
+        else if (story.status === "done") { row.storiesByStatus.done += 1; row.daysByStatus.done += estDays; }
+        else if (story.status === "approved") { row.storiesByStatus.approved += 1; row.daysByStatus.approved += estDays; }
+        row.estimatedTotal += estDays;
         if (story.status === "todo" || story.status === "inProgress") {
           row.openCount += 1;
           row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);

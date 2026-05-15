@@ -17,28 +17,36 @@ type Props = {
   quarter: number;
   sprint: number;
   team?: string | null;
+  metric?: "daysLeft" | "storyCount";
 };
 
-export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team }: Props) {
+export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team, metric = "storyCount" }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "storyCount", year, team ? [team] : null);
+  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric, year, team ? [team] : null);
 
   const teamMode = !team;
+  const useDays = metric === "daysLeft";
   const barData = teamMode
-    ? analytics.workloadByTeam.map((t) => ({
-        name: t.teamLabel,
-        "To do": t.storiesByStatus.todo,
-        "In progress": t.storiesByStatus.inProgress,
-        "Done": t.storiesByStatus.done,
-        "Approved": t.storiesByStatus.approved,
-      }))
-    : analytics.workloadByAssignee.map((r) => ({
-        name: r.assignee.split(/\s+/)[0] ?? r.assignee,
-        "To do": r.storiesByStatus.todo,
-        "In progress": r.storiesByStatus.inProgress,
-        "Done": r.storiesByStatus.done,
-        "Approved": r.storiesByStatus.approved,
-      }));
+    ? analytics.workloadByTeam.map((t) => {
+        const buckets = useDays ? t.daysByStatus : t.storiesByStatus;
+        return {
+          name: t.teamLabel,
+          "To do": useDays ? Number(buckets.todo.toFixed(1)) : buckets.todo,
+          "In progress": useDays ? Number(buckets.inProgress.toFixed(1)) : buckets.inProgress,
+          "Done": useDays ? Number(buckets.done.toFixed(1)) : buckets.done,
+          "Approved": useDays ? Number(buckets.approved.toFixed(1)) : buckets.approved,
+        };
+      })
+    : analytics.workloadByAssignee.map((r) => {
+        const buckets = useDays ? r.daysByStatus : r.storiesByStatus;
+        return {
+          name: r.assignee.split(/\s+/)[0] ?? r.assignee,
+          "To do": useDays ? Number(buckets.todo.toFixed(1)) : buckets.todo,
+          "In progress": useDays ? Number(buckets.inProgress.toFixed(1)) : buckets.inProgress,
+          "Done": useDays ? Number(buckets.done.toFixed(1)) : buckets.done,
+          "Approved": useDays ? Number(buckets.approved.toFixed(1)) : buckets.approved,
+        };
+      });
 
   if (barData.length === 0) {
     return <p className="flex h-[180px] items-center justify-center text-xs text-slate-400">No workload data for this sprint</p>;
@@ -53,9 +61,9 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team 
           tick={{ fontSize: 10 }}
           axisLine={false}
           tickLine={false}
-          allowDecimals={false}
+          allowDecimals={useDays}
           width={44}
-          label={{ value: "Stories", angle: -90, position: "insideLeft", offset: 0, style: { fontSize: 11, fill: "#475569", fontWeight: 600 } }}
+          label={{ value: useDays ? "Days" : "Stories", angle: -90, position: "insideLeft", offset: 0, style: { fontSize: 11, fill: "#475569", fontWeight: 600 } }}
         />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />

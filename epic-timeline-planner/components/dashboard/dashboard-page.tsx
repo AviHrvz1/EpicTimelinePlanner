@@ -389,9 +389,12 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                       setCharts(d.charts as DashboardChartItem[]);
                       setConfirmDeleteId(null);
                       setDirty(false);
-                      setIsEditMode(false);
-                      setBuilderOpen(false);
                       setEditTarget(null);
+                      // Empty dashboards (drafts or saved-but-no-charts) auto-open the chart builder
+                      // so the user lands on the next action instead of an empty canvas.
+                      const isEmpty = d.id.startsWith("draft-") || ((d.charts ?? []).length === 0);
+                      setIsEditMode(isEmpty);
+                      setBuilderOpen(isEmpty);
                     }}
                     className={cn(
                       "group/tab mb-[-1px] inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-t-md border border-b-0 px-4 text-[13px] font-medium leading-none transition-colors",
