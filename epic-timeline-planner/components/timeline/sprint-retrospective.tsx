@@ -154,7 +154,9 @@ function CardComposer({
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: "outline-none min-h-[7rem] px-2 py-1.5 text-[14px] text-slate-700",
+        // Taller writing surface so the notebook reads as a real notepad. Top padding gives the
+        // first line breathing room from the column's frame.
+        class: "outline-none min-h-[7rem] px-2 pt-4 pb-2 text-[14px] text-slate-700",
       },
     },
   });
@@ -210,17 +212,37 @@ function CardComposer({
           editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
         }, <LinkIcon className="size-3.5" />)}
       </div>
-      <EditorContent
-        editor={editor}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            submit();
-          }
+      {/* Ruled notebook page — white background with periodic horizontal lines. 24px ruling matches editor line-height.
+          Background offset matches the editor's top padding so each rule lands just under a text baseline. */}
+      <div
+        className="relative rounded-md bg-white ring-1 ring-slate-200"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(to bottom, transparent 0, transparent calc(1.5rem - 1px), rgb(186 230 253 / 0.7) calc(1.5rem - 1px), rgb(186 230 250 / 0.7) 1.5rem)",
+          backgroundPosition: "0 1.5rem",
+          backgroundAttachment: "local",
         }}
-        className="focus-within:outline-none [&_.ProseMirror]:outline-none"
-      />
-      <div className="mt-2 flex items-center justify-between">
+      >
+        {/* Classic red "margin" line on the left, shifted right to match the bumped text indent */}
+        <span className="pointer-events-none absolute inset-y-0 left-[2.1rem] w-px bg-rose-300/50" aria-hidden />
+        <EditorContent
+          editor={editor}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          className={cn(
+            "focus-within:outline-none [&_.ProseMirror]:outline-none",
+            // Text starts well clear of the margin line (pl-12 = 48px vs margin line at 33.6px → ~14px gap).
+            "[&_.ProseMirror]:pl-12 [&_.ProseMirror_p]:leading-6 [&_.ProseMirror_p]:my-0",
+            "[&_h2]:leading-6 [&_h2]:my-0 [&_h3]:leading-6 [&_h3]:my-0",
+            "[&_ul_li]:leading-6 [&_ol_li]:leading-6 [&_blockquote]:leading-6",
+          )}
+        />
+      </div>
+      <div className="mt-1 flex items-center justify-between">
         <div className="flex items-center gap-1.5">{trailing}</div>
         <button
           type="button"
@@ -417,13 +439,13 @@ export function SprintRetrospectiveEditor({
 
   return (
     <section
-      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      className="flex min-h-0 min-w-0 flex-col"
       style={{
         backgroundImage:
           "linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #fdf2f8 100%)",
       }}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div>
         {/* Header */}
         <div className="px-6 pt-6 pb-3 sm:px-8 sm:pt-7">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -630,7 +652,7 @@ function RetroColumn({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("flex min-h-[19rem] flex-col rounded-3xl p-4 ring-1 backdrop-blur-sm sm:p-5", columnTint)}>
+    <div className={cn("flex min-h-[14rem] flex-col rounded-3xl p-4 ring-1 backdrop-blur-sm sm:p-5", columnTint)}>
       <div className="mb-4 flex items-center justify-center gap-2">
         <h3 className="text-center text-[16px] font-semibold text-slate-700">{title}</h3>
         {count > 0 ? (

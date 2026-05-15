@@ -1,13 +1,16 @@
 "use client";
 
 import {
+  AlertTriangle,
   AreaChart,
   BarChart2,
   Check,
   ChevronLeft,
   Clock,
+  Donut,
   Flag,
   Folder,
+  GanttChartSquare,
   Map as MapIcon,
   PieChart,
   RotateCcw,
@@ -123,9 +126,9 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     accent: "border-sky-200 bg-sky-50 text-sky-700",
   },
   "workload-balance": {
-    label: "Workload Balance",
+    label: "Status Breakdown",
     icon: <BarChart2 className="size-4 text-indigo-500" />,
-    description: "Stories per assignee / team grouped by status",
+    description: "Stacked bars of stories grouped by status (To do, In progress, Done, Approved)",
     accent: "border-indigo-200 bg-indigo-50 text-indigo-700",
   },
   "sprint-load": {
@@ -153,9 +156,9 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     accent: "border-amber-200 bg-amber-50 text-amber-700",
   },
   workload: {
-    label: "Workload",
+    label: "Team Capacity",
     icon: <Users className="size-4 text-orange-500" />,
-    description: "Days left by assignee for a sprint",
+    description: "Per-assignee progress bars: work done vs remaining for the sprint",
     accent: "border-orange-200 bg-orange-50 text-orange-700",
   },
   "quarter-status": {
@@ -172,17 +175,36 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
   },
   "sticky-note": {
     label: "Sticky Note",
-    icon: <StickyNote className="size-4 text-amber-500" />,
+    icon: <StickyNote className="size-4 text-violet-500" />,
     description: "A pinned note for ad-hoc dashboard commentary",
-    accent: "border-amber-200 bg-amber-50 text-amber-700",
+    accent: "border-violet-200 bg-violet-50 text-violet-700",
+  },
+  "at-risk-stories": {
+    label: "At-Risk Stories",
+    icon: <AlertTriangle className="size-4 text-rose-500" />,
+    description: "Stories whose remaining work overruns the sprint days left",
+    accent: "border-rose-200 bg-rose-50 text-rose-700",
+  },
+  "mini-gantt": {
+    label: "Epics Timeline",
+    icon: <GanttChartSquare className="size-4 text-sky-500" />,
+    description: "Compact quarter Gantt: epic bars laid out across a 3-month grid",
+    accent: "border-sky-200 bg-sky-50 text-sky-700",
+  },
+  "team-focus-mix": {
+    label: "Team Focus Mix",
+    icon: <Donut className="size-4 text-fuchsia-500" />,
+    description: "Donut of effort split across initiatives — spot too-many-irons-in-the-fire",
+    accent: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
   },
 };
 
 // Gadget chart types — appear under a "Gadgets" header below the chart list.
+// One-click add with no configuration form.
 const GADGET_CHART_TYPES = new Set<ChartType>(["sprint-countdown", "sticky-note"]);
 
 // Chart types that use the structured SprintChartForm flow (vs. the chat-style OtherChartFlow).
-const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "workload", "sprint-load", "sprint-burnup", "epic-burnup", "velocity"]);
+const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "workload", "sprint-load", "sprint-burnup", "epic-burnup", "velocity", "at-risk-stories", "mini-gantt", "team-focus-mix"]);
 
 // Display order: burndowns first, burnups next, then other sprint types, then quarter-level
 const CHART_TYPE_ORDER: ChartType[] = [
@@ -197,6 +219,9 @@ const CHART_TYPE_ORDER: ChartType[] = [
   "sprint-load",
   "velocity",
   "workload",
+  "at-risk-stories",
+  "mini-gantt",
+  "team-focus-mix",
   "quarter-status",
 ];
 
@@ -206,6 +231,8 @@ function AutocompleteMultiSelect<T extends string>({
   options,
   selected,
   onToggle,
+  onSelectAll,
+  onClearAll,
   renderLabel,
   renderIcon,
   placeholder,
@@ -213,6 +240,9 @@ function AutocompleteMultiSelect<T extends string>({
   options: T[];
   selected: Set<T>;
   onToggle: (v: T) => void;
+  /** Optional bulk actions — when provided, Select all / Clear shortcuts render above the chips. */
+  onSelectAll?: () => void;
+  onClearAll?: () => void;
   renderLabel: (v: T) => string;
   renderIcon?: (v: T) => React.ReactNode;
   placeholder?: string;
@@ -233,8 +263,40 @@ function AutocompleteMultiSelect<T extends string>({
     return () => window.removeEventListener("mousedown", onDown);
   }, [isOpen]);
 
+  const allSelected = options.length > 0 && options.every((o) => selected.has(o));
+
   return (
     <div ref={containerRef} className="flex flex-col gap-2">
+      {/* Select all / Clear shortcuts — shown only when caller wires the callbacks. */}
+      {(onSelectAll || onClearAll) && options.length > 0 && (
+        <div className="flex items-center gap-3 text-[11.5px] font-medium">
+          {onSelectAll && (
+            <button
+              type="button"
+              onClick={() => { if (!allSelected) onSelectAll(); }}
+              disabled={allSelected}
+              className={cn(
+                "inline-flex items-center gap-1 rounded text-indigo-600 transition-colors hover:text-indigo-800",
+                allSelected && "cursor-not-allowed text-slate-400 hover:text-slate-400",
+              )}
+            >
+              <Check className="size-3" />
+              Select all ({options.length})
+            </button>
+          )}
+          {onClearAll && selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => onClearAll()}
+              className="inline-flex items-center gap-1 rounded text-slate-500 transition-colors hover:text-slate-700"
+            >
+              <X className="size-3" />
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Selected chips */}
       {selected.size > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -243,7 +305,7 @@ function AutocompleteMultiSelect<T extends string>({
               key={v}
               type="button"
               onClick={() => onToggle(v)}
-              className="inline-flex items-center gap-1 rounded-full bg-slate-100 ring-1 ring-slate-200 py-1 pl-3 pr-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 hover:ring-slate-300 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-1 pl-3 pr-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200"
             >
               {renderLabel(v)}
               <X className="size-2.5 shrink-0 opacity-75" />
@@ -676,8 +738,23 @@ function SprintChartForm({
   );
   const sprintInfo = useMemo(() => currentSprintParams(), []);
 
-  // Workload always renders one chart per roadmap; multiple teams are combined into a single chart's `teams` filter.
+  // Workload, At-Risk Stories, Mini Gantt and Team Focus Mix all render one chart per roadmap;
+  // multiple teams collapse into a single chart's `teams` filter.
   const isWorkloadChart = chartType === "workload";
+  const isAtRiskChart = chartType === "at-risk-stories";
+  const isMiniGanttChart = chartType === "mini-gantt";
+  const isTeamFocusMixChart = chartType === "team-focus-mix";
+  const combinesTeams = isWorkloadChart || isAtRiskChart || isMiniGanttChart || isTeamFocusMixChart;
+
+  // Team Focus Mix supports a Sprint / Quarter scope toggle.
+  const initFocusScope: "sprint" | "quarter" = useMemo(() => {
+    if (!editTarget || chartType !== "team-focus-mix") return "sprint";
+    let cfg: Record<string, unknown> = {};
+    try { cfg = JSON.parse(editTarget.config); } catch { /* ignore */ }
+    return cfg.focusScope === "quarter" ? "quarter" : "sprint";
+  }, [editTarget, chartType]);
+  const [focusScope, setFocusScope] = useState<"sprint" | "quarter">(initFocusScope);
+  useEffect(() => { setFocusScope(initFocusScope); }, [initFocusScope]);
   const isEditing = !!editTarget;
   const chartCount = isEditing
     ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0 && selectedEpicIds.size === 0) ? 0 : 1)
@@ -686,12 +763,15 @@ function SprintChartForm({
       : isVelocityChart
         // Velocity requires at least one team — "all teams" is not allowed.
         ? (selectedTeamIds.size === 0 ? 0 : (selectedRoadmapIds.size || 1) * selectedTeamIds.size)
-        : isWorkloadChart
+        : combinesTeams
           ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
-              ? 0
+              // At-risk / mini-gantt / team-focus-mix allow "all roadmaps + all teams" with no selection.
+              ? (isAtRiskChart || isMiniGanttChart || isTeamFocusMixChart ? 1 : 0)
               : (selectedRoadmapIds.size || 1) * (
-                  // 0 or 1 team → 1 chart; 2+ teams → 1 (combined) or N (split) per user toggle
-                  selectedTeamIds.size <= 1 ? 1 : (workloadCombineTeams ? 1 : selectedTeamIds.size)
+                  // 0 or 1 team → 1 chart; 2+ teams → 1 (combined) for at-risk / mini-gantt / focus-mix, or user toggle for workload
+                  selectedTeamIds.size <= 1
+                    ? 1
+                    : (isWorkloadChart && !workloadCombineTeams) ? selectedTeamIds.size : 1
                 ))
           : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
             ? 0
@@ -747,24 +827,30 @@ function SprintChartForm({
     const velocityEndHi = Math.max(velocityStart, velocityEnd);
     const velocityPeriodLabel = `${SPRINT_OPTIONS[velocityStartLo - 1]?.label ?? `S${velocityStartLo}`} → ${SPRINT_OPTIONS[velocityEndHi - 1]?.label ?? `S${velocityEndHi}`}`;
 
-    // Workload has its own fan-out rules:
-    //   • 0 or 1 team selected — one chart per roadmap (no team or single-team filter)
-    //   • 2+ teams + combine toggle ON  — one chart per roadmap with all picked teams as rows
-    //   • 2+ teams + combine toggle OFF — one chart per (roadmap × team), each scoped to its team's assignees
-    if (isWorkloadChart) {
+    // Workload / At-Risk / Mini Gantt all collapse multiple teams into one chart per roadmap.
+    // Workload alone has a user toggle to fan out per team instead.
+    if (combinesTeams) {
       const teamIds = selectedTeamIds.size > 0 ? [...selectedTeamIds] : [];
-      const combine = teamIds.length <= 1 || workloadCombineTeams;
+      // Only workload offers the split-by-team option; the other combining charts always combine.
+      const combine = teamIds.length <= 1 || !isWorkloadChart || workloadCombineTeams;
       for (const roadmap of roadmapEntries) {
         const roadmapLabel = roadmap ? roadmap.name : null;
         if (combine) {
           const teamLabelsCsv = teamIds.length > 0
             ? teamIds.map((id) => monthTeamLabelForId(id) ?? id).join(", ")
             : null;
+          // Mini Gantt is quarter-scoped — don't tag it with a sprint number; show the quarter instead.
+          // Team Focus Mix uses its picked scope (sprint or quarter).
+          const periodLabel = isMiniGanttChart
+            ? `Q${sprintInfo.quarter} ${sprintInfo.year}`
+            : isTeamFocusMixChart && focusScope === "quarter"
+              ? `Q${sprintInfo.quarter} ${sprintInfo.year}`
+              : `Sprint ${sprintInfo.sprint}`;
           const parts = [
             CHART_META[chartType].label,
             roadmapLabel,
             teamLabelsCsv,
-            `Sprint ${sprintInfo.sprint}`,
+            periodLabel,
           ].filter(Boolean);
           configs.push({
             chartType,
@@ -777,6 +863,7 @@ function SprintChartForm({
               ...(teamIds.length === 1 ? { team: teamIds[0] } : {}),
               ...(teamIds.length > 1 ? { teams: teamIds } : {}),
               ...(supportsMetricPicker ? { metric } : {}),
+              ...(isTeamFocusMixChart ? { focusScope } : {}),
             },
           });
         } else {
@@ -848,7 +935,7 @@ function SprintChartForm({
         <button type="button" onClick={onBack} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
           <ChevronLeft className="size-4" />
         </button>
-        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-xl border shadow-sm", meta.accent)}>
+        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-xl shadow-sm", meta.accent)}>
           {meta.icon}
         </div>
         <div className="min-w-0">
@@ -929,6 +1016,8 @@ function SprintChartForm({
               options={roadmaps.map((r) => r.id)}
               selected={selectedRoadmapIds}
               onToggle={(id) => setSelectedRoadmapIds((prev) => toggle(prev, id))}
+              onSelectAll={() => setSelectedRoadmapIds(new Set(roadmaps.map((r) => r.id)))}
+              onClearAll={() => setSelectedRoadmapIds(new Set())}
               renderLabel={(id) => roadmaps.find((r) => r.id === id)?.name ?? id}
               renderIcon={(id) => roadmapIconNode(roadmaps.findIndex((r) => r.id === id))}
               placeholder="Search roadmaps…"
@@ -954,6 +1043,8 @@ function SprintChartForm({
               options={teamOptions.map((t) => t.id)}
               selected={selectedTeamIds}
               onToggle={(id) => setSelectedTeamIds((prev) => toggle(prev, id))}
+              onSelectAll={() => setSelectedTeamIds(new Set(teamOptions.map((t) => t.id)))}
+              onClearAll={() => setSelectedTeamIds(new Set())}
               renderLabel={(id) => teamOptions.find((t) => t.id === id)?.label ?? id}
               renderIcon={(id) => teamIconNode(id)}
               placeholder="Search teams…"
@@ -990,6 +1081,40 @@ function SprintChartForm({
                 )}
               >
                 Stories
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Team Focus Mix — Sprint vs Quarter scope */}
+        {isTeamFocusMixChart && (
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <Flag className="size-3.5" />
+              </span>
+              <p className="text-[15px] font-bold text-slate-700">Period</p>
+            </div>
+            <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setFocusScope("sprint")}
+                className={cn(
+                  "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all",
+                  focusScope === "sprint" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                This sprint
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocusScope("quarter")}
+                className={cn(
+                  "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all",
+                  focusScope === "quarter" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                This quarter
               </button>
             </div>
           </div>
@@ -1368,7 +1493,7 @@ function OtherChartFlow({
         <button type="button" onClick={onBack} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
           <ChevronLeft className="size-4" />
         </button>
-        <div className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg border", meta.accent)}>
+        <div className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg", meta.accent)}>
           {meta.icon}
         </div>
         <p className="flex-1 text-base font-semibold text-slate-800">{meta.label}</p>
@@ -1455,6 +1580,7 @@ type Props = {
 
 export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, context, initiatives = [], onAddCharts, editTarget, onCancelEdit }: Props) {
   const [selectedType, setSelectedType] = useState<ChartType | null>(null);
+  const [pickerQuery, setPickerQuery] = useState("");
 
   useEffect(() => {
     if (editTarget) setSelectedType(editTarget.chartType);
@@ -1466,7 +1592,6 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
 
   /** Gadgets add immediately with default config — no form needed. */
   function addGadget(type: ChartType) {
-    const now = new Date();
     const sprintInfo = currentSprintParams();
     if (type === "sprint-countdown") {
       onAddCharts([
@@ -1485,7 +1610,6 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
         },
       ]);
     }
-    void now; // appease unused-var lint if any
   }
 
   if (selectedType && GADGET_CHART_TYPES.has(selectedType)) {
@@ -1523,6 +1647,15 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
   }
 
   // Step 1: chart type picker
+  const q = pickerQuery.trim().toLowerCase();
+  const matchesQuery = (type: ChartType) => {
+    if (!q) return true;
+    const meta = CHART_META[type];
+    return meta.label.toLowerCase().includes(q) || meta.description.toLowerCase().includes(q);
+  };
+  const filteredCharts = CHART_TYPE_ORDER.filter(matchesQuery);
+  const filteredGadgets = [...GADGET_CHART_TYPES].filter(matchesQuery);
+  const nothingMatches = q.length > 0 && filteredCharts.length === 0 && filteredGadgets.length === 0;
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 px-4 py-4">
@@ -1533,10 +1666,38 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
           <p className="text-lg font-bold text-slate-800">Chart Builder</p>
         </div>
         <p className="mt-1.5 text-base text-slate-500 pl-0.5">Pick a chart type to get started</p>
+        {/* Autocomplete-style search — filters chart cards + gadgets live by label/description. */}
+        <div className="relative mt-3">
+          <svg className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+            <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+          </svg>
+          <input
+            value={pickerQuery}
+            onChange={(e) => setPickerQuery(e.target.value)}
+            placeholder="Search charts and gadgets…"
+            className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-7 text-[13px] text-slate-700 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+            autoComplete="off"
+          />
+          {pickerQuery && (
+            <button
+              type="button"
+              onClick={() => setPickerQuery("")}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Clear search"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4">
+        {nothingMatches && (
+          <p className="rounded-lg bg-slate-50 px-3 py-6 text-center text-[13px] text-slate-500">
+            No charts match &ldquo;{pickerQuery}&rdquo;
+          </p>
+        )}
         <div className="flex flex-col gap-2">
-          {CHART_TYPE_ORDER.map((type) => {
+          {filteredCharts.map((type) => {
             const meta = CHART_META[type];
             return (
               <button
@@ -1545,7 +1706,7 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
                 onClick={() => setSelectedType(type)}
                 className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm transition-colors hover:border-indigo-300 hover:bg-indigo-50"
               >
-                <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg border", meta.accent)}>
+                <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", meta.accent)}>
                   {meta.icon}
                 </div>
                 <div className="min-w-0">
@@ -1558,13 +1719,14 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
         </div>
 
         {/* Gadgets — utility cards that bypass the chart form (added with a single click). */}
+        {filteredGadgets.length > 0 && (
         <div className="mt-6">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Gadgets</span>
             <div className="h-px flex-1 bg-slate-200" />
           </div>
           <div className="flex flex-col gap-2">
-            {[...GADGET_CHART_TYPES].map((type) => {
+            {filteredGadgets.map((type) => {
               const meta = CHART_META[type];
               return (
                 <button
@@ -1573,7 +1735,7 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
                   onClick={() => addGadget(type)}
                   className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm transition-colors hover:border-indigo-300 hover:bg-indigo-50"
                 >
-                  <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg border", meta.accent)}>
+                  <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", meta.accent)}>
                     {meta.icon}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1586,6 +1748,7 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
             })}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

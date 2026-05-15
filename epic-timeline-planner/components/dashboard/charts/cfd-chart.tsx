@@ -36,7 +36,7 @@ export function CfdChart({ initiatives, year, quarter, sprint, team }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 4, right: 8, left: 4, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis
           dataKey="labelShort"
@@ -44,9 +44,19 @@ export function CfdChart({ initiatives, year, quarter, sprint, team }: Props) {
           interval={0}
           tickFormatter={(v: string) => v.replace(/\s*\([^)]*\)\s*$/, "")}
         />
-        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+        <YAxis
+          tick={{ fontSize: 11 }}
+          allowDecimals={false}
+          label={{
+            value: "User stories",
+            angle: -90,
+            position: "insideLeft",
+            style: { fontSize: 11, fill: "#64748b", fontWeight: 600 },
+            offset: 14,
+          }}
+        />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Legend wrapperStyle={{ fontSize: 13, paddingTop: 4 }} iconSize={12} />
         {todayLabel && (
           <ReferenceLine
             x={todayLabel}

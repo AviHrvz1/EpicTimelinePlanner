@@ -53,10 +53,7 @@ export function SprintCountdownCard({ year, sprint }: Props) {
   const dateRange = `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${year}`;
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50 p-3 ring-1 ring-violet-100">
-      {/* Soft glow accents — on-brand violet/pink */}
-      <div className="pointer-events-none absolute -left-12 -top-12 size-40 rounded-full bg-violet-300/25 blur-3xl" aria-hidden />
-      <div className="pointer-events-none absolute -right-12 -bottom-12 size-44 rounded-full bg-pink-300/25 blur-3xl" aria-hidden />
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white p-3 ring-1 ring-slate-200">
 
       <div className="relative z-[1] flex w-full items-center justify-between gap-2 text-[11px] font-medium text-slate-600">
         <span className="inline-flex items-center gap-1.5">
@@ -76,7 +73,7 @@ export function SprintCountdownCard({ year, sprint }: Props) {
         {ended ? (
           <span className="text-[20px] font-bold tracking-tight text-slate-500">Sprint has ended</span>
         ) : (
-          <div className="flex items-end gap-2 sm:gap-3">
+          <div className="flex items-start gap-2 sm:gap-3">
             <Tile value={pad(days)} label="DAYS" urgent={urgent} />
             <Colon />
             <Tile value={pad(hours)} label="HOURS" urgent={urgent} />
@@ -115,13 +112,13 @@ function Tile({ value, label, urgent }: { value: string; label: string; urgent: 
     <div className="flex flex-col items-center gap-1">
       <div
         className={cn(
-          "relative flex h-[64px] w-[68px] items-center justify-center overflow-hidden rounded-xl shadow-md transition-colors sm:h-[72px] sm:w-[76px]",
-          // Tile body always uses the project's violet → indigo gradient.
-          // Urgency is indicated by a colored ring + glow shadow + a tiny pulse dot, not by recoloring the whole tile.
-          "bg-gradient-to-b from-violet-600 to-indigo-700",
+          "relative flex h-[64px] w-[68px] items-center justify-center overflow-hidden rounded-xl transition-colors sm:h-[72px] sm:w-[76px]",
+          // Tile body uses a softer indigo → violet gradient so the panels don't dominate the card. No drop shadow.
+          "bg-gradient-to-b from-indigo-400 to-violet-500",
+          // Glassy white ring outlines the tile against the white card background; urgent state thickens it slightly with a rose tint.
           urgent
-            ? "shadow-rose-400/40 ring-2 ring-rose-400/60"
-            : "shadow-violet-400/30 ring-1 ring-violet-300/60",
+            ? "ring-2 ring-white/70"
+            : "ring-1 ring-white/50",
         )}
       >
         {/* Top gloss */}
@@ -147,8 +144,10 @@ function Tile({ value, label, urgent }: { value: string; label: string; urgent: 
 }
 
 function Colon() {
+  // Match the tile box height (64/72px) and center the dots vertically so the colon
+  // sits at the same Y-axis as the digits, not floating between tile and label.
   return (
-    <div className="mb-5 flex flex-col items-center justify-center gap-1.5 sm:mb-6" aria-hidden>
+    <div className="flex h-[64px] flex-col items-center justify-center gap-1.5 sm:h-[72px]" aria-hidden>
       <span className="size-1.5 rounded-full bg-violet-400" />
       <span className="size-1.5 rounded-full bg-violet-400" />
     </div>

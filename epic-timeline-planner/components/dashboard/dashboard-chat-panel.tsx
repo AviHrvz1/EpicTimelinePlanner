@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AreaChart, BarChart2, Clock, PieChart, RotateCcw, Send, StickyNote, TrendingDown, Users } from "lucide-react";
+import { AlertTriangle, AreaChart, BarChart2, Clock, Donut, GanttChartSquare, PieChart, RotateCcw, Send, StickyNote, TrendingDown, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
@@ -89,8 +89,23 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
   },
   "sticky-note": {
     label: "Sticky Note",
-    icon: <StickyNote className="size-4 text-amber-500" />,
+    icon: <StickyNote className="size-4 text-violet-500" />,
     description: "A pinned note for ad-hoc dashboard commentary",
+  },
+  "at-risk-stories": {
+    label: "At-Risk Stories",
+    icon: <AlertTriangle className="size-4 text-rose-500" />,
+    description: "Stories whose remaining work overruns the sprint days left",
+  },
+  "mini-gantt": {
+    label: "Epics Timeline",
+    icon: <GanttChartSquare className="size-4 text-sky-500" />,
+    description: "Compact quarter Gantt: epic bars laid out across a 3-month grid",
+  },
+  "team-focus-mix": {
+    label: "Team Focus Mix",
+    icon: <Donut className="size-4 text-fuchsia-500" />,
+    description: "Donut of effort split across initiatives — spot too-many-irons-in-the-fire",
   },
 };
 

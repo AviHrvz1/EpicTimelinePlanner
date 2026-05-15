@@ -1,10 +1,22 @@
 "use client";
 
-import { AlertTriangle, User } from "lucide-react";
+import { AlertTriangle, User, Users } from "lucide-react";
 
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/** Per-team color classes for the avatar swatch — falls back to violet for unknown teams / assignee rows. */
+const TEAM_AVATAR_CLASS: Record<string, string> = {
+  platform:   "bg-sky-100 text-sky-700 ring-sky-200/80",
+  experience: "bg-violet-100 text-violet-700 ring-violet-200/80",
+  data:       "bg-amber-100 text-amber-700 ring-amber-200/80",
+  mobile:     "bg-emerald-100 text-emerald-700 ring-emerald-200/80",
+  growth:     "bg-rose-100 text-rose-700 ring-rose-200/80",
+};
+function teamAvatarClass(teamId: string | null | undefined): string {
+  return (teamId && TEAM_AVATAR_CLASS[teamId]) || "bg-violet-100 text-violet-700 ring-violet-200/80";
+}
 
 type Props = {
   initiatives: InitiativeItem[];
@@ -39,6 +51,8 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
     key: string;
     label: string;
     initials: string;
+    /** Team id (null when this row IS an assignee in single-team mode). Drives the colored avatar in team mode. */
+    teamId: string | null;
     // Days mode
     daysLeft: number;
     estTotal: number;
@@ -51,6 +65,7 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
         key: t.teamLabel,
         label: t.teamLabel,
         initials: t.teamLabel.slice(0, 2).toUpperCase(),
+        teamId: t.teamId ?? null,
         daysLeft: t.daysLeftTotal,
         estTotal: t.estimatedTotal,
         openCount: t.openCount,
@@ -60,6 +75,7 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
         key: r.assignee,
         label: r.assignee,
         initials: r.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join(""),
+        teamId: null,
         daysLeft: r.daysLeftTotal,
         estTotal: r.estimatedTotal,
         openCount: r.openCount,
@@ -89,12 +105,9 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
             <div
               key={row.key}
               className={cn(
-                "rounded-lg bg-white px-2 py-1.5 ring-1 transition-colors hover:bg-slate-50/60",
-                atRisk
-                  ? "ring-amber-200/70 hover:ring-amber-300"
-                  : showEnded
-                    ? "ring-rose-200/70 hover:ring-rose-300"
-                    : "ring-slate-200/70 hover:ring-slate-300",
+                "rounded-lg bg-white px-2 py-1.5 transition-colors hover:bg-slate-50/60",
+                atRisk && "hover:bg-amber-50/40",
+                showEnded && "hover:bg-rose-50/40",
               )}
             >
               <div className="flex items-center gap-2">
@@ -105,17 +118,21 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
                       ? "bg-amber-100 text-amber-800 ring-amber-200/80"
                       : allDone
                         ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
-                        : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                        // Team mode: avatar takes the team's brand color and shows a Users icon.
+                        // Assignee mode: stays violet with initials.
+                        : teamMode
+                          ? teamAvatarClass(row.teamId)
+                          : "bg-violet-100 text-violet-700 ring-violet-200/80",
                   )}
                 >
-                  {row.initials || <User className="size-3" />}
+                  {teamMode ? <Users className="size-3" /> : (row.initials || <User className="size-3" />)}
                 </span>
 
                 <div className="min-w-0 flex-1">
                   {/* Row 1: name + (warning chip inline) + summary numbers */}
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="flex shrink-0 items-center gap-3">
                       {atRisk && (
                         <span
                           className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200/80"
@@ -136,12 +153,12 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
                       )}
                       <span className="text-[11.5px] tabular-nums text-slate-600">
                         <span className="font-semibold text-slate-800">{useDays ? `${done}d` : done}</span>
-                        <span className="ml-0.5 text-slate-400">done</span>
+                        <span className="ml-0.5 text-slate-400">{useDays ? "est done" : "done"}</span>
                         <span className="mx-1 text-slate-300">·</span>
                         <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>
                           {useDays ? `${remaining}d` : remaining}
                         </span>
-                        <span className="ml-0.5 text-slate-400">left</span>
+                        <span className="ml-0.5 text-slate-400">{useDays ? "est left" : "left"}</span>
                       </span>
                     </div>
                   </div>

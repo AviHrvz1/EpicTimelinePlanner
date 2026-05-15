@@ -3117,7 +3117,7 @@ export function MonthAnalytics({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
-                              <div className="flex shrink-0 items-center gap-1.5">
+                              <div className="flex shrink-0 items-center gap-3">
                                 {atRisk && (
                                   <span
                                     className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200/80"
@@ -3129,10 +3129,10 @@ export function MonthAnalytics({
                                 )}
                                 <span className="text-[11.5px] tabular-nums text-slate-600">
                                   <span className="font-semibold text-slate-800">{doneDays}d</span>
-                                  <span className="ml-0.5 text-slate-400">done</span>
+                                  <span className="ml-0.5 text-slate-400">est done</span>
                                   <span className="mx-1 text-slate-300">·</span>
                                   <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
-                                  <span className="ml-0.5 text-slate-400">left</span>
+                                  <span className="ml-0.5 text-slate-400">est left</span>
                                 </span>
                               </div>
                             </div>

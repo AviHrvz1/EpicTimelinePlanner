@@ -23,6 +23,9 @@ import { WorkloadBalanceChart } from "./charts/workload-balance-chart";
 import { WorkloadChart } from "./charts/workload-chart";
 import { SprintCountdownCard } from "./charts/sprint-countdown-card";
 import { StickyNoteCard } from "./charts/sticky-note-card";
+import { AtRiskStoriesCard } from "./charts/at-risk-stories-card";
+import { MiniGanttCard } from "./charts/mini-gantt-card";
+import { TeamFocusMixCard } from "./charts/team-focus-mix-card";
 import { DashboardChartItem } from "./types";
 
 type Props = {
@@ -82,6 +85,8 @@ const SPRINT_SCOPED_CHART_TYPES = new Set<string>([
   "sprint-burnup",
   "workload",
   "sprint-countdown",
+  "at-risk-stories",
+  "team-focus-mix",
 ]);
 
 function resolveCurrentSprintParams(): { year: number; quarter: number; sprint: number } {
@@ -307,6 +312,39 @@ function ChartBody({ chart, initiatives, onUpdateConfig }: { chart: DashboardCha
         <StickyNoteCard
           body={(params.body as string) ?? ""}
           onSave={(html) => onUpdateConfig?.(chart.id, { body: html })}
+        />
+      );
+    case "at-risk-stories":
+      return (
+        <AtRiskStoriesCard
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          team={params.team as string | null}
+          teams={Array.isArray(params.teams) ? (params.teams as string[]) : null}
+        />
+      );
+    case "mini-gantt":
+      return (
+        <MiniGanttCard
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          team={params.team as string | null}
+          teams={Array.isArray(params.teams) ? (params.teams as string[]) : null}
+        />
+      );
+    case "team-focus-mix":
+      return (
+        <TeamFocusMixCard
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          sprint={(params.sprint as number) ?? 1}
+          scope={params.focusScope === "quarter" ? "quarter" : "sprint"}
+          team={params.team as string | null}
+          teams={Array.isArray(params.teams) ? (params.teams as string[]) : null}
         />
       );
     default:

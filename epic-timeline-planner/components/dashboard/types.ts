@@ -12,7 +12,10 @@ export type ChartType =
   | "sprint-burnup"
   | "epic-burnup"
   | "sprint-countdown"
-  | "sticky-note";
+  | "sticky-note"
+  | "at-risk-stories"
+  | "mini-gantt"
+  | "team-focus-mix";
 
 export type DashboardChartConfig = {
   chartType: ChartType;
