@@ -10,7 +10,9 @@ export type ChartType =
   | "workload-balance"
   | "sprint-load"
   | "sprint-burnup"
-  | "epic-burnup";
+  | "epic-burnup"
+  | "sprint-countdown"
+  | "sticky-note";
 
 export type DashboardChartConfig = {
   chartType: ChartType;

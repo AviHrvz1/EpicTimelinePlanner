@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarDays, User } from "lucide-react";
+import { AlertTriangle, User } from "lucide-react";
 
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
 import { InitiativeItem } from "@/lib/types";
@@ -11,21 +11,26 @@ type Props = {
   year: number;
   quarter: number;
   sprint: number;
+  /** Single-team filter (assignee rows). */
   team?: string | null;
+  /** Multi-team filter — when 2+ teams are picked the chart shows one row per team. Takes priority over `team`. */
+  teams?: string[] | null;
   metric?: "daysLeft" | "storyCount";
 };
 
 /**
  * Workload — dashboard view mirroring the insights "Sprint Load" panel:
- * per-assignee (or per-team when no team filter) row with avatar initials, label,
+ * per-assignee (or per-team when no/multiple team filter) row with avatar initials, label,
  * days/stories breakdown, and a progress bar. Color flips to amber when work
  * exceeds the sprint days remaining, emerald when nothing is left.
  */
-export function WorkloadChart({ initiatives, year, quarter, sprint, team, metric = "daysLeft" }: Props) {
+export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams, metric = "daysLeft" }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric, year, team ? [team] : null);
+  const teamsFilter: string[] | null = (teams && teams.length > 0) ? teams : (team ? [team] : null);
+  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric, year, teamsFilter);
 
-  const teamMode = !team;
+  // Team mode shows one row per team and kicks in for 0 or 2+ teams selected (matches sprint-analytics convention).
+  const teamMode = !teamsFilter || teamsFilter.length !== 1;
   const sprintDaysLeft = analytics.workloadSprintCalendarDaysLeft;
   const sprintEnded = sprintDaysLeft === 0;
   const useDays = metric === "daysLeft";
@@ -65,27 +70,8 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, metric
     return <p className="flex h-full min-h-[180px] items-center justify-center text-xs text-slate-400">No workload for this sprint</p>;
   }
 
-  // Sprint capacity banner copy. In stories mode the calendar info still helps frame the over-capacity warnings.
-  const sprintBannerText = sprintEnded
-    ? "Sprint has ended"
-    : `Sprint ends in ${sprintDaysLeft}d`;
-
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      {/* Sprint banner — single source of truth for calendar days remaining */}
-      <div
-        className={cn(
-          "flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] font-semibold ring-1 transition-colors",
-          sprintEnded
-            ? "bg-rose-50/80 text-rose-700 ring-rose-200/70"
-            : sprintDaysLeft <= 2
-              ? "bg-amber-50/80 text-amber-800 ring-amber-200/70"
-              : "bg-slate-50 text-slate-600 ring-slate-200/70",
-        )}
-      >
-        <CalendarDays className="size-3.5 shrink-0" aria-hidden />
-        <span>{sprintBannerText}</span>
-      </div>
 
       {/* Per-assignee / per-team rows */}
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">

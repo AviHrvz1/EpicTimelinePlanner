@@ -19,9 +19,10 @@ type Props = {
   onDecreaseSpan: (id: string) => void;
   onChangeHeight: (id: string, delta: 1 | -1) => void;
   onRenameChart: (id: string, title: string) => void;
+  onUpdateConfig?: (id: string, partialParams: Record<string, unknown>) => void;
 };
 
-export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart }: Props) {
+export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function handleDragEnd(event: DragEndEvent) {
@@ -58,6 +59,7 @@ export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, on
           onDecreaseSpan={onDecreaseSpan}
           onChangeHeight={onChangeHeight}
           onRenameChart={onRenameChart}
+          onUpdateConfig={onUpdateConfig}
         />
       ))}
     </div>

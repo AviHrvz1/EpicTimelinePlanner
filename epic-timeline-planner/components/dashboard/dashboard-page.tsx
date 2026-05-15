@@ -157,6 +157,17 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
     setDirty(true);
   }
 
+  /** Merge partial params into a chart's config JSON. Used by gadgets (Sticky Note) to persist their state. */
+  function updateChartConfig(chartId: string, partialParams: Record<string, unknown>) {
+    setCharts((prev) => prev.map((c) => {
+      if (c.id !== chartId) return c;
+      let params: Record<string, unknown> = {};
+      try { params = JSON.parse(c.config) as Record<string, unknown>; } catch { /* ignore */ }
+      return { ...c, config: JSON.stringify({ ...params, ...partialParams }) };
+    }));
+    setDirty(true);
+  }
+
   async function deleteDashboard(id: string) {
     if (!id.startsWith("draft-")) {
       await fetch(`/api/dashboard/${id}`, { method: "DELETE" });
@@ -567,6 +578,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
               onDecreaseSpan={handleDecreaseSpan}
               onChangeHeight={handleChangeHeight}
               onRenameChart={renameChart}
+              onUpdateConfig={updateChartConfig}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">

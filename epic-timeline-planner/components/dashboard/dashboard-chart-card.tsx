@@ -21,6 +21,8 @@ import { StoryStatusChart } from "./charts/story-status-chart";
 import { VelocityChart } from "./charts/velocity-chart";
 import { WorkloadBalanceChart } from "./charts/workload-balance-chart";
 import { WorkloadChart } from "./charts/workload-chart";
+import { SprintCountdownCard } from "./charts/sprint-countdown-card";
+import { StickyNoteCard } from "./charts/sticky-note-card";
 import { DashboardChartItem } from "./types";
 
 type Props = {
@@ -33,6 +35,8 @@ type Props = {
   onDecreaseSpan: (id: string) => void;
   onChangeHeight: (id: string, delta: 1 | -1) => void;
   onRenameChart: (id: string, title: string) => void;
+  /** Merges partial params into the chart's config JSON. Used by gadgets like Sticky Note. */
+  onUpdateConfig?: (id: string, partialParams: Record<string, unknown>) => void;
 };
 
 function ResizePad({
@@ -77,6 +81,7 @@ const SPRINT_SCOPED_CHART_TYPES = new Set<string>([
   "sprint-load",
   "sprint-burnup",
   "workload",
+  "sprint-countdown",
 ]);
 
 function resolveCurrentSprintParams(): { year: number; quarter: number; sprint: number } {
@@ -126,7 +131,7 @@ function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
   });
 }
 
-function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiatives: InitiativeItem[] }) {
+function ChartBody({ chart, initiatives, onUpdateConfig }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void }) {
   let params: Record<string, unknown> = {};
   try { params = JSON.parse(chart.config); } catch { /* ignore */ }
 
@@ -223,6 +228,7 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          teams={Array.isArray(params.teams) ? (params.teams as string[]) : null}
           metric={params.metric === "storyCount" ? "storyCount" : "daysLeft"}
         />
       );
@@ -289,12 +295,26 @@ function ChartBody({ chart, initiatives }: { chart: DashboardChartItem; initiati
           metric={params.metric === "daysLeft" ? "daysLeft" : "storyCount"}
         />
       );
+    case "sprint-countdown":
+      return (
+        <SprintCountdownCard
+          year={(params.year as number) ?? new Date().getFullYear()}
+          sprint={(params.sprint as number) ?? 1}
+        />
+      );
+    case "sticky-note":
+      return (
+        <StickyNoteCard
+          body={(params.body as string) ?? ""}
+          onSave={(html) => onUpdateConfig?.(chart.id, { body: html })}
+        />
+      );
     default:
       return <div className="flex h-32 items-center justify-center text-sm text-slate-400">Unknown chart type</div>;
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart }: Props) {
+export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
   const cardHeight = 300 + (rowSpan - 1) * 220;
@@ -395,7 +415,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
 
       {/* Chart body — min-h-0 ensures flex-1 has a definite height so height="100%" works in ResponsiveContainer */}
       <div className="min-h-0 flex-1 overflow-hidden px-2 py-2">
-        <ChartBody chart={chart} initiatives={initiatives} />
+        <ChartBody chart={chart} initiatives={initiatives} onUpdateConfig={onUpdateConfig} />
       </div>
     </div>
   );

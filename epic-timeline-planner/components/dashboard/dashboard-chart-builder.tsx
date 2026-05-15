@@ -5,11 +5,13 @@ import {
   BarChart2,
   Check,
   ChevronLeft,
+  Clock,
   Flag,
   Folder,
   Map as MapIcon,
   PieChart,
   RotateCcw,
+  StickyNote,
   TrendingDown,
   Users,
   Users2,
@@ -162,7 +164,22 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     description: "Story status breakdown for a whole quarter",
     accent: "border-pink-200 bg-pink-50 text-pink-700",
   },
+  "sprint-countdown": {
+    label: "Sprint Countdown",
+    icon: <Clock className="size-4 text-indigo-500" />,
+    description: "Live ticker showing time remaining in the current sprint",
+    accent: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  },
+  "sticky-note": {
+    label: "Sticky Note",
+    icon: <StickyNote className="size-4 text-amber-500" />,
+    description: "A pinned note for ad-hoc dashboard commentary",
+    accent: "border-amber-200 bg-amber-50 text-amber-700",
+  },
 };
+
+// Gadget chart types — appear under a "Gadgets" header below the chart list.
+const GADGET_CHART_TYPES = new Set<ChartType>(["sprint-countdown", "sticky-note"]);
 
 // Chart types that use the structured SprintChartForm flow (vs. the chat-style OtherChartFlow).
 const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "workload", "sprint-load", "sprint-burnup", "epic-burnup", "velocity"]);
@@ -571,6 +588,9 @@ function SprintChartForm({
   const [metric, setMetric] = useState<"daysLeft" | "storyCount">(initMetric);
   useEffect(() => { setMetric(initMetric); }, [initMetric]);
 
+  // Workload + multi-team toggle: combine teams into ONE chart (default) or fan out to one chart per team.
+  const [workloadCombineTeams, setWorkloadCombineTeams] = useState<boolean>(true);
+
   // ─── Velocity period state ───────────────────────────────────────────────
   const initVelocityRange = useMemo((): { start: number; end: number } => {
     const now = new Date();
@@ -656,6 +676,8 @@ function SprintChartForm({
   );
   const sprintInfo = useMemo(() => currentSprintParams(), []);
 
+  // Workload always renders one chart per roadmap; multiple teams are combined into a single chart's `teams` filter.
+  const isWorkloadChart = chartType === "workload";
   const isEditing = !!editTarget;
   const chartCount = isEditing
     ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0 && selectedEpicIds.size === 0) ? 0 : 1)
@@ -664,9 +686,16 @@ function SprintChartForm({
       : isVelocityChart
         // Velocity requires at least one team — "all teams" is not allowed.
         ? (selectedTeamIds.size === 0 ? 0 : (selectedRoadmapIds.size || 1) * selectedTeamIds.size)
-        : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
-          ? 0
-          : (selectedRoadmapIds.size || 1) * (selectedTeamIds.size || 1);
+        : isWorkloadChart
+          ? ((selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
+              ? 0
+              : (selectedRoadmapIds.size || 1) * (
+                  // 0 or 1 team → 1 chart; 2+ teams → 1 (combined) or N (split) per user toggle
+                  selectedTeamIds.size <= 1 ? 1 : (workloadCombineTeams ? 1 : selectedTeamIds.size)
+                ))
+          : (selectedRoadmapIds.size === 0 && selectedTeamIds.size === 0)
+            ? 0
+            : (selectedRoadmapIds.size || 1) * (selectedTeamIds.size || 1);
 
   function toggle<T>(set: Set<T>, v: T): Set<T> {
     const next = new Set(set);
@@ -717,6 +746,69 @@ function SprintChartForm({
     const velocityStartLo = Math.min(velocityStart, velocityEnd);
     const velocityEndHi = Math.max(velocityStart, velocityEnd);
     const velocityPeriodLabel = `${SPRINT_OPTIONS[velocityStartLo - 1]?.label ?? `S${velocityStartLo}`} → ${SPRINT_OPTIONS[velocityEndHi - 1]?.label ?? `S${velocityEndHi}`}`;
+
+    // Workload has its own fan-out rules:
+    //   • 0 or 1 team selected — one chart per roadmap (no team or single-team filter)
+    //   • 2+ teams + combine toggle ON  — one chart per roadmap with all picked teams as rows
+    //   • 2+ teams + combine toggle OFF — one chart per (roadmap × team), each scoped to its team's assignees
+    if (isWorkloadChart) {
+      const teamIds = selectedTeamIds.size > 0 ? [...selectedTeamIds] : [];
+      const combine = teamIds.length <= 1 || workloadCombineTeams;
+      for (const roadmap of roadmapEntries) {
+        const roadmapLabel = roadmap ? roadmap.name : null;
+        if (combine) {
+          const teamLabelsCsv = teamIds.length > 0
+            ? teamIds.map((id) => monthTeamLabelForId(id) ?? id).join(", ")
+            : null;
+          const parts = [
+            CHART_META[chartType].label,
+            roadmapLabel,
+            teamLabelsCsv,
+            `Sprint ${sprintInfo.sprint}`,
+          ].filter(Boolean);
+          configs.push({
+            chartType,
+            title: parts.join(" · "),
+            params: {
+              year: sprintInfo.year,
+              quarter: sprintInfo.quarter,
+              sprint: sprintInfo.sprint,
+              ...(roadmap ? { roadmapId: roadmap.id } : {}),
+              ...(teamIds.length === 1 ? { team: teamIds[0] } : {}),
+              ...(teamIds.length > 1 ? { teams: teamIds } : {}),
+              ...(supportsMetricPicker ? { metric } : {}),
+            },
+          });
+        } else {
+          for (const teamId of teamIds) {
+            const teamLabel = monthTeamLabelForId(teamId) ?? teamId;
+            const parts = [
+              CHART_META[chartType].label,
+              roadmapLabel,
+              teamLabel,
+              `Sprint ${sprintInfo.sprint}`,
+            ].filter(Boolean);
+            configs.push({
+              chartType,
+              title: parts.join(" · "),
+              params: {
+                year: sprintInfo.year,
+                quarter: sprintInfo.quarter,
+                sprint: sprintInfo.sprint,
+                ...(roadmap ? { roadmapId: roadmap.id } : {}),
+                team: teamId,
+                ...(supportsMetricPicker ? { metric } : {}),
+              },
+            });
+          }
+        }
+      }
+      onAdd(configs);
+      setSelectedRoadmapIds(new Set());
+      setSelectedTeamIds(new Set());
+      return;
+    }
+
     for (const roadmap of roadmapEntries) {
       for (const teamId of teamEntries) {
         const teamLabel = teamId ? (monthTeamLabelForId(teamId) ?? teamId) : null;
@@ -898,6 +990,46 @@ function SprintChartForm({
                 )}
               >
                 Stories
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Workload-only combine/split toggle — only meaningful with 2+ teams picked. */}
+        {isWorkloadChart && selectedTeamIds.size > 1 && (
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <Users className="size-3.5" />
+              </span>
+              <p className="text-[15px] font-bold text-slate-700">Multi-team layout</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setWorkloadCombineTeams(true)}
+                className={cn(
+                  "rounded-xl border px-3 py-2.5 text-left transition-all",
+                  workloadCombineTeams
+                    ? "border-indigo-300 bg-indigo-50/60 shadow-sm ring-1 ring-indigo-200"
+                    : "border-slate-200 bg-white hover:border-slate-300",
+                )}
+              >
+                <p className="text-[13px] font-semibold text-slate-800">One chart · team rows</p>
+                <p className="mt-0.5 text-[11.5px] leading-snug text-slate-500">Each team becomes a row in a single combined chart.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkloadCombineTeams(false)}
+                className={cn(
+                  "rounded-xl border px-3 py-2.5 text-left transition-all",
+                  !workloadCombineTeams
+                    ? "border-indigo-300 bg-indigo-50/60 shadow-sm ring-1 ring-indigo-200"
+                    : "border-slate-200 bg-white hover:border-slate-300",
+                )}
+              >
+                <p className="text-[13px] font-semibold text-slate-800">One chart per team · user rows</p>
+                <p className="mt-0.5 text-[11.5px] leading-snug text-slate-500">Multiple charts, each broken down by assignee.</p>
               </button>
             </div>
           </div>
@@ -1332,6 +1464,36 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
     onAddCharts([config]);
   }
 
+  /** Gadgets add immediately with default config — no form needed. */
+  function addGadget(type: ChartType) {
+    const now = new Date();
+    const sprintInfo = currentSprintParams();
+    if (type === "sprint-countdown") {
+      onAddCharts([
+        {
+          chartType: type,
+          title: `Sprint ${sprintInfo.sprint} Countdown`,
+          params: { year: sprintInfo.year, quarter: sprintInfo.quarter, sprint: sprintInfo.sprint },
+        },
+      ]);
+    } else if (type === "sticky-note") {
+      onAddCharts([
+        {
+          chartType: type,
+          title: "Note",
+          params: { body: "" },
+        },
+      ]);
+    }
+    void now; // appease unused-var lint if any
+  }
+
+  if (selectedType && GADGET_CHART_TYPES.has(selectedType)) {
+    // Should never happen — gadgets bypass the form via addGadget — but reset just in case.
+    setSelectedType(null);
+    return null;
+  }
+
   if (selectedType && SPRINT_CHART_TYPES.has(selectedType)) {
     return (
       <SprintChartForm
@@ -1393,6 +1555,36 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
               </button>
             );
           })}
+        </div>
+
+        {/* Gadgets — utility cards that bypass the chart form (added with a single click). */}
+        <div className="mt-6">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Gadgets</span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+          <div className="flex flex-col gap-2">
+            {[...GADGET_CHART_TYPES].map((type) => {
+              const meta = CHART_META[type];
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => addGadget(type)}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm transition-colors hover:border-indigo-300 hover:bg-indigo-50"
+                >
+                  <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg border", meta.accent)}>
+                    {meta.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800">{meta.label}</p>
+                    <p className="text-xs leading-snug text-slate-400">{meta.description}</p>
+                  </div>
+                  <span className="shrink-0 text-[11px] font-semibold text-indigo-600">Add</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

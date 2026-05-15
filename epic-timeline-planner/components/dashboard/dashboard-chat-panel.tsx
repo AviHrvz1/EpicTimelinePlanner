@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AreaChart, BarChart2, PieChart, RotateCcw, Send, TrendingDown, Users } from "lucide-react";
+import { AreaChart, BarChart2, Clock, PieChart, RotateCcw, Send, StickyNote, TrendingDown, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
@@ -81,6 +81,16 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     label: "Epic Scope Burnup",
     icon: <AreaChart className="size-4 text-purple-500" />,
     description: "Epic scope completed vs total scope over a sprint",
+  },
+  "sprint-countdown": {
+    label: "Sprint Countdown",
+    icon: <Clock className="size-4 text-indigo-500" />,
+    description: "Live ticker showing time remaining in the current sprint",
+  },
+  "sticky-note": {
+    label: "Sticky Note",
+    icon: <StickyNote className="size-4 text-amber-500" />,
+    description: "A pinned note for ad-hoc dashboard commentary",
   },
 };
 
