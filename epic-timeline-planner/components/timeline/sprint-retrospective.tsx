@@ -154,9 +154,8 @@ function CardComposer({
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        // Taller writing surface so the notebook reads as a real notepad. Top padding gives the
-        // first line breathing room from the column's frame.
-        class: "outline-none min-h-[7rem] px-2 pt-4 pb-2 text-[14px] text-slate-700",
+        // pt-[6px] places the first text baseline at ~23px, matching the first ruling line of the 24px-period notebook.
+        class: "outline-none min-h-[12rem] px-2 pt-[6px] pb-2 text-[14px] text-slate-700",
       },
     },
   });
@@ -242,7 +241,7 @@ function CardComposer({
           )}
         />
       </div>
-      <div className="mt-1 flex items-center justify-between">
+      <div className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-1.5">{trailing}</div>
         <button
           type="button"

@@ -46,9 +46,6 @@ export function SprintCountdownCard({ year, sprint }: Props) {
   const end = sprintEndDate(year, sprint);
   const { days, hours, minutes, seconds, ended } = formatRemainder(end.getTime() - now);
   const { month, lane } = monthLaneFromGlobalSprint(sprint);
-  const totalMs = end.getTime() - start.getTime();
-  const elapsedMs = Math.max(0, Math.min(totalMs, now - start.getTime()));
-  const pct = Math.round((elapsedMs / totalMs) * 100);
   const urgent = !ended && days <= 1;
   const dateRange = `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${year}`;
 
@@ -85,24 +82,6 @@ export function SprintCountdownCard({ year, sprint }: Props) {
         )}
       </div>
 
-      {/* Progress bar */}
-      <div className="relative z-[1] mt-2">
-        <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-slate-500">
-          <span>Sprint progress</span>
-          <span className="tabular-nums font-semibold text-slate-700">{pct}%</span>
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/80 ring-1 ring-violet-100">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all duration-500",
-              urgent
-                ? "bg-gradient-to-r from-violet-500 via-fuchsia-500 to-rose-500"
-                : "bg-gradient-to-r from-indigo-500 to-violet-500",
-            )}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
     </div>
   );
 }

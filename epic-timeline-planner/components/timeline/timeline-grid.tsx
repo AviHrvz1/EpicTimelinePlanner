@@ -1969,6 +1969,16 @@ export function TimelineGrid({
     const t = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
     return t ? [t] : [];
   });
+  /** Collapsed-team set for the multi-team retrospective accordion. A team is open when NOT in this set. */
+  const [retroCollapsedTeams, setRetroCollapsedTeams] = useState<Set<string>>(new Set());
+  const toggleRetroTeam = (teamId: string) => {
+    setRetroCollapsedTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
+  };
   const [insightsTeamIds, setInsightsTeamIds] = useState<string[]>([]);
   const [isInsightsTeamMenuOpen, setIsInsightsTeamMenuOpen] = useState(false);
   const [insightsTeamSearch, setInsightsTeamSearch] = useState("");
@@ -5749,41 +5759,84 @@ export function TimelineGrid({
                 />
               </div>
             ) : monthPlanTab === "sprint-retrospective" ? (
-              <div className="flex min-h-0 flex-1 flex-col divide-y divide-slate-200/70 overflow-y-auto">
-                {sprintFilterTeamIds.length > 0 ? (
-                  sprintFilterTeamIds.map((teamId) => {
-                    const teamLabel = sprintTeamOptions.find((o) => o.value === teamId)?.label ?? teamId;
-                    const teamDoc = sprintRetrospectiveByTeam[teamId] ?? null;
-                    return (
-                      <div key={teamId} className="min-w-0 shrink-0">
-                        <SprintRetrospectiveEditor
-                          sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
-                          teamName={teamLabel}
-                          teamId={teamId}
-                          workspaceDirectoryUsers={workspaceDirectoryUsers}
-                          initialDoc={teamDoc}
-                          updatedAt={teamDoc?.updatedAt ?? null}
-                          onSave={(doc) => onSaveSprintRetrospective?.(doc, teamId)}
-                          initiatives={initiatives}
-                          planYear={currentYear}
-                          yearSprint={resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}
-                        />
-                      </div>
-                    );
-                  })
-                ) : (
-                  <SprintRetrospectiveEditor
-                    sprintLabel={`Sprint ${resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}`}
-                    workspaceDirectoryUsers={workspaceDirectoryUsers}
-                    initialDoc={sprintRetrospective}
-                    updatedAt={sprintRetrospective?.updatedAt ?? null}
-                    onSave={(doc) => onSaveSprintRetrospective?.(doc)}
-                    initiatives={initiatives}
-                    planYear={currentYear}
-                    yearSprint={resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1)}
-                  />
-                )}
-              </div>
+              (() => {
+                // Pick which teams to render: explicit filter wins, otherwise every team from the menu (minus the "all" pseudo-option).
+                const retroTeamIds = sprintFilterTeamIds.length > 0
+                  ? sprintFilterTeamIds
+                  : sprintTeamOptions.filter((o) => o.value !== "all").map((o) => o.value);
+                const yearSprint = resolvedActiveYearSprint ?? activeSprint ?? firstGlobalSprintForMonth(activeMonth ?? 1);
+                const sprintLabel = `Sprint ${yearSprint}`;
+                // Single-team mode: render the editor directly without accordion chrome.
+                if (retroTeamIds.length === 1) {
+                  const teamId = retroTeamIds[0];
+                  const teamLabel = sprintTeamOptions.find((o) => o.value === teamId)?.label ?? teamId;
+                  const teamDoc = sprintRetrospectiveByTeam[teamId] ?? null;
+                  return (
+                    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                      <SprintRetrospectiveEditor
+                        sprintLabel={sprintLabel}
+                        teamName={teamLabel}
+                        teamId={teamId}
+                        workspaceDirectoryUsers={workspaceDirectoryUsers}
+                        initialDoc={teamDoc}
+                        updatedAt={teamDoc?.updatedAt ?? null}
+                        onSave={(doc) => onSaveSprintRetrospective?.(doc, teamId)}
+                        initiatives={initiatives}
+                        planYear={currentYear}
+                        yearSprint={yearSprint}
+                      />
+                    </div>
+                  );
+                }
+                // Multi-team: accordion list. Each team is collapsible; first one open by default.
+                return (
+                  <div className="flex min-h-0 flex-1 flex-col divide-y divide-slate-200/70 overflow-y-auto">
+                    {retroTeamIds.map((teamId) => {
+                      const teamOpt = sprintTeamOptions.find((o) => o.value === teamId);
+                      const teamLabel = teamOpt?.label ?? teamId;
+                      const teamDoc = sprintRetrospectiveByTeam[teamId] ?? null;
+                      const isOpen = !retroCollapsedTeams.has(teamId);
+                      const updatedAtText = teamDoc?.updatedAt ? new Date(teamDoc.updatedAt).toLocaleString() : null;
+                      return (
+                        <div key={teamId} className="min-w-0 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => toggleRetroTeam(teamId)}
+                            className="flex w-full items-center gap-2 bg-white/70 px-5 py-3 text-left transition-colors hover:bg-slate-50 sm:px-7"
+                            aria-expanded={isOpen}
+                          >
+                            {isOpen ? (
+                              <ChevronDown className="size-4 shrink-0 text-slate-500" />
+                            ) : (
+                              <ChevronRight className="size-4 shrink-0 text-slate-500" />
+                            )}
+                            {teamOpt?.icon}
+                            <span className="text-[15px] font-semibold text-slate-800">{teamLabel}</span>
+                            <span className="text-[12px] font-medium text-slate-400">· {sprintLabel}</span>
+                            <span className="ml-auto text-[11px] text-slate-400">
+                              {updatedAtText ? `Last saved ${updatedAtText}` : "Not saved yet"}
+                            </span>
+                          </button>
+                          {isOpen ? (
+                            <SprintRetrospectiveEditor
+                              sprintLabel={sprintLabel}
+                              teamName={teamLabel}
+                              teamId={teamId}
+                              workspaceDirectoryUsers={workspaceDirectoryUsers}
+                              initialDoc={teamDoc}
+                              updatedAt={teamDoc?.updatedAt ?? null}
+                              onSave={(doc) => onSaveSprintRetrospective?.(doc, teamId)}
+                              initiatives={initiatives}
+                              planYear={currentYear}
+                              yearSprint={yearSprint}
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()
             ) : monthPlanTab === "month-status" ? (
               <div className="p-3 sm:p-5">
                 <MonthAnalytics
