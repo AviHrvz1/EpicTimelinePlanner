@@ -49,6 +49,7 @@ import { QuarterTeamCapacityBoard } from "@/components/timeline/quarter-team-cap
 import { SprintAnalytics } from "@/components/timeline/sprint-analytics";
 import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
 import { SprintEndCountdown } from "@/components/timeline/sprint-end-countdown";
+import { PeriodEndCountdown } from "@/components/timeline/period-end-countdown";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
@@ -3043,6 +3044,16 @@ export function TimelineGrid({
       monthPlanTab === "sprint-capacity" ||
       monthPlanTab === "sprint-retrospective");
 
+  // Period scope detection for the non-sprint countdown chip. Only month gets a chip;
+  // single-quarter and year (all-quarters) intentionally show no chip — those scopes are
+  // already telegraphed by the Gantt header.
+  const periodCountdownScope: "month" | null = (() => {
+    if (showSprintEndCountdown) return null;
+    if (activeMonth != null) return "month";
+    return null;
+  })();
+  const periodCountdownIndex: number | null = periodCountdownScope === "month" ? activeMonth ?? null : null;
+
   const sprintKanbanSuggestions = useMemo(() => {
     const q = sprintKanbanSearch.trim().toLowerCase();
     if (!q || monthPlanTab !== "sprint-kanban" || resolvedActiveYearSprint == null || sprintBoardContextMonth == null) return [];
@@ -4771,6 +4782,9 @@ export function TimelineGrid({
               >
                 {summaryYearChipsJsx}
                 {showGanttSearch ? ganttSearchJsx : null}
+                {periodCountdownScope ? (
+                  <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
+                ) : null}
               </div>
             </div>
           ) : (
@@ -4782,6 +4796,9 @@ export function TimelineGrid({
             >
               {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
               {showGanttSearch ? ganttSearchJsx : null}
+              {periodCountdownScope ? (
+                <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
+              ) : null}
             </div>
           )
         ) : activeMonth ? (
@@ -4865,15 +4882,27 @@ export function TimelineGrid({
                   </div>
                   {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
                     <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                  ) : periodCountdownScope ? (
+                    <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
                   ) : null}
                 </>
               ) : ((suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx)}
               {showGanttSearch ? ganttSearchJsx : null}
           </div>
         ) : focusedQuarter ? (
-          <div className="flex items-center gap-2">{showGanttSearch ? ganttSearchJsx : null}</div>
+          <div className="flex items-center gap-2">
+            {showGanttSearch ? ganttSearchJsx : null}
+            {periodCountdownScope ? (
+              <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
+            ) : null}
+          </div>
         ) : (
-          <div className="flex items-center gap-2">{showGanttSearch ? ganttSearchJsx : null}</div>
+          <div className="flex items-center gap-2">
+            {showGanttSearch ? ganttSearchJsx : null}
+            {periodCountdownScope ? (
+              <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
+            ) : null}
+          </div>
         )}
       </div>
   );

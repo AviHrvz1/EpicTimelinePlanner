@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, ArrowLeft, CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronUp, Layers, PieChart as PieChartIcon, User, UserRound, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronRight, ChevronUp, Layers, PieChart as PieChartIcon, User, UserRound, Users } from "lucide-react";
 import { SprintTimelinePopup } from "@/components/timeline/sprint-end-countdown";
 import {
   Area,
@@ -279,6 +279,21 @@ export function SprintAnalytics({
   const burnUpData = useMemo(() => {
     const allDays = analytics.burndown;
     if (allDays.length === 0) return [];
+
+    if (metric === "daysLeft") {
+      // Days mode: scope is total estimated days for the sprint (constant); completed = scope − burndown.actual remaining.
+      const totalEst =
+        analytics.workloadByTeam.reduce((sum, t) => sum + t.estimatedTotal, 0) ||
+        analytics.workloadByAssignee.reduce((sum, r) => sum + r.estimatedTotal, 0);
+      return allDays.map((bd, idx) => {
+        const remaining = bd.actual;
+        const completed = remaining == null ? null : Math.max(0, Math.round(totalEst - remaining));
+        const ideal = totalEst > 0 ? Math.round((totalEst * idx) / Math.max(allDays.length - 1, 1)) : 0;
+        return { labelShort: bd.labelShort, scope: Math.round(totalEst), completed, ideal, isToday: bd.isToday };
+      });
+    }
+
+    // Stories mode (default): scope/completed from the daily status flow trend.
     const pastByLabel = new Map(analytics.flowSprintTrendData.map((d) => [d.labelShort, d]));
     const lastPast = analytics.flowSprintTrendData[analytics.flowSprintTrendData.length - 1];
     const finalScope = lastPast ? lastPast.todo + lastPast.inProgress + lastPast.done + lastPast.approved : 0;
@@ -289,7 +304,7 @@ export function SprintAnalytics({
       const ideal = finalScope > 0 ? Math.round((finalScope * idx) / Math.max(allDays.length - 1, 1)) : 0;
       return { labelShort: bd.labelShort, scope, completed, ideal, isToday: bd.isToday };
     });
-  }, [analytics.burndown, analytics.flowSprintTrendData]);
+  }, [analytics.burndown, analytics.flowSprintTrendData, analytics.workloadByTeam, analytics.workloadByAssignee, metric]);
 
   const allCfdKeysSelected = cfdVisibleKeys.length === CFD_FLOW_SEGMENTS.length;
   const showAllCfdKeys = () => setCfdVisibleKeys(CFD_FLOW_SEGMENTS.map((segment) => segment.key));
@@ -605,7 +620,7 @@ export function SprintAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
             Burndown
@@ -619,7 +634,7 @@ export function SprintAnalytics({
                   metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
                 }`}
               >
-                Days left
+                Est Days Left
               </button>
               <button
                 type="button"
@@ -668,7 +683,7 @@ export function SprintAnalytics({
                     tick={{ fontSize: 10 }}
                     width={44}
                     label={{
-                      value: metric === "storyCount" ? "Stories" : "Days left",
+                      value: metric === "storyCount" ? "Stories" : "Est Days Left",
                       angle: -90,
                       position: "insideLeft",
                       fill: "#64748b",
@@ -1070,23 +1085,31 @@ export function SprintAnalytics({
             const teamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
             const sprintDaysLeft = analytics.workloadSprintCalendarDaysLeft;
             const sprintEnded = sprintDaysLeft === 0;
+            // In stories mode, swap "days left/est days" for "open / total stories" so the bar reflects story progress.
             const loadRows = teamMode
-              ? analytics.workloadByTeam.map((t) => ({
-                  key: t.teamLabel,
-                  label: t.teamLabel,
-                  initials: t.teamLabel.slice(0, 2).toUpperCase(),
-                  daysLeft: t.daysLeftTotal,
-                  estTotal: t.estimatedTotal,
-                  onRowClick: () => { setSprintLoadDrilldownIsTeam(true); setSprintLoadDrilldownAssignee(t.teamId ?? ""); },
-                }))
-              : analytics.workloadByAssignee.map((row) => ({
-                  key: row.assignee,
-                  label: row.assignee,
-                  initials: row.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join(""),
-                  daysLeft: row.daysLeftTotal,
-                  estTotal: row.estimatedTotal,
-                  onRowClick: () => { setSprintLoadDrilldownIsTeam(false); setSprintLoadDrilldownAssignee(row.assignee); },
-                }));
+              ? analytics.workloadByTeam.map((t) => {
+                  const totalStories = t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.done + t.storiesByStatus.approved;
+                  return {
+                    key: t.teamLabel,
+                    label: t.teamLabel,
+                    initials: t.teamLabel.slice(0, 2).toUpperCase(),
+                    daysLeft: metric === "storyCount" ? t.openCount : t.daysLeftTotal,
+                    estTotal: metric === "storyCount" ? totalStories : t.estimatedTotal,
+                    onRowClick: () => { setSprintLoadDrilldownIsTeam(true); setSprintLoadDrilldownAssignee(t.teamId ?? ""); },
+                  };
+                })
+              : analytics.workloadByAssignee.map((row) => {
+                  const totalStories = row.storiesByStatus.todo + row.storiesByStatus.inProgress + row.storiesByStatus.done + row.storiesByStatus.approved;
+                  return {
+                    key: row.assignee,
+                    label: row.assignee,
+                    initials: row.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join(""),
+                    daysLeft: metric === "storyCount" ? row.openCount : row.daysLeftTotal,
+                    estTotal: metric === "storyCount" ? totalStories : row.estimatedTotal,
+                    onRowClick: () => { setSprintLoadDrilldownIsTeam(false); setSprintLoadDrilldownAssignee(row.assignee); },
+                  };
+                });
+            const loadUnit = metric === "storyCount" ? "" : "d";
             if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
               <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
@@ -1095,17 +1118,37 @@ export function SprintAnalytics({
                     <Users className="size-4 text-slate-600" />
                     Sprint Load
                   </h3>
-                  {sprintLoadDrilldownAssignee ? (
-                    <button
-                      type="button"
-                      onClick={() => { setSprintLoadDrilldownAssignee(null); setSprintLoadDrilldownIsTeam(false); }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      aria-label="Back to sprint load"
-                      title="Back to sprint load"
-                    >
-                      <ArrowLeft className="size-3.5" aria-hidden />
-                    </button>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {!sprintLoadDrilldownAssignee && (
+                      <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => setMetric("daysLeft")}
+                          className={`rounded-md px-2 py-0 text-[12px] font-medium ${metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+                        >
+                          Est Days Left
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMetric("storyCount")}
+                          className={`rounded-md px-2 py-0 text-[12px] font-medium ${metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+                        >
+                          Stories
+                        </button>
+                      </div>
+                    )}
+                    {sprintLoadDrilldownAssignee ? (
+                      <button
+                        type="button"
+                        onClick={() => { setSprintLoadDrilldownAssignee(null); setSprintLoadDrilldownIsTeam(false); }}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        aria-label="Back to sprint load"
+                        title="Back to sprint load"
+                      >
+                        <ArrowLeft className="size-3.5" aria-hidden />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 {!sprintLoadDrilldownAssignee && (
                   <button
@@ -1113,16 +1156,19 @@ export function SprintAnalytics({
                     onClick={() => setSprintTimelinePopupOpen(true)}
                     title="View sprint timeline"
                     className={cn(
-                      "mb-1.5 flex w-full shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[12px] font-semibold ring-1 transition-all hover:-translate-y-px",
+                      "group/sprint-end mb-1.5 inline-flex w-fit shrink-0 cursor-pointer items-center gap-1.5 px-1 py-1 text-left text-[12px] font-semibold transition-colors",
                       sprintEnded
-                        ? "bg-rose-50/80 text-rose-700 ring-rose-200/70 hover:ring-rose-300"
+                        ? "text-rose-700 hover:text-rose-900"
                         : sprintDaysLeft <= 2
-                          ? "bg-amber-50/80 text-amber-800 ring-amber-200/70 hover:ring-amber-300"
-                          : "bg-slate-50 text-slate-600 ring-slate-200/70 hover:ring-slate-300",
+                          ? "text-amber-800 hover:text-amber-900"
+                          : "text-slate-600 hover:text-indigo-700",
                     )}
                   >
                     <CalendarDays className="size-3.5 shrink-0" aria-hidden />
-                    <span>{sprintEnded ? "Sprint has ended" : `Sprint ends in ${sprintDaysLeft}d`}</span>
+                    <span className="underline decoration-dotted underline-offset-[3px] decoration-current/40 group-hover/sprint-end:decoration-current">
+                      {sprintEnded ? "Sprint has ended" : `Sprint ends in ${sprintDaysLeft} ${sprintDaysLeft === 1 ? "Day" : "Days"}`}
+                    </span>
+                    <ChevronRight className="size-3 shrink-0 opacity-50 transition-all group-hover/sprint-end:translate-x-0.5 group-hover/sprint-end:opacity-100" aria-hidden />
                   </button>
                 )}
                 {sprintTimelinePopupOpen && (
@@ -1179,13 +1225,14 @@ export function SprintAnalytics({
                     <div
                       ref={sprintLoadScrollRef}
                       onScroll={() => updateArrowState(sprintLoadScrollRef, setCanScrollSprintLoadUp, setCanScrollSprintLoadDown)}
-                      className="h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] overflow-y-auto overflow-x-hidden overscroll-contain space-y-1 pr-5"
+                      className="h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] overflow-y-auto overflow-x-hidden overscroll-contain space-y-1 pr-5 pb-4"
                     >
                       {loadRows.map((row) => {
                         const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                         const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
-                        const atRisk = sprintDaysLeft > 0 && row.daysLeft > sprintDaysLeft;
-                        const showEnded = sprintEnded && row.daysLeft > 0;
+                        // Capacity warning ("Nd over sprint") only applies in days mode — comparing story counts to calendar days is nonsense.
+                        const atRisk = metric === "daysLeft" && sprintDaysLeft > 0 && row.daysLeft > sprintDaysLeft;
+                        const showEnded = metric === "daysLeft" && sprintEnded && row.daysLeft > 0;
                         const overByDays = atRisk ? row.daysLeft - sprintDaysLeft : 0;
                         const allDone = row.daysLeft === 0 && row.estTotal > 0;
                         return (
@@ -1194,12 +1241,9 @@ export function SprintAnalytics({
                             type="button"
                             onClick={row.onRowClick}
                             className={cn(
-                              "w-full rounded-lg bg-white px-2 py-1.5 text-left ring-1 transition-colors hover:bg-slate-50/60",
-                              atRisk
-                                ? "ring-amber-200/70 hover:ring-amber-300"
-                                : showEnded
-                                  ? "ring-rose-200/70 hover:ring-rose-300"
-                                  : "ring-slate-200/70 hover:ring-slate-300",
+                              "w-full rounded-lg bg-white px-2 py-1.5 text-left transition-colors hover:bg-slate-50/60",
+                              atRisk && "hover:bg-amber-50/40",
+                              showEnded && "hover:bg-rose-50/40",
                             )}
                           >
                             <div className="flex items-center gap-2">
@@ -1238,10 +1282,10 @@ export function SprintAnalytics({
                                       </span>
                                     )}
                                     <span className="text-[11.5px] tabular-nums text-slate-600">
-                                      <span className="font-semibold text-slate-800">{doneDays}d</span>
+                                      <span className="font-semibold text-slate-800">{doneDays}{loadUnit}</span>
                                       <span className="ml-0.5 text-slate-400">done</span>
                                       <span className="mx-1 text-slate-300">·</span>
-                                      <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
+                                      <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}{loadUnit}</span>
                                       <span className="ml-0.5 text-slate-400">left</span>
                                     </span>
                                   </div>
@@ -1265,11 +1309,27 @@ export function SprintAnalytics({
 
           {/* Burn Up — right col */}
           <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
-            <div className="mb-2 flex shrink-0 items-center gap-2">
+            <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
               <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                 <Activity className="size-4 text-slate-600" />
                 Sprint Burnup
               </h3>
+              <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setMetric("daysLeft")}
+                  className={`rounded-md px-2 py-0 text-[13px] font-medium ${metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+                >
+                  Est Days Left
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetric("storyCount")}
+                  className={`rounded-md px-2 py-0 text-[13px] font-medium ${metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+                >
+                  Stories
+                </button>
+              </div>
             </div>
             <div className="grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
               <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
@@ -1292,10 +1352,10 @@ export function SprintAnalytics({
                         height={34}
                       />
                       <YAxis
-                        allowDecimals={false}
+                        allowDecimals={metric === "daysLeft"}
                         tick={{ fontSize: 10 }}
                         width={44}
-                        label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
+                        label={{ value: metric === "daysLeft" ? "Est Days Left" : "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
                       />
                       <Tooltip
                         content={({ active, payload, label }) => {
