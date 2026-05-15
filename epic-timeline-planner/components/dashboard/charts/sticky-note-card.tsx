@@ -36,7 +36,8 @@ type Props = {
  * the description panels.
  */
 export function StickyNoteCard({ body, onSave }: Props) {
-  const [editing, setEditing] = useState(false);
+  // Start in edit mode when there's no saved content — a freshly added sticky note opens straight into the editor.
+  const [editing, setEditing] = useState(() => !body || stripHtml(body).length === 0);
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -104,26 +105,22 @@ export function StickyNoteCard({ body, onSave }: Props) {
   const FOLD = 22; // px — size of the curled-corner triangle
   return (
     <div
-      className="relative h-full min-h-0 ring-1 ring-violet-200/70"
+      className="relative h-full min-h-0 bg-white ring-1 ring-slate-200"
       style={{
-        // Project-palette sticky: cool lavender top → soft pink bottom, with the bottom-right corner clipped for the page-curl.
-        background:
-          "linear-gradient(135deg, rgb(237 233 254 / 0.95) 0%, rgb(243 232 255 / 0.92) 55%, rgb(252 231 243 / 0.85) 100%)",
         clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${FOLD}px), calc(100% - ${FOLD}px) 100%, 0 100%)`,
         borderRadius: "12px",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7), 0 4px 12px -4px rgba(99,102,241,0.16)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7), 0 4px 12px -4px rgba(15,23,42,0.10)",
       }}
     >
-      {/* Underside of the fold — the small triangle in the bottom-right corner */}
+      {/* Underside of the fold — small triangle in the bottom-right corner; soft slate so it reads against the white body. */}
       <div
         className="pointer-events-none absolute right-0 bottom-0"
         style={{
           width: `${FOLD}px`,
           height: `${FOLD}px`,
-          // Underside reads as a slightly deeper violet so the fold has visible depth on the lavender body.
           background:
-            "linear-gradient(135deg, transparent 50%, rgb(196 181 253 / 0.55) 50%, rgb(167 139 250 / 0.85) 100%)",
-          filter: "drop-shadow(-1px -1px 1px rgba(76,29,149,0.18))",
+            "linear-gradient(135deg, transparent 50%, rgb(226 232 240 / 0.85) 50%, rgb(203 213 225 / 0.95) 100%)",
+          filter: "drop-shadow(-1px -1px 1px rgba(15,23,42,0.12))",
         }}
         aria-hidden
       />
@@ -150,7 +147,7 @@ export function StickyNoteCard({ body, onSave }: Props) {
               editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
             }, <LinkIcon className="size-3" />)}
           </div>
-        ) : <span className="text-[11px] font-semibold uppercase tracking-wider text-violet-700/80">Note</span>}
+        ) : <span aria-hidden />}
         <div className="flex items-center gap-1">
           {editing ? (
             <>

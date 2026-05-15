@@ -50,7 +50,7 @@ export function SprintCountdownCard({ year, sprint }: Props) {
   const dateRange = `${MONTH_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTH_SHORT[end.getMonth()]} ${end.getDate()}, ${year}`;
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-white p-3 ring-1 ring-slate-200">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-[#f0f8ff] p-3 ring-1 ring-slate-200">
 
       <div className="relative z-[1] flex w-full items-center justify-between gap-2 text-[11px] font-medium text-slate-600">
         <span className="inline-flex items-center gap-1.5">

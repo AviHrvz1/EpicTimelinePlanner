@@ -3,7 +3,7 @@
 import { Fragment, useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Flag, GripVertical, Pencil, Users, X } from "lucide-react";
+import { Flag, GripVertical, Pencil, StickyNote, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
@@ -411,6 +411,9 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
           <span
             className="group/title flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold text-slate-700"
           >
+            {chart.chartType === "sticky-note" && (
+              <StickyNote className="size-3.5 shrink-0 text-violet-500" aria-hidden />
+            )}
             <span className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
               {renderTitleNodes(chart, displayTitle)}
             </span>

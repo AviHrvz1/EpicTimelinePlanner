@@ -1605,7 +1605,7 @@ export function DashboardChartBuilder({ roadmaps, workspaceDirectoryUsers, conte
       onAddCharts([
         {
           chartType: type,
-          title: "Note",
+          title: "Sticky Note",
           params: { body: "" },
         },
       ]);
