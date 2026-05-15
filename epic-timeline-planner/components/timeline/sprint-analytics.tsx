@@ -871,11 +871,26 @@ export function SprintAnalytics({
                           formatter={((value: number, name: string) => [value, name]) as any}
                           labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
                         />
-                        <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13, paddingTop: 6 }} />
+                        <Legend
+                          wrapperStyle={{ paddingTop: 6 }}
+                          // We render our own legend from WORKLOAD_BAR_SEGMENTS so the order is fixed
+                          // (To do → In progress → Done → Approved) and the items get proper gaps.
+                          content={() => (
+                            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 pt-1.5 text-[13px]">
+                              {WORKLOAD_BAR_SEGMENTS.map((s) => (
+                                <span key={s.key} className="inline-flex items-center gap-1.5">
+                                  <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                                  <span className="font-medium text-slate-700">{s.label}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        />
                         {WORKLOAD_BAR_SEGMENTS.map((s) => (
                           <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
+                            minPointSize={2}
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
+                            label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
                             style={{ cursor: "pointer" }}
                             onClick={teamMode
                               ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any

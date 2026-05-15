@@ -66,7 +66,21 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team,
           label={{ value: useDays ? "Days" : "Stories", angle: -90, position: "insideLeft", offset: 0, style: { fontSize: 11, fill: "#475569", fontWeight: 600 } }}
         />
         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+        <Legend
+          wrapperStyle={{ paddingTop: 6 }}
+          // We render our own legend from SEGMENTS so the order is fixed
+          // (To do → In progress → Done → Approved) and the items get proper gaps.
+          content={() => (
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 pt-1.5 text-[11px]">
+              {SEGMENTS.map((s) => (
+                <span key={s.key} className="inline-flex items-center gap-1.5">
+                  <span className="inline-block size-2 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="font-medium text-slate-700">{s.label}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        />
         {SEGMENTS.map((s) => (
           <Bar
             key={s.key}
@@ -74,8 +88,9 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team,
             fill={s.color}
             radius={[3, 3, 0, 0]}
             maxBarSize={12}
+            minPointSize={2}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => v > 0 ? v : "") as any }}
+            label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
           />
         ))}
       </BarChart>
