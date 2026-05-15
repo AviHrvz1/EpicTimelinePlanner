@@ -28,6 +28,8 @@ type Props = {
   body: string;
   /** Persists the new HTML body for this card. */
   onSave: (html: string) => void;
+  /** When false, the Edit button is hidden and editing-only chrome doesn't appear. The note acts as a read-only display. */
+  allowEdit?: boolean;
 };
 
 /**
@@ -35,9 +37,8 @@ type Props = {
  * pencil icon flips to a Tiptap rich-text editor with the same toolbar as
  * the description panels.
  */
-export function StickyNoteCard({ body, onSave }: Props) {
-  // Start in edit mode when there's no saved content — a freshly added sticky note opens straight into the editor.
-  const [editing, setEditing] = useState(() => !body || stripHtml(body).length === 0);
+export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
+  const [editing, setEditing] = useState(false);
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -71,6 +72,11 @@ export function StickyNoteCard({ body, onSave }: Props) {
     if (!editor) return;
     editor.setEditable(editing);
   }, [editor, editing]);
+
+  // If the dashboard leaves edit mode while we're editing, drop back to read-only without losing the saved body.
+  useEffect(() => {
+    if (!allowEdit && editing) setEditing(false);
+  }, [allowEdit, editing]);
 
   function commit() {
     if (!editor) return;
@@ -168,7 +174,7 @@ export function StickyNoteCard({ body, onSave }: Props) {
                 Save
               </button>
             </>
-          ) : (
+          ) : allowEdit ? (
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -178,7 +184,7 @@ export function StickyNoteCard({ body, onSave }: Props) {
               <Pencil className="size-3" />
               Edit
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 

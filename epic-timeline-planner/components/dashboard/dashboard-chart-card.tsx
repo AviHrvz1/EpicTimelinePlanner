@@ -136,7 +136,7 @@ function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
   });
 }
 
-function ChartBody({ chart, initiatives, onUpdateConfig }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void }) {
+function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; isEditMode: boolean; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void }) {
   let params: Record<string, unknown> = {};
   try { params = JSON.parse(chart.config); } catch { /* ignore */ }
 
@@ -311,6 +311,7 @@ function ChartBody({ chart, initiatives, onUpdateConfig }: { chart: DashboardCha
       return (
         <StickyNoteCard
           body={(params.body as string) ?? ""}
+          allowEdit={isEditMode}
           onSave={(html) => onUpdateConfig?.(chart.id, { body: html })}
         />
       );
@@ -456,7 +457,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
 
       {/* Chart body — min-h-0 ensures flex-1 has a definite height so height="100%" works in ResponsiveContainer */}
       <div className="min-h-0 flex-1 overflow-hidden px-2 py-2">
-        <ChartBody chart={chart} initiatives={initiatives} onUpdateConfig={onUpdateConfig} />
+        <ChartBody chart={chart} initiatives={initiatives} isEditMode={isEditMode} onUpdateConfig={onUpdateConfig} />
       </div>
     </div>
   );
