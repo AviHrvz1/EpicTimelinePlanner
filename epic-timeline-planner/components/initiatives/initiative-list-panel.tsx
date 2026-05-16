@@ -2446,9 +2446,10 @@ export function InitiativeListPanel({
                 values={["current"]}
                 onToggle={() => {}}
                 options={monthFilterOptions}
-                ariaLabel="Month filter (locked to selected month)"
+                ariaLabel={isSprintModeActive ? "Month filter (active sprint month)" : "Month filter (locked to selected month)"}
                 allValue="current"
-                disabled
+                // Sprint surfaces keep the month chip interactive (no greyed-out look); other month-scoped views stay locked.
+                disabled={!isSprintModeActive}
               />
             ) : (
               <IconFilterSelect
@@ -2596,7 +2597,9 @@ export function InitiativeListPanel({
           ) : null}
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-[15px] font-medium tracking-[0.01em] text-slate-900">
-              My Epics ({filteredMonthBacklogEpics.length})
+              {activeMonth != null
+                ? `${MONTHS[activeMonth - 1] ?? `Month ${activeMonth}`} Epics (${filteredMonthBacklogEpics.length})`
+                : `My Epics (${filteredMonthBacklogEpics.length})`}
             </h3>
             <div className="flex items-center gap-0.5">
               <button
@@ -2853,7 +2856,9 @@ export function InitiativeListPanel({
           ) : null}
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-[15px] font-medium tracking-[0.01em] text-slate-900">
-              Initiatives ({filteredInitiatives.length})
+              {panelQuarterQuickFilter
+                ? `${panelQuarterQuickFilter} Initiatives (${filteredInitiatives.length})`
+                : `Initiatives (${filteredInitiatives.length})`}
             </h3>
             <div className="flex items-center gap-0.5">
               <button

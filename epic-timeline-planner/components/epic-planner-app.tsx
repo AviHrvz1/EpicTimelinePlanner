@@ -4776,7 +4776,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                           ? (teamId) => setSprintStoryBoardTeamId(teamId)
                           : undefined
                       }
-                      panelQuarterQuickFilter={activeTimelineMonth == null ? null : (focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null)}
+                      panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
                       panelQuarterFilterLocked={false}
                       onInitiativeAccordionChange={handleInitiativeAccordionChange}
                       onEpicAccordionChange={(epicId, isOpen) => {

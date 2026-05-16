@@ -86,6 +86,8 @@ import {
   monthLaneFromGlobalSprint,
   monthRangeFromYearSprintRange,
   resolvedInitiativeYearSprintBounds,
+  sprintEndDate,
+  sprintStartDate,
 } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
 
@@ -195,14 +197,14 @@ function yearRoadmapGanttMinWidthPx(columnCount: number, minSprintPx: number = Y
   return columnCount * minSprintPx + Math.max(0, columnCount - 1) * YEAR_ROADMAP_GANTT_GAP_PX;
 }
 
-/** Full-year / all-quarters Gantt: vertical "today" line with triangles at top and bottom. */
-function YearRoadmapTodayLine({ leftPercent }: { leftPercent: number | null }) {
-  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
-  const x = Math.min(100, Math.max(0, leftPercent));
+/** Full-year / all-quarters Gantt: vertical "today" line with triangles at top and bottom. `leftPercent` accepts a CSS string (e.g. a gap-aware calc) so the marker lands inside the right column instead of falling in the inter-column gutter. */
+function YearRoadmapTodayLine({ leftPercent }: { leftPercent: string | null }) {
+  if (leftPercent == null) return null;
   return (
+    // z-30 keeps the marker above the lanes (which sit at z-10) when it's rendered as a sibling of the scroll container.
     <div
-      className="pointer-events-none absolute inset-y-0 z-10 overflow-visible"
-      style={{ left: `${x}%` }}
+      className="pointer-events-none absolute inset-y-0 z-30 overflow-visible"
+      style={{ left: leftPercent }}
       aria-hidden
     >
       {/* down-pointing triangle at top */}
@@ -233,7 +235,7 @@ function YearRoadmapEmptyStripedLane({
   isDragging,
 }: {
   currentYear: number;
-  roadmapLaneTodayLeft: number | null;
+  roadmapLaneTodayLeft: string | null;
   columnCount: number;
   variant: "initiatives" | "epics";
   isDragging?: boolean;
@@ -250,8 +252,8 @@ function YearRoadmapEmptyStripedLane({
         roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
       )}
     >
-      <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
       <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
+        <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
         <p className="sr-only">{srText}</p>
         <StripedGanttLaneScrollArea
           id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
@@ -496,19 +498,56 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-/** Today across 24 year-sprint columns (aligns with full-year Gantt lanes). */
-function todayLeftPercentInYearSprints(planYear: number): number | null {
+/** How far through `globalSprint`'s [start, end] window today's instant sits, in [0, 1]. */
+function dayFractionWithinSprint(planYear: number, globalSprint: number, now: Date): number {
+  const s = sprintStartDate(planYear, globalSprint).getTime();
+  const e = sprintEndDate(planYear, globalSprint).getTime();
+  if (e <= s) return 0;
+  const t = Math.max(s, Math.min(e, now.getTime()));
+  return (t - s) / (e - s);
+}
+
+/**
+ * CSS `left` for a marker inside a `flex` (or `grid`) row of `columnCount` equal columns separated by `gapPx` gaps
+ * (matches the Gantt layout's `gap-2` = 8px). `columnIndex` is 0-based; `withinColumnFraction` is in [0, 1].
+ *
+ * `outerPaddingLeftPx` / `outerPaddingRightPx` let the calc account for parent padding when the marker is rendered
+ * at a level above the grid (e.g. the all-quarters panel uses `pl-2 pr-1`). Set both to 0 when the marker is already
+ * inside an inset wrapper that matches the grid width.
+ *
+ * The form `(100% - totalInset) * factor / N + (idxGap + leftPad)` avoids nested parens for the multiplicand,
+ * which a few Safari versions parsed inconsistently.
+ */
+function gapAwareColumnLeftCss(
+  columnIndex: number,
+  withinColumnFraction: number,
+  columnCount: number,
+  gapPx = 8,
+  outerPaddingLeftPx = 0,
+  outerPaddingRightPx = 0,
+): string {
+  const factor = columnIndex + withinColumnFraction;
+  const totalGapPx = (columnCount - 1) * gapPx;
+  const totalInsetPx = totalGapPx + outerPaddingLeftPx + outerPaddingRightPx;
+  const idxGapPx = columnIndex * gapPx;
+  const leftOffsetPx = idxGapPx + outerPaddingLeftPx;
+  return `calc((100% - ${totalInsetPx}px) * ${factor} / ${columnCount} + ${leftOffsetPx}px)`;
+}
+
+/** Today across 24 year-sprint columns (aligns with full-year Gantt lanes). Day-within-sprint fraction so the marker moves daily. */
+function todayLeftCssInYearSprints(planYear: number): string | null {
   const t = new Date();
   if (t.getFullYear() !== planYear) return null;
   const m = t.getMonth() + 1;
   const d = t.getDate();
   const lane: 1 | 2 = d <= 15 ? 1 : 2;
   const g = globalSprintFromMonthLane(m, lane);
-  return ((g - 0.5) / 24) * 100;
+  const frac = dayFractionWithinSprint(planYear, g, t);
+  return gapAwareColumnLeftCss(g - 1, frac, 24);
 }
 
-/** Today within a quarter’s sprint columns (6 for a standard quarter). */
-function todayLeftPercentInQuarterSprints(planYear: number, quarterMonths: readonly number[]): number | null {
+/** Today within a quarter's sprint columns (6 for a standard quarter). */
+function todayLeftCssInQuarterSprints(planYear: number, quarterMonths: readonly number[]): string | null {
   const t = new Date();
   if (t.getFullYear() !== planYear) return null;
   const m = t.getMonth() + 1;
@@ -520,15 +559,22 @@ function todayLeftPercentInQuarterSprints(planYear: number, quarterMonths: reado
   const qHi = globalSprintFromMonthLane(quarterMonths[quarterMonths.length - 1], 2);
   if (g < qLo || g > qHi) return null;
   const n = qHi - qLo + 1;
-  return ((g - qLo + 0.5) / n) * 100;
+  const frac = dayFractionWithinSprint(planYear, g, t);
+  return gapAwareColumnLeftCss(g - qLo, frac, n);
 }
 
-/** Single-month epic lane (one column). */
-function todayLeftPercentInSingleMonth(planYear: number, month: number): number | null {
+/** Single-month epic lane: 2 sprint columns (lane 1 = days 1-15, lane 2 = days 16-end). */
+function todayLeftCssInSingleMonth(planYear: number, month: number): string | null {
   const t = new Date();
   if (t.getFullYear() !== planYear || t.getMonth() + 1 !== month) return null;
-  const dim = daysInMonth(planYear, month);
-  return ((t.getDate() - 0.5) / dim) * 100;
+  const d = t.getDate();
+  const lane: 1 | 2 = d <= 15 ? 1 : 2;
+  const columnIndex = lane - 1;
+  const start = lane === 1 ? 1 : 16;
+  const end = lane === 1 ? 15 : daysInMonth(planYear, month);
+  const span = end - start + 1;
+  const fraction = span > 0 ? (d - start + 0.5) / span : 0.5;
+  return gapAwareColumnLeftCss(columnIndex, fraction, 2);
 }
 
 /** Full-year / all-quarters roadmap: compact "S" + global sprint number. */
@@ -568,6 +614,7 @@ type TodayBadgePlacement = "above" | "inside";
 /** "Today" badge + vertical dashed marker, always aligned (same parent coordinate space). */
 function GanttTodayMarker({
   leftPercent,
+  leftCss,
   showBadge = true,
   badgePlacement = "above",
   prioritizeLabel = false,
@@ -576,7 +623,9 @@ function GanttTodayMarker({
   /** Bleed top/bottom past the track box so the dash meets the outer padded panel border (parent uses py-3 sm:py-4). */
   bleedToPaddedPanel,
 }: {
-  leftPercent: number | null;
+  leftPercent?: number | null;
+  /** Pre-built CSS `left` value (e.g. a calc that subtracts the column gap). Takes priority over leftPercent for the arrow/line. */
+  leftCss?: string | null;
   showBadge?: boolean;
   badgePlacement?: TodayBadgePlacement;
   prioritizeLabel?: boolean;
@@ -584,8 +633,11 @@ function GanttTodayMarker({
   showLine?: boolean;
   bleedToPaddedPanel?: boolean;
 }) {
-  if (leftPercent == null || Number.isNaN(leftPercent)) return null;
-  const x = Math.min(100, Math.max(0, leftPercent));
+  const hasNumeric = leftPercent != null && !Number.isNaN(leftPercent);
+  const cssLeft = leftCss ?? (hasNumeric ? `${Math.min(100, Math.max(0, leftPercent as number))}%` : null);
+  if (cssLeft == null) return null;
+  // x is only used for the SVG-rendered badge, which needs a number in viewBox units. Falls back to 0 when only leftCss is provided.
+  const x = hasNumeric ? Math.min(100, Math.max(0, leftPercent as number)) : 0;
   const prioritizedAbove = prioritizeLabel && badgePlacement === "above";
   if (prioritizedAbove) {
     return (
@@ -596,14 +648,14 @@ function GanttTodayMarker({
         {showBadge ? (
           <div
             className="absolute top-[2px] px-0 py-0 text-[10px] font-semibold leading-none text-emerald-800 [writing-mode:vertical-rl]"
-            style={{ left: `${x}%`, transform: "translateX(-100%) translateX(-6px)" }}
+            style={{ left: cssLeft, transform: "translateX(-100%) translateX(-6px)" }}
           >
             Today
           </div>
         ) : null}
         <div
           className="absolute top-0 bottom-0 w-4 -translate-x-1/2 overflow-visible"
-          style={{ left: `${x}%` }}
+          style={{ left: cssLeft }}
         >
           {showLine ? (
             <div className="absolute left-1/2 bottom-0 top-[14px] w-px -translate-x-1/2 bg-emerald-500/95" />
@@ -662,7 +714,7 @@ function GanttTodayMarker({
         <div
           className="absolute h-[10px] w-[12px] -translate-x-1/2 bg-emerald-500"
           style={{
-            left: `${x}%`,
+            left: cssLeft,
             top: `${arrowTopY}%`,
             clipPath: "polygon(0 0, 100% 0, 50% 100%)",
           }}
@@ -671,14 +723,14 @@ function GanttTodayMarker({
       {showLine ? (
         <div
           className="absolute w-px -translate-x-1/2 bg-emerald-500/85"
-          style={{ left: `${x}%`, top: `calc(${arrowTopY}% + 10px)`, bottom: "0px" }}
+          style={{ left: cssLeft, top: `calc(${arrowTopY}% + 10px)`, bottom: "0px" }}
         />
       ) : null}
       {showArrow ? (
         <div
           className="absolute h-[10px] w-[12px] -translate-x-1/2 bg-emerald-500"
           style={{
-            left: `${x}%`,
+            left: cssLeft,
             bottom: 0,
             clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)",
           }}
@@ -3501,14 +3553,14 @@ export function TimelineGrid({
     if (activeMonth != null) return null;
     if (focusedQuarter && quarterViewTab !== "gantt") return null;
     return focusedQuarter
-      ? todayLeftPercentInQuarterSprints(currentYear, focusedQuarter.months)
-      : todayLeftPercentInYearSprints(currentYear);
+      ? todayLeftCssInQuarterSprints(currentYear, focusedQuarter.months)
+      : todayLeftCssInYearSprints(currentYear);
   }, [activeMonth, currentYear, focusedQuarter, quarterViewTab]);
 
   const monthEpicGanttTodayLeft = useMemo(() => {
     if (activeMonth == null) return null;
     if (monthPlanTab !== "epic-gantt") return null;
-    return todayLeftPercentInSingleMonth(currentYear, activeMonth);
+    return todayLeftCssInSingleMonth(currentYear, activeMonth);
   }, [activeMonth, currentYear, monthPlanTab]);
 
   const prevActiveMonthRef = useRef<number | null>(null);
@@ -4032,20 +4084,19 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
-            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div
               className={cn(
                 "relative flex min-h-0 w-full flex-1 flex-col",
                 !yearRoadmapHScroll && "overflow-x-hidden",
               )}
             >
+              <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
-                  "relative z-10 min-h-0 flex-1 space-y-1.5 overflow-y-auto [&::-webkit-scrollbar]:hidden",
+                  "relative z-10 min-h-0 flex-1 space-y-1.5 overflow-y-auto",
                   !yearRoadmapHScroll && "overflow-x-hidden",
                 )}
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
               <StripedGanttHorizontalGuides />
@@ -4100,20 +4151,19 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
-            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div
               className={cn(
                 "relative flex min-h-0 w-full flex-1 flex-col",
                 !yearRoadmapHScroll && "overflow-x-hidden",
               )}
             >
+              <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
-                  "relative z-10 min-h-0 flex-1 space-y-0 overflow-y-auto [&::-webkit-scrollbar]:hidden",
+                  "relative z-10 min-h-0 flex-1 space-y-0 overflow-y-auto",
                   !yearRoadmapHScroll && "overflow-x-hidden",
                 )}
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
               <StripedGanttHorizontalGuides />
@@ -4896,7 +4946,15 @@ export function TimelineGrid({
                     <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
                   ) : null}
                 </>
-              ) : ((suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx)}
+              ) : (
+                <>
+                  {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
+                  {/* Sprint-capacity / sprint-status / sprint-retrospective views still get the sprint clock in the breadcrumb area, even when sprintKanbanSummaryStats is null (kanban-only). */}
+                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                    <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                  ) : null}
+                </>
+              )}
               {showGanttSearch ? ganttSearchJsx : null}
           </div>
         ) : focusedQuarter ? (
@@ -5482,7 +5540,7 @@ export function TimelineGrid({
                     {monthEpicGanttTodayLeft != null && (
                       <div className="pointer-events-none absolute inset-x-3 sm:inset-x-4 overflow-visible" style={{ top: "1px", height: "calc(100svh - 18rem)" }}>
                         <GanttTodayMarker
-                          leftPercent={monthEpicGanttTodayLeft}
+                          leftCss={monthEpicGanttTodayLeft}
                           showBadge={false}
                           badgePlacement="above"
                         />
@@ -5980,7 +6038,7 @@ export function TimelineGrid({
                   )}
                 >
                   <GanttTodayMarker
-                    leftPercent={roadmapLaneTodayLeft}
+                    leftCss={roadmapLaneTodayLeft}
                     showBadge={false}
                     badgePlacement="above"
                   />
