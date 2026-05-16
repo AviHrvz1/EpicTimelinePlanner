@@ -31,8 +31,16 @@ export function exportYearGanttToPrintableWindow(args: {
   teamIds: string[];
   teamLabels: string[];
   searchFilter: YearGanttPdfFilter;
+  /**
+   * When set (single-quarter Gantt view), scopes the PDF to that quarter:
+   *   - chart spans only those months
+   *   - title reads "Q2 Roadmap" instead of "Annual Roadmap"
+   *   - rows are filtered to those whose plan range intersects the quarter
+   */
+  focusedQuarter?: { label: string; months: number[] } | null;
 }): void {
   const { initiatives, currentYear, roadmapBarMode, showProgress, teamIds, teamLabels, searchFilter } = args;
+  const focusedQuarter = args.focusedQuarter ?? null;
 
   // Quarter color palette — soft tints for backgrounds, deeper accents for labels/borders.
   // Picked to coexist with each initiative bar's own color without competing for attention.
@@ -143,14 +151,24 @@ export function exportYearGanttToPrintableWindow(args: {
   // so the PDF lists rows in the exact same order the user arranged them on the timeline.
   rows.sort((a, b) => (a.sortKey - b.sortKey) || a.title.localeCompare(b.title));
 
+  // Quarter-scoped exports: keep only rows whose plan range intersects the focused quarter's months.
+  const visibleRows = focusedQuarter
+    ? rows.filter((r) => {
+        const qStart = focusedQuarter.months[0];
+        const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
+        return !(r.endMonth < qStart || r.startMonth > qEnd);
+      })
+    : rows;
+
   const html = renderHtml({
     currentYear,
-    rows,
+    rows: visibleRows,
     rowKind: useEpicRows ? "epic" : "initiative",
     showProgress,
     teamLabels,
     initiativeFilterLabel: isInitiativeSearchFilter ? searchFilter!.label : null,
     epicFilterLabel: isEpicSearchFilter ? searchFilter!.label : null,
+    focusedQuarter,
     QUARTER_STYLE,
   });
 
@@ -186,9 +204,26 @@ function renderHtml(args: {
   teamLabels: string[];
   initiativeFilterLabel: string | null;
   epicFilterLabel: string | null;
+  focusedQuarter: { label: string; months: number[] } | null;
   QUARTER_STYLE: Record<string, { tint: string; accent: string; ink: string }>;
 }): string {
-  const { currentYear, rows, rowKind, showProgress, teamLabels, initiativeFilterLabel, epicFilterLabel, QUARTER_STYLE } = args;
+  const { currentYear, rows, rowKind, showProgress, teamLabels, initiativeFilterLabel, epicFilterLabel, focusedQuarter, QUARTER_STYLE } = args;
+
+  // Choose the chart's time axis. Full-year view shows all 12 months and all 4 quarter pills;
+  // single-quarter view collapses to just that quarter's 3 months and a single pill.
+  const visibleMonths: number[] = focusedQuarter ? focusedQuarter.months : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const monthCount = visibleMonths.length;
+  const visibleQuarters = focusedQuarter
+    ? QUARTERS.filter((q) => q.label === focusedQuarter.label)
+    : [...QUARTERS];
+
+  // Map a 1-12 calendar month onto the visible axis (0-based fraction). Used for bar left/width.
+  const monthAxisIndex = (m: number): number => {
+    const idx = visibleMonths.indexOf(m);
+    if (idx >= 0) return idx;
+    if (m < visibleMonths[0]) return 0;
+    return visibleMonths.length - 1;
+  };
 
   // Chunk rows into per-print-page slices. Each `.gantt-page` is sized exactly like the printable A4 landscape
   // area (277mm × 190mm), so the on-screen preview shows the same paginated layout that will print.
@@ -208,9 +243,13 @@ function renderHtml(args: {
 
   // Renderer for a single row inside a page chunk. Progress overlay is only emitted when the Roadmap "Progress"
   // toggle is on AND the row has work to show.
+  // Bar positioning maps the row's months to the visible axis: full-year view uses all 12 months,
+  // single-quarter view collapses to that quarter's 3 months (so a bar spanning Apr-Jun fills the whole Q2 track).
   const renderRow = (r: (typeof rows)[number]): string => {
-    const left = ((r.startMonth - 1) / 12) * 100;
-    const width = ((r.endMonth - r.startMonth + 1) / 12) * 100;
+    const startIdx = monthAxisIndex(Math.max(r.startMonth, visibleMonths[0]));
+    const endIdx = monthAxisIndex(Math.min(r.endMonth, visibleMonths[visibleMonths.length - 1]));
+    const left = (startIdx / monthCount) * 100;
+    const width = ((endIdx - startIdx + 1) / monthCount) * 100;
     const safeTitle = escapeHtml(r.title);
     const progressFillWidth = (width * r.progressPercent) / 100;
     const showRowProgress = showProgress && r.progressPercent > 0;
@@ -229,7 +268,7 @@ function renderHtml(args: {
           <span class="row-meta">${metaText}</span>
         </div>
         <div class="row-track">
-          <div class="row-bar" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;background:${escapeAttr(r.color)}"></div>
+          <div class="row-bar${showRowProgress ? " row-bar-faded" : ""}" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;background:${escapeAttr(r.color)}"></div>
           ${showRowProgress
             ? `<div class="row-bar-progress" style="left:${left.toFixed(3)}%;width:${progressFillWidth.toFixed(3)}%;background:${escapeAttr(r.color)}"></div>`
             : ""
@@ -239,19 +278,28 @@ function renderHtml(args: {
     `;
   };
 
-  // Quarter band — 4 colored cards spanning the top, lining up with the month columns below.
-  const quarterBand = QUARTERS.map((q) => {
+  // Quarter band — colored cards spanning the top, lining up with the month columns below.
+  // In quarter-scoped mode just one pill is rendered (the focused quarter's).
+  // Months for each quarter are already shown in the strip directly underneath, so the pill stays clean
+  // and uses the ordinal name ("1st Quarter") instead of the compact "Q1" form. The ordinal suffix
+  // (st / nd / rd / th) is rendered as a small superscript to match the on-screen quarter chips.
+  const QUARTER_ORDINAL_HTML: Record<string, string> = {
+    Q1: '1<sup>st</sup> Quarter',
+    Q2: '2<sup>nd</sup> Quarter',
+    Q3: '3<sup>rd</sup> Quarter',
+    Q4: '4<sup>th</sup> Quarter',
+  };
+  const quarterBand = visibleQuarters.map((q) => {
     const style = QUARTER_STYLE[q.label];
     return `
       <div class="quarter" style="background:${style.tint};color:${style.ink};border-color:${style.accent}33">
-        <div class="quarter-label" style="color:${style.ink}">${q.label}</div>
-        <div class="quarter-months" style="color:${style.ink}99">${q.months.map((m) => MONTHS[m - 1]?.slice(0, 3) ?? "").join(" · ")}</div>
+        <div class="quarter-label" style="color:${style.ink}">${QUARTER_ORDINAL_HTML[q.label] ?? q.label}</div>
       </div>
     `;
   }).join("");
 
-  // Month strip — 12 columns. (No "current month" highlight since the on-screen today line is omitted from the PDF.)
-  const monthStrip = MONTHS.map((name) => `<div class="month-cell">${name.slice(0, 3)}</div>`).join("");
+  // Month strip — 12 columns in full-year view, 3 columns in single-quarter view.
+  const monthStrip = visibleMonths.map((m) => `<div class="month-cell">${MONTHS[m - 1]?.slice(0, 3) ?? ""}</div>`).join("");
 
   // Header chips show the active scope (team filter, initiative/epic filter) so the printed page is self-explanatory.
   const headerChips: string[] = [];
@@ -277,7 +325,7 @@ function renderHtml(args: {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>${currentYear} Annual Roadmap</title>
+  <title>${currentYear} ${focusedQuarter ? `${focusedQuarter.label} Roadmap` : "Annual Roadmap"}</title>
   <style>
     /* @page rules use landscape orientation so all 12 months fit comfortably across the page. */
     @page { size: A4 landscape; margin: 10mm; }
@@ -292,9 +340,11 @@ function renderHtml(args: {
       print-color-adjust: exact;
     }
     .page {
-      max-width: 1200px;
+      /* Constrain the page wrapper to the same width as a single .gantt-page (A4 landscape printable area)
+         so the toolbar (Close / Print buttons) never overflows past the right edge of the paper preview. */
+      max-width: 277mm;
       margin: 0 auto;
-      padding: 32px 24px;
+      padding: 32px 0;
     }
     .toolbar {
       display: flex;
@@ -378,7 +428,7 @@ function renderHtml(args: {
     }
     .quarter-band .quarters {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(${visibleQuarters.length}, 1fr);
       gap: 8px;
     }
     .quarter {
@@ -387,10 +437,19 @@ function renderHtml(args: {
       padding: 8px 10px;
       display: flex;
       flex-direction: column;
+      align-items: center;
       gap: 2px;
+      text-align: center;
     }
     .quarter-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
-    .quarter-months { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; }
+    /* Ordinal suffix (st/nd/rd/th) renders as small superscript to match the on-screen quarter chips. */
+    .quarter-label sup {
+      font-size: 0.6em;
+      font-weight: 600;
+      vertical-align: super;
+      line-height: 0;
+      margin-left: 1px;
+    }
 
     .month-band {
       display: grid;
@@ -400,7 +459,7 @@ function renderHtml(args: {
     }
     .month-band .months {
       display: grid;
-      grid-template-columns: repeat(12, 1fr);
+      grid-template-columns: repeat(${monthCount}, 1fr);
       gap: 0;
       border-bottom: 1px solid #e2e8f0;
       padding-bottom: 4px;
@@ -472,7 +531,7 @@ function renderHtml(args: {
       position: absolute;
       inset: 0;
       background-image: linear-gradient(to right, #e2e8f0 1px, transparent 1px);
-      background-size: calc(100% / 12) 100%;
+      background-size: calc(100% / ${monthCount}) 100%;
       pointer-events: none;
       opacity: 0.5;
     }
@@ -481,6 +540,12 @@ function renderHtml(args: {
       top: 3px;
       bottom: 3px;
       border-radius: 6px;
+      /* Full-color planned range — used when no progress overlay sits on top. */
+      opacity: 0.95;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+    }
+    /* Faded variant — applied only when the progress overlay is drawn over it, so the completed portion stands out. */
+    .row-bar-faded {
       opacity: 0.32;
       box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
     }
@@ -593,7 +658,7 @@ function renderHtml(args: {
     <section class="gantt-page${isLast ? " gantt-page-last" : ""}">
       ${isFirst
         ? `
-        <h1 class="title">${currentYear} Annual Roadmap <span class="title-mode">· ${rowKind === "epic" ? "Epics" : "Initiatives"}</span></h1>
+        <h1 class="title">${currentYear} ${focusedQuarter ? `${focusedQuarter.label} Roadmap` : "Annual Roadmap"} <span class="title-mode">· ${rowKind === "epic" ? "Epics" : "Initiatives"}</span></h1>
         <p class="subtitle">${subtitleParts.map(escapeHtml).join(" · ")}</p>
         ${headerChips.length > 0 ? `<div class="chips">${headerChips.join("")}</div>` : ""}
       `
@@ -616,7 +681,7 @@ function renderHtml(args: {
         </div>
 
         <div class="legend">
-          <span><span class="legend-swatch" style="background:#6366f1;opacity:0.32"></span>Planned range</span>
+          <span><span class="legend-swatch" style="background:#6366f1;opacity:${showProgress ? "0.32" : "0.95"}"></span>Planned range</span>
           ${showProgress ? '<span><span class="legend-swatch" style="background:#6366f1"></span>Completed (done + approved stories)</span>' : ""}
         </div>
       </div>

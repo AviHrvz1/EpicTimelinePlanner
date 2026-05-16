@@ -254,8 +254,8 @@ function YearRoadmapEmptyStripedLane({
         roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
       )}
     >
+      <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
       <div className="relative flex min-h-0 w-full basis-0 flex-1 flex-col overflow-hidden">
-        <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
         <p className="sr-only">{srText}</p>
         <StripedGanttLaneScrollArea
           id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
@@ -500,12 +500,19 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-/** How far through `globalSprint`'s [start, end] window today's instant sits, in [0, 1]. */
+/**
+ * How far through `globalSprint`'s [start, end] window today's instant sits, in [0, 1].
+ *
+ * Quantized to the start of the local calendar day so SSR + the subsequent client hydration produce the same
+ * value within a 24h window. Sub-second variations between `new Date()` calls would otherwise emit slightly
+ * different CSS `calc(...)` strings and trip React's hydration mismatch detector.
+ */
 function dayFractionWithinSprint(planYear: number, globalSprint: number, now: Date): number {
   const s = sprintStartDate(planYear, globalSprint).getTime();
   const e = sprintEndDate(planYear, globalSprint).getTime();
   if (e <= s) return 0;
-  const t = Math.max(s, Math.min(e, now.getTime()));
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const t = Math.max(s, Math.min(e, dayStart));
   return (t - s) / (e - s);
 }
 
@@ -536,7 +543,12 @@ function gapAwareColumnLeftCss(
   return `calc((100% - ${totalInsetPx}px) * ${factor} / ${columnCount} + ${leftOffsetPx}px)`;
 }
 
-/** Today across 24 year-sprint columns (aligns with full-year Gantt lanes). Day-within-sprint fraction so the marker moves daily. */
+/** Today across 24 year-sprint columns (aligns with full-year Gantt lanes). Day-within-sprint fraction so the marker moves daily.
+ *
+ * The marker is rendered at the outer lanes panel level (pl-2 pr-1 padding) so the down-arrow triangle can sit
+ * in the panel's `pt-5` reservation strip above the grid. The 8px / 4px padding values are subtracted from the
+ * calc's available width so the bar still aligns with the grid columns inside.
+ */
 function todayLeftCssInYearSprints(planYear: number): string | null {
   const t = new Date();
   if (t.getFullYear() !== planYear) return null;
@@ -545,7 +557,7 @@ function todayLeftCssInYearSprints(planYear: number): string | null {
   const lane: 1 | 2 = d <= 15 ? 1 : 2;
   const g = globalSprintFromMonthLane(m, lane);
   const frac = dayFractionWithinSprint(planYear, g, t);
-  return gapAwareColumnLeftCss(g - 1, frac, 24);
+  return gapAwareColumnLeftCss(g - 1, frac, 24, 8, 8, 4);
 }
 
 /** Today within a quarter's sprint columns (6 for a standard quarter). */
@@ -2086,6 +2098,45 @@ export function TimelineGrid({
       setQuarter4PanelMetrics(null);
     }
   }, [measureQuarter4]);
+
+  // Last-month panel in the single-quarter Gantt — same idea as Q4, but for the quarter view: search aligns with
+  // the rightmost month panel (e.g. June for Q2, December for Q4) and the export icon sits inside that panel's tail.
+  const [lastMonthPanelMetrics, setLastMonthPanelMetrics] = useState<{ width: number; left: number } | null>(null);
+  const lastMonthNodeRef = useRef<HTMLElement | null>(null);
+  const measureLastMonthPanel = useCallback(() => {
+    const node = lastMonthNodeRef.current;
+    const searchEl = ganttSearchRef.current;
+    if (!node || !searchEl) return;
+    const rect = node.getBoundingClientRect();
+    const parent = searchEl.parentElement;
+    if (!parent) return;
+    const parentRect = parent.getBoundingClientRect();
+    const width = Math.round(rect.width);
+    const left = Math.max(0, Math.round(rect.left - parentRect.left));
+    if (width > 0) setLastMonthPanelMetrics({ width, left });
+  }, []);
+  const lastMonthResizeObserverRef = useRef<ResizeObserver | null>(null);
+  if (typeof window !== "undefined" && !lastMonthResizeObserverRef.current) {
+    lastMonthResizeObserverRef.current = new ResizeObserver(() => { measureLastMonthPanel(); });
+  }
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => measureLastMonthPanel();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [measureLastMonthPanel]);
+  const setLastMonthPanelRef = useCallback((node: HTMLElement | null) => {
+    lastMonthNodeRef.current = node;
+    const ro = lastMonthResizeObserverRef.current;
+    if (!ro) return;
+    ro.disconnect();
+    if (node) {
+      ro.observe(node);
+      measureLastMonthPanel();
+    } else {
+      setLastMonthPanelMetrics(null);
+    }
+  }, [measureLastMonthPanel]);
   const [isRailExpanded, setIsRailExpanded] = useState(false);
   const barElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Prevents onSprintModeChange ↔ activeSprintExternal ping-pong (max update depth). */
@@ -4086,13 +4137,13 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
+            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div
               className={cn(
                 "relative flex min-h-0 w-full flex-1 flex-col",
                 !yearRoadmapHScroll && "overflow-x-hidden",
               )}
             >
-              <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
@@ -4153,13 +4204,13 @@ export function TimelineGrid({
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
+            <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div
               className={cn(
                 "relative flex min-h-0 w-full flex-1 flex-col",
                 !yearRoadmapHScroll && "overflow-x-hidden",
               )}
             >
-              <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
@@ -4476,20 +4527,22 @@ export function TimelineGrid({
     </>
   ) : null;
 
-  // PDF export icon (full-year Gantt only) reserves ~32px + 4px gap at the right side of the Q4-aligned bar.
+  // PDF export icon reserves ~32px + 4px gap at the right side of the panel-aligned search bar.
   const PDF_EXPORT_RESERVATION_PX = 36;
-  const showGanttPdfExport = isFullYearGanttLayout;
-  const searchInputWidthPx = quarter4PanelMetrics
-    ? Math.max(80, quarter4PanelMetrics.width - (showGanttPdfExport ? PDF_EXPORT_RESERVATION_PX : 0))
+  const showGanttPdfExport = isFullYearGanttLayout || isQuarterGanttLayout;
+  // Search/export anchor: Q4 panel in the all-quarters view, last-month panel in the single-quarter view.
+  const searchAlignMetrics = isQuarterGanttLayout ? lastMonthPanelMetrics : quarter4PanelMetrics;
+  const searchInputWidthPx = searchAlignMetrics
+    ? Math.max(80, searchAlignMetrics.width - (showGanttPdfExport ? PDF_EXPORT_RESERVATION_PX : 0))
     : null;
   const ganttSearchJsx = (
     <div
       ref={ganttSearchRef}
       className={cn(
         "relative mr-1 flex shrink-0 items-center gap-1 transition-[margin] duration-200",
-        !quarter4PanelMetrics && "ml-2",
+        !searchAlignMetrics && "ml-2",
       )}
-      style={quarter4PanelMetrics ? { marginLeft: `${quarter4PanelMetrics.left}px` } : undefined}
+      style={searchAlignMetrics ? { marginLeft: `${searchAlignMetrics.left}px` } : undefined}
       onBlur={(e) => { if (!ganttSearchRef.current?.contains(e.relatedTarget as Node)) setGanttSearchOpen(false); }}
     >
       <div className="relative flex items-center">
@@ -4504,7 +4557,7 @@ export function TimelineGrid({
           style={searchInputWidthPx != null ? { width: `${searchInputWidthPx}px` } : undefined}
           className={cn(
             "h-8 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200",
-            !quarter4PanelMetrics && "w-[30rem] focus:w-[36rem]",
+            !searchAlignMetrics && "w-[30rem] focus:w-[36rem]",
           )}
         />
         {(ganttSearchQuery || ganttSearchFilter) ? (
@@ -4536,6 +4589,10 @@ export function TimelineGrid({
               teamLabels: ganttTeamIds.map((id) => teamLabelMap.get(id) ?? id),
               // If the user has picked an initiative or epic via the Gantt search, scope the PDF to that pick.
               searchFilter: ganttSearchFilter,
+              // When viewing a single quarter, scope the PDF to that quarter's 3 months (title, columns, eligible rows).
+              focusedQuarter: isQuarterGanttLayout && focusedQuarter
+                ? { label: focusedQuarter.label, months: [...focusedQuarter.months] }
+                : null,
             });
           }}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white/80 text-slate-500 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-200"
@@ -4612,7 +4669,7 @@ export function TimelineGrid({
                       runSurfaceTransition();
                       item.onClick?.();
                     }}
-                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-950 underline-offset-4 transition hover:text-slate-900 hover:underline"
+                    className="cursor-pointer whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-950 underline-offset-4 transition-colors hover:text-indigo-600 hover:underline"
                   >
                     {item.label}
                   </button>
@@ -4620,7 +4677,7 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em]",
+                      "whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em] underline-offset-4 transition-colors hover:text-indigo-600 hover:underline",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
                         : "text-slate-800",
@@ -4637,8 +4694,8 @@ export function TimelineGrid({
             {showSprintTeamPicker ? (
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
-                <label className="inline-flex items-center gap-2 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[16px] font-semibold tracking-[0.01em] text-slate-500">Team</span>
+                <label className="group/teamlabel inline-flex items-center gap-2 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
+                  <span className="text-[16px] font-semibold tracking-[0.01em] text-slate-500 transition-colors group-hover/teamlabel:text-indigo-600">Team</span>
                   <div className="group/trigger relative z-40" ref={sprintTeamMenuRef}>
                     <button
                       type="button"
@@ -5999,9 +6056,12 @@ export function TimelineGrid({
                     )}
                   >
                     <div className="relative grid min-w-0 gap-2 p-0.5" style={ganttLaneGridStyle}>
-                    {visibleMonths.map((month) => (
+                    {visibleMonths.map((month, monthIdx) => (
                       <div
                         key={month}
+                        // Ref the rightmost month panel so the Gantt search bar + export icon align with it,
+                        // mirroring the way Q4 anchors them in the all-quarters view.
+                        ref={monthIdx === visibleMonths.length - 1 ? setLastMonthPanelRef : undefined}
                         style={{ gridColumn: "span 2" }}
                         className="space-y-1.5 rounded-2xl border border-slate-200/50 bg-gradient-to-b from-white to-slate-50/40 px-2 pt-1.5 pb-0 shadow-sm ring-1 ring-black/[0.03]"
                       >
