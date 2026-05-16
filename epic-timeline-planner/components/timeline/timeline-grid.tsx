@@ -4522,7 +4522,22 @@ export function TimelineGrid({
       {showGanttPdfExport ? (
         <button
           type="button"
-          onClick={() => exportYearGanttToPrintableWindow({ initiatives, currentYear })}
+          onClick={() => {
+            const teamLabelMap = new Map(sprintTeamOptions.map((o) => [o.value, o.label]));
+            exportYearGanttToPrintableWindow({
+              initiatives,
+              currentYear,
+              // Match the on-screen Roadmap chip choice (Initiatives vs Epics bars) so the PDF mirrors what the user sees.
+              roadmapBarMode,
+              // Mirror the on-screen Roadmap progress chip — when off, the PDF stays clean (no progress overlay, no % meta).
+              showProgress: showRoadmapProgress,
+              // Carry the Gantt's team filter through so the PDF scopes to the same epics and labels them in the header.
+              teamIds: ganttTeamIds,
+              teamLabels: ganttTeamIds.map((id) => teamLabelMap.get(id) ?? id),
+              // If the user has picked an initiative or epic via the Gantt search, scope the PDF to that pick.
+              searchFilter: ganttSearchFilter,
+            });
+          }}
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white/80 text-slate-500 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-200"
           aria-label="Export Gantt to PDF"
           title="Export Gantt to PDF (opens a presentation-ready view)"

@@ -1,19 +1,38 @@
 import type { InitiativeItem } from "@/lib/types";
 import { MONTHS, QUARTERS } from "@/lib/timeline";
 
+export type YearGanttPdfFilter =
+  | { type: "initiative"; id: string; label: string }
+  | { type: "epic"; id: string; label: string }
+  | null;
+
 /**
- * Opens a new window with a standalone, presentation-quality rendering of the all-quarters Gantt
- * and triggers `window.print()` so the user can save it as PDF.
+ * Opens a new window with a standalone, presentation-quality rendering of the all-quarters Gantt.
+ *
+ * The window does NOT auto-print. The user sees the rendered preview first and triggers the print
+ * dialog explicitly via the "Print / Save as PDF" button in the toolbar (or browser shortcut).
  *
  * The rendered chart is rebuilt from data — it is NOT a screenshot of the on-screen Gantt. That keeps
  * the print output clean (no zoom/scroll artifacts, no surrounding UI chrome) and gives us full control
  * of typography, colors, and spacing for a presentation-ready deliverable.
+ *
+ * Mirrors the on-screen view's filters:
+ *   - `roadmapBarMode` — selects per-initiative or per-epic rows, matching the on-screen Initiatives/Epics chip.
+ *   - `showProgress` — when true (Roadmap "Progress" chip on), the completed-stories overlay is drawn.
+ *   - `teamLabels` — when non-empty, restricts rows to epics whose team matches and adds a team chip to the header.
+ *   - `searchFilter` — when present, scopes the export to the picked initiative or epic (matches the chart's search filter).
  */
 export function exportYearGanttToPrintableWindow(args: {
   initiatives: InitiativeItem[];
   currentYear: number;
+  /** Mirror the on-screen Roadmap chip: "initiatives" → one row per initiative; "epics" → one row per planned epic. */
+  roadmapBarMode: "initiatives" | "epics";
+  showProgress: boolean;
+  teamIds: string[];
+  teamLabels: string[];
+  searchFilter: YearGanttPdfFilter;
 }): void {
-  const { initiatives, currentYear } = args;
+  const { initiatives, currentYear, roadmapBarMode, showProgress, teamIds, teamLabels, searchFilter } = args;
 
   // Quarter color palette — soft tints for backgrounds, deeper accents for labels/borders.
   // Picked to coexist with each initiative bar's own color without competing for attention.
@@ -24,63 +43,115 @@ export function exportYearGanttToPrintableWindow(args: {
     Q4: { tint: "#d1fae5", accent: "#10b981", ink: "#064e3b" },
   };
 
-  // Build the row model: one row per scheduled initiative, with its earliest start and latest end.
-  // Falls back to the initiative's own startMonth/endMonth when the child epics have no plan data yet.
+  const hasTeamFilter = teamIds.length > 0;
+  const isEpicSearchFilter = searchFilter?.type === "epic";
+  const isInitiativeSearchFilter = searchFilter?.type === "initiative";
+
+  // Build the row model. Matches the on-screen all-quarters Gantt's eligibility rule:
+  // include initiatives/epics that have at least one *fully-planned* epic (both planStartMonth and planEndMonth set).
+  //
+  // `meta` is the small right-aligned tag in the row label column. In initiative mode it counts child epics;
+  // in epic mode it shows the parent initiative title so the reader knows which initiative the epic belongs to.
   type Row = {
     title: string;
     color: string;
     startMonth: number;
     endMonth: number;
-    epicCount: number;
+    meta: string;
     progressPercent: number;
+    /** Sort key — mirrors the on-screen Gantt's lane order so the PDF lists rows in the same order. */
+    sortKey: number;
   };
   const rows: Row[] = [];
-  for (const init of initiatives) {
-    if (init.status !== "scheduled") continue;
 
-    const epics = init.epics ?? [];
-    const epicStarts = epics
-      .map((e) => e.planStartMonth)
-      .filter((m): m is number => typeof m === "number" && m >= 1 && m <= 12);
-    const epicEnds = epics
-      .map((e) => e.planEndMonth ?? e.planStartMonth)
-      .filter((m): m is number => typeof m === "number" && m >= 1 && m <= 12);
+  // Build epic rows (used for the epics roadmapBarMode AND for an epic-scoped search filter regardless of mode).
+  const buildEpicRows = (): Row[] => {
+    const out: Row[] = [];
+    for (const init of initiatives) {
+      for (const epic of init.epics ?? []) {
+        if (isEpicSearchFilter && epic.id !== searchFilter!.id) continue;
+        if (isInitiativeSearchFilter && init.id !== searchFilter!.id) continue;
+        if (hasTeamFilter && (!epic.team || !teamIds.includes(epic.team))) continue;
+        if (
+          typeof epic.planStartMonth !== "number" ||
+          typeof epic.planEndMonth !== "number" ||
+          epic.planEndMonth < epic.planStartMonth
+        ) continue;
+        const stories = epic.userStories ?? [];
+        const done = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+        out.push({
+          title: epic.title,
+          color: epic.color || init.color || "#6366f1",
+          startMonth: clampMonth(epic.planStartMonth),
+          endMonth: clampMonth(epic.planEndMonth),
+          // Epic rows intentionally don't echo the parent initiative title — keeps the print clean.
+          meta: "",
+          progressPercent: stories.length > 0 ? Math.round((done / stories.length) * 100) : 0,
+          sortKey: typeof epic.timelineRow === "number" ? epic.timelineRow : Number.MAX_SAFE_INTEGER,
+        });
+      }
+    }
+    return out;
+  };
 
-    const fallbackStart = init.startMonth ?? null;
-    const fallbackEnd = init.endMonth ?? fallbackStart;
+  // Build initiative rows (used for the initiatives roadmapBarMode).
+  const buildInitiativeRows = (): Row[] => {
+    const out: Row[] = [];
+    for (const init of initiatives) {
+      if (isInitiativeSearchFilter && init.id !== searchFilter!.id) continue;
 
-    const startMonth = epicStarts.length > 0 ? Math.min(...epicStarts) : fallbackStart;
-    const endMonth = epicEnds.length > 0 ? Math.max(...epicEnds) : fallbackEnd;
-    if (startMonth == null || endMonth == null || endMonth < startMonth) continue;
+      const scopedEpics = hasTeamFilter
+        ? (init.epics ?? []).filter((e) => e.team && teamIds.includes(e.team))
+        : (init.epics ?? []);
+      if (hasTeamFilter && scopedEpics.length === 0) continue;
 
-    const stories = epics.flatMap((e) => e.userStories ?? []);
-    const completed = stories.filter((s) => s.status === "done" || s.status === "approved").length;
-    const progressPercent = stories.length > 0 ? Math.round((completed / stories.length) * 100) : 0;
+      const plannedEpics = scopedEpics.filter(
+        (e) =>
+          typeof e.planStartMonth === "number" && e.planStartMonth >= 1 && e.planStartMonth <= 12 &&
+          typeof e.planEndMonth === "number" && e.planEndMonth >= 1 && e.planEndMonth <= 12,
+      );
+      if (plannedEpics.length === 0) continue;
 
-    rows.push({
-      title: init.title,
-      color: init.color || "#6366f1",
-      startMonth: Math.max(1, Math.min(12, startMonth)),
-      endMonth: Math.max(1, Math.min(12, endMonth)),
-      epicCount: epics.length,
-      progressPercent,
-    });
-  }
-  // Sort by start month then title so the chart reads chronologically.
-  rows.sort((a, b) => (a.startMonth - b.startMonth) || a.title.localeCompare(b.title));
+      const startMonth = Math.min(...plannedEpics.map((e) => e.planStartMonth as number));
+      const endMonth = Math.max(...plannedEpics.map((e) => e.planEndMonth as number));
+      if (endMonth < startMonth) continue;
 
-  // Today marker — only meaningful when the currently-viewed planYear is the calendar year.
-  const today = new Date();
-  const isCurrentYear = today.getFullYear() === currentYear;
-  let todayLeftPct: number | null = null;
-  if (isCurrentYear) {
-    const yearStart = new Date(currentYear, 0, 1).getTime();
-    const yearEnd = new Date(currentYear + 1, 0, 1).getTime();
-    todayLeftPct = ((today.getTime() - yearStart) / (yearEnd - yearStart)) * 100;
-    todayLeftPct = Math.max(0, Math.min(100, todayLeftPct));
-  }
+      const stories = plannedEpics.flatMap((e) => e.userStories ?? []);
+      const completed = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+      const progressPercent = stories.length > 0 ? Math.round((completed / stories.length) * 100) : 0;
 
-  const html = renderHtml({ currentYear, rows, todayLeftPct, QUARTER_STYLE });
+      out.push({
+        title: init.title,
+        color: init.color || "#6366f1",
+        startMonth: clampMonth(startMonth),
+        endMonth: clampMonth(endMonth),
+        meta: `${plannedEpics.length} ${plannedEpics.length === 1 ? "epic" : "epics"}`,
+        progressPercent,
+        sortKey: typeof init.timelineRow === "number" ? init.timelineRow : Number.MAX_SAFE_INTEGER,
+      });
+    }
+    return out;
+  };
+
+  // Epic-scoped search always forces epic-row output (matches the on-screen filter behavior).
+  // Otherwise honor the user's Roadmap chip choice.
+  const useEpicRows = isEpicSearchFilter || roadmapBarMode === "epics";
+  rows.push(...(useEpicRows ? buildEpicRows() : buildInitiativeRows()));
+
+  // Sort by the same key the on-screen Gantt uses (initiative/epic `timelineRow`), falling back to title
+  // so the PDF lists rows in the exact same order the user arranged them on the timeline.
+  rows.sort((a, b) => (a.sortKey - b.sortKey) || a.title.localeCompare(b.title));
+
+  const html = renderHtml({
+    currentYear,
+    rows,
+    rowKind: useEpicRows ? "epic" : "initiative",
+    showProgress,
+    teamLabels,
+    initiativeFilterLabel: isInitiativeSearchFilter ? searchFilter!.label : null,
+    epicFilterLabel: isEpicSearchFilter ? searchFilter!.label : null,
+    QUARTER_STYLE,
+  });
 
   // Open the rendered page in a new window. Auto-print is triggered inside the page once content settles.
   const win = window.open("", "_blank");
@@ -94,6 +165,10 @@ export function exportYearGanttToPrintableWindow(args: {
   win.document.close();
 }
 
+function clampMonth(m: number): number {
+  return Math.max(1, Math.min(12, m));
+}
+
 function renderHtml(args: {
   currentYear: number;
   rows: Array<{
@@ -101,36 +176,66 @@ function renderHtml(args: {
     color: string;
     startMonth: number;
     endMonth: number;
-    epicCount: number;
+    meta: string;
     progressPercent: number;
+    sortKey: number;
   }>;
-  todayLeftPct: number | null;
+  rowKind: "initiative" | "epic";
+  showProgress: boolean;
+  teamLabels: string[];
+  initiativeFilterLabel: string | null;
+  epicFilterLabel: string | null;
   QUARTER_STYLE: Record<string, { tint: string; accent: string; ink: string }>;
 }): string {
-  const { currentYear, rows, todayLeftPct, QUARTER_STYLE } = args;
+  const { currentYear, rows, rowKind, showProgress, teamLabels, initiativeFilterLabel, epicFilterLabel, QUARTER_STYLE } = args;
 
-  // Each row's bar: left/width are percentages within the 12-month track.
-  const rowsMarkup = rows
-    .map((r) => {
-      const left = ((r.startMonth - 1) / 12) * 100;
-      const width = ((r.endMonth - r.startMonth + 1) / 12) * 100;
-      const progressFillWidth = (width * r.progressPercent) / 100;
-      const safeTitle = escapeHtml(r.title);
-      return `
-        <div class="row">
-          <div class="row-label">
-            <span class="row-dot" style="background:${escapeAttr(r.color)}"></span>
-            <span class="row-title">${safeTitle}</span>
-            <span class="row-meta">${r.epicCount} ${r.epicCount === 1 ? "epic" : "epics"} · ${r.progressPercent}%</span>
-          </div>
-          <div class="row-track">
-            <div class="row-bar" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;background:${escapeAttr(r.color)}"></div>
-            <div class="row-bar-progress" style="left:${left.toFixed(3)}%;width:${progressFillWidth.toFixed(3)}%;background:${escapeAttr(r.color)}"></div>
-          </div>
+  // Chunk rows into per-print-page slices. 18 rows fits A4 landscape with the header strip + legend repeated on
+  // every page; tweak if the row layout changes. Each page gets the same quarter band + month strip so a reader
+  // can interpret any single page without flipping back.
+  const ROWS_PER_PAGE = 18;
+  const pages: Array<typeof rows> = rows.length === 0
+    ? [[]]
+    : (() => {
+        const chunks: Array<typeof rows> = [];
+        for (let i = 0; i < rows.length; i += ROWS_PER_PAGE) {
+          chunks.push(rows.slice(i, i + ROWS_PER_PAGE));
+        }
+        return chunks;
+      })();
+  const totalPages = pages.length;
+
+  // Renderer for a single row inside a page chunk. Progress overlay is only emitted when the Roadmap "Progress"
+  // toggle is on AND the row has work to show.
+  const renderRow = (r: (typeof rows)[number]): string => {
+    const left = ((r.startMonth - 1) / 12) * 100;
+    const width = ((r.endMonth - r.startMonth + 1) / 12) * 100;
+    const safeTitle = escapeHtml(r.title);
+    const progressFillWidth = (width * r.progressPercent) / 100;
+    const showRowProgress = showProgress && r.progressPercent > 0;
+    // `meta` carries the row context ("3 epics" in initiative mode). Epic-mode rows leave it blank
+    // so the printed view shows only the epic title and no parent initiative echo.
+    // When the Roadmap "Progress" chip is on we still surface the %, with or without leading meta text.
+    const safeMeta = escapeHtml(r.meta);
+    const metaText = showProgress
+      ? safeMeta ? `${safeMeta} · ${r.progressPercent}%` : `${r.progressPercent}%`
+      : safeMeta;
+    return `
+      <div class="row">
+        <div class="row-label">
+          <span class="row-dot" style="background:${escapeAttr(r.color)}"></span>
+          <span class="row-title">${safeTitle}</span>
+          <span class="row-meta">${metaText}</span>
         </div>
-      `;
-    })
-    .join("");
+        <div class="row-track">
+          <div class="row-bar" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;background:${escapeAttr(r.color)}"></div>
+          ${showRowProgress
+            ? `<div class="row-bar-progress" style="left:${left.toFixed(3)}%;width:${progressFillWidth.toFixed(3)}%;background:${escapeAttr(r.color)}"></div>`
+            : ""
+          }
+        </div>
+      </div>
+    `;
+  };
 
   // Quarter band — 4 colored cards spanning the top, lining up with the month columns below.
   const quarterBand = QUARTERS.map((q) => {
@@ -143,19 +248,28 @@ function renderHtml(args: {
     `;
   }).join("");
 
-  // Month strip — 12 columns, lighter accent for the current month.
-  const monthStrip = MONTHS.map((name, idx) => {
-    const isCurrent = todayLeftPct != null && new Date().getMonth() === idx;
-    return `<div class="month-cell${isCurrent ? " month-cell-current" : ""}">${name.slice(0, 3)}</div>`;
-  }).join("");
+  // Month strip — 12 columns. (No "current month" highlight since the on-screen today line is omitted from the PDF.)
+  const monthStrip = MONTHS.map((name) => `<div class="month-cell">${name.slice(0, 3)}</div>`).join("");
 
-  // Today line — vertical green dashed line + small "Today" label at the top.
-  const todayMarker = todayLeftPct != null
-    ? `
-      <div class="today-line" style="left:${todayLeftPct.toFixed(3)}%"></div>
-      <div class="today-label" style="left:${todayLeftPct.toFixed(3)}%">Today</div>
-    `
-    : "";
+  // Header chips show the active scope (team filter, initiative/epic filter) so the printed page is self-explanatory.
+  const headerChips: string[] = [];
+  if (teamLabels.length > 0) {
+    headerChips.push(
+      `<span class="chip chip-team">Team: ${teamLabels.map(escapeHtml).join(", ")}</span>`,
+    );
+  }
+  if (initiativeFilterLabel) {
+    headerChips.push(`<span class="chip chip-initiative">Initiative: ${escapeHtml(initiativeFilterLabel)}</span>`);
+  }
+  if (epicFilterLabel) {
+    headerChips.push(`<span class="chip chip-epic">Epic: ${escapeHtml(epicFilterLabel)}</span>`);
+  }
+
+  const noun = rowKind === "epic" ? "epic" : "initiative";
+  const subtitleParts: string[] = [
+    `${rows.length} ${rows.length === 1 ? noun : `${noun}s`} shown`,
+  ];
+  if (teamLabels.length > 0) subtitleParts.push(`team: ${teamLabels.join(", ")}`);
 
   return `<!doctype html>
 <html lang="en">
@@ -214,11 +328,37 @@ function renderHtml(args: {
       letter-spacing: -0.01em;
       margin: 0 0 4px 0;
     }
+    .title-mode {
+      font-size: 18px;
+      font-weight: 600;
+      color: #64748b;
+      letter-spacing: -0.005em;
+      margin-left: 2px;
+    }
     .subtitle {
       font-size: 13px;
       color: #475569;
-      margin: 0 0 24px 0;
+      margin: 0 0 12px 0;
     }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 18px 0;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid;
+    }
+    .chip-team { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+    .chip-initiative { background: #f5f3ff; color: #5b21b6; border-color: #ddd6fe; }
+    .chip-epic { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
 
     .chart {
       background: white;
@@ -234,7 +374,6 @@ function renderHtml(args: {
       align-items: stretch;
       margin-bottom: 8px;
     }
-    .quarter-band .label-spacer { /* keeps quarters aligned with the row track below */ }
     .quarter-band .quarters {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -275,7 +414,6 @@ function renderHtml(args: {
       border-left: 1px solid #f1f5f9;
     }
     .month-cell:first-child { border-left: 0; }
-    .month-cell-current { color: #047857; font-weight: 700; }
 
     .rows {
       position: relative;
@@ -327,7 +465,6 @@ function renderHtml(args: {
       overflow: visible;
     }
     .row-track::before {
-      /* Sub-grid for month boundaries inside the track. */
       content: "";
       position: absolute;
       inset: 0;
@@ -341,7 +478,7 @@ function renderHtml(args: {
       top: 3px;
       bottom: 3px;
       border-radius: 6px;
-      opacity: 0.28;
+      opacity: 0.32;
       box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
     }
     .row-bar-progress {
@@ -350,28 +487,6 @@ function renderHtml(args: {
       bottom: 3px;
       border-radius: 6px;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 0 1px rgba(15, 23, 42, 0.08);
-    }
-
-    .today-line {
-      position: absolute;
-      top: -6px;
-      bottom: -2px;
-      width: 1px;
-      background: #10b981;
-      pointer-events: none;
-    }
-    .today-label {
-      position: absolute;
-      top: -22px;
-      transform: translateX(-50%);
-      background: #10b981;
-      color: white;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      padding: 2px 6px;
-      border-radius: 4px;
-      pointer-events: none;
     }
 
     .empty {
@@ -397,6 +512,38 @@ function renderHtml(args: {
       margin-right: 4px;
       vertical-align: middle;
     }
+
+    /* Each chunked page renders as its own <section.gantt-page>. On screen they stack with a gap;
+       in print, each one starts a fresh page and the last one gets no trailing break. */
+    .gantt-page {
+      background: transparent;
+    }
+    .gantt-page + .gantt-page {
+      margin-top: 24px;
+    }
+    .page-footer {
+      margin-top: 8px;
+      text-align: right;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #94a3b8;
+    }
+    @media print {
+      .gantt-page {
+        page-break-after: always;
+        break-after: page;
+      }
+      .gantt-page-last,
+      .gantt-page:last-of-type {
+        page-break-after: auto;
+        break-after: auto;
+      }
+      .gantt-page + .gantt-page { margin-top: 0; }
+      /* Keep the in-page chart from being split mid-content; chunk size already keeps each page small enough. */
+      .chart { page-break-inside: avoid; break-inside: avoid; }
+      .row { page-break-inside: avoid; break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
@@ -406,45 +553,51 @@ function renderHtml(args: {
       <button type="button" class="primary" onclick="window.print()">Print / Save as PDF</button>
     </div>
 
-    <h1 class="title">${currentYear} Annual Roadmap</h1>
-    <p class="subtitle">All scheduled initiatives across the year — Q1 to Q4. ${rows.length} ${rows.length === 1 ? "initiative" : "initiatives"} shown.</p>
+    ${pages
+      .map((chunk, pageIdx) => {
+        const isFirst = pageIdx === 0;
+        const isLast = pageIdx === totalPages - 1;
+        const pageNumber = pageIdx + 1;
+        return `
+    <section class="gantt-page${isLast ? " gantt-page-last" : ""}">
+      ${isFirst
+        ? `
+        <h1 class="title">${currentYear} Annual Roadmap <span class="title-mode">· ${rowKind === "epic" ? "Epics" : "Initiatives"}</span></h1>
+        <p class="subtitle">${subtitleParts.map(escapeHtml).join(" · ")}</p>
+        ${headerChips.length > 0 ? `<div class="chips">${headerChips.join("")}</div>` : ""}
+      `
+        : ""
+      }
+      <div class="chart">
+        <div class="quarter-band">
+          <div></div>
+          <div class="quarters">${quarterBand}</div>
+        </div>
+        <div class="month-band">
+          <div></div>
+          <div class="months">${monthStrip}</div>
+        </div>
+        <div class="rows">
+          ${chunk.length === 0
+            ? `<div class="empty">No planned ${rowKind === "epic" ? "epics" : "initiatives"} match the current filters.</div>`
+            : chunk.map(renderRow).join("")
+          }
+        </div>
 
-    <div class="chart">
-      <div class="quarter-band">
-        <div class="label-spacer"></div>
-        <div class="quarters">${quarterBand}</div>
+        <div class="legend">
+          <span><span class="legend-swatch" style="background:#6366f1;opacity:0.32"></span>Planned range</span>
+          ${showProgress ? '<span><span class="legend-swatch" style="background:#6366f1"></span>Completed (done + approved stories)</span>' : ""}
+        </div>
       </div>
-      <div class="month-band">
-        <div></div>
-        <div class="months">${monthStrip}</div>
-      </div>
-      <div class="rows">
-        ${rows.length === 0
-          ? '<div class="empty">No scheduled initiatives to display.</div>'
-          : rowsMarkup
-        }
-        ${todayMarker
-          ? `<div style="position:absolute;left:252px;right:0;top:0;bottom:0;pointer-events:none;">
-              <div style="position:relative;width:100%;height:100%;">${todayMarker}</div>
-            </div>`
-          : ""
-        }
-      </div>
-
-      <div class="legend">
-        <span><span class="legend-swatch" style="background:#6366f1;opacity:0.28"></span>Planned range</span>
-        <span><span class="legend-swatch" style="background:#6366f1"></span>Completed (done + approved stories)</span>
-        ${todayLeftPct != null ? '<span><span class="legend-swatch" style="background:#10b981"></span>Today</span>' : ""}
-      </div>
-    </div>
+      ${totalPages > 1
+        ? `<div class="page-footer">Page ${pageNumber} of ${totalPages}</div>`
+        : ""
+      }
+    </section>`;
+      })
+      .join("")}
   </div>
 
-  <script>
-    // Wait one frame after load so layout settles, then open the print dialog automatically.
-    window.addEventListener("load", function () {
-      requestAnimationFrame(function () { setTimeout(function () { window.print(); }, 120); });
-    });
-  </script>
 </body>
 </html>`;
 }
