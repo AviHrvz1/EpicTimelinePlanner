@@ -12,6 +12,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   ClipboardList,
+  FileDown,
   FileText,
   FileWarning,
   Flag,
@@ -64,6 +65,7 @@ import {
 import { isEpicPlanDraggableId } from "@/lib/epic-dnd-ids";
 import { type MonthTeamCapacityBoard as MonthTeamCapacityBoardModel } from "@/lib/month-team-capacity";
 import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTERS } from "@/lib/timeline";
+import { exportYearGanttToPrintableWindow } from "@/lib/year-gantt-pdf";
 import {
   epicDeliveryTeamAssignmentChip,
   MONTH_TEAM_COLUMNS,
@@ -4474,39 +4476,58 @@ export function TimelineGrid({
     </>
   ) : null;
 
+  // PDF export icon (full-year Gantt only) reserves ~32px + 4px gap at the right side of the Q4-aligned bar.
+  const PDF_EXPORT_RESERVATION_PX = 36;
+  const showGanttPdfExport = isFullYearGanttLayout;
+  const searchInputWidthPx = quarter4PanelMetrics
+    ? Math.max(80, quarter4PanelMetrics.width - (showGanttPdfExport ? PDF_EXPORT_RESERVATION_PX : 0))
+    : null;
   const ganttSearchJsx = (
     <div
       ref={ganttSearchRef}
       className={cn(
-        "relative mr-1 flex shrink-0 items-center transition-[margin] duration-200",
+        "relative mr-1 flex shrink-0 items-center gap-1 transition-[margin] duration-200",
         !quarter4PanelMetrics && "ml-2",
       )}
       style={quarter4PanelMetrics ? { marginLeft: `${quarter4PanelMetrics.left}px` } : undefined}
       onBlur={(e) => { if (!ganttSearchRef.current?.contains(e.relatedTarget as Node)) setGanttSearchOpen(false); }}
     >
-      <Search className="pointer-events-none absolute left-2 z-10 size-3.5 text-slate-400" aria-hidden />
-      <input
-        ref={ganttSearchInputRef}
-        type="text"
-        value={ganttSearchQuery}
-        onChange={(e) => { setGanttSearchQuery(e.target.value); setGanttSearchFilter(null); setGanttSearchOpen(true); }}
-        onFocus={() => setGanttSearchOpen(true)}
-        placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
-        style={quarter4PanelMetrics ? { width: `${quarter4PanelMetrics.width}px` } : undefined}
-        className={cn(
-          "h-8 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200",
-          !quarter4PanelMetrics && "w-[30rem] focus:w-[36rem]",
-        )}
-      />
-      {(ganttSearchQuery || ganttSearchFilter) ? (
+      <div className="relative flex items-center">
+        <Search className="pointer-events-none absolute left-2 z-10 size-3.5 text-slate-400" aria-hidden />
+        <input
+          ref={ganttSearchInputRef}
+          type="text"
+          value={ganttSearchQuery}
+          onChange={(e) => { setGanttSearchQuery(e.target.value); setGanttSearchFilter(null); setGanttSearchOpen(true); }}
+          onFocus={() => setGanttSearchOpen(true)}
+          placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
+          style={searchInputWidthPx != null ? { width: `${searchInputWidthPx}px` } : undefined}
+          className={cn(
+            "h-8 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200",
+            !quarter4PanelMetrics && "w-[30rem] focus:w-[36rem]",
+          )}
+        />
+        {(ganttSearchQuery || ganttSearchFilter) ? (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { setGanttSearchQuery(""); setGanttSearchFilter(null); setGanttSearchOpen(false); }}
+            className="absolute right-1.5 z-10 text-slate-400 hover:text-slate-600"
+            aria-label="Clear search"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+      {showGanttPdfExport ? (
         <button
           type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => { setGanttSearchQuery(""); setGanttSearchFilter(null); setGanttSearchOpen(false); }}
-          className="absolute right-1.5 z-10 text-slate-400 hover:text-slate-600"
-          aria-label="Clear search"
+          onClick={() => exportYearGanttToPrintableWindow({ initiatives, currentYear })}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white/80 text-slate-500 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-200"
+          aria-label="Export Gantt to PDF"
+          title="Export Gantt to PDF (opens a presentation-ready view)"
         >
-          <X className="size-3.5" />
+          <FileDown className="size-3.5" aria-hidden />
         </button>
       ) : null}
       {ganttSearchOpen && (ganttSearchResults.initiatives.length > 0 || ganttSearchResults.epics.length > 0) ? (
