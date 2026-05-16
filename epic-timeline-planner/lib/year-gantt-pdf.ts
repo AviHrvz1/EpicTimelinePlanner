@@ -125,7 +125,8 @@ export function exportYearGanttToPrintableWindow(args: {
         color: init.color || "#6366f1",
         startMonth: clampMonth(startMonth),
         endMonth: clampMonth(endMonth),
-        meta: `${plannedEpics.length} ${plannedEpics.length === 1 ? "epic" : "epics"}`,
+        // Initiative rows skip the "N epics" tag in print — the bar already conveys planned range, no need to clutter.
+        meta: "",
         progressPercent,
         sortKey: typeof init.timelineRow === "number" ? init.timelineRow : Number.MAX_SAFE_INTEGER,
       });
@@ -189,10 +190,11 @@ function renderHtml(args: {
 }): string {
   const { currentYear, rows, rowKind, showProgress, teamLabels, initiativeFilterLabel, epicFilterLabel, QUARTER_STYLE } = args;
 
-  // Chunk rows into per-print-page slices. 18 rows fits A4 landscape with the header strip + legend repeated on
-  // every page; tweak if the row layout changes. Each page gets the same quarter band + month strip so a reader
-  // can interpret any single page without flipping back.
-  const ROWS_PER_PAGE = 18;
+  // Chunk rows into per-print-page slices. Each `.gantt-page` is sized exactly like the printable A4 landscape
+  // area (277mm × 190mm), so the on-screen preview shows the same paginated layout that will print.
+  // Page 1 is slightly tighter because the title block lives there; the rest of the pages can fit a bit more
+  // — but using a single value keeps the look consistent across the doc.
+  const ROWS_PER_PAGE = 14;
   const pages: Array<typeof rows> = rows.length === 0
     ? [[]]
     : (() => {
@@ -323,28 +325,28 @@ function renderHtml(args: {
     @media print { .toolbar { display: none; } }
 
     .title {
-      font-size: 28px;
+      font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.01em;
-      margin: 0 0 4px 0;
+      margin: 0 0 2px 0;
     }
     .title-mode {
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 600;
       color: #64748b;
       letter-spacing: -0.005em;
       margin-left: 2px;
     }
     .subtitle {
-      font-size: 13px;
+      font-size: 12px;
       color: #475569;
-      margin: 0 0 12px 0;
+      margin: 0 0 8px 0;
     }
     .chips {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin: 0 0 18px 0;
+      margin: 0 0 12px 0;
     }
     .chip {
       display: inline-flex;
@@ -424,7 +426,8 @@ function renderHtml(args: {
       grid-template-columns: 240px 1fr;
       gap: 12px;
       align-items: center;
-      padding: 6px 0;
+      /* Tighter row padding so 14 rows + header + legend fit inside the A4 landscape printable area. */
+      padding: 4px 0;
       border-bottom: 1px dashed #f1f5f9;
     }
     .row:last-child { border-bottom: 0; }
@@ -513,16 +516,36 @@ function renderHtml(args: {
       vertical-align: middle;
     }
 
-    /* Each chunked page renders as its own <section.gantt-page>. On screen they stack with a gap;
-       in print, each one starts a fresh page and the last one gets no trailing break. */
+    /* Each chunked page renders as its own <section.gantt-page>, sized to the printable A4 landscape area
+       (277mm × 190mm = the paper minus the @page 10mm margins). On screen they stack like sheets of paper
+       with a shadow + border so the user previews exactly what will print. */
     .gantt-page {
-      background: transparent;
+      box-sizing: border-box;
+      width: 277mm;
+      min-height: 190mm;
+      padding: 12mm 12mm 10mm 12mm;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.18), 0 2px 4px rgba(15, 23, 42, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
     }
     .gantt-page + .gantt-page {
-      margin-top: 24px;
+      margin-top: 28px;
+    }
+    .gantt-page .chart {
+      flex: 1;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
     }
     .page-footer {
-      margin-top: 8px;
+      margin-top: auto;
+      padding-top: 6px;
       text-align: right;
       font-size: 10px;
       font-weight: 600;
@@ -530,7 +553,16 @@ function renderHtml(args: {
       color: #94a3b8;
     }
     @media print {
+      html, body { background: white; }
+      .page { padding: 0 !important; max-width: none !important; }
       .gantt-page {
+        width: auto;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
         page-break-after: always;
         break-after: page;
       }
@@ -540,8 +572,7 @@ function renderHtml(args: {
         break-after: auto;
       }
       .gantt-page + .gantt-page { margin-top: 0; }
-      /* Keep the in-page chart from being split mid-content; chunk size already keeps each page small enough. */
-      .chart { page-break-inside: avoid; break-inside: avoid; }
+      /* Rows shouldn't split mid-bar; chunk size already keeps the page under one printed page. */
       .row { page-break-inside: avoid; break-inside: avoid; }
     }
   </style>
