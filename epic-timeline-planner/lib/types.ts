@@ -115,6 +115,8 @@ export type EpicItem = {
   backlogOrder?: number;
   /** Month team board lane id, when assigned. */
   team: string | null;
+  /** Free-form labels (comma-separated). */
+  labels: string | null;
   userStories: UserStoryItem[];
   comments: EpicCommentItem[];
   history: EpicHistoryItem[];
@@ -137,6 +139,10 @@ export type InitiativeItem = {
   timelineRow: number;
   year: number;
   roadmapId: string | null;
+  /** Delivery team id; mirrors aggregate of epic.team. */
+  team: string | null;
+  /** Free-form labels (comma-separated). */
+  labels: string | null;
   epics: EpicItem[];
   comments: InitiativeCommentItem[];
   history: InitiativeHistoryItem[];

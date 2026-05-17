@@ -6,11 +6,14 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Bookmark,
   Check,
+  CheckCheck,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronsDown,
   ChevronsUp,
   Eraser,
+  FileSpreadsheet,
   Filter,
   Folder,
   Layers3,
@@ -18,11 +21,13 @@ import {
   ListTodo,
   Lock,
   Map as MapIcon,
+  PlayCircle,
   Plus,
   Save,
   Search,
   TableProperties,
   Trash2,
+  UserRound,
   X,
   Zap,
 } from "lucide-react";
@@ -51,16 +56,36 @@ import {
   ganttDateRangeForInitiative,
   storyWorkPlanRangeFromProgress,
 } from "@/lib/backlog-plan-dates";
+import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { exportBacklogToPrintableWindow } from "@/lib/backlog-excel-export";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
-import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
+import { monthTeamLabelForId, MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { defaultMembersForTeam } from "@/lib/sprint-capacity";
 import { InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 /** Softer than shared table zebra -- long wide rows read cleaner with lower-contrast bands. */
 const BACKLOG_TABLE_STRIPE_BG = "#f4f7fc";
 const BACKLOG_TABLE_BASE_BG = "#ffffff";
+
+const TEAM_DOT_COLOR: Record<string, string> = {
+  platform: "bg-sky-500",
+  experience: "bg-violet-500",
+  data: "bg-amber-500",
+  mobile: "bg-emerald-500",
+  growth: "bg-rose-500",
+};
+
+function aggregateInitiativeTeamId(initiative: InitiativeItem): string | null {
+  const teams = new Set<string>();
+  for (const epic of initiative.epics ?? []) {
+    if (epic.team) teams.add(epic.team);
+  }
+  if (teams.size === 1) return [...teams][0]!;
+  return null;
+}
 
 type BacklogPlanningPanelProps = {
   initiatives: InitiativeItem[];
@@ -84,8 +109,30 @@ type BacklogPlanningPanelProps = {
       labels: string | null;
     }>,
   ) => Promise<void>;
-  onPatchInitiativeQuick: (initiativeId: string, patch: { assignee?: string | null; title?: string }) => Promise<void>;
-  onPatchEpicQuick: (epicId: string, patch: { assignee?: string | null; title?: string }) => Promise<void>;
+  onPatchInitiativeQuick: (
+    initiativeId: string,
+    patch: {
+      assignee?: string | null;
+      title?: string;
+      startMonth?: number | null;
+      endMonth?: number | null;
+      team?: string | null;
+      labels?: string | null;
+    },
+  ) => Promise<void>;
+  onPatchEpicQuick: (
+    epicId: string,
+    patch: {
+      assignee?: string | null;
+      title?: string;
+      planStartMonth?: number | null;
+      planStartDay?: number | null;
+      planEndMonth?: number | null;
+      planEndDay?: number | null;
+      team?: string | null;
+      labels?: string | null;
+    },
+  ) => Promise<void>;
   summaryBarPortalElement?: HTMLElement | null;
   suppressInlineChips?: boolean;
 };
@@ -95,6 +142,7 @@ type CreateKind = "initiative" | "epic" | "story";
 type CreateScope = "initiative" | "epic" | "story";
 type BacklogColumnKey =
   | "workItem"
+  | "team"
   | "year"
   | "quarter"
   | "month"
@@ -310,23 +358,25 @@ function storyEditSnapshotFromGroupedRow(row: BacklogGroupedStoryRowForSnapshot)
 
 const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "workItem",
+  "status",
+  "team",
+  "assignee",
+  "epicOriginalEst",
+  "estDays",
+  "daysLeft",
+  "sprint",
+  "progress",
+  "startDate",
+  "endDate",
   "year",
   "quarter",
   "month",
-  "startDate",
-  "endDate",
-  "status",
-  "sprint",
-  "progress",
-  "assignee",
   "labels",
-  "estDays",
-  "epicOriginalEst",
-  "daysLeft",
 ];
 
 const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   workItem: "Work item",
+  team: "Team",
   year: "Year",
   quarter: "Quarter",
   month: "Month",
@@ -338,12 +388,13 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   labels: "Labels",
   estDays: "Est Days",
   epicOriginalEst: "Epic Est",
-  daysLeft: "Days Left",
+  daysLeft: "Est. Days Left",
   progress: "Progress",
 };
 
 const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   workItem: 300,
+  team: 120,
   year: 88,
   quarter: 104,
   month: 80,
@@ -355,12 +406,13 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   labels: 140,
   estDays: 90,
   epicOriginalEst: 110,
-  daysLeft: 90,
+  daysLeft: 150,
   progress: 180,
 };
 
 const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   workItem: 420,
+  team: 150,
   year: 104,
   quarter: 112,
   month: 120,
@@ -372,7 +424,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   labels: 200,
   estDays: 128,
   epicOriginalEst: 150,
-  daysLeft: 128,
+  daysLeft: 160,
   progress: 220,
 };
 
@@ -380,35 +432,32 @@ const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
 /** Bump when default visibility for columns changes so stored layout can migrate once. */
-const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 2;
+const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 10;
 const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
 const BACKLOG_SAVED_VIEWS_STORAGE_KEY = "epic-planner.backlog.saved-views.v1";
 
 const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   workItem: true,
+  team: true,
   /** Calendar facets duplicate Group by / filters for most views; enable from Table → columns when needed. */
   year: false,
   quarter: false,
   month: false,
-  /** Shown via Table → columns when needed -- dates add a lot of horizontal noise. */
-  startDate: false,
-  endDate: false,
-  /** Turn on from Table → columns when you want status in the grid (filters still apply). */
-  status: false,
-  sprint: false,
-  assignee: false,
-  /** Wide; turn on for label-heavy workflows. */
-  labels: false,
+  startDate: true,
+  endDate: true,
+  status: true,
+  sprint: true,
+  assignee: true,
+  labels: true,
   /** Core planning columns -- on by default. */
   estDays: true,
-  /** Often redundant with story estimates; toggle on when useful. */
-  epicOriginalEst: false,
+  epicOriginalEst: true,
   daysLeft: true,
-  /** Wide vs Est days; enable when you want the bar. */
-  progress: false,
+  progress: true,
 };
 
 const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
+  "team",
   "year",
   "quarter",
   "month",
@@ -527,6 +576,102 @@ function statusDot(status: string) {
   return "bg-amber-400";
 }
 
+/**
+ * Lucide icon for a workflow status. Matches the conventions used in
+ * `components/initiatives/initiative-list-panel.tsx` so the backlog status
+ * chips read the same across surfaces (To do/In progress/Done/Approved).
+ */
+function statusIcon(status: string, className = "size-3.5"): ReactNode {
+  if (status === "approved") return <CheckCircle2 className={cn(className, "text-violet-600")} />;
+  if (status === "done") return <CheckCheck className={cn(className, "text-emerald-600")} />;
+  if (status === "inProgress") return <PlayCircle className={cn(className, "text-blue-600")} />;
+  return <ListTodo className={cn(className, "text-amber-600")} />;
+}
+
+/**
+ * Lightweight popover used by inline cell editors that need icons next to
+ * each option (status, team). Native <select>/<option> can't show icons
+ * reliably across browsers, so we render a small card menu instead. The
+ * shell matches the project's existing rounded-xl + slate-200 + shadow-lg
+ * dropdown convention (see initiative-form-dialog suggestion panels).
+ *
+ * Behavior:
+ *   • Esc → onCancel
+ *   • Click outside → onCancel
+ *   • Click option → onSelect(value) (parent decides whether to also close)
+ */
+function CellOptionPopover<T extends string>({
+  value,
+  options,
+  onSelect,
+  onCancel,
+  widthClass = "w-[220px]",
+}: {
+  value: T | "";
+  options: Array<{ value: T | ""; label: string; subtitle?: string; icon?: ReactNode }>;
+  onSelect: (v: T | "") => void;
+  onCancel: () => void;
+  widthClass?: string;
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    function onDocMouseDown(event: globalThis.MouseEvent) {
+      if (!rootRef.current) return;
+      if (event.target instanceof Node && rootRef.current.contains(event.target)) return;
+      onCancel();
+    }
+    function onDocKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+      }
+    }
+    window.addEventListener("mousedown", onDocMouseDown);
+    window.addEventListener("keydown", onDocKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onDocMouseDown);
+      window.removeEventListener("keydown", onDocKeyDown);
+    };
+  }, [onCancel]);
+  return (
+    <div
+      ref={rootRef}
+      role="listbox"
+      className={cn(
+        "absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg ring-1 ring-black/[0.04]",
+        widthClass,
+      )}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {options.map((opt) => {
+        const selected = opt.value === value;
+        return (
+          <button
+            key={opt.value || "__none__"}
+            type="button"
+            role="option"
+            aria-selected={selected}
+            onClick={() => onSelect(opt.value)}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[14px] outline-none transition-colors",
+              selected ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50",
+            )}
+          >
+            {opt.icon ? <span className="flex size-4 shrink-0 items-center justify-center">{opt.icon}</span> : null}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate font-medium leading-tight">{opt.label}</span>
+              {opt.subtitle ? (
+                <span className="truncate text-[11.5px] leading-tight text-slate-500">{opt.subtitle}</span>
+              ) : null}
+            </span>
+            {selected ? <Check className="size-3.5 shrink-0 text-indigo-600" aria-hidden /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const LABEL_CHIP_PALETTES = [
   "border-indigo-200/70 bg-indigo-50 text-indigo-700",
   "border-violet-200/70 bg-violet-50 text-violet-700",
@@ -547,6 +692,18 @@ function labelChipClasses(label: string): string {
 function sprintLabel(sprint: number | null) {
   return sprint == null ? "Unscheduled" : `Sprint ${sprint}`;
 }
+
+/** Option list for the inline status popover (story status edit). */
+const STORY_STATUS_POPOVER_OPTIONS: Array<{
+  value: "todo" | "inProgress" | "done" | "approved";
+  label: string;
+  icon: ReactNode;
+}> = [
+  { value: "todo", label: "To do", icon: <ListTodo className="size-3.5 text-amber-600" /> },
+  { value: "inProgress", label: "In progress", icon: <PlayCircle className="size-3.5 text-blue-600" /> },
+  { value: "done", label: "Done", icon: <CheckCheck className="size-3.5 text-emerald-600" /> },
+  { value: "approved", label: "Approved", icon: <CheckCircle2 className="size-3.5 text-violet-600" /> },
+];
 
 function quarterFromMonth(month: number | null | undefined): string {
   if (month == null) return "-";
@@ -1410,6 +1567,23 @@ export function BacklogPlanningPanel({
     value: string;
   } | null>(null);
   const [editingStoryTitle, setEditingStoryTitle] = useState<{ id: string; value: string } | null>(null);
+  type ParentDateEditTarget = {
+    kind: "epic" | "initiative";
+    id: string;
+    field: "start" | "end";
+    value: string;
+  };
+  const [editingParentDate, setEditingParentDate] = useState<ParentDateEditTarget | null>(null);
+  const [editingParentTeam, setEditingParentTeam] = useState<{
+    kind: "epic" | "initiative";
+    id: string;
+    value: string;
+  } | null>(null);
+  const [editingParentLabels, setEditingParentLabels] = useState<{
+    kind: "epic" | "initiative";
+    id: string;
+    value: string;
+  } | null>(null);
   const [backlogReadonlyNotice, setBacklogReadonlyNotice] = useState<{ title: string; body: string } | null>(null);
 
   async function patchStoryInline(
@@ -1441,9 +1615,14 @@ export function BacklogPlanningPanel({
     setEditingStoryCell(null);
   }
 
-  async function confirmStoryCellEdit(storyId: string, field: InlineEditableStoryField, current: StoryCellEditSnapshot) {
+  async function confirmStoryCellEdit(
+    storyId: string,
+    field: InlineEditableStoryField,
+    current: StoryCellEditSnapshot,
+    nextValueOverride?: string,
+  ) {
     if (!editingStoryCell || editingStoryCell.storyId !== storyId || editingStoryCell.field !== field) return;
-    const nextRaw = editingStoryCell.value.trim();
+    const nextRaw = (nextValueOverride ?? editingStoryCell.value).trim();
     if (field === "status") {
       const next = nextRaw as "todo" | "inProgress" | "done" | "approved";
       if (next !== current.status) await patchStoryInline(storyId, { status: next });
@@ -1531,6 +1710,383 @@ export function BacklogPlanningPanel({
       toast.success("User story title updated");
     }
     setEditingStoryTitle(null);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Parent date inline edit (epic: month + day; initiative: month only).
+  // ───────────────────────────────────────────────────────────────────────────
+  function daysInMonth(year: number, month: number): number {
+    // month is 1-12; using day=0 of next month yields last day of `month`.
+    return new Date(year, month, 0).getDate();
+  }
+  function pad2(n: number): string {
+    return n < 10 ? `0${n}` : String(n);
+  }
+  /** YYYY-MM-DD from epic plan month/day + initiative year. Falls back to month=1/day=1 when missing. */
+  function epicDateInputValue(year: number, month: number | null | undefined, day: number | null | undefined): string {
+    const m = month ?? 1;
+    const dim = daysInMonth(year, m);
+    const d = Math.min(Math.max(day ?? 1, 1), dim);
+    return `${year}-${pad2(m)}-${pad2(d)}`;
+  }
+  /** YYYY-MM from initiative month + year. Falls back to month=1 when missing. */
+  function initiativeMonthInputValue(year: number, month: number | null | undefined): string {
+    return `${year}-${pad2(month ?? 1)}`;
+  }
+  function beginEpicDateEdit(
+    epicId: string,
+    field: "start" | "end",
+    year: number,
+    month: number | null | undefined,
+    day: number | null | undefined,
+  ) {
+    setEditingParentDate({ kind: "epic", id: epicId, field, value: epicDateInputValue(year, month, day) });
+  }
+  function beginInitiativeDateEdit(
+    initiativeId: string,
+    field: "start" | "end",
+    year: number,
+    month: number | null | undefined,
+  ) {
+    setEditingParentDate({
+      kind: "initiative",
+      id: initiativeId,
+      field,
+      value: initiativeMonthInputValue(year, month),
+    });
+  }
+  function reportParentDateValidationError(message: string) {
+    try {
+      toast.error(message);
+    } catch {
+      console.warn(message);
+    }
+  }
+  async function commitEpicDateEdit() {
+    if (!editingParentDate || editingParentDate.kind !== "epic") return;
+    const raw = editingParentDate.value.trim();
+    // <input type="date"> emits YYYY-MM-DD.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+    if (!m) {
+      reportParentDateValidationError("Enter a valid date (YYYY-MM-DD)");
+      return;
+    }
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    if (!Number.isFinite(month) || month < 1 || month > 12) {
+      reportParentDateValidationError("Month must be 1-12");
+      return;
+    }
+    if (!Number.isFinite(day) || day < 1 || day > 31) {
+      reportParentDateValidationError("Day must be 1-31");
+      return;
+    }
+    const patch =
+      editingParentDate.field === "start"
+        ? { planStartMonth: month, planStartDay: day }
+        : { planEndMonth: month, planEndDay: day };
+    try {
+      await onPatchEpicQuick(editingParentDate.id, patch);
+      toast.success("Epic updated");
+    } catch {
+      reportParentDateValidationError("Failed to update epic");
+      return;
+    }
+    setEditingParentDate(null);
+  }
+  async function commitInitiativeDateEdit() {
+    if (!editingParentDate || editingParentDate.kind !== "initiative") return;
+    const raw = editingParentDate.value.trim();
+    // <input type="month"> emits YYYY-MM.
+    const m = /^(\d{4})-(\d{2})$/.exec(raw);
+    if (!m) {
+      reportParentDateValidationError("Enter a valid month (YYYY-MM)");
+      return;
+    }
+    const month = Number(m[2]);
+    if (!Number.isFinite(month) || month < 1 || month > 12) {
+      reportParentDateValidationError("Month must be 1-12");
+      return;
+    }
+    const patch = editingParentDate.field === "start" ? { startMonth: month } : { endMonth: month };
+    try {
+      await onPatchInitiativeQuick(editingParentDate.id, patch);
+      toast.success("Initiative updated");
+    } catch {
+      reportParentDateValidationError("Failed to update initiative");
+      return;
+    }
+    setEditingParentDate(null);
+  }
+  function isEditingParentDate(
+    kind: "epic" | "initiative",
+    id: string,
+    field: "start" | "end",
+  ): boolean {
+    return (
+      editingParentDate !== null &&
+      editingParentDate.kind === kind &&
+      editingParentDate.id === id &&
+      editingParentDate.field === field
+    );
+  }
+  /** Inline editor for epic (date) and initiative (month). Commits on Enter / blur; cancels on Escape. */
+  function renderParentDateEditor(args: {
+    kind: "epic" | "initiative";
+    id: string;
+    field: "start" | "end";
+  }): ReactNode {
+    const isEpic = args.kind === "epic";
+    const commit = isEpic ? commitEpicDateEdit : commitInitiativeDateEdit;
+    const value = editingParentDate?.value ?? "";
+    return (
+      <span
+        className="inline-flex items-center gap-1"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <input
+          type={isEpic ? "date" : "month"}
+          value={value}
+          onChange={(event) =>
+            setEditingParentDate((prev) => (prev ? { ...prev, value: event.target.value } : prev))
+          }
+          onBlur={() => {
+            // Defer so click on Check/X buttons can fire first.
+            window.setTimeout(() => {
+              if (
+                editingParentDate &&
+                editingParentDate.kind === args.kind &&
+                editingParentDate.id === args.id &&
+                editingParentDate.field === args.field
+              ) {
+                void commit();
+              }
+            }, 120);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setEditingParentDate(null);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              void commit();
+            }
+          }}
+          autoFocus
+          className="h-7 rounded-md bg-white px-2 text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => setEditingParentDate(null)}
+          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+        >
+          <X className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void commit()}
+          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+        >
+          <Check className="size-3.5" />
+        </button>
+      </span>
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Parent team & labels inline edits (epic and initiative rows).
+  // Team is a <select> populated from MONTH_TEAM_COLUMNS plus "(none)".
+  // Labels is a free-text input; Enter/blur commits, Escape cancels.
+  // ───────────────────────────────────────────────────────────────────────────
+  function beginEpicTeamEdit(epic: { id: string; team?: string | null }) {
+    setEditingParentTeam({ kind: "epic", id: epic.id, value: epic.team ?? "" });
+  }
+  function beginInitiativeTeamEdit(initiative: { id: string; team?: string | null }) {
+    setEditingParentTeam({ kind: "initiative", id: initiative.id, value: initiative.team ?? "" });
+  }
+  async function commitEpicTeamEdit(nextValue?: string) {
+    if (!editingParentTeam || editingParentTeam.kind !== "epic") return;
+    const raw = (nextValue ?? editingParentTeam.value).trim();
+    const next = raw === "" ? null : raw;
+    try {
+      await onPatchEpicQuick(editingParentTeam.id, { team: next });
+      toast.success("Epic team updated");
+    } catch {
+      toast.error("Failed to update epic team");
+      return;
+    }
+    setEditingParentTeam(null);
+  }
+  async function commitInitiativeTeamEdit(nextValue?: string) {
+    if (!editingParentTeam || editingParentTeam.kind !== "initiative") return;
+    const raw = (nextValue ?? editingParentTeam.value).trim();
+    const next = raw === "" ? null : raw;
+    try {
+      await onPatchInitiativeQuick(editingParentTeam.id, { team: next });
+      toast.success("Initiative team updated");
+    } catch {
+      toast.error("Failed to update initiative team");
+      return;
+    }
+    setEditingParentTeam(null);
+  }
+  function isEditingParentTeam(kind: "epic" | "initiative", id: string): boolean {
+    return (
+      editingParentTeam !== null &&
+      editingParentTeam.kind === kind &&
+      editingParentTeam.id === id
+    );
+  }
+  function renderParentTeamEditor(args: { kind: "epic" | "initiative"; id: string }): ReactNode {
+    const isEpic = args.kind === "epic";
+    const value = editingParentTeam?.value ?? "";
+    const currentColor = value ? TEAM_DOT_COLOR[value] ?? "bg-slate-300" : "bg-slate-300";
+    const currentLabel = value
+      ? monthTeamLabelForId(value) ?? teamLabelForWorkspaceUser(value) ?? value
+      : "(none)";
+    const popoverOptions: Array<{ value: string; label: string; subtitle?: string; icon: ReactNode }> = [
+      {
+        value: "",
+        label: "(none)",
+        icon: <span className="inline-block size-2 rounded-full bg-slate-300" aria-hidden />,
+      },
+      ...MONTH_TEAM_COLUMNS.map((team) => ({
+        value: team.id,
+        label: team.label,
+        subtitle: team.subtitle,
+        icon: (
+          <span
+            className={cn("inline-block size-2 rounded-full", TEAM_DOT_COLOR[team.id] ?? "bg-slate-400")}
+            aria-hidden
+          />
+        ),
+      })),
+    ];
+    return (
+      <span
+        className="relative inline-flex items-center gap-1"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <span className="inline-flex h-7 items-center gap-1.5 rounded-md bg-white px-2 text-[14px] text-slate-700 ring-1 ring-slate-200">
+          <span className={cn("inline-block size-2 rounded-full", currentColor)} aria-hidden />
+          <span className="truncate">{currentLabel}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => setEditingParentTeam(null)}
+          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+        >
+          <X className="size-3.5" />
+        </button>
+        <CellOptionPopover
+          value={value}
+          options={popoverOptions}
+          onSelect={(v) => {
+            setEditingParentTeam((prev) => (prev ? { ...prev, value: v } : prev));
+            if (isEpic) void commitEpicTeamEdit(v);
+            else void commitInitiativeTeamEdit(v);
+          }}
+          onCancel={() => setEditingParentTeam(null)}
+        />
+      </span>
+    );
+  }
+
+  function beginEpicLabelsEdit(epic: { id: string; labels?: string | null }) {
+    setEditingParentLabels({ kind: "epic", id: epic.id, value: epic.labels ?? "" });
+  }
+  function beginInitiativeLabelsEdit(initiative: { id: string; labels?: string | null }) {
+    setEditingParentLabels({ kind: "initiative", id: initiative.id, value: initiative.labels ?? "" });
+  }
+  async function commitEpicLabelsEdit() {
+    if (!editingParentLabels || editingParentLabels.kind !== "epic") return;
+    const raw = editingParentLabels.value;
+    const next = raw.trim() === "" ? null : raw.trim();
+    try {
+      await onPatchEpicQuick(editingParentLabels.id, { labels: next });
+      toast.success("Epic labels updated");
+    } catch {
+      toast.error("Failed to update epic labels");
+      return;
+    }
+    setEditingParentLabels(null);
+  }
+  async function commitInitiativeLabelsEdit() {
+    if (!editingParentLabels || editingParentLabels.kind !== "initiative") return;
+    const raw = editingParentLabels.value;
+    const next = raw.trim() === "" ? null : raw.trim();
+    try {
+      await onPatchInitiativeQuick(editingParentLabels.id, { labels: next });
+      toast.success("Initiative labels updated");
+    } catch {
+      toast.error("Failed to update initiative labels");
+      return;
+    }
+    setEditingParentLabels(null);
+  }
+  function isEditingParentLabels(kind: "epic" | "initiative", id: string): boolean {
+    return (
+      editingParentLabels !== null &&
+      editingParentLabels.kind === kind &&
+      editingParentLabels.id === id
+    );
+  }
+  function renderParentLabelsEditor(args: { kind: "epic" | "initiative"; id: string }): ReactNode {
+    const isEpic = args.kind === "epic";
+    const commit = isEpic ? commitEpicLabelsEdit : commitInitiativeLabelsEdit;
+    const value = editingParentLabels?.value ?? "";
+    return (
+      <span
+        className="inline-flex w-full items-center gap-1"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <input
+          type="text"
+          value={value}
+          onChange={(event) =>
+            setEditingParentLabels((prev) => (prev ? { ...prev, value: event.target.value } : prev))
+          }
+          onBlur={() => {
+            // Defer so click on Check/X buttons can fire first.
+            window.setTimeout(() => {
+              if (
+                editingParentLabels &&
+                editingParentLabels.kind === args.kind &&
+                editingParentLabels.id === args.id
+              ) {
+                void commit();
+              }
+            }, 120);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setEditingParentLabels(null);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              void commit();
+            }
+          }}
+          autoFocus
+          placeholder="Comma-separated labels"
+          className="h-7 min-w-0 flex-1 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => setEditingParentLabels(null)}
+          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+        >
+          <X className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void commit()}
+          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+        >
+          <Check className="size-3.5" />
+        </button>
+      </span>
+    );
   }
 
   const q = query.trim().toLowerCase();
@@ -1918,6 +2474,18 @@ export function BacklogPlanningPanel({
 
   type CellIconHint = { kind: "edit"; onEdit: () => void } | { kind: "lock" };
 
+  function renderBacklogTeamCell(teamId: string | null | undefined): ReactNode {
+    if (!teamId) return <span className="text-[14px] text-slate-400">—</span>;
+    const color = TEAM_DOT_COLOR[teamId] ?? "bg-slate-400";
+    const label = monthTeamLabelForId(teamId) ?? teamLabelForWorkspaceUser(teamId) ?? teamId;
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[15px] text-slate-800">
+        <span className={cn("inline-block size-2 rounded-full", color)} aria-hidden />
+        <span className="truncate">{label}</span>
+      </span>
+    );
+  }
+
   function renderBacklogCells(
     cells: Record<BacklogColumnKey, ReactNode>,
     iconHints?: Partial<Record<BacklogColumnKey, CellIconHint>>,
@@ -1998,6 +2566,7 @@ export function BacklogPlanningPanel({
             epicTitle: epic.title,
             epicAssignee: epic.assignee?.trim() || "Unassigned",
             epicOriginalEstimateDays: epic.originalEstimateDays ?? 0,
+            teamId: (epic.team ?? null) as string | null,
             monthNum,
             monthLabelValue: monthLabel(monthNum),
             quarterLabelValue: quarterFromMonth(monthNum),
@@ -2022,17 +2591,122 @@ export function BacklogPlanningPanel({
         initiativeMonthNum: initiative.startMonth ?? null,
         initiativeMonthLabelValue: monthLabel(initiative.startMonth),
         initiativeQuarterLabelValue: quarterFromMonth(initiative.startMonth),
+        initiativeTeamId: aggregateInitiativeTeamId(initiative),
         epics: (initiative.epics ?? []).map((epic) => ({
           epicId: epic.id,
           epicTitle: epic.title,
           epicAssignee: epic.assignee?.trim() || "Unassigned",
           epicOriginalEstimateDays: epic.originalEstimateDays ?? 0,
+          epicTeamId: (epic.team ?? null) as string | null,
           epicMonthNum: epic.planStartMonth ?? initiative.startMonth ?? null,
           epicMonthLabelValue: monthLabel(epic.planStartMonth ?? initiative.startMonth),
           epicQuarterLabelValue: quarterFromMonth(epic.planStartMonth ?? initiative.startMonth),
         })),
       }));
   }, [fullyFiltered]);
+
+  /**
+   * Excel export — builds a row-per-story payload from the currently filtered `groupedStoryRows`, mapping
+   * each visible column to its plain-text value. The preview window then offers a one-click .xls download.
+   * Honors the user's column order + visibility exactly so the export matches what's on screen.
+   */
+  const handleExcelExport = useCallback(() => {
+    const teamLabelOf = (teamId: string | null | undefined): string => {
+      if (!teamId) return "";
+      return monthTeamLabelForId(teamId) ?? teamLabelForWorkspaceUser(teamId) ?? teamId;
+    };
+    const STATUS_LABEL: Record<string, string> = {
+      todo: "To do",
+      inProgress: "In progress",
+      done: "Done",
+      approved: "Approved",
+    };
+    // Sequential short IDs (INIT-001, EPIC-001, STORY-001). Computed deterministically by encounter order in
+    // the filtered rows so the same backlog snapshot always gets the same IDs in the export.
+    const initIds = new Map<string, string>();
+    const epicIds = new Map<string, string>();
+    const storyIds = new Map<string, string>();
+    const pad = (n: number) => String(n).padStart(3, "0");
+    for (const r of groupedStoryRows) {
+      if (!initIds.has(r.initiativeId)) initIds.set(r.initiativeId, `INIT-${pad(initIds.size + 1)}`);
+      if (!epicIds.has(r.epicId)) epicIds.set(r.epicId, `EPIC-${pad(epicIds.size + 1)}`);
+      if (!storyIds.has(r.storyId)) storyIds.set(r.storyId, `STORY-${pad(storyIds.size + 1)}`);
+    }
+    // Non-workItem cell extractor — workItem is replaced by 6 dedicated columns up front and is not emitted here.
+    const cellValueFor = (row: (typeof groupedStoryRows)[number], key: BacklogColumnKey): string => {
+      switch (key) {
+        case "workItem":
+          return "";
+        case "team":
+          return teamLabelOf(row.teamId);
+        case "assignee":
+          return row.storyAssignee || "";
+        case "status":
+          return STATUS_LABEL[row.storyStatus] ?? row.storyStatus ?? "";
+        case "sprint":
+          return row.storySprintLabel || "";
+        case "progress": {
+          const total = row.storyEstimatedDays || 0;
+          if (total <= 0) return "";
+          const done = Math.max(0, total - (row.storyDaysLeft || 0));
+          return `${Math.round((done / total) * 100)}%`;
+        }
+        case "estDays":
+          return String(row.storyEstimatedDays ?? 0);
+        case "epicOriginalEst":
+          return String(row.epicOriginalEstimateDays ?? 0);
+        case "daysLeft":
+          return String(row.storyDaysLeft ?? 0);
+        case "labels":
+          return row.storyLabels ?? "";
+        case "startDate":
+          return row.storyStartDateLabel ?? "";
+        case "endDate":
+          return row.storyEndDateLabel ?? "";
+        case "year":
+          return row.initiativeYear ?? "";
+        case "quarter":
+          return row.quarterLabelValue ?? "";
+        case "month":
+          return row.monthLabelValue ?? "";
+        default:
+          return "";
+      }
+    };
+    // 6 leading hierarchy columns replace the on-screen combined "Work item" column.
+    const hierarchyLabels = [
+      "INIT ID",
+      "Initiative Description",
+      "EPIC ID",
+      "Epic Description",
+      "STORY ID",
+      "User Story Description",
+    ];
+    // Drop workItem from the trailing column list — it's superseded by the hierarchy columns above.
+    const trailingKeys = visibleColumnKeys.filter((key) => key !== "workItem");
+    const trailingLabels = trailingKeys.map((key) => BACKLOG_COLUMN_LABELS[key]);
+    const columnLabels = [...hierarchyLabels, ...trailingLabels];
+
+    const rows = groupedStoryRows.map((r) => ({
+      cells: [
+        initIds.get(r.initiativeId) ?? "",
+        r.initiativeTitle ?? "",
+        epicIds.get(r.epicId) ?? "",
+        r.epicTitle ?? "",
+        storyIds.get(r.storyId) ?? "",
+        r.storyTitle ?? "",
+        ...trailingKeys.map((key) => cellValueFor(r, key)),
+      ],
+    }));
+    const subtitle = `${rows.length} ${rows.length === 1 ? "story" : "stories"} · ${columnLabels.length} columns`;
+    exportBacklogToPrintableWindow({
+      columnLabels,
+      rows,
+      title: "Backlog export",
+      subtitle,
+      filename: `backlog-${new Date().toISOString().slice(0, 10)}`,
+    });
+  }, [groupedStoryRows, visibleColumnKeys]);
 
   const groupSummaryLabel = groupLevels.length === 0 ? "None" : groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ");
   const hasAnyActiveFilter =
@@ -2348,6 +3022,11 @@ export function BacklogPlanningPanel({
                   </div>
                 </div>
               ),
+              team: isEditingParentTeam("epic", row.epicId) ? (
+                renderParentTeamEditor({ kind: "epic", id: row.epicId })
+              ) : (
+                renderBacklogTeamCell(row.teamId)
+              ),
               year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
               quarter: <span className="text-center text-[16px] text-slate-700">{row.quarterLabelValue}</span>,
               month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
@@ -2358,35 +3037,24 @@ export function BacklogPlanningPanel({
                 <span className="text-center text-[14px] tabular-nums text-slate-700">{row.storyEndDateLabel}</span>
               ),
               status: (
-            <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
+            <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
-                <span className="flex items-center gap-1">
-                  <select
-                    value={editingStoryCell.value}
-                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                    onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "status", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="w-full cursor-pointer bg-transparent text-[16px] font-medium outline-none"
-                  >
-                    <option value="todo">To do</option>
-                    <option value="inProgress">In progress</option>
-                    <option value="done">Done</option>
-                    <option value="approved">Approved</option>
-                  </select>
-                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200">
-                    <X className="size-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"
-                  >
-                    <Check className="size-3" />
-                  </button>
-                </span>
+                <>
+                  <span className="inline-flex items-center gap-1.5 font-semibold">
+                    {statusIcon(editingStoryCell.value)}
+                    {workflowStatusLabel(editingStoryCell.value as WorkflowStatus)}
+                  </span>
+                  <CellOptionPopover
+                    value={editingStoryCell.value as WorkflowStatus}
+                    options={STORY_STATUS_POPOVER_OPTIONS}
+                    onSelect={(v) => {
+                      setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
+                      void confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row), v);
+                    }}
+                    onCancel={cancelStoryCellEdit}
+                    widthClass="w-[180px]"
+                  />
+                </>
               ) : (
                 <button
                   type="button"
@@ -2394,8 +3062,9 @@ export function BacklogPlanningPanel({
                     event.preventDefault();
                     beginStoryCellEdit(row.storyId, "status", row.storyStatus);
                   }}
-                  className="font-semibold"
+                  className="inline-flex items-center gap-1.5 font-semibold"
                 >
+                  {statusIcon(row.storyStatus)}
                   {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
                 </button>
               )}
@@ -2479,8 +3148,9 @@ export function BacklogPlanningPanel({
                     event.preventDefault();
                     beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee);
                   }}
-                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                  className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                 >
+                  <UserRound className="size-3.5 text-slate-400" aria-hidden />
                   {row.storyAssignee}
                 </button>
               )}
@@ -2612,6 +3282,8 @@ export function BacklogPlanningPanel({
             </button>
               ),
             }, {
+              workItem: { kind: "lock" },
+              team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: row.epicId, team: row.teamId }) },
               status: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "status", row.storyStatus) },
               sprint: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
               assignee: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
@@ -2667,6 +3339,7 @@ export function BacklogPlanningPanel({
                 </button>
               </div>
             ),
+            team: renderBacklogTeamCell(null),
             year: <span className="text-center text-[16px] text-slate-400">-</span>,
             quarter: <span className="text-center text-[16px] text-slate-400">-</span>,
             month: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -2680,6 +3353,22 @@ export function BacklogPlanningPanel({
             epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
             daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
             progress: <span className="text-center text-[16px] text-slate-400">-</span>,
+          }, {
+            workItem: { kind: "lock" },
+            team: { kind: "lock" },
+            year: { kind: "lock" },
+            quarter: { kind: "lock" },
+            month: { kind: "lock" },
+            startDate: { kind: "lock" },
+            endDate: { kind: "lock" },
+            status: { kind: "lock" },
+            sprint: { kind: "lock" },
+            assignee: { kind: "lock" },
+            labels: { kind: "lock" },
+            estDays: { kind: "lock" },
+            epicOriginalEst: { kind: "lock" },
+            daysLeft: { kind: "lock" },
+            progress: { kind: "lock" },
           })}
         </div>
         {renderedChildren}
@@ -2774,7 +3463,7 @@ export function BacklogPlanningPanel({
                     onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId) return; onOpenEpic(epicId); }}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    <Folder className="size-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                    <EpicPlanBarIcon icon={epicModelForRow?.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
                     {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
                       <span className="flex min-w-0 items-center gap-1">
                         <input
@@ -2819,6 +3508,11 @@ export function BacklogPlanningPanel({
                   </button>
                 </div>
               ),
+              team: isEditingParentTeam("epic", epicId) ? (
+                renderParentTeamEditor({ kind: "epic", id: epicId })
+              ) : (
+                renderBacklogTeamCell(epicModelForRow?.team ?? epicRows[0]?.teamId ?? null)
+              ),
               year: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>,
               quarter: (
                 <span className="text-center text-[16px] text-slate-700">
@@ -2828,16 +3522,25 @@ export function BacklogPlanningPanel({
               month: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
               startDate: (
                 <span className="text-center text-[14px] tabular-nums text-slate-700">
-                  {formatBacklogPlanDate(epicGanttRange.start)}
+                  {isEditingParentDate("epic", epicId, "start") ? (
+                    renderParentDateEditor({ kind: "epic", id: epicId, field: "start" })
+                  ) : (
+                    formatBacklogPlanDate(epicGanttRange.start)
+                  )}
                 </span>
               ),
               endDate: (
                 <span className="text-center text-[14px] tabular-nums text-slate-700">
-                  {formatBacklogPlanDate(epicGanttRange.end)}
+                  {isEditingParentDate("epic", epicId, "end") ? (
+                    renderParentDateEditor({ kind: "epic", id: epicId, field: "end" })
+                  ) : (
+                    formatBacklogPlanDate(epicGanttRange.end)
+                  )}
                 </span>
               ),
               status: (
-                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+                <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+                  {statusIcon(rollupWorkflowStatusFromGroupedRows(epicRows))}
                   {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
                 </span>
               ),
@@ -2873,14 +3576,19 @@ export function BacklogPlanningPanel({
                         event.preventDefault();
                         setEditingParentAssignee({ kind: "epic", id: epicId, value: epicAssignee === "Unassigned" ? "" : epicAssignee });
                       }}
-                      className="rounded px-1 py-0.5 hover:bg-slate-100"
+                      className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                     >
+                      <UserRound className="size-3.5 text-slate-400" aria-hidden />
                       {epicAssignee}
                     </button>
                   )}
                 </span>
               ),
-              labels: <BacklogLabelsEmptyRowSlot />,
+              labels: isEditingParentLabels("epic", epicId) ? (
+                renderParentLabelsEditor({ kind: "epic", id: epicId })
+              ) : (
+                <span className="truncate text-[14px] text-slate-700">{epicModelForRow?.labels ?? ""}</span>
+              ),
               estDays: (
                 <button
                   type="button"
@@ -2906,14 +3614,37 @@ export function BacklogPlanningPanel({
               ),
               progress: renderCompletionCell(epicRows),
             }, {
+              workItem: { kind: "lock" },
+              team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epicId, team: epicModelForRow?.team ?? epicRows[0]?.teamId ?? null }) },
               assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "epic", id: epicId, value: epicAssignee === "Unassigned" ? "" : epicAssignee }) },
               year: { kind: "lock" },
               quarter: { kind: "lock" },
               month: { kind: "lock" },
-              startDate: { kind: "lock" },
-              endDate: { kind: "lock" },
+              startDate: {
+                kind: "edit",
+                onEdit: () =>
+                  beginEpicDateEdit(
+                    epicId,
+                    "start",
+                    Number(epicRows[0]?.initiativeYear),
+                    epicModelForRow?.planStartMonth ?? null,
+                    epicModelForRow?.planStartDay ?? null,
+                  ),
+              },
+              endDate: {
+                kind: "edit",
+                onEdit: () =>
+                  beginEpicDateEdit(
+                    epicId,
+                    "end",
+                    Number(epicRows[0]?.initiativeYear),
+                    epicModelForRow?.planEndMonth ?? null,
+                    epicModelForRow?.planEndDay ?? null,
+                  ),
+              },
               status: { kind: "lock" },
               sprint: { kind: "lock" },
+              labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epicId, labels: epicModelForRow?.labels ?? null }) },
               estDays: { kind: "lock" },
               epicOriginalEst: { kind: "lock" },
               daysLeft: { kind: "lock" },
@@ -3029,10 +3760,17 @@ export function BacklogPlanningPanel({
                   </button>
                 </div>
               ),
+              team: isEditingParentTeam("initiative", initiativeId) ? (
+                renderParentTeamEditor({ kind: "initiative", id: initiativeId })
+              ) : (
+                renderBacklogTeamCell(initModelForRow?.team ?? (initModelForRow ? aggregateInitiativeTeamId(initModelForRow) : null))
+              ),
               year: <span className="text-center text-[16px] text-slate-700">{initiativeYear}</span>,
               quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>,
               month: <span className="text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>,
-              startDate: (
+              startDate: isEditingParentDate("initiative", initiativeId, "start") ? (
+                renderParentDateEditor({ kind: "initiative", id: initiativeId, field: "start" })
+              ) : (
                 <button
                   type="button"
                   onClick={() => {}}
@@ -3041,7 +3779,9 @@ export function BacklogPlanningPanel({
                   {formatBacklogPlanDate(initGanttRange.start)}
                 </button>
               ),
-              endDate: (
+              endDate: isEditingParentDate("initiative", initiativeId, "end") ? (
+                renderParentDateEditor({ kind: "initiative", id: initiativeId, field: "end" })
+              ) : (
                 <button
                   type="button"
                   onClick={() => {}}
@@ -3051,7 +3791,8 @@ export function BacklogPlanningPanel({
                 </button>
               ),
               status: (
-                <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeStatus))}>
+                <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeStatus))}>
+                  {statusIcon(initiativeStatus)}
                   {workflowStatusLabel(initiativeStatus)}
                 </span>
               ),
@@ -3095,14 +3836,19 @@ export function BacklogPlanningPanel({
                           value: initiativeAssignee === "Unassigned" ? "" : initiativeAssignee,
                         });
                       }}
-                      className="rounded px-1 py-0.5 hover:bg-slate-100"
+                      className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                     >
+                      <UserRound className="size-3.5 text-slate-400" aria-hidden />
                       {initiativeAssignee}
                     </button>
                   )}
                 </span>
               ),
-              labels: <BacklogLabelsEmptyRowSlot />,
+              labels: isEditingParentLabels("initiative", initiativeId) ? (
+                renderParentLabelsEditor({ kind: "initiative", id: initiativeId })
+              ) : (
+                <span className="truncate text-[14px] text-slate-700">{initModelForRow?.labels ?? ""}</span>
+              ),
               estDays: (
                 <button
                   type="button"
@@ -3124,14 +3870,35 @@ export function BacklogPlanningPanel({
               ),
               progress: renderCompletionCell(initiativeRows),
             }, {
+              workItem: { kind: "lock" },
+              team: { kind: "edit", onEdit: () => beginInitiativeTeamEdit({ id: initiativeId, team: initModelForRow?.team ?? null }) },
               assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "initiative", id: initiativeId, value: initiativeAssignee === "Unassigned" ? "" : initiativeAssignee }) },
               year: { kind: "lock" },
               quarter: { kind: "lock" },
               month: { kind: "lock" },
-              startDate: { kind: "lock" },
-              endDate: { kind: "lock" },
+              startDate: {
+                kind: "edit",
+                onEdit: () =>
+                  beginInitiativeDateEdit(
+                    initiativeId,
+                    "start",
+                    Number(initiativeYear),
+                    initModelForRow?.startMonth ?? null,
+                  ),
+              },
+              endDate: {
+                kind: "edit",
+                onEdit: () =>
+                  beginInitiativeDateEdit(
+                    initiativeId,
+                    "end",
+                    Number(initiativeYear),
+                    initModelForRow?.endMonth ?? null,
+                  ),
+              },
               status: { kind: "lock" },
               sprint: { kind: "lock" },
+              labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiativeId, labels: initModelForRow?.labels ?? null }) },
               estDays: { kind: "lock" },
               epicOriginalEst: { kind: "lock" },
               daysLeft: { kind: "lock" },
@@ -3377,10 +4144,17 @@ export function BacklogPlanningPanel({
                     </button>
                   </div>
                 ),
+                team: isEditingParentTeam("initiative", initiative.initiativeId) ? (
+                  renderParentTeamEditor({ kind: "initiative", id: initiative.initiativeId })
+                ) : (
+                  renderBacklogTeamCell(standInitModel?.team ?? initiative.initiativeTeamId)
+                ),
                 year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
                 quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>,
                 month: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
-                startDate: (
+                startDate: isEditingParentDate("initiative", initiative.initiativeId, "start") ? (
+                  renderParentDateEditor({ kind: "initiative", id: initiative.initiativeId, field: "start" })
+                ) : (
                   <button
                     type="button"
                     onClick={() => {}}
@@ -3389,7 +4163,9 @@ export function BacklogPlanningPanel({
                     {formatBacklogPlanDate(standInitGantt.start)}
                   </button>
                 ),
-                endDate: (
+                endDate: isEditingParentDate("initiative", initiative.initiativeId, "end") ? (
+                  renderParentDateEditor({ kind: "initiative", id: initiative.initiativeId, field: "end" })
+                ) : (
                   <button
                     type="button"
                     onClick={() => {}}
@@ -3399,13 +4175,23 @@ export function BacklogPlanningPanel({
                   </button>
                 ),
                 status: (
-                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiative.initiativeStatus))}>
+                  <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiative.initiativeStatus))}>
+                    {statusIcon(initiative.initiativeStatus)}
                     {workflowStatusLabel(initiative.initiativeStatus)}
                   </span>
                 ),
                 sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
-                assignee: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeAssignee}</span>,
-                labels: <BacklogLabelsEmptyRowSlot />,
+                assignee: (
+                  <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
+                    <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                    {initiative.initiativeAssignee}
+                  </span>
+                ),
+                labels: isEditingParentLabels("initiative", initiative.initiativeId) ? (
+                  renderParentLabelsEditor({ kind: "initiative", id: initiative.initiativeId })
+                ) : (
+                  <span className="truncate text-[14px] text-slate-700">{standInitModel?.labels ?? ""}</span>
+                ),
                 estDays: (
                   <button
                     type="button"
@@ -3439,13 +4225,35 @@ export function BacklogPlanningPanel({
                   </button>
                 ),
               }, {
+                workItem: { kind: "lock" },
+                team: { kind: "edit", onEdit: () => beginInitiativeTeamEdit({ id: initiative.initiativeId, team: standInitModel?.team ?? null }) },
                 year: { kind: "lock" },
                 quarter: { kind: "lock" },
                 month: { kind: "lock" },
-                startDate: { kind: "lock" },
-                endDate: { kind: "lock" },
+                startDate: {
+                  kind: "edit",
+                  onEdit: () =>
+                    beginInitiativeDateEdit(
+                      initiative.initiativeId,
+                      "start",
+                      Number(initiative.initiativeYear),
+                      standInitModel?.startMonth ?? null,
+                    ),
+                },
+                endDate: {
+                  kind: "edit",
+                  onEdit: () =>
+                    beginInitiativeDateEdit(
+                      initiative.initiativeId,
+                      "end",
+                      Number(initiative.initiativeYear),
+                      standInitModel?.endMonth ?? null,
+                    ),
+                },
                 status: { kind: "lock" },
                 sprint: { kind: "lock" },
+                assignee: { kind: "lock" },
+                labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiative.initiativeId, labels: standInitModel?.labels ?? null }) },
                 estDays: { kind: "lock" },
                 epicOriginalEst: { kind: "lock" },
                 daysLeft: { kind: "lock" },
@@ -3507,7 +4315,7 @@ export function BacklogPlanningPanel({
                               }}
                               className="flex min-w-0 flex-1 items-center gap-2 text-left"
                             >
-                              <Folder className="size-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                              <EpicPlanBarIcon icon={standEpicModel?.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
                               {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
                                 <span className="flex min-w-0 items-center gap-1">
                                   <input
@@ -3554,23 +4362,50 @@ export function BacklogPlanningPanel({
                             </button>
                           </div>
                         ),
+                        team: isEditingParentTeam("epic", epic.epicId) ? (
+                          renderParentTeamEditor({ kind: "epic", id: epic.epicId })
+                        ) : (
+                          renderBacklogTeamCell(standEpicModel?.team ?? epic.epicTeamId)
+                        ),
                         year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
                         quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>,
                         month: <span className="text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>,
                         startDate: (
                           <span className="text-center text-[14px] tabular-nums text-slate-700">
-                            {formatBacklogPlanDate(standEpicGantt.start)}
+                            {isEditingParentDate("epic", epic.epicId, "start") ? (
+                              renderParentDateEditor({ kind: "epic", id: epic.epicId, field: "start" })
+                            ) : (
+                              formatBacklogPlanDate(standEpicGantt.start)
+                            )}
                           </span>
                         ),
                         endDate: (
                           <span className="text-center text-[14px] tabular-nums text-slate-700">
-                            {formatBacklogPlanDate(standEpicGantt.end)}
+                            {isEditingParentDate("epic", epic.epicId, "end") ? (
+                              renderParentDateEditor({ kind: "epic", id: epic.epicId, field: "end" })
+                            ) : (
+                              formatBacklogPlanDate(standEpicGantt.end)
+                            )}
                           </span>
                         ),
-                        status: <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip("todo"))}>To do</span>,
+                        status: (
+                          <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip("todo"))}>
+                            {statusIcon("todo")}
+                            To do
+                          </span>
+                        ),
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
-                        assignee: <span className="text-center text-[16px] text-slate-700">{epic.epicAssignee}</span>,
-                        labels: <BacklogLabelsEmptyRowSlot />,
+                        assignee: (
+                          <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
+                            <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                            {epic.epicAssignee}
+                          </span>
+                        ),
+                        labels: isEditingParentLabels("epic", epic.epicId) ? (
+                          renderParentLabelsEditor({ kind: "epic", id: epic.epicId })
+                        ) : (
+                          <span className="truncate text-[14px] text-slate-700">{standEpicModel?.labels ?? ""}</span>
+                        ),
                         estDays: (
                           <button
                             type="button"
@@ -3607,6 +4442,42 @@ export function BacklogPlanningPanel({
                             <div className="h-1.5 overflow-hidden rounded-full bg-slate-200" />
                           </button>
                         ),
+                      }, {
+                        workItem: { kind: "lock" },
+                        team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epic.epicId, team: standEpicModel?.team ?? epic.epicTeamId ?? null }) },
+                        year: { kind: "lock" },
+                        quarter: { kind: "lock" },
+                        month: { kind: "lock" },
+                        startDate: {
+                          kind: "edit",
+                          onEdit: () =>
+                            beginEpicDateEdit(
+                              epic.epicId,
+                              "start",
+                              Number(initiative.initiativeYear),
+                              standEpicModel?.planStartMonth ?? null,
+                              standEpicModel?.planStartDay ?? null,
+                            ),
+                        },
+                        endDate: {
+                          kind: "edit",
+                          onEdit: () =>
+                            beginEpicDateEdit(
+                              epic.epicId,
+                              "end",
+                              Number(initiative.initiativeYear),
+                              standEpicModel?.planEndMonth ?? null,
+                              standEpicModel?.planEndDay ?? null,
+                            ),
+                        },
+                        status: { kind: "lock" },
+                        sprint: { kind: "lock" },
+                        assignee: { kind: "lock" },
+                        labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epic.epicId, labels: standEpicModel?.labels ?? null }) },
+                        estDays: { kind: "lock" },
+                        epicOriginalEst: { kind: "lock" },
+                        daysLeft: { kind: "lock" },
+                        progress: { kind: "lock" },
                       })}
                     </div>
                     {createSelection?.anchorKey === `group-standalone-epic:${epic.epicId}` ? (
@@ -3981,24 +4852,25 @@ export function BacklogPlanningPanel({
           typeof parsed.defaultsVersion === "number" && Number.isFinite(parsed.defaultsVersion)
             ? parsed.defaultsVersion
             : 0;
-        if (parsed.columnVisibility && typeof parsed.columnVisibility === "object") {
-          setColumnVisibility(() => {
-            // Start from defaults; merge saved booleans so new columns get default visibility until saved.
-            const next = { ...DEFAULT_BACKLOG_COLUMN_VISIBILITY };
-            for (const key of BACKLOG_COLUMN_ORDER) {
-              const v = parsed.columnVisibility![key];
-              if (typeof v === "boolean") next[key] = v;
-            }
-            next.workItem = true;
-            if (storedDefaultsVersion < BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION) {
-              next.year = DEFAULT_BACKLOG_COLUMN_VISIBILITY.year;
-              next.quarter = DEFAULT_BACKLOG_COLUMN_VISIBILITY.quarter;
-              next.month = DEFAULT_BACKLOG_COLUMN_VISIBILITY.month;
-            }
-            return next;
-          });
+        // When defaults bump (new column added, order changed, visibility tweaked), discard the saved layout
+        // entirely so the user picks up the new defaults. The save effect below will re-persist with the new
+        // defaultsVersion on the next render.
+        const needsReset = storedDefaultsVersion < BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION;
+        if (!needsReset) {
+          if (parsed.columnVisibility && typeof parsed.columnVisibility === "object") {
+            setColumnVisibility(() => {
+              // Start from defaults; merge saved booleans so new columns get default visibility until saved.
+              const next = { ...DEFAULT_BACKLOG_COLUMN_VISIBILITY };
+              for (const key of BACKLOG_COLUMN_ORDER) {
+                const v = parsed.columnVisibility![key];
+                if (typeof v === "boolean") next[key] = v;
+              }
+              next.workItem = true;
+              return next;
+            });
+          }
+          setColumnOrder(normalizeColumnOrder(parsed.columnOrder));
         }
-        setColumnOrder(normalizeColumnOrder(parsed.columnOrder));
         if (typeof parsed.showTableHeaderRow === "boolean") setShowTableHeaderRow(parsed.showTableHeaderRow);
       }
     } catch {
@@ -4109,7 +4981,7 @@ export function BacklogPlanningPanel({
   );
 
   return (
-    <section className="flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+    <section className="ml-3 flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
       <div className="mb-6 flex shrink-0 items-center justify-between gap-3 pb-2 pt-4">
         <div className="flex items-center gap-2.5">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
@@ -4117,9 +4989,21 @@ export function BacklogPlanningPanel({
           </span>
           <h2 className="text-[27px] font-bold tracking-tight text-slate-900">Backlog Workspace</h2>
         </div>
-        {!(suppressInlineChips || summaryBarPortalElement) && (
-          <div className="flex flex-wrap items-center gap-1.5">{summaryChipsJsx}</div>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {!(suppressInlineChips || summaryBarPortalElement) && (
+            <div className="flex flex-wrap items-center gap-1.5">{summaryChipsJsx}</div>
+          )}
+          <button
+            type="button"
+            onClick={handleExcelExport}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 text-[13px] font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+            aria-label="Export backlog to Excel"
+            title="Export to Excel (preview, then download .xls)"
+          >
+            <FileSpreadsheet className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+            <span>Export Excel</span>
+          </button>
+        </div>
       </div>
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
 
@@ -4478,7 +5362,7 @@ export function BacklogPlanningPanel({
         <>
         {showTableHeaderRow ? (
           <div className="sticky top-0 z-10 min-w-full w-max border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)] relative">
-            <div ref={columnsMenuRef} className="absolute left-4 top-0 flex h-full items-center z-20">
+            <div ref={columnsMenuRef} className="absolute left-4 top-0 flex h-full items-center gap-1.5 z-20">
               <button
                 type="button"
                 onClick={() => setColumnsMenuOpen((open) => !open)}
@@ -4719,10 +5603,17 @@ export function BacklogPlanningPanel({
                           ) : null}
                         </div>
                       ),
+                      team: isEditingParentTeam("initiative", initiative.id) ? (
+                        renderParentTeamEditor({ kind: "initiative", id: initiative.id })
+                      ) : (
+                        renderBacklogTeamCell(initiative.team ?? aggregateInitiativeTeamId(initiative))
+                      ),
                       year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
                       quarter: <span className="text-center text-[16px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>,
                       month: <span className="text-center text-[16px] text-slate-700">{monthLabel(initiative.startMonth)}</span>,
-                      startDate: (
+                      startDate: isEditingParentDate("initiative", initiative.id, "start") ? (
+                        renderParentDateEditor({ kind: "initiative", id: initiative.id, field: "start" })
+                      ) : (
                         <button
                           type="button"
                           onClick={() => {}}
@@ -4731,7 +5622,9 @@ export function BacklogPlanningPanel({
                           {formatBacklogPlanDate(flatInitGantt.start)}
                         </button>
                       ),
-                      endDate: (
+                      endDate: isEditingParentDate("initiative", initiative.id, "end") ? (
+                        renderParentDateEditor({ kind: "initiative", id: initiative.id, field: "end" })
+                      ) : (
                         <button
                           type="button"
                           onClick={() => {}}
@@ -4741,7 +5634,8 @@ export function BacklogPlanningPanel({
                         </button>
                       ),
                       status: (
-                        <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
+                        <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
+                          {statusIcon(initiativeWorkflowStatus)}
                           {workflowStatusLabel(initiativeWorkflowStatus)}
                         </span>
                       ),
@@ -4777,14 +5671,19 @@ export function BacklogPlanningPanel({
                                 event.preventDefault();
                                 setEditingParentAssignee({ kind: "initiative", id: initiative.id, value: initiative.assignee?.trim() || "" });
                               }}
-                              className="rounded px-1 py-0.5 hover:bg-slate-100"
+                              className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                             >
+                              <UserRound className="size-3.5 text-slate-400" aria-hidden />
                               {initiative.assignee ?? "Unassigned"}
                             </button>
                           )}
                         </span>
                       ),
-                      labels: <BacklogLabelsEmptyRowSlot />,
+                      labels: isEditingParentLabels("initiative", initiative.id) ? (
+                        renderParentLabelsEditor({ kind: "initiative", id: initiative.id })
+                      ) : (
+                        <span className="truncate text-[14px] text-slate-700">{initiative.labels ?? ""}</span>
+                      ),
                       estDays: (
                         <button
                           type="button"
@@ -4824,6 +5723,40 @@ export function BacklogPlanningPanel({
                           </div>
                         </button>
                       ),
+                    }, {
+                      workItem: { kind: "lock" },
+                      team: { kind: "edit", onEdit: () => beginInitiativeTeamEdit({ id: initiative.id, team: initiative.team ?? null }) },
+                      year: { kind: "lock" },
+                      quarter: { kind: "lock" },
+                      month: { kind: "lock" },
+                      startDate: {
+                        kind: "edit",
+                        onEdit: () =>
+                          beginInitiativeDateEdit(
+                            initiative.id,
+                            "start",
+                            initiative.year,
+                            initiative.startMonth ?? null,
+                          ),
+                      },
+                      endDate: {
+                        kind: "edit",
+                        onEdit: () =>
+                          beginInitiativeDateEdit(
+                            initiative.id,
+                            "end",
+                            initiative.year,
+                            initiative.endMonth ?? null,
+                          ),
+                      },
+                      status: { kind: "lock" },
+                      sprint: { kind: "lock" },
+                      assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "initiative", id: initiative.id, value: initiative.assignee?.trim() || "" }) },
+                      labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiative.id, labels: initiative.labels ?? null }) },
+                      estDays: { kind: "lock" },
+                      epicOriginalEst: { kind: "lock" },
+                      daysLeft: { kind: "lock" },
+                      progress: { kind: "lock" },
                     })}
                   </div>
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
@@ -4995,8 +5928,9 @@ export function BacklogPlanningPanel({
                                           <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.id, epic.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
                                         </span>
                                       ) : (
-                                        <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-800">
-                                          <span className="truncate">{epic.icon} {epic.title}</span>
+                                        <span className="inline-flex w-full min-w-0 items-center gap-1.5 text-[16px] font-medium text-slate-800">
+                                          <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
+                                          <span className="truncate">{epic.title}</span>
                                           <span
                                             className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                                             onMouseDown={(event) => event.stopPropagation()}
@@ -5058,6 +5992,11 @@ export function BacklogPlanningPanel({
                                     ) : null}
                                   </div>
                                 ),
+                                team: isEditingParentTeam("epic", epic.id) ? (
+                                  renderParentTeamEditor({ kind: "epic", id: epic.id })
+                                ) : (
+                                  renderBacklogTeamCell(epic.team ?? null)
+                                ),
                                 year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
                                 quarter: (
                                   <span className="text-center text-[16px] text-slate-700">
@@ -5071,16 +6010,25 @@ export function BacklogPlanningPanel({
                                 ),
                                 startDate: (
                                   <span className="text-center text-[14px] tabular-nums text-slate-700">
-                                    {formatBacklogPlanDate(flatEpicGantt.start)}
+                                    {isEditingParentDate("epic", epic.id, "start") ? (
+                                      renderParentDateEditor({ kind: "epic", id: epic.id, field: "start" })
+                                    ) : (
+                                      formatBacklogPlanDate(flatEpicGantt.start)
+                                    )}
                                   </span>
                                 ),
                                 endDate: (
                                   <span className="text-center text-[14px] tabular-nums text-slate-700">
-                                    {formatBacklogPlanDate(flatEpicGantt.end)}
+                                    {isEditingParentDate("epic", epic.id, "end") ? (
+                                      renderParentDateEditor({ kind: "epic", id: epic.id, field: "end" })
+                                    ) : (
+                                      formatBacklogPlanDate(flatEpicGantt.end)
+                                    )}
                                   </span>
                                 ),
                                 status: (
-                                  <span className={cn("inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
+                                  <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
+                                    {statusIcon(epicWorkflowStatus)}
                                     {workflowStatusLabel(epicWorkflowStatus)}
                                   </span>
                                 ),
@@ -5116,14 +6064,19 @@ export function BacklogPlanningPanel({
                                           event.preventDefault();
                                           setEditingParentAssignee({ kind: "epic", id: epic.id, value: epic.assignee?.trim() || "" });
                                         }}
-                                        className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                        className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                                       >
+                                        <UserRound className="size-3.5 text-slate-400" aria-hidden />
                                         {epic.assignee ?? "Unassigned"}
                                       </button>
                                     )}
                                   </span>
                                 ),
-                                labels: <BacklogLabelsEmptyRowSlot />,
+                                labels: isEditingParentLabels("epic", epic.id) ? (
+                                  renderParentLabelsEditor({ kind: "epic", id: epic.id })
+                                ) : (
+                                  <span className="truncate text-[14px] text-slate-700">{epic.labels ?? ""}</span>
+                                ),
                                 estDays: (
                                   <button
                                     type="button"
@@ -5167,6 +6120,42 @@ export function BacklogPlanningPanel({
                                     </div>
                                   </button>
                                 ),
+                              }, {
+                                workItem: { kind: "lock" },
+                                team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epic.id, team: epic.team ?? null }) },
+                                year: { kind: "lock" },
+                                quarter: { kind: "lock" },
+                                month: { kind: "lock" },
+                                startDate: {
+                                  kind: "edit",
+                                  onEdit: () =>
+                                    beginEpicDateEdit(
+                                      epic.id,
+                                      "start",
+                                      initiative.year,
+                                      epic.planStartMonth ?? null,
+                                      epic.planStartDay ?? null,
+                                    ),
+                                },
+                                endDate: {
+                                  kind: "edit",
+                                  onEdit: () =>
+                                    beginEpicDateEdit(
+                                      epic.id,
+                                      "end",
+                                      initiative.year,
+                                      epic.planEndMonth ?? null,
+                                      epic.planEndDay ?? null,
+                                    ),
+                                },
+                                status: { kind: "lock" },
+                                sprint: { kind: "lock" },
+                                assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "epic", id: epic.id, value: epic.assignee?.trim() || "" }) },
+                                labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epic.id, labels: epic.labels ?? null }) },
+                                estDays: { kind: "lock" },
+                                epicOriginalEst: { kind: "lock" },
+                                daysLeft: { kind: "lock" },
+                                progress: { kind: "lock" },
                               })}
                             </div>
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
@@ -5282,9 +6271,6 @@ export function BacklogPlanningPanel({
                                             </span>
                                           </span>
                                         )}
-                                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[16px] font-semibold text-slate-600">
-                                          #{storyRefById[story.id] ?? story.id.slice(0, 6)}
-                                        </span>
                                       </div>
                                       <button
                                         type="button"
@@ -5318,6 +6304,11 @@ export function BacklogPlanningPanel({
                                       ) : null}
                                     </div>
                                       ),
+                                      team: isEditingParentTeam("epic", epic.id) ? (
+                                        renderParentTeamEditor({ kind: "epic", id: epic.id })
+                                      ) : (
+                                        renderBacklogTeamCell(epic.team ?? null)
+                                      ),
                                       year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
                                       quarter: (
                                     <span className="text-center text-[16px] text-slate-700">
@@ -5342,34 +6333,27 @@ export function BacklogPlanningPanel({
                                       status: (
                                     <span
                                       className={cn(
-                                        "inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide",
+                                        "relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide",
                                         statusChip(story.status),
                                       )}
                                     >
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "status" ? (
-                                        <span className="flex items-center gap-1">
-                                          <select
-                                            value={editingStoryCell.value}
-                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                                            onKeyDown={(event) =>
-                                              handleStoryCellKeyDown(event, story.id, "status", storyEditSnapshotFromFlat(story))
-                                            }
-                                            className="w-full cursor-pointer bg-transparent text-[16px] font-medium outline-none"
-                                          >
-                                            <option value="todo">To do</option>
-                                            <option value="inProgress">In progress</option>
-                                            <option value="done">Done</option>
-                                            <option value="approved">Approved</option>
-                                          </select>
-                                          <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"><X className="size-3" /></button>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              confirmStoryCellEdit(story.id, "status", storyEditSnapshotFromFlat(story))
-                                            }
-                                            className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200"
-                                          ><Check className="size-3" /></button>
-                                        </span>
+                                        <>
+                                          <span className="inline-flex items-center gap-1.5 font-semibold">
+                                            {statusIcon(editingStoryCell.value)}
+                                            {workflowStatusLabel(editingStoryCell.value as WorkflowStatus)}
+                                          </span>
+                                          <CellOptionPopover
+                                            value={editingStoryCell.value as WorkflowStatus}
+                                            options={STORY_STATUS_POPOVER_OPTIONS}
+                                            onSelect={(v) => {
+                                              setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
+                                              void confirmStoryCellEdit(story.id, "status", storyEditSnapshotFromFlat(story), v);
+                                            }}
+                                            onCancel={cancelStoryCellEdit}
+                                            widthClass="w-[180px]"
+                                          />
+                                        </>
                                       ) : (
                                         <button
                                           type="button"
@@ -5379,6 +6363,7 @@ export function BacklogPlanningPanel({
                                           }}
                                           className="inline-flex items-center gap-1.5 font-semibold"
                                         >
+                                          {statusIcon(story.status)}
                                           {workflowStatusLabel(story.status as WorkflowStatus)}
                                         </button>
                                       )}
@@ -5458,8 +6443,9 @@ export function BacklogPlanningPanel({
                                             event.preventDefault();
                                             beginStoryCellEdit(story.id, "assignee", story.assignee?.trim() || "");
                                           }}
-                                          className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                          className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                                         >
+                                          <UserRound className="size-3.5 text-slate-400" aria-hidden />
                                           {story.assignee?.trim() || "Unassigned"}
                                         </button>
                                       )}
@@ -5595,6 +6581,22 @@ export function BacklogPlanningPanel({
                                       </div>
                                     </button>
                                       ),
+                                    }, {
+                                      workItem: { kind: "lock" },
+                                      team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epic.id, team: epic.team ?? null }) },
+                                      status: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "status", story.status) },
+                                      sprint: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "sprint", story.sprint == null ? "unscheduled" : String(story.sprint)) },
+                                      assignee: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "assignee", story.assignee?.trim() || "") },
+                                      labels: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "labels", formatStoryLabelsForEditInput(story.labels)) },
+                                      estDays: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "estimatedDays", String(story.estimatedDays ?? 0)) },
+                                      daysLeft: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "daysLeft", String(story.daysLeft ?? 0)) },
+                                      year: { kind: "lock" },
+                                      quarter: { kind: "lock" },
+                                      month: { kind: "lock" },
+                                      startDate: { kind: "lock" },
+                                      endDate: { kind: "lock" },
+                                      epicOriginalEst: { kind: "lock" },
+                                      progress: { kind: "lock" },
                                     })}
                                     </div>
                                       );

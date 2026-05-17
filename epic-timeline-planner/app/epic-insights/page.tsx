@@ -100,6 +100,8 @@ export default async function EpicInsightsPage({ searchParams }: PageProps) {
           timelineRow: 0,
           year: initiative.year,
           roadmapId: initiative.roadmapId ?? null,
+          team: initiative.team ?? null,
+          labels: initiative.labels ?? null,
           createdAt: initiative.createdAt.toISOString(),
           updatedAt: initiative.updatedAt.toISOString(),
           comments: initiative.comments.map((c) => ({
@@ -123,6 +125,7 @@ export default async function EpicInsightsPage({ searchParams }: PageProps) {
             assignee: e.assignee,
             color: e.color,
             team: e.team,
+            labels: e.labels ?? null,
             originalEstimateDays: e.originalEstimateDays,
             planStartMonth: e.planStartMonth,
             planEndMonth: e.planEndMonth,

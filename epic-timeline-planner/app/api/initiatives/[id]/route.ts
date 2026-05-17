@@ -12,6 +12,8 @@ const updateInitiativeSchema = z.object({
   startMonth: z.number().int().min(1).max(12).optional().nullable(),
   endMonth: z.number().int().min(1).max(12).optional().nullable(),
   timelineRow: z.number().int().min(0).max(999).optional(),
+  team: z.string().trim().min(1).max(64).optional().nullable(),
+  labels: z.string().trim().max(500).optional().nullable(),
 });
 
 export async function PATCH(
@@ -40,6 +42,8 @@ export async function PATCH(
       startMonth: true,
       endMonth: true,
       timelineRow: true,
+      team: true,
+      labels: true,
     },
   });
   if (!existing) {
@@ -59,6 +63,8 @@ export async function PATCH(
   if (patch.endMonth !== undefined && patch.endMonth !== existing.endMonth) changes.push("End month updated");
   if (patch.timelineRow !== undefined && patch.timelineRow !== existing.timelineRow)
     changes.push("Gantt row order updated");
+  if (patch.team !== undefined && patch.team !== existing.team) changes.push("Team updated");
+  if (patch.labels !== undefined && patch.labels !== existing.labels) changes.push("Labels updated");
 
   const initiative = await db.initiative.update({
     where: { id },
@@ -71,6 +77,8 @@ export async function PATCH(
       ...(patch.startMonth !== undefined ? { startMonth: patch.startMonth } : {}),
       ...(patch.endMonth !== undefined ? { endMonth: patch.endMonth } : {}),
       ...(patch.timelineRow !== undefined ? { timelineRow: patch.timelineRow } : {}),
+      ...(patch.team !== undefined ? { team: patch.team } : {}),
+      ...(patch.labels !== undefined ? { labels: patch.labels } : {}),
       ...(changes.length > 0
         ? { history: { create: changes.map((entry) => ({ entry })) } }
         : {}),

@@ -49,6 +49,10 @@ model Initiative {
   year        Int
   roadmapId   String?
   roadmap     Roadmap?            @relation(fields: [roadmapId], references: [id])
+  /** Delivery team id surfaced for the initiative; mirrors epic.team. */
+  team        String?
+  /** Free-form labels (comma-separated). */
+  labels      String?
   epics       Epic[]
   comments    InitiativeComment[]
   history     InitiativeHistory[]
@@ -99,6 +103,8 @@ model Epic {
   backlogOrder   Int           @default(0)
   /** Delivery team id when assigned on the month team board (`platform` | `experience` | `data`). */
   team           String?
+  /** Free-form labels (comma-separated). */
+  labels         String?
   userStories    UserStory[]
   comments       EpicComment[]
   history        EpicHistory[]

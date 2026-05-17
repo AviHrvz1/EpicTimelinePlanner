@@ -20,6 +20,7 @@ const updateEpicSchema = z.object({
   planEndDay: z.number().int().min(1).max(31).optional().nullable(),
   timelineRow: z.number().int().min(0).max(100000).optional(),
   team: epicTeamIdSchema.optional().nullable(),
+  labels: z.string().trim().max(500).optional().nullable(),
   originalEstimateDays: z.number().int().min(0).max(5000).optional().nullable(),
 });
 
@@ -66,6 +67,7 @@ export async function PATCH(
         planEndDay: true,
         timelineRow: true,
         team: true,
+        labels: true,
         originalEstimateDays: true,
       },
     });
@@ -93,6 +95,7 @@ export async function PATCH(
     if (patch.timelineRow !== undefined && patch.timelineRow !== existing.timelineRow)
       changes.push("Gantt row updated");
     if (patch.team !== undefined && patch.team !== existing.team) changes.push("Delivery team updated");
+    if (patch.labels !== undefined && patch.labels !== existing.labels) changes.push("Labels updated");
     if (patch.originalEstimateDays !== undefined && patch.originalEstimateDays !== existing.originalEstimateDays)
       changes.push("Original estimate updated");
 
@@ -126,6 +129,7 @@ export async function PATCH(
         ...(patch.planEndDay !== undefined ? { planEndDay: patch.planEndDay } : {}),
         ...(patch.timelineRow !== undefined ? { timelineRow: patch.timelineRow } : {}),
         ...(patch.team !== undefined ? { team: patch.team } : {}),
+        ...(patch.labels !== undefined ? { labels: patch.labels } : {}),
         ...(patch.originalEstimateDays !== undefined ? { originalEstimateDays: patch.originalEstimateDays } : {}),
         planYear: nextPlanYear,
         planQuarter: nextPlanQuarter,
