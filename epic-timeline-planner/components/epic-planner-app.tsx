@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
+import { UserChip } from "@/components/auth/user-chip";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
@@ -4620,9 +4621,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             "overflow-hidden bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
         )}
       >
-        {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid */}
+        {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid.
+            UserChip lives on the right edge (after the summary chips) so the signed-in
+            user / Sign-in link is always visible regardless of which mode is active. */}
         <div className="-mr-[5px] flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
           <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
+          <div className="ml-2 flex shrink-0 items-center pl-2 border-l border-slate-100">
+            <UserChip />
+          </div>
         </div>
         <div
           className={cn(
@@ -4655,7 +4661,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 className={cn(
                   "shrink-0 overflow-hidden border-slate-200/55 bg-white transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
                   isModeRailExpanded
-                    ? "max-h-[6.25rem] border-b px-3 pb-3 pt-3 opacity-100"
+                    ? "max-h-[120px] border-b px-3 py-[17px] opacity-100"
                     : "max-h-0 border-0 bg-transparent p-0 opacity-0",
                 )}
                 aria-hidden={!isModeRailExpanded}
@@ -4664,8 +4670,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   src="/bird-eye-lockup-wide.png"
                   alt="Bird Eye Viewer logo"
                   className={cn(
-                    "block w-full rounded-md object-contain object-left transition-opacity duration-200",
-                    isModeRailExpanded ? "h-[62px] opacity-100" : "h-0 opacity-0",
+                    "block w-auto max-w-full rounded-md object-contain transition-opacity duration-200",
+                    isModeRailExpanded ? "h-[52px] opacity-100" : "h-0 opacity-0",
                   )}
                 />
               </div>

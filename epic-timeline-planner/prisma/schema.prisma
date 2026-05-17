@@ -224,7 +224,100 @@ model WorkspaceUser {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  /** Back-link from the auth User; set when a User signs up with this email. */
+  user User?
+
   @@index([team])
   @@index([permission])
   @@index([status])
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Auth models (Better Auth shape) — separate from WorkspaceUser. The auth User
+// is the login identity; WorkspaceUser is the team-directory profile. On first
+// signup we soft-link them by email so directory entries an admin added in
+// advance "activate" when that person signs up. See lib/auth.ts.
+// ──────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  name             String?
+  image            String?
+  /** Null for OAuth-only users; bcrypt hash for credentials users. */
+  passwordHash     String?
+  /** Consecutive failed-login count for this email. Reset on success. */
+  failedLoginCount Int       @default(0)
+  /** Brute-force lockout window end; UI shows a "try again in X minutes" message until this passes. */
+  lockedUntil      DateTime?
+  workspaceUserId  String?   @unique
+  workspaceUser    WorkspaceUser? @relation(fields: [workspaceUserId], references: [id])
+  accounts         Account[]
+  sessions         Session[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([email])
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  userId                String
+  /** "credentials" | "google" | "apple" | "microsoft" */
+  providerId            String
+  /** OAuth `sub` or, for credentials, the email. */
+  accountId             String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  /** Better Auth may also store credentials hash here; we keep it on User.passwordHash instead. */
+  password              String?
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  /** Random opaque token stored in the session cookie. */
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  /** Subject of the verification: email address for password-reset / email-verify flows. */
+  identifier String
+  /** The hashed token / code. */
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model RateLimitEvent {
+  id        String   @id @default(uuid())
+  /** Sliding-window key, e.g. `login:email:foo@bar.com` or `signup:ip:1.2.3.4`. */
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
 }
