@@ -201,6 +201,17 @@ function renderHtml(args: {
     .dashboard-pdf-canvas .grid-cols-3 {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
+    /* Shrink the chart title in each card header so it doesn't dominate the card at print
+       scale. Target the header (first direct child of each card) and override the live UI's
+       text-sm sizing on its inner spans + cap the leading icon. */
+    .dashboard-pdf-canvas [class*="col-span-"] > div:first-child,
+    .dashboard-pdf-canvas [class*="col-span-"] > div:first-child span {
+      font-size: 11px !important;
+    }
+    .dashboard-pdf-canvas [class*="col-span-"] > div:first-child svg {
+      width: 12px !important;
+      height: 12px !important;
+    }
     /* Recharts SVGs are emitted with hardcoded pixel width/height attrs matching whatever the
        live container measured at render time — on a wide monitor that's 600-800px, wider than
        the ~470px print card. They have no viewBox, so CSS scaling clips them instead of
