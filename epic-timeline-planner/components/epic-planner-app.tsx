@@ -4661,7 +4661,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 className={cn(
                   "shrink-0 overflow-hidden border-slate-200/55 bg-white transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
                   isModeRailExpanded
-                    ? "max-h-[120px] border-b px-3 py-[17px] opacity-100"
+                    ? "max-h-[120px] border-b px-3 pt-[25px] pb-[9px] opacity-100"
                     : "max-h-0 border-0 bg-transparent p-0 opacity-0",
                 )}
                 aria-hidden={!isModeRailExpanded}
