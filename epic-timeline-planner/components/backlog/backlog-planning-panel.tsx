@@ -4,6 +4,7 @@ import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSe
 import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowUpDown,
   Bookmark,
   CalendarDays,
   CalendarRange,
@@ -14,6 +15,7 @@ import {
   ChevronRight,
   ChevronsDown,
   ChevronsUp,
+  ChevronUp,
   Eraser,
   FileSpreadsheet,
   Filter,
@@ -165,6 +167,76 @@ type InlineEditableStoryField = "status" | "sprint" | "assignee" | "labels" | "e
 type WorkItemKindFilter = "initiative" | "epic" | "story";
 
 type BacklogSortBy = "titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status";
+
+/**
+ * Per-column header sort state. When non-null this OVERRIDES the saved-view
+ * `BacklogSortBy` for initiative-level ordering (the saved-view sort still
+ * governs story-level ordering inside each epic). Third click clears it back
+ * to null so the saved-view default takes over again.
+ */
+type BacklogColumnSort = { key: BacklogColumnKey; dir: "asc" | "desc" } | null;
+
+function compareByColumn(a: InitiativeItem, b: InitiativeItem, sort: BacklogColumnSort): number {
+  if (!sort) return 0;
+  const dir = sort.dir === "asc" ? 1 : -1;
+  const key = sort.key;
+  if (key === "workItem") return dir * a.title.localeCompare(b.title);
+  if (key === "assignee") return dir * (a.assignee ?? "Unassigned").localeCompare(b.assignee ?? "Unassigned");
+  if (key === "year") return dir * ((a.year ?? 0) - (b.year ?? 0));
+  if (key === "startDate") return dir * ((a.startMonth ?? 99) - (b.startMonth ?? 99));
+  if (key === "endDate") return dir * ((a.endMonth ?? 99) - (b.endMonth ?? 99));
+  if (key === "month") return dir * ((a.startMonth ?? 99) - (b.startMonth ?? 99));
+  if (key === "quarter") {
+    const qa = a.startMonth ? Math.ceil(a.startMonth / 3) : 99;
+    const qb = b.startMonth ? Math.ceil(b.startMonth / 3) : 99;
+    return dir * (qa - qb);
+  }
+  if (key === "status") {
+    const order: Record<string, number> = { backlog: 0, planning: 1, "in-progress": 2, blocked: 3, done: 4 };
+    return dir * ((order[a.status as string] ?? 99) - (order[b.status as string] ?? 99));
+  }
+  if (key === "team") {
+    const at = (a.team ?? "").toString();
+    const bt = (b.team ?? "").toString();
+    return dir * at.localeCompare(bt);
+  }
+  if (key === "labels") return dir * ((a.labels ?? "").localeCompare(b.labels ?? ""));
+  // Numeric/sprint/progress/est columns roll up across epics → use sums for initiatives.
+  const aEpics = a.epics ?? [];
+  const bEpics = b.epics ?? [];
+  if (key === "epicOriginalEst") {
+    const av = aEpics.reduce((s, e) => s + (e.originalEstimateDays ?? 0), 0);
+    const bv = bEpics.reduce((s, e) => s + (e.originalEstimateDays ?? 0), 0);
+    return dir * (av - bv);
+  }
+  if (key === "estDays") {
+    const av = aEpics.reduce((s, e) => s + (e.userStories ?? []).reduce((ss, st) => ss + (st.estimatedDays ?? 0), 0), 0);
+    const bv = bEpics.reduce((s, e) => s + (e.userStories ?? []).reduce((ss, st) => ss + (st.estimatedDays ?? 0), 0), 0);
+    return dir * (av - bv);
+  }
+  if (key === "daysLeft") {
+    const av = aEpics.reduce((s, e) => s + (e.userStories ?? []).reduce((ss, st) => ss + (st.daysLeft ?? 0), 0), 0);
+    const bv = bEpics.reduce((s, e) => s + (e.userStories ?? []).reduce((ss, st) => ss + (st.daysLeft ?? 0), 0), 0);
+    return dir * (av - bv);
+  }
+  if (key === "progress") {
+    const tot = (arr: typeof aEpics) => {
+      const all = arr.flatMap((e) => e.userStories ?? []);
+      if (all.length === 0) return 0;
+      const done = all.filter((s) => s.status === "done" || s.status === "approved").length;
+      return done / all.length;
+    };
+    return dir * (tot(aEpics) - tot(bEpics));
+  }
+  if (key === "sprint") {
+    const firstSprint = (arr: typeof aEpics): number => {
+      const sprints = arr.flatMap((e) => (e.userStories ?? []).map((s) => s.sprint ?? Infinity));
+      return sprints.length === 0 ? Infinity : Math.min(...sprints);
+    };
+    return dir * (firstSprint(aEpics) - firstSprint(bEpics));
+  }
+  return 0;
+}
 
 /** Filters, group-by, and work-item scope only (no table layout or sort). */
 type BacklogFilterSnapshot = {
@@ -515,9 +587,19 @@ type SortableBacklogColumnHeaderProps = {
   centered: boolean;
   label: ReactNode;
   resizeHandle: ReactNode;
+  columnSort: BacklogColumnSort;
+  onToggleSort: (key: BacklogColumnKey) => void;
 };
 
-function SortableBacklogColumnHeader({ id, className, centered, label, resizeHandle }: SortableBacklogColumnHeaderProps) {
+function SortableBacklogColumnHeader({
+  id,
+  className,
+  centered,
+  label,
+  resizeHandle,
+  columnSort,
+  onToggleSort,
+}: SortableBacklogColumnHeaderProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -536,6 +618,25 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
       <TableColumnDragGrip />
     </button>
   );
+  const isActive = columnSort?.key === id;
+  const dir = isActive ? columnSort?.dir : null;
+  // Sort icons rendered AFTER the title (trailing). Bumped to size-4 with a slightly thicker stroke
+  // so they read clearly on the indigo header bg.
+  const sortIcon = isActive ? (
+    dir === "asc" ? <ChevronUp className="size-4 shrink-0" strokeWidth={2.4} /> : <ChevronDown className="size-4 shrink-0" strokeWidth={2.4} />
+  ) : (
+    <ArrowUpDown className="size-4 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-60" strokeWidth={2.2} />
+  );
+  const sortableLabel = (
+    <button
+      type="button"
+      onClick={() => onToggleSort(id)}
+      className="group/col-sort inline-flex min-w-0 items-center gap-1 truncate"
+    >
+      {label}
+      {sortIcon}
+    </button>
+  );
   return (
     <div ref={setNodeRef} style={style} className={cn(className, "group/col w-full min-w-0 transition-colors hover:text-amber-200")}>
       {/* pr-2.5 reserves the resize strip; overflow-hidden keeps label from painting past the column edge */}
@@ -543,13 +644,13 @@ function SortableBacklogColumnHeader({ id, className, centered, label, resizeHan
         <span className="flex min-h-[1.25rem] w-full min-w-0 justify-center overflow-hidden pr-2.5">
           <span className="flex min-w-0 max-w-full items-center justify-center gap-1">
             {grip}
-            <span className="min-w-0 overflow-hidden">{label}</span>
+            <span className="min-w-0 overflow-hidden">{sortableLabel}</span>
           </span>
         </span>
       ) : (
         <span className="flex min-h-[1.25rem] w-full min-w-0 items-center gap-1 overflow-hidden pr-2.5">
           {grip}
-          <span className="min-w-0 flex-1 overflow-hidden">{label}</span>
+          <span className="min-w-0 flex-1 overflow-hidden">{sortableLabel}</span>
         </span>
       )}
       {resizeHandle}
@@ -1830,6 +1931,16 @@ export function BacklogPlanningPanel({
   const [roadmapFilter, setRoadmapFilter] = useState<string[]>([]);
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
   const [sortBy, setSortBy] = useState<BacklogSortBy>("titleAsc");
+  // Per-column header sort: overrides initiative ordering when non-null. Third
+  // click on the same header clears back to null so the saved-view sort wins.
+  const [columnSort, setColumnSort] = useState<BacklogColumnSort>(null);
+  function toggleColumnSort(key: BacklogColumnKey) {
+    setColumnSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "asc" };
+      if (prev.dir === "asc") return { key, dir: "desc" };
+      return null;
+    });
+  }
   const [openCreateMenuKey, setOpenCreateMenuKey] = useState<string | null>(null);
   const [createDraftTitle, setCreateDraftTitle] = useState("");
   const [createSelection, setCreateSelection] = useState<{
@@ -2597,10 +2708,14 @@ export function BacklogPlanningPanel({
       .filter(Boolean) as typeof filteredWithControls;
   }, [filteredWithControls, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter]);
 
-  const fullyFiltered = useMemo(
-    () => applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter),
-    [backlogFilteredBeforeWorkItem, workItemFilter],
-  );
+  const fullyFiltered = useMemo(() => {
+    const base = applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter);
+    // When the user clicks a column header, columnSort takes priority over the
+    // saved-view sortBy (which still governs per-epic story ordering inside
+    // `filteredWithControls`). Cleared (null) → fall back to the upstream order.
+    if (columnSort) return [...base].sort((a, b) => compareByColumn(a, b, columnSort));
+    return base;
+  }, [backlogFilteredBeforeWorkItem, workItemFilter, columnSort]);
   // O(1) lookups by id — replaces `fullyFiltered.find(...)` calls that fired once per rendered
   // row (= O(N²) total) and made changing Group by feel slow on large backlogs.
   const initiativeById = useMemo(() => {
@@ -2804,7 +2919,7 @@ export function BacklogPlanningPanel({
               // the cell contains one of: native form element (inline editors) or an explicit
               // `data-cell-editing` marker (portal-anchored status / team / date editors).
               // Multiple rules used (instead of `:is(...)`) so Tailwind v4 generates each simple selector reliably.
-              className="pointer-events-auto absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
+              className="pointer-events-auto absolute right-1 top-1/2 z-20 shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
               onMouseDown={(e) => e.stopPropagation()}
             >
               <EditRowIconButton label="Edit" onClick={hint.onEdit} />
@@ -2812,9 +2927,10 @@ export function BacklogPlanningPanel({
           ) : (
             <span
               title="Read only"
-              className="pointer-events-none absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
+              aria-label="Read only"
+              className="pointer-events-none absolute right-1 top-1/2 z-20 shrink-0 -translate-y-1/2 inline-flex size-7 items-center justify-center rounded-lg bg-white text-slate-400 ring-1 ring-slate-200/80 opacity-0 transition-opacity group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
             >
-              <Lock className="size-3.5 text-slate-300" />
+              <Lock className="size-3.5" strokeWidth={2} aria-hidden />
             </span>
           )}
         </div>
@@ -2859,11 +2975,64 @@ export function BacklogPlanningPanel({
             quarterLabelValue: quarterFromMonth(monthNum),
             storyStartDateLabel: formatBacklogPlanDate(workPlan.start),
             storyEndDateLabel: formatBacklogPlanDate(workPlan.end),
+            workPlanStart: workPlan.start,
+            workPlanEnd: workPlan.end,
           };
         }),
       ),
     );
   }, [fullyFiltered]);
+
+  // Sort the story-row list by the user's column choice. The bucket renderer preserves iteration order
+  // when filling groups, so sorting here causes rows to appear in the chosen order both flat AND inside
+  // each group bucket. Bucket order itself stays alphabetical (group-by isn't changed).
+  const sortedGroupedStoryRows = useMemo(() => {
+    if (!columnSort) return groupedStoryRows;
+    const dir = columnSort.dir === "asc" ? 1 : -1;
+    const key = columnSort.key;
+    const STATUS_RANK: Record<string, number> = { todo: 0, inProgress: 1, done: 2, approved: 3 };
+    const arr = [...groupedStoryRows];
+    arr.sort((a, b) => {
+      switch (key) {
+        case "workItem":
+          return dir * a.storyTitle.localeCompare(b.storyTitle);
+        case "status":
+          return dir * ((STATUS_RANK[a.storyStatus] ?? 99) - (STATUS_RANK[b.storyStatus] ?? 99));
+        case "team":
+          return dir * (a.teamId ?? "").localeCompare(b.teamId ?? "");
+        case "assignee":
+          return dir * a.storyAssignee.localeCompare(b.storyAssignee);
+        case "sprint":
+          return dir * ((a.storySprintNum ?? Number.MAX_SAFE_INTEGER) - (b.storySprintNum ?? Number.MAX_SAFE_INTEGER));
+        case "estDays":
+          return dir * (a.storyEstimatedDays - b.storyEstimatedDays);
+        case "daysLeft":
+          return dir * (a.storyDaysLeft - b.storyDaysLeft);
+        case "epicOriginalEst":
+          return dir * (a.epicOriginalEstimateDays - b.epicOriginalEstimateDays);
+        case "labels":
+          return dir * (a.storyLabels ?? "").localeCompare(b.storyLabels ?? "");
+        case "year":
+          return dir * (Number(a.initiativeYear) - Number(b.initiativeYear));
+        case "quarter":
+          return dir * (a.quarterLabelValue ?? "").localeCompare(b.quarterLabelValue ?? "");
+        case "month":
+          return dir * ((a.monthNum ?? 99) - (b.monthNum ?? 99));
+        case "startDate":
+          return dir * ((a.workPlanStart?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.workPlanStart?.getTime() ?? Number.MAX_SAFE_INTEGER));
+        case "endDate":
+          return dir * ((a.workPlanEnd?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.workPlanEnd?.getTime() ?? Number.MAX_SAFE_INTEGER));
+        case "progress": {
+          const ap = a.storyEstimatedDays > 0 ? (a.storyEstimatedDays - a.storyDaysLeft) / a.storyEstimatedDays : 0;
+          const bp = b.storyEstimatedDays > 0 ? (b.storyEstimatedDays - b.storyDaysLeft) / b.storyEstimatedDays : 0;
+          return dir * (ap - bp);
+        }
+        default:
+          return 0;
+      }
+    });
+    return arr;
+  }, [groupedStoryRows, columnSort]);
   const groupedStandaloneInitiatives = useMemo(() => {
     return fullyFiltered
       .filter((initiative) => (initiative.epics ?? []).every((epic) => (epic.userStories ?? []).length === 0))
@@ -2996,6 +3165,10 @@ export function BacklogPlanningPanel({
   }, [groupedStoryRows, visibleColumnKeys]);
 
   const groupSummaryLabel = groupLevels.length === 0 ? "None" : groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ");
+  // Group-by and column sort coexist: buckets stay in their natural order (alphabetical by label),
+  // while rows WITHIN each bucket reflect the column sort because `fullyFiltered` is sorted by
+  // `compareByColumn` and `renderGroupedTree` preserves that iteration order when filling buckets.
+  const effectiveGroupLevels = groupLevels;
   const hasAnyActiveFilter =
     yearFilter.length > 0 ||
     quarterFilter.length > 0 ||
@@ -3319,13 +3492,14 @@ export function BacklogPlanningPanel({
               month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
               startDate: (
                 <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
-                  {row.storyStartDateLabel ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                  {/* storyStartDateLabel is the formatted string (em-dash when null), so also skip on "—" */}
+                  {row.storyStartDateLabel && row.storyStartDateLabel !== "—" ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                   {row.storyStartDateLabel}
                 </span>
               ),
               endDate: (
                 <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
-                  {row.storyEndDateLabel ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                  {row.storyEndDateLabel && row.storyEndDateLabel !== "—" ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                   {row.storyEndDateLabel}
                 </span>
               ),
@@ -4243,12 +4417,16 @@ export function BacklogPlanningPanel({
         if (!byEpic.has(row.epicId)) byEpic.set(row.epicId, []);
         byEpic.get(row.epicId)!.push(row);
       }
-      return Array.from(byEpic.entries())
-        .sort((a, b) => (a[1][0]?.epicTitle ?? "").localeCompare(b[1][0]?.epicTitle ?? ""))
-        .map(([epicId, epicRows]) => {
-          const first = epicRows[0];
-          return renderEpicRow(epicId, first.epicTitle, first.epicAssignee, epicRows, indentPx, path);
-        });
+      const epicEntries = Array.from(byEpic.entries());
+      // Honor the upstream sort when columnSort is active (Map preserves insertion order = sorted-row order).
+      // Otherwise fall back to alphabetical-by-epic-title.
+      if (!columnSort) {
+        epicEntries.sort((a, b) => (a[1][0]?.epicTitle ?? "").localeCompare(b[1][0]?.epicTitle ?? ""));
+      }
+      return epicEntries.map(([epicId, epicRows]) => {
+        const first = epicRows[0];
+        return renderEpicRow(epicId, first.epicTitle, first.epicAssignee, epicRows, indentPx, path);
+      });
     }
 
     const byInitiative = new Map<string, typeof groupedStoryRows>();
@@ -4257,8 +4435,11 @@ export function BacklogPlanningPanel({
       byInitiative.get(row.initiativeId)!.push(row);
     }
 
-    return Array.from(byInitiative.entries())
-      .sort((a, b) => (a[1][0]?.initiativeTitle ?? "").localeCompare(b[1][0]?.initiativeTitle ?? ""))
+    const initiativeEntries = Array.from(byInitiative.entries());
+    if (!columnSort) {
+      initiativeEntries.sort((a, b) => (a[1][0]?.initiativeTitle ?? "").localeCompare(b[1][0]?.initiativeTitle ?? ""));
+    }
+    return initiativeEntries
       .map(([initiativeId, initiativeRows]) => {
         const first = initiativeRows[0];
         return renderInitiativeRow(
@@ -4282,7 +4463,7 @@ export function BacklogPlanningPanel({
     levelIndex = 0,
     path = "",
   ): React.ReactNode {
-    if (levelIndex >= groupLevels.length) {
+    if (levelIndex >= effectiveGroupLevels.length) {
       return (
         <>
           {renderLeafRows(rows, levelIndex * 14, path)}
@@ -4290,7 +4471,7 @@ export function BacklogPlanningPanel({
         </>
       );
     }
-    const level = groupLevels[levelIndex];
+    const level = effectiveGroupLevels[levelIndex];
     type Bucket = {
       label: string;
       sort: string;
@@ -4793,8 +4974,8 @@ export function BacklogPlanningPanel({
 
   function renderStandaloneGroupedTree(rows: typeof groupedStandaloneInitiatives, levelIndex = 0, path = "standalone/"): React.ReactNode {
     if (rows.length === 0) return null;
-    if (levelIndex >= groupLevels.length) return renderStandaloneInitiativeRows(rows, levelIndex * 14);
-    const level = groupLevels[levelIndex];
+    if (levelIndex >= effectiveGroupLevels.length) return renderStandaloneInitiativeRows(rows, levelIndex * 14);
+    const level = effectiveGroupLevels[levelIndex];
     const groups = new Map<string, { label: string; sort: string; rows: typeof groupedStandaloneInitiatives }>();
     for (const row of rows) {
       const { key, label, sort } = keyForStandaloneLevel(row, level);
@@ -5730,6 +5911,8 @@ export function BacklogPlanningPanel({
                         centered
                         label={<span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>}
                         resizeHandle={resizeHandle}
+                        columnSort={columnSort}
+                        onToggleSort={toggleColumnSort}
                       />
                     );
                   })}
@@ -5743,8 +5926,8 @@ export function BacklogPlanningPanel({
           <div className="px-4 py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
           <div className="min-w-max bg-white" ref={backlogRowsRootRef}>
-            {groupLevels.length > 0 ? (
-              renderGroupedTree(groupedStoryRows, groupedStandaloneInitiatives)
+            {effectiveGroupLevels.length > 0 ? (
+              renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives)
             ) : (
             <>
             {fullyFiltered.map((initiative) => {
