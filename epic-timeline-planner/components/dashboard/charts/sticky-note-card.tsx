@@ -132,9 +132,9 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
       />
 
       <div className="flex h-full min-h-0 flex-col p-3">
-      {/* Header row: edit toggle */}
-      <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2">
-        {editing ? (
+      {/* Header row: formatting toolbar only (shown when editing). Action buttons live in the footer below. */}
+      {editing ? (
+        <div className="mb-1.5 flex shrink-0 items-center">
           <div className="flex flex-wrap items-center gap-0.5 rounded-md bg-violet-100/60 p-0.5 ring-1 ring-violet-200/60">
             {tbBtn(!!editor?.isActive("bold"), () => editor?.chain().focus().toggleBold().run(), <Bold className="size-3" />)}
             {tbBtn(!!editor?.isActive("italic"), () => editor?.chain().focus().toggleItalic().run(), <Italic className="size-3" />)}
@@ -153,40 +153,8 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
               editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
             }, <LinkIcon className="size-3" />)}
           </div>
-        ) : <span aria-hidden />}
-        <div className="flex items-center gap-1">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                onClick={cancel}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-300/60 bg-white/70 px-2 text-[11px] font-semibold text-violet-800 hover:bg-white"
-              >
-                <X className="size-3" />
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={commit}
-                className="inline-flex h-7 items-center gap-1 rounded-md bg-gradient-to-r from-violet-600 to-indigo-600 px-2 text-[11px] font-semibold text-white shadow-sm hover:from-violet-500 hover:to-indigo-500"
-              >
-                <Check className="size-3" />
-                Save
-              </button>
-            </>
-          ) : allowEdit ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-300/60 bg-white/70 px-2 text-[11px] font-semibold text-violet-800 hover:bg-white"
-              aria-label="Edit note"
-            >
-              <Pencil className="size-3" />
-              Edit
-            </button>
-          ) : null}
         </div>
-      </div>
+      ) : null}
 
       {/* Body — ruled notebook page: white background with periodic horizontal lines.
           The 24px ruling matches the editor's line-height so text sits on the lines. */}
@@ -220,6 +188,42 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
           <p className="pl-10 pr-2 py-1.5 text-[13px] italic leading-6 text-violet-800/60">No note yet. Click Edit to add one.</p>
         )}
       </div>
+
+      {/* Footer — action buttons pinned to the bottom of the panel (Edit when read-only, Cancel + Save when editing). */}
+      {(editing || allowEdit) ? (
+        <div className="mt-2 flex shrink-0 items-center justify-end gap-1">
+          {editing ? (
+            <>
+              <button
+                type="button"
+                onClick={cancel}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-300/60 bg-white/70 px-2 text-[11px] font-semibold text-violet-800 hover:bg-white"
+              >
+                <X className="size-3" />
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={commit}
+                className="inline-flex h-7 items-center gap-1 rounded-md bg-gradient-to-r from-violet-600 to-indigo-600 px-2 text-[11px] font-semibold text-white shadow-sm hover:from-violet-500 hover:to-indigo-500"
+              >
+                <Check className="size-3" />
+                Save
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-300/60 bg-white/70 px-2 text-[11px] font-semibold text-violet-800 hover:bg-white"
+              aria-label="Edit note"
+            >
+              <Pencil className="size-3" />
+              Edit
+            </button>
+          )}
+        </div>
+      ) : null}
       </div>
     </div>
   );
