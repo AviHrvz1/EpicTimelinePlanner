@@ -4597,7 +4597,7 @@ export function TimelineGrid({
                 : null,
             });
           }}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white/80 text-slate-500 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-200"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-indigo-50/60 text-slate-500 transition-colors hover:border-indigo-300 hover:from-white hover:to-indigo-50 hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-200"
           aria-label="Export Gantt to PDF"
           title="Export Gantt to PDF (opens a presentation-ready view)"
         >

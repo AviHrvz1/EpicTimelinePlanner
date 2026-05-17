@@ -503,7 +503,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
             <button
               onClick={handleExportPdf}
               title="Export dashboard to PDF"
-              className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 px-2.5 text-[12px] font-semibold text-white shadow-none transition-all bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 [&_svg]:text-white"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 px-2.5 text-[12px] font-semibold text-white shadow-sm shadow-fuchsia-500/25 transition-all bg-gradient-to-br from-fuchsia-500 via-purple-500 to-indigo-600 hover:from-fuchsia-600 hover:via-purple-600 hover:to-indigo-700 hover:shadow-md hover:shadow-fuchsia-500/30 [&_svg]:text-white"
             >
               <FileDown className="size-3.5" />
               Export PDF
