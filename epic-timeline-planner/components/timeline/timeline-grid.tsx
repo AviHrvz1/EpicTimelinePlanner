@@ -18,7 +18,7 @@ import {
   Flag,
   Folder,
   Map as MapIcon,
-  Pencil,
+  SquarePen,
   PieChart,
   Plus,
   Search,
@@ -1534,14 +1534,14 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-[26px] shrink-0 items-stretch overflow-visible rounded-full border-0 bg-gradient-to-br from-blue-50 via-blue-100 to-blue-100 text-slate-800 ring-1 ring-blue-200/75 select-none">
+    <div className="inline-flex h-[26px] shrink-0 items-stretch overflow-hidden whitespace-nowrap rounded-full border-0 bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 shadow-sm ring-1 ring-blue-300/75 select-none [&_svg]:opacity-35">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
-        <span className="flex shrink-0 items-center gap-1 border-r border-blue-200/80 px-1.5 text-[12.5px] font-semibold tracking-[0.01em] text-blue-950 sm:px-2 [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]">
-          <MapIcon className="size-3.5 shrink-0 opacity-35" aria-hidden />
+        <span className="flex shrink-0 items-center gap-1 border-r border-blue-300/60 pl-3 pr-2 text-[12px] font-semibold leading-none tracking-wide text-blue-950">
+          <MapIcon className="size-3.5 shrink-0" aria-hidden />
           Roadmap
         </span>
-        <div className="relative flex items-center bg-sky-200">
+        <div className="relative flex items-center">
           <input
             ref={inputRef}
             type="text"
@@ -1551,11 +1551,11 @@ function RoadmapSelector({
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
             onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12.5px] font-semibold leading-none text-blue-950 outline-none [-webkit-text-stroke:0.5px_#ffffff] [paint-order:stroke_fill]"
+            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12px] font-semibold leading-none text-blue-950 placeholder:text-blue-900/55 outline-none"
             style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
             aria-label="Select roadmap"
           />
-          <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-600/80 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
+          <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-950 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
         </div>
 
         {/* Dropdown */}
@@ -1639,16 +1639,18 @@ function RoadmapSelector({
         )}
       </div>
 
-      {/* Pencil manage button */}
+      {/* Manage roadmap button — sits inside the same light-blue pill as the rest of the
+          toolbar group; dark-blue icon, subtle hover. */}
       {selectedRoadmap && (
-        <div ref={manageRef} className="relative flex items-center border-l border-blue-200/80">
+        <div ref={manageRef} className="relative flex items-center border-l border-blue-300/60">
           <button
             type="button"
             onClick={() => setManageOpen((v) => !v)}
-            className="flex h-7 w-6 items-center justify-center text-blue-600/70 transition hover:bg-blue-100/60 hover:text-blue-950"
+            className="flex h-full w-7 items-center justify-center text-blue-950 transition hover:bg-blue-300/40"
             title="Manage roadmap"
+            aria-label="Manage roadmap"
           >
-            <Pencil className="size-3" />
+            <SquarePen className="size-3.5" strokeWidth={2} aria-hidden />
           </button>
 
           {/* Manage popover */}
@@ -1722,14 +1724,14 @@ function RoadmapSelector({
 
       {/* Year sub-picker */}
       {years.length > 0 && (
-        <div className="flex items-center border-l border-blue-200/80 px-1.5">
+        <div className="flex items-center border-l border-blue-300/60 pl-1.5 pr-2">
           <select
             value={year}
             onChange={(e) => void onYearChange(Number(e.target.value))}
-            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[11px] font-semibold tabular-nums text-blue-950 outline-none hover:bg-blue-100/60 sm:text-[12px]"
+            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[12px] font-semibold tabular-nums text-blue-950 outline-none hover:bg-blue-300/40"
           >
             {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
+              <option key={y} value={y} className="text-slate-900">{y}</option>
             ))}
           </select>
         </div>
@@ -2634,7 +2636,7 @@ export function TimelineGrid({
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
   const summaryChipBaseClass =
-    "inline-flex h-7 max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition [&_svg]:opacity-35";
+    "inline-flex h-[26px] max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition [&_svg]:opacity-35";
   const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-950 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
   const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-950 ring-violet-300/75 shadow-sm hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50`;
   const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-950 ring-orange-200/75 hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40`;
