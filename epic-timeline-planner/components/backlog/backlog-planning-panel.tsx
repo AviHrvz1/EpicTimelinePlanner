@@ -61,7 +61,7 @@ import { exportBacklogToPrintableWindow } from "@/lib/backlog-excel-export";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { monthTeamLabelForId, MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { defaultMembersForTeam } from "@/lib/sprint-capacity";
-import { InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
@@ -1519,7 +1519,10 @@ export function BacklogPlanningPanel({
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
-  const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
+  // Default to *collapsed* so changing Group by doesn't recursively render the entire backlog.
+  // Without this, picking "roadmap / year / quarter / month / sprint" eagerly expands every level
+  // and renders every leaf — N×levels of work on a single click. Users still expand via the row chevron.
+  const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(false);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const savedFilterMenuRef = useRef<HTMLDivElement | null>(null);
   const savedViewMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2333,6 +2336,20 @@ export function BacklogPlanningPanel({
     () => applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter),
     [backlogFilteredBeforeWorkItem, workItemFilter],
   );
+  // O(1) lookups by id — replaces `fullyFiltered.find(...)` calls that fired once per rendered
+  // row (= O(N²) total) and made changing Group by feel slow on large backlogs.
+  const initiativeById = useMemo(() => {
+    const map = new Map<string, InitiativeItem>();
+    for (const initiative of fullyFiltered) map.set(initiative.id, initiative);
+    return map;
+  }, [fullyFiltered]);
+  const epicById = useMemo(() => {
+    const map = new Map<string, EpicItem>();
+    for (const initiative of fullyFiltered) {
+      for (const epic of initiative.epics ?? []) map.set(epic.id, epic);
+    }
+    return map;
+  }, [fullyFiltered]);
 
   const summaryInitiativeCount = backlogFilteredBeforeWorkItem.length;
   const summaryEpicCount = useMemo(
@@ -2501,23 +2518,24 @@ export function BacklogPlanningPanel({
         );
       }
 
-      // Hint present: stretch to fill the column and use flex so the icon sits at the far right.
-      // Override justify-self-center (which shrinks the cell to content width) with justify-self-stretch.
+      // Hint present: absolute-position the icon over the right edge so the cell content (especially
+      // centered chips like Status / Team / Start / End) stays visually centered within the column —
+      // the previous flex layout reserved a fixed icon slot which pulled centered content slightly left.
       const isCentered = CENTER_ALIGNED_BACKLOG_COLUMNS.has(key);
       const stretchClass =
         key === "workItem" ? "relative min-w-0 pl-4"
-        : key === "progress" ? "min-w-0"
-        : key === "labels" ? "min-w-0 w-full max-w-full overflow-hidden"
-        : "min-w-0"; // no justify-self-center -- grid default is stretch
+        : key === "progress" ? "relative min-w-0"
+        : key === "labels" ? "relative min-w-0 w-full max-w-full overflow-hidden"
+        : "relative min-w-0";
 
       return (
-        <div key={key} className={cn(stretchClass, "group/cell flex items-center gap-0.5 pr-1")}>
-          <div className={cn("min-w-0 flex-1 flex items-center overflow-hidden", isCentered && "justify-center")}>
+        <div key={key} className={cn(stretchClass, "group/cell flex items-center")}>
+          <div className={cn("w-full min-w-0 flex items-center overflow-hidden", isCentered && "justify-center")}>
             {cells[key]}
           </div>
           {hint.kind === "edit" ? (
             <span
-              className="shrink-0 opacity-0 transition-opacity group-hover/cell:opacity-100"
+              className="pointer-events-auto absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100"
               onMouseDown={(e) => e.stopPropagation()}
             >
               <EditRowIconButton label="Edit" onClick={hint.onEdit} />
@@ -2525,7 +2543,7 @@ export function BacklogPlanningPanel({
           ) : (
             <span
               title="Read only"
-              className="pointer-events-none shrink-0 opacity-0 transition-opacity group-hover/cell:opacity-100"
+              className="pointer-events-none absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100"
             >
               <Lock className="size-3.5 text-slate-300" />
             </span>
@@ -3423,8 +3441,8 @@ export function BacklogPlanningPanel({
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(epicRows);
       const originalEstimate = epicRows[0]?.epicOriginalEstimateDays ?? 0;
-      const initModelForEpic = fullyFiltered.find((i) => i.id === epicRows[0]?.initiativeId);
-      const epicModelForRow = initModelForEpic?.epics?.find((e) => e.id === epicId);
+      const initModelForEpic = epicRows[0]?.initiativeId ? initiativeById.get(epicRows[0].initiativeId) : undefined;
+      const epicModelForRow = epicById.get(epicId);
       const planYearForEpic = initModelForEpic?.year ?? Number(epicRows[0]?.initiativeYear);
       const epicGanttRange =
         epicModelForRow && Number.isFinite(planYearForEpic)
@@ -3681,7 +3699,7 @@ export function BacklogPlanningPanel({
       const folderId = `${initPath}/initiative:${initiativeId}`;
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
-      const initModelForRow = fullyFiltered.find((i) => i.id === initiativeId);
+      const initModelForRow = initiativeById.get(initiativeId);
       const initGanttRange = initModelForRow ? ganttDateRangeForInitiative(initModelForRow) : { start: null as Date | null, end: null as Date | null };
       return (
         <div key={folderId}>
@@ -4055,7 +4073,7 @@ export function BacklogPlanningPanel({
       .map((initiative) => {
         const initFolderId = `standalone-init:${initiative.initiativeId}`;
         const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
-        const standInitModel = fullyFiltered.find((i) => i.id === initiative.initiativeId);
+        const standInitModel = initiativeById.get(initiative.initiativeId);
         const standInitGantt = standInitModel ? ganttDateRangeForInitiative(standInitModel) : { start: null, end: null };
         return (
               <div key={initFolderId}>
@@ -5442,7 +5460,8 @@ export function BacklogPlanningPanel({
                         key={key}
                         id={key}
                         className={cellClass}
-                        centered={CENTER_ALIGNED_BACKLOG_COLUMNS.has(key)}
+                        // All column titles align center per project spec (workItem keeps its own custom header layout above).
+                        centered
                         label={<span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>}
                         resizeHandle={resizeHandle}
                       />
@@ -6243,7 +6262,9 @@ export function BacklogPlanningPanel({
                                         }}
                                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                                       >
-                                        <span className="inline-block size-3.5 shrink-0" aria-hidden />
+                                        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                                          <UserStoryIcon />
+                                        </span>
                                         {editingStoryTitle?.id === story.id ? (
                                           <span className="flex min-w-0 items-center gap-1">
                                             <input
