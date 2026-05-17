@@ -4671,7 +4671,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   alt="Bird Eye Viewer logo"
                   className={cn(
                     "block w-auto max-w-full rounded-md object-contain transition-opacity duration-200",
-                    isModeRailExpanded ? "h-[52px] opacity-100" : "h-0 opacity-0",
+                    isModeRailExpanded ? "h-[56px] opacity-100" : "h-0 opacity-0",
                   )}
                 />
               </div>
