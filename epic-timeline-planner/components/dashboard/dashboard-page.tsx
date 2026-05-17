@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, LayoutDashboard, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, FileDown, LayoutDashboard, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { exportDashboardToPrintableWindow } from "@/lib/dashboard-pdf";
 import { InitiativeItem, RoadmapItem } from "@/lib/types";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { DashboardCanvas } from "./dashboard-canvas";
@@ -53,6 +54,8 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const dragStartWidth = useRef(380);
   // Full cross-roadmap initiative dataset for charts (not filtered to active roadmap)
   const [allInitiatives, setAllInitiatives] = useState<InitiativeItem[]>(passedInitiatives);
+  // Ref over the live chart grid so the PDF exporter can clone the rendered DOM.
+  const canvasExportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const year = new Date().getFullYear();
@@ -364,6 +367,18 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
   const isSavedDashboard = !!activeDashboardId && !activeDashboardId.startsWith("draft-");
   const effectiveEditMode = activeDashboardId?.startsWith("draft-") || isEditMode;
 
+  const handleExportPdf = useCallback(() => {
+    if (!canvasExportRef.current) return;
+    const active = dashboards.find((d) => d.id === activeDashboardId);
+    const dashboardName = active?.name?.trim() || "Dashboard";
+    const subtitle = `${charts.length} chart${charts.length === 1 ? "" : "s"} · ${new Date().toLocaleDateString()}`;
+    void exportDashboardToPrintableWindow({
+      canvas: canvasExportRef.current,
+      dashboardName,
+      subtitle,
+    });
+  }, [dashboards, activeDashboardId, charts.length]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-md ring-1 ring-slate-200/60">
       {/* Tab bar — browser-style */}
@@ -481,6 +496,20 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
             ) : null;
           })()}
 
+          {/* Export PDF — only for saved dashboards with at least one chart. Opens a print
+              preview window (Close / Print as PDF buttons) matching the all-quarters Gantt
+              export UX. */}
+          {isSavedDashboard && charts.length > 0 && (
+            <button
+              onClick={handleExportPdf}
+              title="Export dashboard to PDF"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 px-2.5 text-[12px] font-semibold text-white shadow-none transition-all bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 [&_svg]:text-white"
+            >
+              <FileDown className="size-3.5" />
+              Export PDF
+            </button>
+          )}
+
           {/* Edit button — only for saved dashboards when not already editing */}
           {isSavedDashboard && !isEditMode && (
             <button
@@ -567,19 +596,21 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
           }}
         >
           {activeDashboardId ? (
-            <DashboardCanvas
-              charts={charts}
-              initiatives={allInitiatives}
-              isEditMode={!!effectiveEditMode}
-              onReorder={handleReorder}
-              onRemove={handleRemove}
-              onEdit={handleEdit}
-              onToggleSpan={handleToggleSpan}
-              onDecreaseSpan={handleDecreaseSpan}
-              onChangeHeight={handleChangeHeight}
-              onRenameChart={renameChart}
-              onUpdateConfig={updateChartConfig}
-            />
+            <div ref={canvasExportRef}>
+              <DashboardCanvas
+                charts={charts}
+                initiatives={allInitiatives}
+                isEditMode={!!effectiveEditMode}
+                onReorder={handleReorder}
+                onRemove={handleRemove}
+                onEdit={handleEdit}
+                onToggleSpan={handleToggleSpan}
+                onDecreaseSpan={handleDecreaseSpan}
+                onChangeHeight={handleChangeHeight}
+                onRenameChart={renameChart}
+                onUpdateConfig={updateChartConfig}
+              />
+            </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
               <p className="text-sm">Click + New to create a dashboard, then add charts</p>
