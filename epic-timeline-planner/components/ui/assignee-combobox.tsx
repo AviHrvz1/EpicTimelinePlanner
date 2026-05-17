@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, UserRound } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   type CSSProperties,
@@ -144,33 +145,74 @@ export function AssigneeCombobox({
     onKeyDown?.(e);
   };
 
-  const showMenu = open && !disabled && filtered.length > 0;
+  const trimmed = value.trim();
+  // Surface a "Use '<typed>'" affordance when the input doesn't match any
+  // suggestion -- lets users add a brand-new assignee from inside the menu.
+  const showCreateRow =
+    trimmed.length > 0 &&
+    !filtered.some((s) => s.toLowerCase() === trimmed.toLowerCase());
+  const showMenu = open && !disabled && (filtered.length > 0 || showCreateRow);
   const dropdown =
     showMenu && typeof document !== "undefined"
       ? createPortal(
           <div
             ref={portalRef}
-            className="rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+            className="rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg ring-1 ring-black/[0.04]"
             style={menuStyle}
           >
             <ul
-              className="max-h-full overflow-y-auto overscroll-contain py-0.5 [-webkit-overflow-scrolling:touch]"
+              className="max-h-full overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
               role="listbox"
             >
-              {filtered.map((s) => (
-                <li key={s} role="option">
+              {filtered.map((s) => {
+                const isCurrent = s.toLowerCase() === trimmed.toLowerCase() && trimmed.length > 0;
+                return (
+                  <li key={s} role="option" aria-selected={isCurrent}>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[14px] outline-none transition-colors",
+                        isCurrent
+                          ? "bg-indigo-50 text-indigo-700"
+                          : "text-slate-700 hover:bg-slate-50",
+                      )}
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        pick(s);
+                      }}
+                    >
+                      <UserRound
+                        className={cn(
+                          "size-3.5 shrink-0",
+                          isCurrent ? "text-indigo-500" : "text-slate-400",
+                        )}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 flex-1 truncate font-medium leading-tight">{s}</span>
+                      {isCurrent ? (
+                        <Check className="size-3.5 shrink-0 text-indigo-600" aria-hidden />
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+              {showCreateRow ? (
+                <li role="option">
                   <button
                     type="button"
-                    className="w-full px-2.5 py-1.5 text-left text-[13px] font-semibold text-slate-800 hover:bg-slate-100"
+                    className="mt-0.5 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-300 px-2 py-1.5 text-left text-[14px] text-slate-600 outline-none transition-colors hover:bg-slate-50"
                     onMouseDown={(ev) => {
                       ev.preventDefault();
-                      pick(s);
+                      pick(trimmed);
                     }}
                   >
-                    {s}
+                    <UserRound className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate leading-tight">
+                      Use <span className="font-medium text-slate-800">&ldquo;{trimmed}&rdquo;</span>
+                    </span>
                   </button>
                 </li>
-              ))}
+              ) : null}
             </ul>
           </div>,
           document.body,

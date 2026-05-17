@@ -1825,6 +1825,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   }, [topMode]);
 
   // Backlog Workspace shows initiatives across all roadmaps; refetch with roadmapId=all when entering it.
+  const refreshBacklogInitiatives = useCallback(async () => {
+    try {
+      const data = await parseJson<InitiativeItem[]>(
+        await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all`, { cache: "no-store" }),
+      );
+      setBacklogInitiatives(data);
+    } catch {
+      setBacklogInitiatives([]);
+    }
+  }, [selectedYear]);
   useEffect(() => {
     if (topMode !== "backlog") return;
     let cancelled = false;
@@ -5296,44 +5306,78 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   }
                 }}
                 onPatchStoryQuick={async (storyId, patch) => {
+                  console.log("[BacklogPatch] onPatchStoryQuick start", { storyId, patch });
                   try {
                     const response = await fetch(`/api/stories/${storyId}`, {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(patch),
                     });
+                    console.log("[BacklogPatch] story PATCH response", { storyId, status: response.status, ok: response.ok });
                     if (!response.ok) {
+                      const body = await response.text().catch(() => "");
+                      console.error("[BacklogPatch] story PATCH failed body", body);
                       throw new Error("Failed to patch story");
                     }
-                    await refresh();
-                  } catch {
+                    // Backlog reads from `backlogInitiatives` (fetched with roadmapId=all), separate from the
+                    // year-scoped `initiatives` used by the timeline. Refresh both so the backlog table reflects
+                    // inline edits immediately.
+                    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+                    console.log("[BacklogPatch] onPatchStoryQuick refresh done", { storyId });
+                  } catch (err) {
+                    console.error("[BacklogPatch] onPatchStoryQuick error", err);
                     toast.error("Failed to update story");
                   }
                 }}
                 onPatchInitiativeQuick={async (initiativeId, patch) => {
+                  console.log("[BacklogPatch] onPatchInitiativeQuick start", { initiativeId, patch });
+                  let toastShown = false;
                   try {
                     const response = await fetch(`/api/initiatives/${initiativeId}`, {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(patch),
                     });
-                    if (!response.ok) throw new Error("Failed to patch initiative");
-                    await refresh();
-                  } catch {
-                    toast.error("Failed to update initiative");
+                    console.log("[BacklogPatch] initiative PATCH response", { initiativeId, status: response.status, ok: response.ok });
+                    if (!response.ok) {
+                      const body = await response.text().catch(() => "");
+                      console.error("[BacklogPatch] initiative PATCH failed body", body);
+                      // Surface the server's complaint in the toast so the user can copy it without dev tools.
+                      const reason = body ? body.slice(0, 280) : `HTTP ${response.status}`;
+                      toast.error(`Initiative update failed (${response.status}): ${reason}`, { duration: 12000 });
+                      toastShown = true;
+                      throw new Error("Failed to patch initiative");
+                    }
+                    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+                    console.log("[BacklogPatch] onPatchInitiativeQuick refresh done", { initiativeId });
+                  } catch (err) {
+                    console.error("[BacklogPatch] onPatchInitiativeQuick error", err);
+                    if (!toastShown) toast.error(`Initiative update failed: ${err instanceof Error ? err.message : String(err)}`, { duration: 12000 });
                   }
                 }}
                 onPatchEpicQuick={async (epicId, patch) => {
+                  console.log("[BacklogPatch] onPatchEpicQuick start", { epicId, patch });
+                  let toastShown = false;
                   try {
                     const response = await fetch(`/api/epics/${epicId}`, {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(patch),
                     });
-                    if (!response.ok) throw new Error("Failed to patch epic");
-                    await refresh();
-                  } catch {
-                    toast.error("Failed to update epic");
+                    console.log("[BacklogPatch] epic PATCH response", { epicId, status: response.status, ok: response.ok });
+                    if (!response.ok) {
+                      const body = await response.text().catch(() => "");
+                      console.error("[BacklogPatch] epic PATCH failed body", body);
+                      const reason = body ? body.slice(0, 280) : `HTTP ${response.status}`;
+                      toast.error(`Epic update failed (${response.status}): ${reason}`, { duration: 12000 });
+                      toastShown = true;
+                      throw new Error("Failed to patch epic");
+                    }
+                    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+                    console.log("[BacklogPatch] onPatchEpicQuick refresh done", { epicId });
+                  } catch (err) {
+                    console.error("[BacklogPatch] onPatchEpicQuick error", err);
+                    if (!toastShown) toast.error(`Epic update failed: ${err instanceof Error ? err.message : String(err)}`, { duration: 12000 });
                   }
                 }}
               />

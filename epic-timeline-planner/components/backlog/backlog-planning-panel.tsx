@@ -5,6 +5,8 @@ import { arrayMove, horizontalListSortingStrategy, SortableContext, sortableKeyb
 import { CSS } from "@dnd-kit/utilities";
 import {
   Bookmark,
+  CalendarDays,
+  CalendarRange,
   Check,
   CheckCheck,
   CheckCircle2,
@@ -15,6 +17,7 @@ import {
   Eraser,
   FileSpreadsheet,
   Filter,
+  Flag,
   Folder,
   Layers3,
   LayoutGrid,
@@ -31,7 +34,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode, RefObject } from "react";
 import {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -600,24 +603,76 @@ function statusIcon(status: string, className = "size-3.5"): ReactNode {
  *   • Click outside → onCancel
  *   • Click option → onSelect(value) (parent decides whether to also close)
  */
+const CELL_POPOVER_Z = 8000;
+const CELL_POPOVER_GAP = 6;
+const CELL_POPOVER_VIEW_MARGIN = 8;
+
 function CellOptionPopover<T extends string>({
   value,
   options,
   onSelect,
   onCancel,
   widthClass = "w-[220px]",
+  triggerRef,
 }: {
   value: T | "";
   options: Array<{ value: T | ""; label: string; subtitle?: string; icon?: ReactNode }>;
   onSelect: (v: T | "") => void;
   onCancel: () => void;
   widthClass?: string;
+  /** Element to anchor the portaled popover to (its bounding rect drives positioning). */
+  triggerRef?: RefObject<HTMLElement | null>;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const [style, setStyle] = useState<CSSProperties>({ position: "fixed", visibility: "hidden", zIndex: CELL_POPOVER_Z });
+
+  const recalc = useCallback(() => {
+    const trigger = triggerRef?.current;
+    if (!trigger) return;
+    const r = trigger.getBoundingClientRect();
+    const menuH = rootRef.current?.offsetHeight ?? 220;
+    const spaceBelow = window.innerHeight - r.bottom - CELL_POPOVER_VIEW_MARGIN;
+    const spaceAbove = r.top - CELL_POPOVER_VIEW_MARGIN;
+    const openUp = spaceBelow < Math.min(menuH, 160) && spaceAbove > spaceBelow;
+    const next: CSSProperties = {
+      position: "fixed",
+      zIndex: CELL_POPOVER_Z,
+      left: Math.round(r.left + r.width / 2),
+      transform: "translateX(-50%)",
+      visibility: "visible",
+    };
+    if (openUp) {
+      next.bottom = Math.round(window.innerHeight - r.top + CELL_POPOVER_GAP);
+      next.maxHeight = Math.max(120, spaceAbove - CELL_POPOVER_GAP);
+    } else {
+      next.top = Math.round(r.bottom + CELL_POPOVER_GAP);
+      next.maxHeight = Math.max(120, spaceBelow - CELL_POPOVER_GAP);
+    }
+    setStyle(next);
+  }, [triggerRef]);
+
+  useLayoutEffect(() => {
+    recalc();
+  }, [recalc, value, options.length]);
+
+  useEffect(() => {
+    window.addEventListener("scroll", recalc, true);
+    window.addEventListener("resize", recalc);
+    return () => {
+      window.removeEventListener("scroll", recalc, true);
+      window.removeEventListener("resize", recalc);
+    };
+  }, [recalc]);
+
   useEffect(() => {
     function onDocMouseDown(event: globalThis.MouseEvent) {
-      if (!rootRef.current) return;
-      if (event.target instanceof Node && rootRef.current.contains(event.target)) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      // Click inside the portaled popover -> ignore
+      if (rootRef.current && rootRef.current.contains(target)) return;
+      // Click inside the anchored trigger -> ignore (so the parent toggle handler runs cleanly)
+      const trigger = triggerRef?.current;
+      if (trigger && trigger.contains(target)) return;
       onCancel();
     }
     function onDocKeyDown(event: globalThis.KeyboardEvent) {
@@ -632,15 +687,19 @@ function CellOptionPopover<T extends string>({
       window.removeEventListener("mousedown", onDocMouseDown);
       window.removeEventListener("keydown", onDocKeyDown);
     };
-  }, [onCancel]);
-  return (
+  }, [onCancel, triggerRef]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       ref={rootRef}
       role="listbox"
       className={cn(
-        "absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg ring-1 ring-black/[0.04]",
+        "overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg ring-1 ring-black/[0.04]",
         widthClass,
       )}
+      style={style}
       onMouseDown={(event) => event.stopPropagation()}
     >
       {options.map((opt) => {
@@ -668,7 +727,81 @@ function CellOptionPopover<T extends string>({
           </button>
         );
       })}
-    </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * Inline team-cell editor. Renders the current-team chip as the visible anchor
+ * and a portaled CellOptionPopover positioned to that anchor (so it isn't
+ * clipped by the cell's overflow box).
+ */
+function ParentTeamEditor({
+  kind,
+  editingValue,
+  onSelect,
+  onCancel,
+}: {
+  kind: "epic" | "initiative";
+  editingValue: string;
+  onSelect: (v: string) => void;
+  onCancel: () => void;
+}) {
+  // kind currently doesn't change rendering -- preserved for future per-kind tweaks.
+  void kind;
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const value = editingValue;
+  const currentColor = value ? TEAM_DOT_COLOR[value] ?? "bg-slate-300" : "bg-slate-300";
+  const currentLabel = value
+    ? monthTeamLabelForId(value) ?? teamLabelForWorkspaceUser(value) ?? value
+    : "(none)";
+  const popoverOptions: Array<{ value: string; label: string; subtitle?: string; icon: ReactNode }> = [
+    {
+      value: "",
+      label: "(none)",
+      icon: <span className="inline-block size-2 rounded-full bg-slate-300" aria-hidden />,
+    },
+    ...MONTH_TEAM_COLUMNS.map((team) => ({
+      value: team.id,
+      label: team.label,
+      subtitle: team.subtitle,
+      icon: (
+        <span
+          className={cn("inline-block size-2 rounded-full", TEAM_DOT_COLOR[team.id] ?? "bg-slate-400")}
+          aria-hidden
+        />
+      ),
+    })),
+  ];
+  return (
+    <span
+      data-cell-editing
+      className="relative inline-flex items-center gap-1"
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      <span
+        ref={anchorRef}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md bg-white px-2 text-[14px] text-slate-700 ring-1 ring-slate-200"
+      >
+        <span className={cn("inline-block size-2 rounded-full", currentColor)} aria-hidden />
+        <span className="truncate">{currentLabel}</span>
+      </span>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+      >
+        <X className="size-3.5" />
+      </button>
+      <CellOptionPopover
+        value={value}
+        options={popoverOptions}
+        onSelect={onSelect}
+        onCancel={onCancel}
+        triggerRef={anchorRef}
+      />
+    </span>
   );
 }
 
@@ -691,6 +824,200 @@ function labelChipClasses(label: string): string {
 
 function sprintLabel(sprint: number | null) {
   return sprint == null ? "Unscheduled" : `Sprint ${sprint}`;
+}
+
+/**
+ * Inline editor for a story's status. Owns an anchor ref so the portaled
+ * CellOptionPopover is positioned against the visible status chip (which lives
+ * inside an `overflow-hidden` cell wrapper).
+ */
+function StoryStatusEditor({
+  currentValue,
+  onSelect,
+  onCancel,
+}: {
+  currentValue: WorkflowStatus;
+  onSelect: (v: WorkflowStatus) => void;
+  onCancel: () => void;
+}) {
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  return (
+    <>
+      <span ref={anchorRef} data-cell-editing className="inline-flex items-center gap-1.5 font-semibold">
+        {statusIcon(currentValue)}
+        {workflowStatusLabel(currentValue)}
+      </span>
+      <CellOptionPopover
+        value={currentValue}
+        options={STORY_STATUS_POPOVER_OPTIONS}
+        onSelect={(v) => onSelect(v as WorkflowStatus)}
+        onCancel={onCancel}
+        widthClass="w-[180px]"
+        triggerRef={anchorRef}
+      />
+    </>
+  );
+}
+
+/**
+ * Inline editor for a story's sprint assignment. Mirrors StoryStatusEditor:
+ * an anchor span (marked with data-cell-editing so the row pencil icon hides)
+ * plus a portaled CellOptionPopover listing "Unscheduled" + the year's
+ * assignable sprints. Each option shows a Flag icon to match the cell display.
+ */
+function SprintSelectEditor({
+  currentValue,
+  options,
+  onSelect,
+  onCancel,
+}: {
+  currentValue: string;
+  options: number[];
+  onSelect: (v: string) => void;
+  onCancel: () => void;
+}) {
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const popoverOptions = [
+    {
+      value: "unscheduled",
+      label: "Unscheduled",
+      icon: <Flag className="size-3.5 text-slate-400" aria-hidden />,
+    },
+    ...options.map((n) => ({
+      value: String(n),
+      label: `Sprint ${n}`,
+      icon: <Flag className="size-3.5 text-rose-500" aria-hidden />,
+    })),
+  ];
+  return (
+    <>
+      <span ref={anchorRef} data-cell-editing className="inline-flex items-center gap-1.5 text-[15px]">
+        <Flag className="size-3.5 text-rose-500" aria-hidden />
+        {currentValue === "unscheduled" ? "Unscheduled" : `Sprint ${currentValue}`}
+      </span>
+      <CellOptionPopover
+        value={currentValue}
+        options={popoverOptions}
+        onSelect={onSelect}
+        onCancel={onCancel}
+        widthClass="w-[200px]"
+        triggerRef={anchorRef}
+      />
+    </>
+  );
+}
+
+/**
+ * Inline date editor rendered as a portaled floating card so it can't be
+ * clipped by the cell's `overflow-hidden` wrapper. Anchored to the closest
+ * positioned ancestor's bounding box via the host span ref.
+ */
+function ParentDateEditorOverlay({
+  isEpic,
+  value,
+  onChange,
+  onCommit,
+  onCancel,
+  shouldStillCommit,
+}: {
+  isEpic: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  shouldStillCommit: () => boolean;
+}) {
+  // Inline placeholder span keeps a stable position in the document for
+  // the portaled card to anchor against (uses parentElement bounding box).
+  const hostRef = useRef<HTMLSpanElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [style, setStyle] = useState<CSSProperties>({ position: "fixed", visibility: "hidden", zIndex: CELL_POPOVER_Z });
+
+  const recalc = useCallback(() => {
+    const anchor = hostRef.current?.parentElement;
+    if (!anchor) return;
+    const r = anchor.getBoundingClientRect();
+    const cardW = cardRef.current?.offsetWidth ?? 240;
+    const left = Math.round(r.left + r.width / 2 - cardW / 2);
+    const top = Math.round(r.top + r.height / 2 - (cardRef.current?.offsetHeight ?? 32) / 2);
+    setStyle({
+      position: "fixed",
+      left: Math.max(8, left),
+      top: Math.max(8, top),
+      zIndex: CELL_POPOVER_Z,
+      visibility: "visible",
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    recalc();
+  }, [recalc, value]);
+
+  useEffect(() => {
+    window.addEventListener("scroll", recalc, true);
+    window.addEventListener("resize", recalc);
+    return () => {
+      window.removeEventListener("scroll", recalc, true);
+      window.removeEventListener("resize", recalc);
+    };
+  }, [recalc]);
+
+  const card =
+    typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={cardRef}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-md ring-1 ring-black/[0.04]"
+            style={style}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <input
+              type={isEpic ? "date" : "month"}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              onBlur={() => {
+                // Defer so click on Check/X buttons can fire first.
+                window.setTimeout(() => {
+                  if (shouldStillCommit()) onCommit();
+                }, 120);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onCancel();
+                } else if (event.key === "Enter") {
+                  event.preventDefault();
+                  onCommit();
+                }
+              }}
+              autoFocus
+              className="h-7 rounded-md bg-white px-2 text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
+            />
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+            >
+              <X className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onCommit}
+              className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+            >
+              <Check className="size-3.5" />
+            </button>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      <span ref={hostRef} data-cell-editing aria-hidden style={{ display: "none" }} />
+      {card}
+    </>
+  );
 }
 
 /** Option list for the inline status popover (story status edit). */
@@ -1515,14 +1842,13 @@ export function BacklogPlanningPanel({
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
-  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["roadmap", "year"]);
+  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["roadmap", "year", "quarter"]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
-  // Default to *collapsed* so changing Group by doesn't recursively render the entire backlog.
-  // Without this, picking "roadmap / year / quarter / month / sprint" eagerly expands every level
-  // and renders every leaf — N×levels of work on a single click. Users still expand via the row chevron.
-  const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(false);
+  // Default group folders open so the user sees the roadmap → year → quarter tree on first load.
+  // The O(N²) `.find()` removal earlier in this file makes eager expansion fast enough.
+  const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
   const savedFilterMenuRef = useRef<HTMLDivElement | null>(null);
   const savedViewMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1601,10 +1927,18 @@ export function BacklogPlanningPanel({
       title: string;
     }>,
   ) {
-    if (Object.keys(patch).length === 0) return;
+    if (Object.keys(patch).length === 0) {
+      console.log("[BacklogEdit] patchStoryInline noop (empty patch)", { storyId });
+      return;
+    }
+    console.log("[BacklogEdit] patchStoryInline start", { storyId, patch });
     setSavingStoryId(storyId);
     try {
       await onPatchStoryQuick(storyId, patch);
+      console.log("[BacklogEdit] patchStoryInline success", { storyId, patch });
+    } catch (err) {
+      console.error("[BacklogEdit] patchStoryInline error", { storyId, patch, err });
+      throw err;
     } finally {
       setSavingStoryId((current) => (current === storyId ? null : current));
     }
@@ -1624,8 +1958,14 @@ export function BacklogPlanningPanel({
     current: StoryCellEditSnapshot,
     nextValueOverride?: string,
   ) {
-    if (!editingStoryCell || editingStoryCell.storyId !== storyId || editingStoryCell.field !== field) return;
-    const nextRaw = (nextValueOverride ?? editingStoryCell.value).trim();
+    // When the user explicitly picked a value (e.g. clicked a popover option), trust the override and skip
+    // the state-guard — popover state changes can race with this handler and null out editingStoryCell
+    // mid-flight, which previously caused the patch to be skipped (the editor closes but the change was
+    // never sent → the cell visually reverts on the next refresh).
+    if (nextValueOverride === undefined) {
+      if (!editingStoryCell || editingStoryCell.storyId !== storyId || editingStoryCell.field !== field) return;
+    }
+    const nextRaw = (nextValueOverride ?? editingStoryCell?.value ?? "").trim();
     if (field === "status") {
       const next = nextRaw as "todo" | "inProgress" | "done" | "approved";
       if (next !== current.status) await patchStoryInline(storyId, { status: next });
@@ -1635,6 +1975,7 @@ export function BacklogPlanningPanel({
     } else if (field === "assignee") {
       const next = nextRaw === "" ? null : nextRaw;
       const currentValue = current.assignee?.trim() || null;
+      console.log("[BacklogEdit] confirmStoryCellEdit assignee", { storyId, nextRaw, next, currentValue, willPatch: next !== currentValue });
       if (next !== currentValue) await patchStoryInline(storyId, { assignee: next });
     } else if (field === "labels") {
       const nextLabs = parseStoryLabels(nextRaw.replace(/\r?\n/g, ","));
@@ -1841,58 +2182,22 @@ export function BacklogPlanningPanel({
   }): ReactNode {
     const isEpic = args.kind === "epic";
     const commit = isEpic ? commitEpicDateEdit : commitInitiativeDateEdit;
-    const value = editingParentDate?.value ?? "";
     return (
-      <span
-        className="inline-flex items-center gap-1"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <input
-          type={isEpic ? "date" : "month"}
-          value={value}
-          onChange={(event) =>
-            setEditingParentDate((prev) => (prev ? { ...prev, value: event.target.value } : prev))
-          }
-          onBlur={() => {
-            // Defer so click on Check/X buttons can fire first.
-            window.setTimeout(() => {
-              if (
-                editingParentDate &&
-                editingParentDate.kind === args.kind &&
-                editingParentDate.id === args.id &&
-                editingParentDate.field === args.field
-              ) {
-                void commit();
-              }
-            }, 120);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              setEditingParentDate(null);
-            } else if (event.key === "Enter") {
-              event.preventDefault();
-              void commit();
-            }
-          }}
-          autoFocus
-          className="h-7 rounded-md bg-white px-2 text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
-        />
-        <button
-          type="button"
-          onClick={() => setEditingParentDate(null)}
-          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-        >
-          <X className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void commit()}
-          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-        >
-          <Check className="size-3.5" />
-        </button>
-      </span>
+      <ParentDateEditorOverlay
+        isEpic={isEpic}
+        value={editingParentDate?.value ?? ""}
+        onChange={(v) =>
+          setEditingParentDate((prev) => (prev ? { ...prev, value: v } : prev))
+        }
+        onCommit={() => void commit()}
+        onCancel={() => setEditingParentDate(null)}
+        shouldStillCommit={() =>
+          !!editingParentDate &&
+          editingParentDate.kind === args.kind &&
+          editingParentDate.id === args.id &&
+          editingParentDate.field === args.field
+        }
+      />
     );
   }
 
@@ -1941,57 +2246,17 @@ export function BacklogPlanningPanel({
     );
   }
   function renderParentTeamEditor(args: { kind: "epic" | "initiative"; id: string }): ReactNode {
-    const isEpic = args.kind === "epic";
-    const value = editingParentTeam?.value ?? "";
-    const currentColor = value ? TEAM_DOT_COLOR[value] ?? "bg-slate-300" : "bg-slate-300";
-    const currentLabel = value
-      ? monthTeamLabelForId(value) ?? teamLabelForWorkspaceUser(value) ?? value
-      : "(none)";
-    const popoverOptions: Array<{ value: string; label: string; subtitle?: string; icon: ReactNode }> = [
-      {
-        value: "",
-        label: "(none)",
-        icon: <span className="inline-block size-2 rounded-full bg-slate-300" aria-hidden />,
-      },
-      ...MONTH_TEAM_COLUMNS.map((team) => ({
-        value: team.id,
-        label: team.label,
-        subtitle: team.subtitle,
-        icon: (
-          <span
-            className={cn("inline-block size-2 rounded-full", TEAM_DOT_COLOR[team.id] ?? "bg-slate-400")}
-            aria-hidden
-          />
-        ),
-      })),
-    ];
     return (
-      <span
-        className="relative inline-flex items-center gap-1"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <span className="inline-flex h-7 items-center gap-1.5 rounded-md bg-white px-2 text-[14px] text-slate-700 ring-1 ring-slate-200">
-          <span className={cn("inline-block size-2 rounded-full", currentColor)} aria-hidden />
-          <span className="truncate">{currentLabel}</span>
-        </span>
-        <button
-          type="button"
-          onClick={() => setEditingParentTeam(null)}
-          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-        >
-          <X className="size-3.5" />
-        </button>
-        <CellOptionPopover
-          value={value}
-          options={popoverOptions}
-          onSelect={(v) => {
-            setEditingParentTeam((prev) => (prev ? { ...prev, value: v } : prev));
-            if (isEpic) void commitEpicTeamEdit(v);
-            else void commitInitiativeTeamEdit(v);
-          }}
-          onCancel={() => setEditingParentTeam(null)}
-        />
-      </span>
+      <ParentTeamEditor
+        kind={args.kind}
+        editingValue={editingParentTeam?.value ?? ""}
+        onSelect={(v) => {
+          setEditingParentTeam((prev) => (prev ? { ...prev, value: v } : prev));
+          if (args.kind === "epic") void commitEpicTeamEdit(v);
+          else void commitInitiativeTeamEdit(v);
+        }}
+        onCancel={() => setEditingParentTeam(null)}
+      />
     );
   }
 
@@ -2535,7 +2800,11 @@ export function BacklogPlanningPanel({
           </div>
           {hint.kind === "edit" ? (
             <span
-              className="pointer-events-auto absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100"
+              // Hidden while the cell is in edit mode — each `group-has-[…]/cell:hidden` rule applies when
+              // the cell contains one of: native form element (inline editors) or an explicit
+              // `data-cell-editing` marker (portal-anchored status / team / date editors).
+              // Multiple rules used (instead of `:is(...)`) so Tailwind v4 generates each simple selector reliably.
+              className="pointer-events-auto absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
               onMouseDown={(e) => e.stopPropagation()}
             >
               <EditRowIconButton label="Edit" onClick={hint.onEdit} />
@@ -2543,7 +2812,7 @@ export function BacklogPlanningPanel({
           ) : (
             <span
               title="Read only"
-              className="pointer-events-none absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100"
+              className="pointer-events-none absolute right-1 top-1/2 z-[1] shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
             >
               <Lock className="size-3.5 text-slate-300" />
             </span>
@@ -3049,30 +3318,28 @@ export function BacklogPlanningPanel({
               quarter: <span className="text-center text-[16px] text-slate-700">{row.quarterLabelValue}</span>,
               month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
               startDate: (
-                <span className="text-center text-[14px] tabular-nums text-slate-700">{row.storyStartDateLabel}</span>
+                <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                  {row.storyStartDateLabel ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                  {row.storyStartDateLabel}
+                </span>
               ),
               endDate: (
-                <span className="text-center text-[14px] tabular-nums text-slate-700">{row.storyEndDateLabel}</span>
+                <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                  {row.storyEndDateLabel ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                  {row.storyEndDateLabel}
+                </span>
               ),
               status: (
             <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
-                <>
-                  <span className="inline-flex items-center gap-1.5 font-semibold">
-                    {statusIcon(editingStoryCell.value)}
-                    {workflowStatusLabel(editingStoryCell.value as WorkflowStatus)}
-                  </span>
-                  <CellOptionPopover
-                    value={editingStoryCell.value as WorkflowStatus}
-                    options={STORY_STATUS_POPOVER_OPTIONS}
-                    onSelect={(v) => {
-                      setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
-                      void confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row), v);
-                    }}
-                    onCancel={cancelStoryCellEdit}
-                    widthClass="w-[180px]"
-                  />
-                </>
+                <StoryStatusEditor
+                  currentValue={editingStoryCell.value as WorkflowStatus}
+                  onSelect={(v) => {
+                    setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
+                    void confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row), v);
+                  }}
+                  onCancel={cancelStoryCellEdit}
+                />
               ) : (
                 <button
                   type="button"
@@ -3091,33 +3358,15 @@ export function BacklogPlanningPanel({
               sprint: (
             <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "sprint" ? (
-                <span className="inline-flex items-center gap-1">
-                  <select
-                    value={editingStoryCell.value}
-                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                    onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="h-7 min-w-[94px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  >
-                    <option value="unscheduled">Unscheduled</option>
-                    {assignableSprintsForYear(Number(row.initiativeYear)).map((n) => {
-                      return (
-                        <option key={n} value={String(n)}>
-                          Sprint {n}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-                  ><Check className="size-3.5" /></button>
-                </span>
+                <SprintSelectEditor
+                  currentValue={editingStoryCell.value}
+                  options={assignableSprintsForYear(Number(row.initiativeYear))}
+                  onSelect={(v) => {
+                    setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
+                    void confirmStoryCellEdit(row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row), v);
+                  }}
+                  onCancel={cancelStoryCellEdit}
+                />
               ) : (
                 <button
                   type="button"
@@ -3129,8 +3378,9 @@ export function BacklogPlanningPanel({
                       row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum),
                     );
                   }}
-                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                  className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                 >
+                  <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
                   {row.storySprintLabel}
                 </button>
               )}
@@ -3539,20 +3789,26 @@ export function BacklogPlanningPanel({
               ),
               month: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
               startDate: (
-                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                   {isEditingParentDate("epic", epicId, "start") ? (
                     renderParentDateEditor({ kind: "epic", id: epicId, field: "start" })
                   ) : (
-                    formatBacklogPlanDate(epicGanttRange.start)
+                    <>
+                      {epicGanttRange.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                      {formatBacklogPlanDate(epicGanttRange.start)}
+                    </>
                   )}
                 </span>
               ),
               endDate: (
-                <span className="text-center text-[14px] tabular-nums text-slate-700">
+                <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                   {isEditingParentDate("epic", epicId, "end") ? (
                     renderParentDateEditor({ kind: "epic", id: epicId, field: "end" })
                   ) : (
-                    formatBacklogPlanDate(epicGanttRange.end)
+                    <>
+                      {epicGanttRange.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                      {formatBacklogPlanDate(epicGanttRange.end)}
+                    </>
                   )}
                 </span>
               ),
@@ -3792,8 +4048,9 @@ export function BacklogPlanningPanel({
                 <button
                   type="button"
                   onClick={() => {}}
-                  className={backlogReadonlyInitiativeDateButtonClass}
+                  className={cn(backlogReadonlyInitiativeDateButtonClass, "inline-flex items-center justify-center gap-1.5")}
                 >
+                  {initGanttRange.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                   {formatBacklogPlanDate(initGanttRange.start)}
                 </button>
               ),
@@ -3803,8 +4060,9 @@ export function BacklogPlanningPanel({
                 <button
                   type="button"
                   onClick={() => {}}
-                  className={backlogReadonlyInitiativeDateButtonClass}
+                  className={cn(backlogReadonlyInitiativeDateButtonClass, "inline-flex items-center justify-center gap-1.5")}
                 >
+                  {initGanttRange.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                   {formatBacklogPlanDate(initGanttRange.end)}
                 </button>
               ),
@@ -4176,8 +4434,9 @@ export function BacklogPlanningPanel({
                   <button
                     type="button"
                     onClick={() => {}}
-                    className={backlogReadonlyInitiativeDateButtonClass}
+                    className={cn(backlogReadonlyInitiativeDateButtonClass, "inline-flex items-center justify-center gap-1.5")}
                   >
+                    {standInitGantt.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                     {formatBacklogPlanDate(standInitGantt.start)}
                   </button>
                 ),
@@ -4187,8 +4446,9 @@ export function BacklogPlanningPanel({
                   <button
                     type="button"
                     onClick={() => {}}
-                    className={backlogReadonlyInitiativeDateButtonClass}
+                    className={cn(backlogReadonlyInitiativeDateButtonClass, "inline-flex items-center justify-center gap-1.5")}
                   >
+                    {standInitGantt.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                     {formatBacklogPlanDate(standInitGantt.end)}
                   </button>
                 ),
@@ -4389,20 +4649,26 @@ export function BacklogPlanningPanel({
                         quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>,
                         month: <span className="text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>,
                         startDate: (
-                          <span className="text-center text-[14px] tabular-nums text-slate-700">
+                          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                             {isEditingParentDate("epic", epic.epicId, "start") ? (
                               renderParentDateEditor({ kind: "epic", id: epic.epicId, field: "start" })
                             ) : (
-                              formatBacklogPlanDate(standEpicGantt.start)
+                              <>
+                                {standEpicGantt.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                                {formatBacklogPlanDate(standEpicGantt.start)}
+                              </>
                             )}
                           </span>
                         ),
                         endDate: (
-                          <span className="text-center text-[14px] tabular-nums text-slate-700">
+                          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                             {isEditingParentDate("epic", epic.epicId, "end") ? (
                               renderParentDateEditor({ kind: "epic", id: epic.epicId, field: "end" })
                             ) : (
-                              formatBacklogPlanDate(standEpicGantt.end)
+                              <>
+                                {standEpicGantt.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                                {formatBacklogPlanDate(standEpicGantt.end)}
+                              </>
                             )}
                           </span>
                         ),
@@ -5636,8 +5902,9 @@ export function BacklogPlanningPanel({
                         <button
                           type="button"
                           onClick={() => {}}
-                          className={backlogReadonlyInitiativeDateButtonClass}
+                          className={cn(backlogReadonlyInitiativeDateButtonClass, "inline-flex items-center justify-center gap-1.5")}
                         >
+                          {flatInitGantt.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                           {formatBacklogPlanDate(flatInitGantt.start)}
                         </button>
                       ),
@@ -5647,8 +5914,9 @@ export function BacklogPlanningPanel({
                         <button
                           type="button"
                           onClick={() => {}}
-                          className={backlogReadonlyInitiativeDateButtonClass}
+                          className={cn(backlogReadonlyInitiativeDateButtonClass, "inline-flex items-center justify-center gap-1.5")}
                         >
+                          {flatInitGantt.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                           {formatBacklogPlanDate(flatInitGantt.end)}
                         </button>
                       ),
@@ -6028,20 +6296,26 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 startDate: (
-                                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                  <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                                     {isEditingParentDate("epic", epic.id, "start") ? (
                                       renderParentDateEditor({ kind: "epic", id: epic.id, field: "start" })
                                     ) : (
-                                      formatBacklogPlanDate(flatEpicGantt.start)
+                                      <>
+                                        {flatEpicGantt.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                                        {formatBacklogPlanDate(flatEpicGantt.start)}
+                                      </>
                                     )}
                                   </span>
                                 ),
                                 endDate: (
-                                  <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                  <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                                     {isEditingParentDate("epic", epic.id, "end") ? (
                                       renderParentDateEditor({ kind: "epic", id: epic.id, field: "end" })
                                     ) : (
-                                      formatBacklogPlanDate(flatEpicGantt.end)
+                                      <>
+                                        {flatEpicGantt.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+                                        {formatBacklogPlanDate(flatEpicGantt.end)}
+                                      </>
                                     )}
                                   </span>
                                 ),
@@ -6342,12 +6616,14 @@ export function BacklogPlanningPanel({
                                     </span>
                                       ),
                                       startDate: (
-                                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                        <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                                          {flatStoryWork.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                                           {formatBacklogPlanDate(flatStoryWork.start)}
                                         </span>
                                       ),
                                       endDate: (
-                                        <span className="text-center text-[14px] tabular-nums text-slate-700">
+                                        <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                                          {flatStoryWork.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                                           {formatBacklogPlanDate(flatStoryWork.end)}
                                         </span>
                                       ),
@@ -6359,22 +6635,14 @@ export function BacklogPlanningPanel({
                                       )}
                                     >
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "status" ? (
-                                        <>
-                                          <span className="inline-flex items-center gap-1.5 font-semibold">
-                                            {statusIcon(editingStoryCell.value)}
-                                            {workflowStatusLabel(editingStoryCell.value as WorkflowStatus)}
-                                          </span>
-                                          <CellOptionPopover
-                                            value={editingStoryCell.value as WorkflowStatus}
-                                            options={STORY_STATUS_POPOVER_OPTIONS}
-                                            onSelect={(v) => {
-                                              setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
-                                              void confirmStoryCellEdit(story.id, "status", storyEditSnapshotFromFlat(story), v);
-                                            }}
-                                            onCancel={cancelStoryCellEdit}
-                                            widthClass="w-[180px]"
-                                          />
-                                        </>
+                                        <StoryStatusEditor
+                                          currentValue={editingStoryCell.value as WorkflowStatus}
+                                          onSelect={(v) => {
+                                            setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
+                                            void confirmStoryCellEdit(story.id, "status", storyEditSnapshotFromFlat(story), v);
+                                          }}
+                                          onCancel={cancelStoryCellEdit}
+                                        />
                                       ) : (
                                         <button
                                           type="button"
@@ -6393,33 +6661,15 @@ export function BacklogPlanningPanel({
                                       sprint: (
                                     <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "sprint" ? (
-                                        <span className="inline-flex items-center gap-1">
-                                          <select
-                                            value={editingStoryCell.value}
-                                            onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                                            onKeyDown={(event) =>
-                                              handleStoryCellKeyDown(event, story.id, "sprint", storyEditSnapshotFromFlat(story))
-                                            }
-                                            className="h-7 min-w-[96px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                                          >
-                                            <option value="unscheduled">Unscheduled</option>
-                                            {assignableSprintsForYear(Number(initiative.year)).map((n) => {
-                                              return (
-                                                <option key={n} value={String(n)}>
-                                                  Sprint {n}
-                                                </option>
-                                              );
-                                            })}
-                                          </select>
-                                          <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              confirmStoryCellEdit(story.id, "sprint", storyEditSnapshotFromFlat(story))
-                                            }
-                                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-                                          ><Check className="size-3.5" /></button>
-                                        </span>
+                                        <SprintSelectEditor
+                                          currentValue={editingStoryCell.value}
+                                          options={assignableSprintsForYear(Number(initiative.year))}
+                                          onSelect={(v) => {
+                                            setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
+                                            void confirmStoryCellEdit(story.id, "sprint", storyEditSnapshotFromFlat(story), v);
+                                          }}
+                                          onCancel={cancelStoryCellEdit}
+                                        />
                                       ) : (
                                         <button
                                           type="button"
@@ -6427,8 +6677,9 @@ export function BacklogPlanningPanel({
                                             event.preventDefault();
                                             beginStoryCellEdit(story.id, "sprint", story.sprint == null ? "unscheduled" : String(story.sprint));
                                           }}
-                                          className="rounded px-1 py-0.5 hover:bg-slate-100"
+                                          className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                                         >
+                                          <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
                                           {sprintLabel(story.sprint)}
                                         </button>
                                       )}

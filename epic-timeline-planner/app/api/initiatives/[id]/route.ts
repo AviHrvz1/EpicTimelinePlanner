@@ -20,6 +20,7 @@ export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  try {
   const { id } = await context.params;
   const payload = await request.json();
   const parsed = updateInitiativeSchema.safeParse(payload);
@@ -133,6 +134,11 @@ export async function PATCH(
   }
 
   return NextResponse.json(initiative);
+  } catch (err) {
+    console.error("[PATCH /api/initiatives/[id]]", err);
+    const message = err instanceof Error ? err.message : "Initiative update failed";
+    return NextResponse.json({ message }, { status: 500 });
+  }
 }
 
 export async function DELETE(
