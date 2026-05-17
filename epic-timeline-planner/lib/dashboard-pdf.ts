@@ -29,6 +29,7 @@ export function exportDashboardToPrintableWindow(args: {
   // Deep-clone the canvas and strip the edit-mode chrome that has no place in a printed document.
   const clone = canvas.cloneNode(true) as HTMLElement;
   stripEditChrome(clone);
+  shrinkCardHeights(clone);
 
   const html = renderHtml({
     dashboardName,
@@ -79,6 +80,27 @@ function collectDocumentStyles(): string {
  */
 function stripEditChrome(root: HTMLElement): void {
   root.querySelectorAll("[data-no-print]").forEach((el) => el.remove());
+}
+
+/**
+ * Pull each card's bottom border up to match the zoomed chart body. The body uses
+ * `zoom: 0.6` (see renderHtml), so the visible body height = (cardHeight - header) × 0.6.
+ * Without this shrink, the card retains its original inline height (300/520/740/960) and
+ * leaves an empty band beneath each chart.
+ *
+ * Keep ZOOM_SCALE in sync with the CSS rule on the chart body.
+ */
+function shrinkCardHeights(root: HTMLElement): void {
+  const ZOOM_SCALE = 0.6;
+  const HEADER_PX = 36;
+  const BUFFER_PX = 12;
+  root.querySelectorAll<HTMLElement>("[class*='col-span-']").forEach((card) => {
+    const match = /^(\d+(?:\.\d+)?)px$/.exec(card.style.height);
+    if (!match) return;
+    const original = parseFloat(match[1]);
+    const newHeight = Math.round(HEADER_PX + (original - HEADER_PX) * ZOOM_SCALE + BUFFER_PX);
+    card.style.height = `${newHeight}px`;
+  });
 }
 
 /**
@@ -212,22 +234,13 @@ function renderHtml(args: {
       width: 12px !important;
       height: 12px !important;
     }
-    /* Recharts SVGs are emitted with hardcoded pixel width/height attrs matching whatever the
-       live container measured at render time — on a wide monitor that's 600-800px, wider than
-       the ~470px print card. They have no viewBox, so CSS scaling clips them instead of
-       fitting them in.
-       Workaround that doesn't touch SVG internals: shrink the chart body (2nd child of each
-       card; the 1st is the header) via CSS transform: scale. The chart body's pre-scale width
-       is bumped to 1/scale so post-scale it matches the card exactly. The chart inside stays
-       at its original pixel coordinates inside the SVG — fully visible, just smaller.
-       Scale 0.5 is aggressive but ensures wide live renders fit inside narrow print cards;
-       a smaller scale is the only way to guarantee the chart's right edge stays inside the
-       card without touching Recharts internals. */
+    /* Shrink the chart body to 60% via the CSS zoom property (a true layout-time scale,
+       unlike transform: scale). Combined with shrinkCardHeights() — which reduces each
+       card's inline height to match the zoomed body — the card's bottom border lines up
+       with the chart's bottom, removing both the empty band below the chart AND the legend
+       clipping that the earlier transform approach caused. */
     .dashboard-pdf-canvas [class*="col-span-"] > div:nth-of-type(2) {
-      transform: scale(0.6);
-      transform-origin: top left;
-      width: 166.67% !important;
-      height: 166.67% !important;
+      zoom: 0.6;
     }
     /* Pull the chart's x-axis / y-axis tick text down to a readable size at the smaller scale,
        so users can still see the rightmost x-axis labels (the "end of the chart"). */
