@@ -9,10 +9,12 @@ import { LoginForm } from "@/components/auth/login-form";
  */
 export default function LoginPage() {
   return (
-    <div className="space-y-5">
-      <div className="space-y-1 text-center">
-        <h1 className="text-lg font-bold text-slate-800">Sign in</h1>
-        <p className="text-[12px] text-slate-500">Welcome back. Pick up where you left off.</p>
+    <div className="space-y-7">
+      <div className="space-y-2">
+        <h1 className="text-[28px] font-extrabold tracking-tight text-slate-900">Sign in</h1>
+        <p className="text-[13px] leading-relaxed text-slate-500">
+          Welcome back. Pick up where you left off.
+        </p>
       </div>
       <LoginForm enabledProviders={ENABLED_OAUTH_PROVIDERS} />
     </div>
