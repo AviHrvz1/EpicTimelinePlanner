@@ -5250,12 +5250,20 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             null
           ) : topMode === "users" ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-row">
-              <div className="mt-3 mb-4 min-h-0 min-w-0 flex-1">
+              <div className="ml-1 mt-3 mb-4 min-h-0 min-w-0 flex-1">
                 <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
                   <UsersWorkspacePanel />
                 </div>
               </div>
-              {rightEdgeSeparator}
+              {/* Slim right gutter matching the backlog mode — 18px instead of
+                  the standard 24px so the user directory panel gets a touch
+                  more horizontal room while keeping the white separator-line. */}
+              <div
+                className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
+                aria-hidden
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
+              </div>
             </div>
           ) : (
             <div className="flex h-full min-h-0 min-w-0 flex-1 flex-row">
