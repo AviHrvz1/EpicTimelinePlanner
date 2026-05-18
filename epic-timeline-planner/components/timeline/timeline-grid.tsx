@@ -265,20 +265,30 @@ function YearRoadmapEmptyStripedLane({
         >
           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
         </StripedGanttLaneScrollArea>
+        {/* Empty-state grid overlay — paints column dividers using the SAME
+            styling as the populated-state GanttLaneSprintBackdrop so the
+            grid reads consistently whether or not epics are scheduled.
+            Pointer-events-none so it doesn't block the popup above. */}
+        <div
+          className="pointer-events-none absolute inset-0 z-[5] flex w-full gap-2 pl-2 pr-1 pb-3 sm:pb-4"
+          aria-hidden
+        >
+          {Array.from({ length: columnCount }, (_, i) => (
+            <div
+              key={i}
+              className={cn(
+                "min-w-0 flex-1",
+                i < columnCount - 1 && "border-r border-slate-100/60",
+              )}
+            />
+          ))}
+        </div>
         <div className={cn(
-          "pointer-events-none absolute inset-x-3 top-3 z-[21] flex justify-center transition-opacity duration-200",
+          "pointer-events-none absolute inset-x-3 top-16 z-[21] flex justify-center transition-opacity duration-200",
           isDragging ? "opacity-0" : "opacity-100",
         )}>
           <div
-            className="px-8 py-5 text-center"
-            style={{
-              background: "rgba(255, 255, 255, 0.04)",
-              borderRadius: "16px",
-              boxShadow: "0 4px 24px rgba(15, 23, 42, 0.10), 0 1px 6px rgba(15, 23, 42, 0.06)",
-              backdropFilter: "blur(0.5px)",
-              WebkitBackdropFilter: "blur(0.5px)",
-              border: "1px solid rgba(255, 255, 255, 0.25)",
-            }}
+            className="rounded-2xl border border-slate-300/60 px-8 py-5 text-center"
             aria-hidden
           >
             {variant === "initiatives" ? (
@@ -1240,6 +1250,9 @@ type TimelineGridProps = {
   onSprintTabChange?: (tab: "kanban" | "status") => void;
   onOpenEpic: (epicId: string) => void;
   onUnscheduleEpic?: (epicId: string) => void;
+  /** Delete an initiative from the Gantt — wired to the X chip that shows on
+   *  hover over an initiative bar (mirrors the unschedule X on epic bars). */
+  onDeleteInitiative?: (initiativeId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onResizeInitiativeRange?: (initiativeId: string, range: InitiativeScheduleRangePatch) => void;
@@ -1453,6 +1466,13 @@ function RoadmapSelector({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Hidden mirror span used to measure the actual rendered width of the
+  // current input text (font + weight + variable-char widths accounted for).
+  // The character-count formula was too approximate — empty spaces, capitals,
+  // and digits all render at different widths. Measuring is the only way to
+  // size the input precisely.
+  const widthMeasureRef = useRef<HTMLSpanElement>(null);
+  const [measuredTextWidth, setMeasuredTextWidth] = useState(0);
 
   // Create form state
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -1479,6 +1499,15 @@ function RoadmapSelector({
     if (dropdownOpen) document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [dropdownOpen]);
+
+  // Measure the rendered text width every time the visible text changes, so
+  // the input shrinks/grows to fit accurately (capitals, digits, spaces all
+  // measured properly — no per-character formula needed).
+  useEffect(() => {
+    if (widthMeasureRef.current) {
+      setMeasuredTextWidth(widthMeasureRef.current.offsetWidth);
+    }
+  }, [dropdownOpen, query, selectedRoadmap?.name, roadmaps.length]);
 
   // Close manage popover on outside click
   useEffect(() => {
@@ -1534,7 +1563,7 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border overflow-hidden whitespace-nowrap rounded-full bg-indigo-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:bg-indigo-200/70 select-none [&_svg]:opacity-60">
+    <div className="inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border whitespace-nowrap rounded-full bg-indigo-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:bg-indigo-200/70 select-none [&_svg]:opacity-60">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
         <span className="flex shrink-0 items-center gap-1 border-r border-indigo-300/60 pl-3 pr-2 text-[12px] font-semibold text-indigo-900">
@@ -1542,20 +1571,43 @@ function RoadmapSelector({
           Roadmap
         </span>
         <div className="relative flex items-center">
-          <input
-            ref={inputRef}
-            type="text"
-            value={dropdownOpen ? query : (selectedRoadmap?.name ?? "")}
-            placeholder={roadmaps.length === 0 ? "Create roadmap…" : "Select…"}
-            onChange={(e) => { setQuery(e.target.value); setDropdownOpen(true); setShowCreateForm(false); }}
-            onFocus={() => { setDropdownOpen(true); setQuery(""); }}
-            onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
-            onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-[28px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12px] font-semibold text-indigo-900 placeholder:text-indigo-900/55 outline-none"
-            style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
-            aria-label="Select roadmap"
-          />
-          <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-indigo-950 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
+          {(() => {
+            const visibleText = dropdownOpen ? query : (selectedRoadmap?.name ?? "");
+            const placeholder = roadmaps.length === 0 ? "Create roadmap…" : "Select…";
+            const textForMeasurement = visibleText || placeholder;
+            // Measured text width + pl-1.5 (6px) + pr-4 (16px) + 4px safety margin.
+            const width = Math.max(40, Math.min(288, measuredTextWidth + 26));
+            return (
+              <>
+                {/* Hidden mirror — identical font/weight/size to the input.
+                    Its rendered width is what we measure, so capitals,
+                    digits, spaces, and lowercase all contribute their
+                    correct widths instead of a flat per-char estimate. */}
+                <span
+                  ref={widthMeasureRef}
+                  aria-hidden
+                  className="invisible pointer-events-none absolute whitespace-pre text-[12px] font-semibold"
+                  style={{ left: -9999, top: 0 }}
+                >
+                  {textForMeasurement}
+                </span>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={visibleText}
+                  placeholder={placeholder}
+                  onChange={(e) => { setQuery(e.target.value); setDropdownOpen(true); setShowCreateForm(false); }}
+                  onFocus={() => { setDropdownOpen(true); setQuery(""); }}
+                  onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
+                  onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
+                  className="h-[28px] cursor-pointer bg-transparent py-0 pl-1.5 pr-4 text-[12px] font-semibold text-indigo-900 placeholder:text-indigo-900/55 outline-none"
+                  style={{ width: `${width}px` }}
+                  aria-label="Select roadmap"
+                />
+              </>
+            );
+          })()}
+          <ChevronDown className={cn("pointer-events-none absolute right-0.5 top-1/2 size-3 -translate-y-1/2 text-indigo-950 transition", dropdownOpen && "rotate-180")} aria-hidden />
         </div>
 
         {/* Dropdown */}
@@ -1917,6 +1969,7 @@ export function TimelineGrid({
   onSprintTabChange,
   onOpenEpic,
   onUnscheduleEpic,
+  onDeleteInitiative,
   onOpenInitiative,
   onOpenStory,
   onResizeInitiativeRange,
@@ -4215,6 +4268,7 @@ export function TimelineGrid({
                             progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
                             showProgress={showRoadmapProgress}
                             onClick={() => onOpenInitiative(row.initiative.id)}
+                            onDelete={onDeleteInitiative ? () => onDeleteInitiative(row.initiative.id) : undefined}
                           />
                         </div>
                       );
@@ -4449,7 +4503,7 @@ export function TimelineGrid({
           onClick={() => setShowYearSprintChips((prev) => !prev)}
           className={cn(summaryChipBaseClass, showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass)}
         >
-          <CalendarDays className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+          <Flag className="size-3 shrink-0 sm:size-3.5" aria-hidden />
           <span className="hidden xl:inline">Sprints</span>
           <span className="xl:hidden">Spr</span>
         </button>

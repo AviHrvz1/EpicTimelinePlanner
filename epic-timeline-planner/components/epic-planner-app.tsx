@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
+import { LoginModal } from "@/components/auth/login-modal";
 import { UserChip } from "@/components/auth/user-chip";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
@@ -4612,6 +4613,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
   return (
     <DragContext onDragEnd={onDragEnd}>
+      {/* Sign-in modal — renders ONLY when there's no active session. The
+          underlying planner stays mounted behind a dimmed/blurred backdrop
+          so the user can see the app while being gated from interacting. */}
+      <LoginModal />
       <main
         className={cn(
           "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-5",
@@ -5015,6 +5020,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   setEditingInitiative(initiative);
                   setInitiativeDialogOpen(true);
                 }}
+                onDeleteInitiative={requestDeleteInitiative}
                 onUnscheduleEpic={async (epicId) => {
                   const before = initiatives;
                   const target = before.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId);

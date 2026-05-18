@@ -22,8 +22,12 @@ import { PasswordStrengthMeter } from "./password-strength-meter";
  */
 export function SignupForm({
   enabledProviders,
+  onSwitchToLogin,
 }: {
   enabledProviders: { google: boolean; apple: boolean; microsoft: boolean };
+  /** When provided, the "Sign in" link calls this instead of navigating to
+   *  /login — used by the auth modal to swap to its login view in-place. */
+  onSwitchToLogin?: () => void;
 }) {
   const router = useRouter();
 
@@ -177,9 +181,19 @@ export function SignupForm({
 
       <p className="pt-2 text-center text-[12px] text-slate-500">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
-          Sign in
-        </Link>
+        {onSwitchToLogin ? (
+          <button
+            type="button"
+            onClick={onSwitchToLogin}
+            className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+          >
+            Sign in
+          </button>
+        ) : (
+          <Link href="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            Sign in
+          </Link>
+        )}
       </p>
     </form>
   );

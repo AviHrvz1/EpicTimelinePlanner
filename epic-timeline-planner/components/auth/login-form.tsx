@@ -25,8 +25,13 @@ const TURNSTILE_THRESHOLD = 3;
  */
 export function LoginForm({
   enabledProviders,
+  onSwitchToSignup,
 }: {
   enabledProviders: { google: boolean; apple: boolean; microsoft: boolean };
+  /** When provided, the "Create account" link calls this instead of
+   *  navigating to /signup — used by the login modal to switch to its
+   *  signup view in-place rather than leaving the planner page. */
+  onSwitchToSignup?: () => void;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -297,9 +302,19 @@ export function LoginForm({
 
       <p className="pt-2 text-center text-[12px] text-slate-500">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
-          Create account
-        </Link>
+        {onSwitchToSignup ? (
+          <button
+            type="button"
+            onClick={onSwitchToSignup}
+            className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+          >
+            Create account
+          </button>
+        ) : (
+          <Link href="/signup" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            Create account
+          </Link>
+        )}
       </p>
     </form>
   );

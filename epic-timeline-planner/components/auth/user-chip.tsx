@@ -71,9 +71,11 @@ export function UserChip() {
     try {
       await signOut();
       toast.success("Signed out");
-      // Redirect to /login after sign-out so the user lands on the auth page
-      // instead of staying on an authenticated route that flashes empty data.
-      router.push("/login");
+      // Stay on the planner — the LoginModal will render itself on top as soon
+      // as useSession reflects the cleared session. router.refresh() flushes
+      // any server-fetched data so the planner doesn't show stale signed-in
+      // chrome behind the modal.
+      router.push("/");
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to sign out";

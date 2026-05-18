@@ -23,8 +23,13 @@ const SESSION_COOKIE_NAMES = [
 ];
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
-/** UI routes that must be reachable for an unauthenticated visitor. */
+/** UI routes that must be reachable for an unauthenticated visitor.
+ *  Note: "/" is intentionally listed here because the roadmap-planning page
+ *  renders the live planner behind a login modal overlay for unauth users.
+ *  The modal blocks interaction client-side, so letting the page load
+ *  unauthenticated is safe — write endpoints under /api/* still 401. */
 const PUBLIC_UI_PREFIXES = [
+  "/",
   "/login",
   "/signup",
   "/forgot-password",
@@ -35,7 +40,10 @@ const PUBLIC_UI_PREFIXES = [
 const PUBLIC_API_PREFIXES = ["/api/auth/"];
 
 function isPublicUi(pathname: string): boolean {
-  return PUBLIC_UI_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return PUBLIC_UI_PREFIXES.some((p) => {
+    if (p === "/") return pathname === "/"; // exact match — don't treat "/" as a prefix of everything
+    return pathname === p || pathname.startsWith(`${p}/`);
+  });
 }
 
 function hasSessionCookie(request: NextRequest): boolean {

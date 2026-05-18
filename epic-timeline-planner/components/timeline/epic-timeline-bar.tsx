@@ -119,6 +119,8 @@ type InitiativeTimelineBarProps = {
   showProgress?: boolean;
   /** Renders at the start of the progress row (below the title strip), not on the colored title row. */
   progressRowPrefix?: ReactNode;
+  /** Optional delete handler — renders an X chip on hover. */
+  onDelete?: () => void;
 };
 
 export function InitiativeTimelineBar({
@@ -134,6 +136,7 @@ export function InitiativeTimelineBar({
   emphasizeTick = 0,
   showProgress = true,
   progressRowPrefix,
+  onDelete,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -150,6 +153,21 @@ export function InitiativeTimelineBar({
       className="group/bar relative z-20 overflow-visible space-y-0"
     >
       <GanttBarTooltip label={title} anchorRef={barRef} />
+      {onDelete ? (
+        <button
+          type="button"
+          aria-label="Delete initiative"
+          title="Delete initiative"
+          className="pointer-events-none absolute right-1 -top-1.5 z-[70] inline-flex size-4 items-center justify-center rounded-full bg-white opacity-0 shadow ring-1 ring-slate-300/80 transition duration-150 hover:bg-rose-50 hover:ring-rose-300 group-hover/bar:pointer-events-auto group-hover/bar:opacity-100"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <X className="size-2.5 text-slate-500 hover:text-rose-500" strokeWidth={2.5} aria-hidden />
+        </button>
+      ) : null}
       <div
         className={cn(
           "relative z-10 flex h-8 w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em]",
