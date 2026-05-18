@@ -2645,9 +2645,10 @@ export function TimelineGrid({
   // The Sign-In look used by every non-selected chip + every static chip.
   const summaryChipBaseClass = `${summaryChipShared} text-indigo-950 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 ring-1 ring-indigo-300/75 focus-visible:ring-indigo-400`;
   const summaryChipIdleClass = `${summaryChipBaseClass} hover:shadow-sm hover:from-indigo-50 hover:via-indigo-100 hover:to-indigo-100`;
-  // ON — selected state. Saturated indigo, white text, deeper ring + shadow so
-  // it pops against the row of pale idle chips.
-  const summaryChipOnClass = `${summaryChipShared} text-white bg-gradient-to-br from-indigo-500 via-indigo-600 to-indigo-700 ring-1 ring-indigo-700/60 shadow-md shadow-indigo-500/35 hover:shadow-indigo-500/45 hover:from-indigo-400 hover:via-indigo-500 hover:to-indigo-600 focus-visible:ring-indigo-300`;
+  // ON — selected state. Same pale-indigo gradient + dark text as the idle
+  // variant, but with an inset top-shadow + stronger ring so it reads like the
+  // chip has been pressed in (recessed) rather than as a recolored button.
+  const summaryChipOnClass = `${summaryChipShared} text-indigo-950 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 ring-1 ring-indigo-400 shadow-[inset_0_2px_4px_rgba(15,23,42,0.18),inset_0_0_0_1px_rgba(99,102,241,0.18)] focus-visible:ring-indigo-400`;
   const summaryChipStaticClass = `${summaryChipBaseClass} hover:shadow-sm`;
   const summaryChipInitiativesIdleClass = summaryChipIdleClass;
   const summaryChipInitiativesOnClass = summaryChipOnClass;
@@ -4414,8 +4415,7 @@ export function TimelineGrid({
       <div className={summaryChipStoriesStaticClass}>
         <FileText className="size-3 shrink-0 sm:size-3.5" aria-hidden />
         <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-        <span className="hidden xl:inline">User Stories</span>
-        <span className="xl:hidden">Stories</span>
+        <span>Stories</span>
       </div>
       <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
         <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
@@ -4427,8 +4427,7 @@ export function TimelineGrid({
           />
         </svg>
         <span className="truncate">{estimatedEpicsPercentForScope}%</span>
-        <span className="hidden xl:inline">Epic Estimated</span>
-        <span className="xl:hidden">Estimated</span>
+        <span>Epic Est.</span>
       </button>
       {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
         <button
@@ -4662,7 +4661,7 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-0 bg-gradient-to-r from-blue-50 via-violet-50 to-pink-50 py-2 pl-5 pr-4 shadow-[inset_0_4px_6px_-4px_rgba(15,23,42,0.10),inset_0_-4px_6px_-4px_rgba(15,23,42,0.08)] ring-0",
+          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_0_4px_6px_-4px_rgba(15,23,42,0.10),inset_0_-4px_6px_-4px_rgba(15,23,42,0.08)] ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
@@ -4671,7 +4670,7 @@ export function TimelineGrid({
             className={cn(
               "relative z-30 inline-flex shrink-0 items-center gap-1 py-0.5 pl-1.5 pr-1 outline-none",
               useRoadmapGanttChipTrack && !suppressInlineChips &&
-                "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 rounded-none border-0 bg-gradient-to-r from-blue-50 via-violet-50 to-pink-50 pr-1 shadow-none ring-0",
+                "pointer-events-auto absolute top-1/2 left-0 z-20 max-w-[min(55vw,20rem)] -translate-y-1/2 rounded-none border-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pr-1 shadow-none ring-0",
             )}
           >
             {breadcrumbItems.map((item, index) => (

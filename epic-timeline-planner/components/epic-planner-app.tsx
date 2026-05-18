@@ -4632,7 +4632,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         </div>
         <div
           className={cn(
-            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5",
+            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100",
             topMode === "backlog"
               ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-hidden overflow-y-hidden"
               : "flex-1 min-h-0 overflow-y-visible",

@@ -39,6 +39,9 @@ export function LoginForm({
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Inline error banner shown inside the form panel instead of a toast — toasts
+  // are easy to miss and feel out of place for credential validation feedback.
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const needsCaptcha = failedAttempts >= TURNSTILE_THRESHOLD;
   const captchaConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
@@ -52,6 +55,7 @@ export function LoginForm({
     event.preventDefault();
     if (pending || captchaBlocking) return;
     setPending(true);
+    setErrorMessage(null);
     try {
       const result = await signIn.email({
         email: email.trim(),
@@ -68,7 +72,7 @@ export function LoginForm({
         const msg = result.error.message || "Unable to sign in";
         setFailedAttempts((n) => n + 1);
         setTurnstileToken(null);
-        toast.error(msg);
+        setErrorMessage(msg);
         return;
       }
       toast.success("Welcome back!");
@@ -78,7 +82,7 @@ export function LoginForm({
       setFailedAttempts((n) => n + 1);
       setTurnstileToken(null);
       const msg = err instanceof Error ? err.message : "Unable to sign in";
-      toast.error(msg);
+      setErrorMessage(msg);
     } finally {
       setPending(false);
     }
@@ -86,6 +90,19 @@ export function LoginForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
+      {/* Inline error banner — surfaces credential / lockout / rate-limit
+          messages right above the inputs where the user is already looking,
+          instead of relying on a toast notification that can be missed. */}
+      {errorMessage && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[12.5px] font-medium text-rose-700"
+        >
+          <span aria-hidden className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">!</span>
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       <div className="space-y-2">
         <label htmlFor="login-email" className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
           Email
@@ -102,7 +119,7 @@ export function LoginForm({
             autoComplete="email"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); if (errorMessage) setErrorMessage(null); }}
             className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-[14px] text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             placeholder="you@example.com"
           />
@@ -130,7 +147,7 @@ export function LoginForm({
             autoComplete="current-password"
             required
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => { setPassword(e.target.value); if (errorMessage) setErrorMessage(null); }}
             className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-11 py-3 text-[14px] text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             placeholder="••••••••••"
           />

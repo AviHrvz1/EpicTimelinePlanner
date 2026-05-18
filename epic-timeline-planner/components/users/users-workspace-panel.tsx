@@ -1402,7 +1402,7 @@ export function UsersWorkspacePanel() {
         </div>
       </header>
 
-      <div className="mb-5 shrink-0 rounded-xl bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50 px-4 pb-5 pt-5 shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="mb-5 shrink-0 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-5 pt-5 shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-3">
         <div className="flex min-w-0 w-full flex-1 flex-col gap-1.5 lg:max-w-md">
           <div ref={searchFieldWrapRef} className="relative min-w-0 w-full">

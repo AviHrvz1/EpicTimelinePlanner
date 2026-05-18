@@ -137,7 +137,25 @@ export function SignupForm({
           className="mt-0.5 size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
         />
         <span>
-          I agree to the terms of service and acknowledge the privacy policy.
+          I agree to the{" "}
+          <Link
+            href="/legal/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-indigo-600 underline-offset-2 hover:text-indigo-700 hover:underline"
+          >
+            Terms of Service
+          </Link>{" "}
+          and acknowledge the{" "}
+          <Link
+            href="/legal/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-indigo-600 underline-offset-2 hover:text-indigo-700 hover:underline"
+          >
+            Privacy Policy
+          </Link>
+          .
         </span>
       </label>
 

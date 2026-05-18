@@ -14,12 +14,11 @@ export function BrandPanel() {
       aria-hidden
       className="relative hidden overflow-hidden lg:block bg-gradient-to-br from-sky-500 via-indigo-600 to-violet-700"
     >
-      {/* The hero PNG has the gradient + bubble + WELCOME copy baked in. By
-          painting a matching gradient on the panel itself and switching the
-          image to object-contain (instead of object-cover), the bubble + text
-          shrinks to fit inside the column with comfortable padding while the
-          gradient extends seamlessly behind it. Adjust the inset padding to
-          change how much the artwork shrinks. */}
+      {/* Shrink the entire image (gradient backdrop + bubble + text) to fit
+          inside the panel with breathing room on all sides. object-contain
+          preserves the image's aspect ratio; the matching panel gradient
+          behind it extends seamlessly to the card's edge. Bump p-* up to make
+          the image even smaller, down to reduce the margin. */}
       <Image
         src="/auth-hero.png"
         alt=""
@@ -27,7 +26,7 @@ export function BrandPanel() {
         priority
         quality={100}
         sizes="(min-width: 1280px) 720px, 50vw"
-        className="object-contain p-8 xl:p-12"
+        className="object-contain p-12 xl:p-16"
       />
     </aside>
   );

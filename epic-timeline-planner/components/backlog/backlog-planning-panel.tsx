@@ -5472,7 +5472,7 @@ export function BacklogPlanningPanel({
       </div>
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
 
-      <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50 px-4 pb-9 pt-9 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-9 pt-9 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
           style={{ gridTemplateColumns: "auto auto repeat(11, minmax(0, 1fr)) auto" }}

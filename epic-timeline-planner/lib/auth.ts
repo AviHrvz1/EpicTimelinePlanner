@@ -58,6 +58,20 @@ export const ENABLED_OAUTH_PROVIDERS = {
 export const auth = betterAuth({
   appName: "Epic Timeline Planner",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  // Origins Better Auth will accept on POST /api/auth/* requests. The default
+  // strictly matches baseURL, which trips an "Invalid origin" error any time
+  // the browser sends a different host (e.g. 127.0.0.1 vs localhost, a non-
+  // default dev port, or a LAN IP for mobile testing). Allow common dev
+  // variants so the login form works regardless of how the user reaches it.
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+  ],
   secret:
     process.env.BETTER_AUTH_SECRET ||
     // Dev-only fallback so a missing secret doesn't take the whole app down before .env is
