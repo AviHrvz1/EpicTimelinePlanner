@@ -1534,10 +1534,10 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-[26px] shrink-0 items-stretch box-border overflow-hidden whitespace-nowrap rounded-full border-0 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-1 ring-indigo-300/75 select-none leading-none [&_svg]:opacity-35">
+    <div className="inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border overflow-hidden whitespace-nowrap rounded-full bg-indigo-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:bg-indigo-200/70 select-none [&_svg]:opacity-60">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
-        <span className="flex shrink-0 items-center gap-1 border-r border-indigo-300/60 pl-3 pr-2 text-[12px] font-semibold leading-none tracking-wide text-indigo-950">
+        <span className="flex shrink-0 items-center gap-1 border-r border-indigo-300/60 pl-3 pr-2 text-[12px] font-semibold text-indigo-900">
           <MapIcon className="size-3.5 shrink-0" aria-hidden />
           Roadmap
         </span>
@@ -1551,7 +1551,7 @@ function RoadmapSelector({
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
             onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12px] font-semibold leading-none text-indigo-950 placeholder:text-indigo-900/55 outline-none"
+            className="h-[28px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12px] font-semibold text-indigo-900 placeholder:text-indigo-900/55 outline-none"
             style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
             aria-label="Select roadmap"
           />
@@ -1728,7 +1728,7 @@ function RoadmapSelector({
           <select
             value={year}
             onChange={(e) => void onYearChange(Number(e.target.value))}
-            className="appearance-none h-[22px] leading-none cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[12px] font-semibold tabular-nums text-indigo-950 outline-none hover:bg-indigo-300/40"
+            className="appearance-none h-[22px] cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[12px] font-semibold tabular-nums text-indigo-900 outline-none hover:bg-indigo-300/40"
           >
             {years.map((y) => (
               <option key={y} value={y} className="text-slate-900">{y}</option>
@@ -2635,35 +2635,49 @@ export function TimelineGrid({
     return Math.round((scopedEpicsForEstimatePanel.estimated.length / scopedEpicsForEstimatePanel.all.length) * 100);
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
-  // Top-toolbar summary chips. IDLE variants match the toolbar "Sign in" button
-  // (pale indigo gradient, dark indigo text, indigo ring). The ON variant
-  // inverts to a saturated indigo gradient with white text + a stronger ring +
-  // shadow lift so the selected state reads instantly. Sizes (h-[26px] / px-3
-  // / text-[12px]) are preserved so the toolbar layout doesn't reflow.
+  // Top-toolbar summary chips. Now styled to match the BACKLOG WORKSPACE's
+  // top-panel filter buttons (h-[34px], rounded-lg, slate border) and to
+  // rotate between the two color treatments the backlog actually uses:
+  //
+  //   A) The "filter button" look — white background, slate-300 border,
+  //      slate-700 text, hover lifts slate-400 border + slate-50 bg.
+  //   B) The "Group By" look — indigo→violet pastel gradient, slate border,
+  //      indigo-700 text, hover deepens to indigo/violet-100.
+  //
+  // Alternating these two styles across the chips gives the row visual rhythm
+  // while sticking strictly to the backlog's palette. Selected (ON) chips use
+  // a deeper fill + inset shadow so they read as pressed.
+  // Match the reference image: PILL-SHAPED chips (rounded-full), pale indigo
+  // fill, semibold indigo text, hairline indigo ring. Selected state flips to
+  // a pale yellow/amber fill (same shape, same text color) so the active chip
+  // pops without changing geometry.
   const summaryChipShared =
-    "inline-flex h-[26px] max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-3 text-[12px] font-semibold leading-none tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2";
-  // The Sign-In look used by every non-selected chip + every static chip.
-  const summaryChipBaseClass = `${summaryChipShared} text-indigo-950 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 ring-1 ring-indigo-300/75 focus-visible:ring-indigo-400`;
-  const summaryChipIdleClass = `${summaryChipBaseClass} hover:shadow-sm hover:from-indigo-50 hover:via-indigo-100 hover:to-indigo-100`;
-  // ON — selected state. Same pale-indigo gradient + dark text as the idle
-  // variant, but with an inset top-shadow + stronger ring so it reads like the
-  // chip has been pressed in (recessed) rather than as a recolored button.
-  const summaryChipOnClass = `${summaryChipShared} text-indigo-950 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 ring-1 ring-indigo-400 shadow-[inset_0_2px_4px_rgba(15,23,42,0.18),inset_0_0_0_1px_rgba(99,102,241,0.18)] focus-visible:ring-indigo-400`;
-  const summaryChipStaticClass = `${summaryChipBaseClass} hover:shadow-sm`;
-  const summaryChipInitiativesIdleClass = summaryChipIdleClass;
-  const summaryChipInitiativesOnClass = summaryChipOnClass;
-  const summaryChipEpicsIdleClass = summaryChipIdleClass;
-  const summaryChipEpicsOnClass = summaryChipOnClass;
-  const summaryChipSprintsIdleClass = summaryChipIdleClass;
-  const summaryChipSprintsOnClass = summaryChipOnClass;
-  const summaryChipProgressIdleClass = summaryChipIdleClass;
-  const summaryChipProgressOnClass = summaryChipOnClass;
-  const summaryChipTeamsIdleClass = summaryChipIdleClass;
-  const summaryChipTeamsOnClass = summaryChipOnClass;
-  const summaryChipEstimatedClass = summaryChipStaticClass;
-  const summaryChipStoriesClass = summaryChipStaticClass;
+    "inline-flex h-[28px] max-w-full shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-tight outline-none transition focus:outline-none focus:ring-2";
+
+  // IDLE — pale indigo pill (the look of "19 Initiatives" / "Sign in" chips
+  // in the reference).
+  const chipIdle = `${summaryChipShared} bg-indigo-100 text-indigo-900 ring-1 ring-indigo-200/80 hover:bg-indigo-200/70 focus:ring-indigo-300`;
+  // ON — pale amber pill (the highlighted "9 Epics" chip in the reference).
+  const chipOn = `${summaryChipShared} bg-amber-100 text-amber-900 ring-1 ring-amber-200 shadow-[inset_0_2px_4px_rgba(15,23,42,0.10)] focus:ring-amber-300`;
+
+  // All chips share the same idle/on look — the reference shows one consistent
+  // pale-indigo palette with the selected chip flipped to amber, not a rotated
+  // rainbow of hues.
+  const summaryChipBaseClass = summaryChipShared;
+  const summaryChipInitiativesIdleClass = chipIdle;
+  const summaryChipInitiativesOnClass = chipOn;
+  const summaryChipEpicsIdleClass = chipIdle;
+  const summaryChipEpicsOnClass = chipOn;
+  const summaryChipStoriesClass = chipIdle;
   const summaryChipStoriesStaticClass = summaryChipStoriesClass;
-  const summaryChipUnscheduledClass = summaryChipStaticClass;
+  const summaryChipEstimatedClass = chipIdle;
+  const summaryChipSprintsIdleClass = chipIdle;
+  const summaryChipSprintsOnClass = chipOn;
+  const summaryChipProgressIdleClass = chipIdle;
+  const summaryChipProgressOnClass = chipOn;
+  const summaryChipTeamsIdleClass = chipIdle;
+  const summaryChipTeamsOnClass = chipOn;
+  const summaryChipUnscheduledClass = chipIdle;
   const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
   const estimatePanelScopeLabel = activeMonth
