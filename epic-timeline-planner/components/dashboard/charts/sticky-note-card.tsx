@@ -14,7 +14,7 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
-  Pencil,
+  SquarePen,
   Quote,
   Underline as UnderlineIcon,
   X,
@@ -106,31 +106,17 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
 
   const isEmpty = !body || stripHtml(body).length === 0;
 
-  // Page-curl effect: the paper has a chunk cut from its bottom-right corner via a -45deg gradient,
-  // and a small triangle below paints the underside of the fold (lighter + shadow on the diagonal).
+  // Page-curl effect: applied to the NOTEBOOK page (further down) rather than
+  // the outer card, so the curl always reads as part of the paper itself even
+  // when the footer action buttons (Edit / Cancel / Save) are mounted below.
   const FOLD = 22; // px — size of the curled-corner triangle
   return (
     <div
-      className="relative h-full min-h-0 bg-white ring-1 ring-slate-200"
+      className="relative h-full min-h-0 rounded-xl bg-white ring-1 ring-slate-200"
       style={{
-        clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${FOLD}px), calc(100% - ${FOLD}px) 100%, 0 100%)`,
-        borderRadius: "12px",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7), 0 4px 12px -4px rgba(15,23,42,0.10)",
       }}
     >
-      {/* Underside of the fold — small triangle in the bottom-right corner; soft slate so it reads against the white body. */}
-      <div
-        className="pointer-events-none absolute right-0 bottom-0"
-        style={{
-          width: `${FOLD}px`,
-          height: `${FOLD}px`,
-          background:
-            "linear-gradient(135deg, transparent 50%, rgb(226 232 240 / 0.85) 50%, rgb(203 213 225 / 0.95) 100%)",
-          filter: "drop-shadow(-1px -1px 1px rgba(15,23,42,0.12))",
-        }}
-        aria-hidden
-      />
-
       <div className="flex h-full min-h-0 flex-col p-3">
       {/* Header row: formatting toolbar only (shown when editing). Action buttons live in the footer below. */}
       {editing ? (
@@ -156,8 +142,10 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
         </div>
       ) : null}
 
-      {/* Body — ruled notebook page: white background with periodic horizontal lines.
-          The 24px ruling matches the editor's line-height so text sits on the lines. */}
+      {/* Body — ruled notebook page: white background with periodic
+          horizontal lines + the page-curl effect cut from its bottom-right
+          corner. The 24px ruling matches the editor's line-height so text
+          sits on the lines. */}
       <div
         className="relative min-h-0 flex-1 overflow-y-auto rounded-md bg-white ring-1 ring-violet-200/50"
         style={{
@@ -165,10 +153,25 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
             "repeating-linear-gradient(to bottom, transparent 0, transparent calc(1.5rem - 1px), rgb(186 230 253 / 0.7) calc(1.5rem - 1px), rgb(186 230 253 / 0.7) 1.5rem)",
           backgroundPosition: "0 0.4rem",
           backgroundAttachment: "local",
+          clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${FOLD}px), calc(100% - ${FOLD}px) 100%, 0 100%)`,
         }}
       >
         {/* Optional red "margin" line on the left, classic notebook touch */}
         <span className="pointer-events-none absolute inset-y-0 left-[1.65rem] w-px bg-rose-300/50" aria-hidden />
+        {/* Underside of the page-curl fold — soft slate triangle in the
+            bottom-right corner of the notebook page. Sits inside the body
+            so it always tracks the paper, not the outer card. */}
+        <div
+          className="pointer-events-none absolute right-0 bottom-0"
+          style={{
+            width: `${FOLD}px`,
+            height: `${FOLD}px`,
+            background:
+              "linear-gradient(135deg, transparent 50%, rgb(226 232 240 / 0.85) 50%, rgb(203 213 225 / 0.95) 100%)",
+            filter: "drop-shadow(-1px -1px 1px rgba(15,23,42,0.12))",
+          }}
+          aria-hidden
+        />
         {editing || !isEmpty ? (
           <EditorContent
             editor={editor}
@@ -218,7 +221,7 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
               className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-300/60 bg-white/70 px-2 text-[11px] font-semibold text-violet-800 hover:bg-white"
               aria-label="Edit note"
             >
-              <Pencil className="size-3" />
+              <SquarePen className="size-3.5" strokeWidth={2} />
               Edit
             </button>
           )}

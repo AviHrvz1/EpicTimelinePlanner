@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2, LogIn, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,21 +39,67 @@ export function LoginForm({
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Mounted gate — password-manager extensions (Keeper, 1Password, LastPass)
+  // inject sibling elements into form inputs AFTER React's first paint, which
+  // breaks SSR hydration with a child-list mismatch that suppressHydrationWarning
+  // alone can't silence. By rendering a static placeholder on the server and
+  // swapping to the real form only after `mounted` flips true (client-only),
+  // hydration completes against the placeholder and the swap is a normal
+  // re-render — no mismatch to flag.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   // Inline error banner shown inside the form panel instead of a toast — toasts
   // are easy to miss and feel out of place for credential validation feedback.
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Client-side cooldown — after 5 failed attempts in this browser session we
+  // disable the submit button for 60s and surface a countdown. Doesn't replace
+  // the server-side rate limit (5/15min) — it just gives the user explicit
+  // feedback and a hard pause before they can keep trying.
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownTick, setCooldownTick] = useState(0);
 
   const needsCaptcha = failedAttempts >= TURNSTILE_THRESHOLD;
   const captchaConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
   const captchaBlocking = needsCaptcha && captchaConfigured && !turnstileToken;
+  const cooldownRemainingMs = cooldownUntil ? Math.max(0, cooldownUntil - Date.now()) : 0;
+  const cooldownActive = cooldownRemainingMs > 0;
+  const cooldownSeconds = Math.ceil(cooldownRemainingMs / 1000);
+  const submitBlocked = pending || captchaBlocking || cooldownActive;
+
+  // Keep the countdown text in sync while the cooldown is active. We only run
+  // the interval when there's a live cooldown so we don't tick forever.
+  useEffect(() => {
+    if (!cooldownActive) return;
+    const id = setInterval(() => setCooldownTick((t) => t + 1), 250);
+    return () => clearInterval(id);
+  }, [cooldownActive]);
+  // cooldownTick is intentionally read so its change re-renders the countdown.
+  void cooldownTick;
+
+  const COOLDOWN_THRESHOLD = 5;
+  const COOLDOWN_DURATION_MS = 60_000;
 
   const handleTurnstileSuccess = useCallback((token: string) => {
     setTurnstileToken(token);
   }, []);
 
+  function registerFailure() {
+    setTurnstileToken(null);
+    setFailedAttempts((n) => {
+      const next = n + 1;
+      // Once the user crosses COOLDOWN_THRESHOLD failed attempts in this
+      // session, start a 60-second hard pause. We re-arm the cooldown on every
+      // subsequent failure too, so they can't squeeze in attempts at the edge.
+      if (next >= COOLDOWN_THRESHOLD) {
+        setCooldownUntil(Date.now() + COOLDOWN_DURATION_MS);
+      }
+      return next;
+    });
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || captchaBlocking) return;
+    if (submitBlocked) return;
     setPending(true);
     setErrorMessage(null);
     try {
@@ -70,8 +116,7 @@ export function LoginForm({
       });
       if ("error" in result && result.error) {
         const msg = result.error.message || "Unable to sign in";
-        setFailedAttempts((n) => n + 1);
-        setTurnstileToken(null);
+        registerFailure();
         setErrorMessage(msg);
         return;
       }
@@ -79,13 +124,27 @@ export function LoginForm({
       router.push(callbackURL);
       router.refresh();
     } catch (err) {
-      setFailedAttempts((n) => n + 1);
-      setTurnstileToken(null);
+      registerFailure();
       const msg = err instanceof Error ? err.message : "Unable to sign in";
       setErrorMessage(msg);
     } finally {
       setPending(false);
     }
+  }
+
+  // Server-side / first-paint placeholder so hydration completes before the
+  // real <input>s exist (no inputs → nothing for password-managers to inject).
+  // Heights match the real form layout so there's no perceived layout shift
+  // when the real form swaps in on the next tick.
+  if (!mounted) {
+    return (
+      <div className="space-y-5" aria-hidden>
+        <div className="h-[68px]" />
+        <div className="h-[68px]" />
+        <div className="h-5" />
+        <div className="h-12 rounded-full bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600 opacity-60" />
+      </div>
+    );
   }
 
   return (
@@ -102,15 +161,32 @@ export function LoginForm({
           <span>{errorMessage}</span>
         </div>
       )}
+      {/* Cooldown banner — appears after 5 failed attempts and ticks down a
+          60-second hard pause. The submit button below is disabled while this
+          is on screen so the user can't keep brute-forcing. */}
+      {cooldownActive && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12.5px] font-medium text-amber-800"
+        >
+          <span aria-hidden className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">!</span>
+          <span>
+            Too many failed attempts. Please wait <strong>{cooldownSeconds}s</strong> before trying again.
+          </span>
+        </div>
+      )}
 
       <div className="space-y-2">
         <label htmlFor="login-email" className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
           Email
         </label>
-        <div className="group relative">
+        <div className="group relative" suppressHydrationWarning>
           {/* Leading icon — sits inside the input's left padding so the cursor and
               text never collide with it. Color shifts to indigo on focus to echo
-              the focus ring's hue. */}
+              the focus ring's hue. suppressHydrationWarning silences the noise
+              from password-manager extensions (Keeper, 1Password, etc.) that
+              inject their own siblings into this wrapper after mount. */}
           <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
           <input
             id="login-email"
@@ -122,6 +198,7 @@ export function LoginForm({
             onChange={(e) => { setEmail(e.target.value); if (errorMessage) setErrorMessage(null); }}
             className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-[14px] text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             placeholder="you@example.com"
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -138,7 +215,7 @@ export function LoginForm({
             Forgot password?
           </Link>
         </div>
-        <div className="group relative">
+        <div className="group relative" suppressHydrationWarning>
           <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
           <input
             id="login-password"
@@ -150,6 +227,7 @@ export function LoginForm({
             onChange={(e) => { setPassword(e.target.value); if (errorMessage) setErrorMessage(null); }}
             className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-11 py-3 text-[14px] text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             placeholder="••••••••••"
+            suppressHydrationWarning
           />
           <button
             type="button"
@@ -176,7 +254,7 @@ export function LoginForm({
 
       <button
         type="submit"
-        disabled={pending || captchaBlocking}
+        disabled={submitBlocked}
         className={cn(
           "inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border-0 px-6 text-[13px] font-bold uppercase tracking-[0.12em] text-white shadow-lg shadow-indigo-500/25 transition-all",
           "bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600",
@@ -186,7 +264,13 @@ export function LoginForm({
         )}
       >
         {pending ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-        <span>{pending ? "Signing in…" : "Login"}</span>
+        <span>
+          {pending
+            ? "Signing in…"
+            : cooldownActive
+              ? `Locked · ${cooldownSeconds}s`
+              : "Login"}
+        </span>
       </button>
 
       {captchaBlocking && (

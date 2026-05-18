@@ -3,7 +3,7 @@
 import { Fragment, useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Flag, GripVertical, Pencil, StickyNote, Users, X } from "lucide-react";
+import { Flag, GripVertical, SquarePen, StickyNote, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
@@ -410,12 +410,16 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
           />
         ) : (
           <span
-            className="group/title flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold text-slate-700"
+            className="group/title flex min-w-0 flex-1 items-center gap-1.5 text-sm font-semibold text-slate-700"
           >
             {chart.chartType === "sticky-note" && (
               <StickyNote className="size-3.5 shrink-0 text-violet-500" aria-hidden />
             )}
-            <span className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
+            {/* Title takes only its natural width (no flex-1) so the edit icon
+                sits right after the text with a small gap, rather than being
+                pushed to the far right of the header. overflow-hidden +
+                whitespace-nowrap still clip long titles. */}
+            <span className="flex min-w-0 items-center overflow-hidden whitespace-nowrap">
               {renderTitleNodes(chart, displayTitle)}
             </span>
             <button
@@ -423,7 +427,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
               className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition-all group-hover/title:opacity-100 hover:bg-slate-100 hover:text-slate-500"
               title="Rename chart"
             >
-              <Pencil className="size-3" />
+              <SquarePen className="size-3.5" strokeWidth={2} />
             </button>
           </span>
         )}
@@ -437,13 +441,6 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
               disableUp={rowSpan <= 1}
               disableDown={rowSpan >= 4}
             />
-            <button
-              onClick={() => onEdit(chart)}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              title="Edit chart"
-            >
-              <Pencil className="size-3.5" />
-            </button>
             <button
               onClick={() => onRemove(chart.id)}
               className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
