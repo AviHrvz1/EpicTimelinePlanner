@@ -4627,21 +4627,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             is the first thing you see; summary chips sit on the right pushed
             by ml-auto. */}
         <div className="relative -mr-[5px] flex shrink-0 items-center gap-1 overflow-visible border-b border-slate-200 bg-white pl-14 pr-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
-          {/* Bird-eye logo (simple variant) — absolutely positioned so a
-              bigger icon can spill above and below the header strip without
-              inflating its height. 1024×1024 source → 48px rendered, crisp
-              at 2× density. pl-14 on the parent reserves the horizontal
-              real estate for it. */}
-          <Image
-            src="/bird-eye-logo-simple.png"
-            alt="Bird Eye Viewer"
-            width={192}
-            height={192}
-            priority
-            quality={100}
-            sizes="48px"
-            className="pointer-events-none absolute left-1 top-1/2 size-[52px] shrink-0 -translate-y-1/2 drop-shadow-[0_2px_4px_rgba(15,23,42,0.18)]"
-          />
+          {/* Bird-eye logo (simple variant) — wrapped in a white card with a
+              soft bottom shadow so the logo reads as a separate badge sitting
+              on top of the toolbar. Absolutely positioned so a bigger icon
+              can spill above/below the header without inflating its height.
+              pl-14 on the parent reserves the horizontal real estate. */}
+          <div className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 bg-white p-1 shadow-[0_4px_10px_-2px_rgba(15,23,42,0.18),0_2px_4px_-2px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70">
+            <Image
+              src="/bird-eye-logo-simple.png"
+              alt="Bird Eye Viewer"
+              width={192}
+              height={192}
+              priority
+              quality={100}
+              sizes="44px"
+              className="block size-[44px] shrink-0"
+            />
+          </div>
           <div className="ml-[13px] mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
             <UserChip />
           </div>

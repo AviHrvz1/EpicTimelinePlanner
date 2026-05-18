@@ -183,11 +183,19 @@ function getInitials(name: string | null | undefined, email: string): string {
  * dashboard feels visually varied across many users. HSL with a fixed saturation/lightness
  * looks consistent against the white chip background.
  */
+/**
+ * Stable avatar color, restricted to the project's sky → indigo → violet
+ * palette (hue 200°–280°) so user avatars never land on red/orange tones that
+ * clash with the rest of the UI. Saturation/lightness picked to read well as
+ * a white-text avatar against the white chip background.
+ */
 function stableColor(id: string): string {
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
     hash = (hash * 31 + id.charCodeAt(i)) | 0;
   }
-  const hue = ((hash % 360) + 360) % 360;
-  return `hsl(${hue} 65% 48%)`;
+  const HUE_MIN = 200; // sky-500-ish
+  const HUE_RANGE = 80; // → 280° ≈ violet-500
+  const hue = HUE_MIN + (Math.abs(hash) % HUE_RANGE);
+  return `hsl(${hue} 62% 52%)`;
 }
