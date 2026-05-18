@@ -56,7 +56,7 @@ export function LoginModal() {
           on mobile the brand panel collapses and only the form shows.
           No ring border — the drop shadow alone separates the card from
           the planner behind it. */}
-      <div className="relative z-10 mx-4 grid w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-[0_40px_100px_-15px_rgba(15,23,42,0.55),0_20px_40px_-20px_rgba(15,23,42,0.35)] lg:grid-cols-[9fr_11fr]">
+      <div className="relative z-10 mx-4 grid w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-[0_40px_100px_-15px_rgba(15,23,42,0.55),0_20px_40px_-20px_rgba(15,23,42,0.35)] lg:grid-cols-[1fr_1fr]">
         <section className="flex flex-col px-8 py-8 sm:px-12 sm:py-10 lg:px-14 lg:py-10">
           <div className="my-auto w-full max-w-[420px] py-4">
             {/* When in signup mode, show a "Back to sign in" link above the
