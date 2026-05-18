@@ -4642,7 +4642,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             sizes="48px"
             className="pointer-events-none absolute left-1 top-1/2 size-[52px] shrink-0 -translate-y-1/2 drop-shadow-[0_2px_4px_rgba(15,23,42,0.18)]"
           />
-          <div className="ml-2 mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
+          <div className="ml-[13px] mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
             <UserChip />
           </div>
           <div ref={setSummaryBarEl} className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
