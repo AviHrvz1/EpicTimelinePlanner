@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { ENABLED_OAUTH_PROVIDERS } from "@/lib/auth";
 
 import { LoginForm } from "@/components/auth/login-form";
@@ -10,19 +12,23 @@ import { LoginForm } from "@/components/auth/login-form";
 export default function LoginPage() {
   return (
     <div className="space-y-7">
-      <div className="space-y-3">
-        {/* Tiny gradient accent above the heading echoes the LOGIN button's
-            sky → indigo → violet gradient, tying the form into the brand
-            palette without adding heavy chrome. */}
-        <div className="h-1 w-10 rounded-full bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600" />
-        <div className="space-y-1.5">
-          <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
-            Sign in
-          </h1>
-          <p className="text-[13px] leading-relaxed text-slate-500">
-            Welcome back. Pick up where you left off.
-          </p>
-        </div>
+      <div className="space-y-1.5">
+        <h1 className="flex items-center gap-2.5 text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
+          <Image
+            src="/bird-eye-bubble.png"
+            alt=""
+            width={56}
+            height={56}
+            priority
+            quality={100}
+            className="size-7"
+            aria-hidden
+          />
+          Sign in
+        </h1>
+        <p className="text-[13px] leading-relaxed text-slate-500">
+          Welcome back. Pick up where you left off.
+        </p>
       </div>
       <LoginForm enabledProviders={ENABLED_OAUTH_PROVIDERS} />
     </div>

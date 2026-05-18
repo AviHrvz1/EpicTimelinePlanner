@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { BrandPanel } from "@/components/auth/brand-panel";
@@ -32,19 +31,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="grid w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_-30px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70 lg:grid-cols-2">
           {/* Form column — left half on desktop, full width on mobile. */}
           <section className="relative flex flex-col px-8 py-8 sm:px-12 sm:py-10 lg:px-14 lg:py-10">
-            <Link href="/" aria-label="Bird Eye Viewer — home" className="inline-block">
-              <Image
-                src="/bird-eye-lockup-wide.png"
-                alt="Bird Eye Viewer"
-                width={630}
-                height={207}
-                priority
-                quality={100}
-                sizes="260px"
-                className="h-20 w-auto"
-              />
-            </Link>
-
             <div className="my-auto w-full max-w-[420px] py-4">{children}</div>
 
             <p className="text-[11px] text-slate-400">
