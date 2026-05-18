@@ -82,13 +82,16 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
   --scrollbar-track: transparent;
-  /* Exact retro/main panel gradient — blue-50 → violet-50 → pink-50. */
-  --scrollbar-thumb-from: #eff6ff; /* blue-50 */
-  --scrollbar-thumb-to: #fdf2f8; /* pink-50 */
-  --scrollbar-thumb-from-hover: #dbeafe; /* blue-100 */
-  --scrollbar-thumb-to-hover: #fce7f3; /* pink-100 */
-  --scrollbar-thumb-from-active: #bfdbfe; /* blue-200 */
-  --scrollbar-thumb-to-active: #fbcfe8; /* pink-200 */
+  /* Match the unified panel gradient — sky-100 → indigo-100 → violet-100 — that
+     wraps the breadcrumb trail, backlog filters, user directory filters, and
+     the roadmap planning left+right panel container. Keeping the scrollbar in
+     the same hue family ties the entire app's chrome together. */
+  --scrollbar-thumb-from: #e0f2fe; /* sky-100 */
+  --scrollbar-thumb-to: #ede9fe; /* violet-100 */
+  --scrollbar-thumb-from-hover: #bae6fd; /* sky-200 */
+  --scrollbar-thumb-to-hover: #ddd6fe; /* violet-200 */
+  --scrollbar-thumb-from-active: #7dd3fc; /* sky-300 */
+  --scrollbar-thumb-to-active: #c4b5fd; /* violet-300 */
 }
 
 .dark {
@@ -264,7 +267,7 @@
   .capacity-bucket-scroll {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: #f5f3ff transparent;
+    scrollbar-color: #c7d2fe transparent;
   }
   .capacity-bucket-scroll::-webkit-scrollbar {
     width: 6px;
@@ -296,7 +299,7 @@
   body,
   * {
     scrollbar-width: thin;
-    scrollbar-color: #f5f3ff transparent;
+    scrollbar-color: #c7d2fe transparent;
   }
   *::-webkit-scrollbar {
     width: 6px;
