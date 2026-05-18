@@ -1563,7 +1563,7 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border whitespace-nowrap rounded-full bg-indigo-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:bg-indigo-200/70 select-none [&_svg]:opacity-60">
+    <div className="inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border whitespace-nowrap rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 select-none [&_svg]:opacity-60">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
         <span className="flex shrink-0 items-center gap-1 border-r border-indigo-300/60 pl-3 pr-2 text-[12px] font-semibold text-indigo-900">
@@ -2709,7 +2709,9 @@ export function TimelineGrid({
 
   // IDLE — pale indigo pill (the look of "19 Initiatives" / "Sign in" chips
   // in the reference).
-  const chipIdle = `${summaryChipShared} bg-indigo-100 text-indigo-900 ring-1 ring-indigo-200/80 hover:bg-indigo-200/70 focus:ring-indigo-300`;
+  // Chip background mirrors the breadcrumb panel's sky → indigo → violet
+  // pastel gradient so the top toolbar reads as one continuous palette.
+  const chipIdle = `${summaryChipShared} bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-900 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 focus:ring-indigo-300`;
   // ON — pale amber pill (the highlighted "9 Epics" chip in the reference).
   const chipOn = `${summaryChipShared} bg-amber-100 text-amber-900 ring-1 ring-amber-200 shadow-[inset_0_2px_4px_rgba(15,23,42,0.10)] focus:ring-amber-300`;
 
