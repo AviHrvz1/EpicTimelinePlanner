@@ -5446,7 +5446,7 @@ export function BacklogPlanningPanel({
   );
 
   return (
-    <section className="ml-3 flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+    <section className="ml-1 mr-0 flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
       <div className="mb-6 flex shrink-0 items-center justify-between gap-3 pb-2 pt-4">
         <div className="flex items-center gap-2.5">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">

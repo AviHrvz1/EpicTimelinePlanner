@@ -4696,7 +4696,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 isResizingPanel && "select-none",
               )}
               style={{
-                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 24px" : "auto 20px minmax(0, 1fr) 24px",
+                // Trailing column is the right-edge gutter; trimmed from 24px to 8px
+                // so the timeline panel spreads a bit further toward the right edge.
+                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 8px" : "auto 20px minmax(0, 1fr) 8px",
               }}
             >
               <div
@@ -5388,7 +5390,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 }}
               />
               </div>
-              {rightEdgeSeparator}
+              {/* Slimmed-down mirror of rightEdgeSeparator for backlog mode —
+                  same visual treatment but ~18px instead of 24px so the table
+                  gets a touch more horizontal room. */}
+              <div
+                className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
+                aria-hidden
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
+              </div>
             </div>
           )}
           {/* Dashboard stays mounted once visited so unsaved drafts persist when the user temporarily navigates to another mode. */}
