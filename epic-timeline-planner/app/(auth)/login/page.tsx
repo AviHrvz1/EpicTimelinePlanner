@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 import { ENABLED_OAUTH_PROVIDERS } from "@/lib/auth";
 
 import { LoginForm } from "@/components/auth/login-form";
@@ -13,17 +11,7 @@ export default function LoginPage() {
   return (
     <div className="space-y-7">
       <div className="space-y-1.5">
-        <h1 className="flex items-center gap-2.5 text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
-          <Image
-            src="/bird-eye-bubble.png"
-            alt=""
-            width={56}
-            height={56}
-            priority
-            quality={100}
-            className="size-7"
-            aria-hidden
-          />
+        <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
           Sign in
         </h1>
         <p className="text-[13px] leading-relaxed text-slate-500">

@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
 import { ENABLED_OAUTH_PROVIDERS } from "@/lib/auth";
 
 import { SignupForm } from "@/components/auth/signup-form";
@@ -9,6 +12,13 @@ import { SignupForm } from "@/components/auth/signup-form";
 export default function SignupPage() {
   return (
     <div className="space-y-7">
+      <Link
+        href="/login"
+        className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-indigo-600 transition-colors hover:text-indigo-700 hover:underline"
+      >
+        <ArrowLeft className="size-3.5" />
+        Back to sign in
+      </Link>
       <div className="space-y-1.5">
         <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
           Create your account
