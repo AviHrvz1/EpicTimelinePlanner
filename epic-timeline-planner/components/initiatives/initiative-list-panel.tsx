@@ -2356,9 +2356,12 @@ export function InitiativeListPanel({
               variant="default"
               className={cn(
                 "h-8 border-0 px-3 text-[13px] font-bold shadow-none",
-                "bg-gradient-to-br from-sky-400 via-blue-500 to-sky-500 text-white",
-                "hover:from-sky-500 hover:via-blue-600 hover:to-sky-600 hover:text-white",
-                "focus-visible:ring-2 focus-visible:ring-sky-400/90 focus-visible:ring-offset-0 [&_svg]:text-white",
+                // Flat indigo-100 — the middle shade of the breadcrumb panel's
+                // sky → indigo → violet gradient. No gradient on the button
+                // itself, just the same color the breadcrumb sits at center.
+                "bg-indigo-100 text-indigo-900 ring-1 ring-indigo-200/80",
+                "hover:bg-indigo-200 hover:text-indigo-900",
+                "focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-0 [&_svg]:text-indigo-700",
               )}
               onClick={handleNewButtonClick}
             >
