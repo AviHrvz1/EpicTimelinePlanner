@@ -47,9 +47,9 @@ export function LoginModal() {
       aria-label={mode === "login" ? "Sign in to Bird Eye Viewer" : "Create your Bird Eye Viewer account"}
       className="fixed inset-0 z-[1000] flex items-center justify-center"
     >
-      {/* Backdrop — 30% dim so the planner is clearly de-emphasized while
-          still being visible underneath. Still swallows click events. */}
-      <div className="absolute inset-0 bg-slate-900/30" aria-hidden />
+      {/* Backdrop — 18% dim: signals the planner is inactive without
+          obscuring it. Still swallows click events. */}
+      <div className="absolute inset-0 bg-slate-900/[0.18]" aria-hidden />
 
       {/* Modal card — floats above the planner with a strong drop shadow.
           Split-screen layout (form left, brand panel right) like /login;

@@ -82,15 +82,18 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
   --scrollbar-track: transparent;
-  /* Match the unified panel gradient — sky-100 → indigo-100 → violet-100 — that
-     wraps the breadcrumb trail, backlog filters, user directory filters, and
-     the roadmap planning left+right panel container. Keeping the scrollbar in
-     the same hue family ties the entire app's chrome together. */
+  /* Scrollbar thumb mirrors the breadcrumb panel's EXACT 3-stop gradient
+     (sky-100 → indigo-100 → violet-100) so the scrollbar reads as the same
+     pastel band that wraps the breadcrumb trail, backlog filters, user
+     directory filters, and the roadmap planning panel container. */
   --scrollbar-thumb-from: #e0f2fe; /* sky-100 */
+  --scrollbar-thumb-via: #e0e7ff; /* indigo-100 */
   --scrollbar-thumb-to: #ede9fe; /* violet-100 */
   --scrollbar-thumb-from-hover: #bae6fd; /* sky-200 */
+  --scrollbar-thumb-via-hover: #c7d2fe; /* indigo-200 */
   --scrollbar-thumb-to-hover: #ddd6fe; /* violet-200 */
   --scrollbar-thumb-from-active: #7dd3fc; /* sky-300 */
+  --scrollbar-thumb-via-active: #a5b4fc; /* indigo-300 */
   --scrollbar-thumb-to-active: #c4b5fd; /* violet-300 */
 }
 
@@ -267,7 +270,7 @@
   .capacity-bucket-scroll {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
-    scrollbar-color: #c7d2fe transparent;
+    scrollbar-color: #e0e7ff transparent;
   }
   .capacity-bucket-scroll::-webkit-scrollbar {
     width: 6px;
@@ -277,13 +280,13 @@
     border-radius: 9999px;
   }
   .capacity-bucket-scroll::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, var(--scrollbar-thumb-from), var(--scrollbar-thumb-to));
+    background: linear-gradient(180deg, var(--scrollbar-thumb-from), var(--scrollbar-thumb-via), var(--scrollbar-thumb-to));
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   .capacity-bucket-scroll::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, var(--scrollbar-thumb-from-hover), var(--scrollbar-thumb-to-hover));
+    background: linear-gradient(180deg, var(--scrollbar-thumb-from-hover), var(--scrollbar-thumb-via-hover), var(--scrollbar-thumb-to-hover));
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
@@ -299,7 +302,7 @@
   body,
   * {
     scrollbar-width: thin;
-    scrollbar-color: #c7d2fe transparent;
+    scrollbar-color: #e0e7ff transparent;
   }
   *::-webkit-scrollbar {
     width: 6px;
@@ -310,19 +313,19 @@
     border-radius: 9999px;
   }
   *::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, var(--scrollbar-thumb-from), var(--scrollbar-thumb-to));
+    background: linear-gradient(180deg, var(--scrollbar-thumb-from), var(--scrollbar-thumb-via), var(--scrollbar-thumb-to));
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, var(--scrollbar-thumb-from-hover), var(--scrollbar-thumb-to-hover));
+    background: linear-gradient(180deg, var(--scrollbar-thumb-from-hover), var(--scrollbar-thumb-via-hover), var(--scrollbar-thumb-to-hover));
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:active {
-    background: linear-gradient(180deg, var(--scrollbar-thumb-from-active), var(--scrollbar-thumb-to-active));
+    background: linear-gradient(180deg, var(--scrollbar-thumb-from-active), var(--scrollbar-thumb-via-active), var(--scrollbar-thumb-to-active));
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
