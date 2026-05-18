@@ -288,7 +288,7 @@ function YearRoadmapEmptyStripedLane({
           isDragging ? "opacity-0" : "opacity-100",
         )}>
           <div
-            className="rounded-2xl border border-slate-300/60 px-8 py-5 text-center"
+            className="rounded-2xl border border-slate-300/60 px-8 py-5 text-center shadow-[0_8px_24px_-8px_rgba(15,23,42,0.20),0_2px_6px_-2px_rgba(15,23,42,0.10)]"
             aria-hidden
           >
             {variant === "initiatives" ? (
@@ -4467,7 +4467,7 @@ export function TimelineGrid({
         onClick={() => { setRoadmapBarMode("initiatives"); onSummaryStatusQuickFilterChange?.(null); }}
         className={cn(summaryChipBaseClass, roadmapBarMode === "initiatives" ? summaryChipInitiativesOnClass : summaryChipInitiativesIdleClass)}
       >
-        <Zap className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        <Zap className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
         <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
         <span className="hidden xl:inline">Initiatives</span>
         <span className="xl:hidden">Inits</span>
@@ -4477,18 +4477,28 @@ export function TimelineGrid({
         onClick={() => { setRoadmapBarMode("epics"); onSummaryStatusQuickFilterChange?.(null); }}
         className={cn(summaryChipBaseClass, roadmapBarMode === "epics" && summaryStatusQuickFilter == null ? summaryChipEpicsOnClass : summaryChipEpicsIdleClass)}
       >
-        <Folder className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        <Folder className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
         {("totalEpics" in summaryBadgesForScope ? summaryBadgesForScope.totalEpics : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}Epics
       </button>
       <div className={summaryChipStoriesStaticClass}>
-        <FileText className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        {/* Stroke-based FileText icon — strokeWidth 1.25 + opacity-70 keeps
+            it noticeably lighter than the neighbouring chip icons. */}
+        <FileText className="size-3 shrink-0 sm:size-3.5 opacity-70" strokeWidth={1.25} aria-hidden />
         <span className="truncate">{summaryBadgesForScope.totalStories}</span>
         <span>Stories</span>
       </div>
       <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
+        {/* Donut chart visualizing Epic Estimated %. Track was slate-200
+            (#e2e8f0) which is nearly identical to the chip's indigo-100
+            background — the donut looked white/invisible. Bumped the track
+            to indigo-400 for clear contrast against the pale-indigo chip
+            while staying in the chip's palette. Progress arc keeps the
+            project's rose accent. */}
         <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-          <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
-          <circle cx="8" cy="8" r="6" fill="none" stroke="#9f1239" strokeWidth="2.5" strokeLinecap="round"
+          <circle cx="8" cy="8" r="6" fill="none" stroke="#818cf8" strokeWidth="2" />
+          <circle
+            cx="8" cy="8" r="6" fill="none"
+            stroke="#e11d48" strokeWidth="2" strokeLinecap="round"
             transform="rotate(-90 8 8)"
             strokeDasharray={`${2 * Math.PI * 6}`}
             strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
@@ -4776,7 +4786,7 @@ export function TimelineGrid({
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
                 <label className="group/teamlabel inline-flex items-center gap-2 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[16px] font-semibold tracking-[0.01em] text-slate-500 transition-colors group-hover/teamlabel:text-indigo-600">Team</span>
+                  <span className="text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-950 transition-colors group-hover/teamlabel:text-indigo-600">Team</span>
                   <div className="group/trigger relative z-40" ref={sprintTeamMenuRef}>
                     <button
                       type="button"
@@ -4856,7 +4866,7 @@ export function TimelineGrid({
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
                 <label className="inline-flex items-center gap-2 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[12px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <span className="text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-950">Team</span>
                   <div className="group/trigger relative z-40" ref={ganttTeamMenuRef}>
                     <button
                       type="button"
@@ -4931,7 +4941,7 @@ export function TimelineGrid({
               <>
                 <ChevronRight className="size-4 text-slate-400" aria-hidden />
                 <label className="inline-flex items-center gap-2 rounded-md border-0 bg-transparent py-0.5 pl-1.5 pr-1 shadow-none">
-                  <span className="text-[12px] font-semibold tracking-wide text-slate-500 uppercase">Team</span>
+                  <span className="text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-950">Team</span>
                   <div className="group/trigger relative z-40" ref={insightsTeamMenuRef}>
                     <button
                       type="button"

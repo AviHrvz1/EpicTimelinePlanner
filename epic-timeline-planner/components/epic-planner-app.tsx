@@ -4720,9 +4720,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 isResizingPanel && "select-none",
               )}
               style={{
-                // Trailing column is the right-edge gutter; trimmed from 24px to 8px
-                // so the timeline panel spreads a bit further toward the right edge.
-                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 8px" : "auto 20px minmax(0, 1fr) 8px",
+                // Trailing column hosts the slim white right-edge separator
+                // (matches backlog + users panels). 18px gives the timeline
+                // panel most of the row while still showing the white line.
+                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 18px" : "auto 20px minmax(0, 1fr) 18px",
               }}
             >
               <div
@@ -5268,8 +5269,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onSprintModeChange={handleSprintModeChange}
               />
               </div>
-              {/* Decorative mirror of the left-side panel separator (no resize) */}
-              {rightEdgeSeparator}
+              {/* Slim 18px right-edge separator with a white center line — same
+                  visual treatment as backlog + users panels for consistency.
+                  Replaces the 24px shared rightEdgeSeparator on the roadmap
+                  branch so the timeline panel keeps the extra width. */}
+              <div
+                className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
+                aria-hidden
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
+              </div>
             </div>
           ) : topMode === "dashboard" ? (
             null
