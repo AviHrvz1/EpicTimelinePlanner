@@ -4,6 +4,7 @@ import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
 import { Archive, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Users } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
@@ -4622,13 +4623,29 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         )}
       >
         {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid.
-            UserChip lives on the right edge (after the summary chips) so the signed-in
-            user / Sign-in link is always visible regardless of which mode is active. */}
-        <div className="-mr-[5px] flex shrink-0 items-center justify-end gap-1 overflow-visible border-b border-slate-200 bg-white px-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
-          <div ref={setSummaryBarEl} className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
-          <div className="ml-2 flex shrink-0 items-center pl-2 border-l border-slate-100">
+            UserChip lives at the LEFT edge so the signed-in user identity
+            is the first thing you see; summary chips sit on the right pushed
+            by ml-auto. */}
+        <div className="relative -mr-[5px] flex shrink-0 items-center gap-1 overflow-visible border-b border-slate-200 bg-white pl-14 pr-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
+          {/* Bird-eye logo (simple variant) — absolutely positioned so a
+              bigger icon can spill above and below the header strip without
+              inflating its height. 1024×1024 source → 48px rendered, crisp
+              at 2× density. pl-14 on the parent reserves the horizontal
+              real estate for it. */}
+          <Image
+            src="/bird-eye-logo-simple.png"
+            alt="Bird Eye Viewer"
+            width={192}
+            height={192}
+            priority
+            quality={100}
+            sizes="48px"
+            className="pointer-events-none absolute left-1 top-1/2 size-[52px] shrink-0 -translate-y-1/2 drop-shadow-[0_2px_4px_rgba(15,23,42,0.18)]"
+          />
+          <div className="ml-2 mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
             <UserChip />
           </div>
+          <div ref={setSummaryBarEl} className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
         </div>
         <div
           className={cn(

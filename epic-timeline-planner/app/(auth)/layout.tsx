@@ -28,7 +28,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-10 sm:px-8 sm:py-14">
         {/* Centered card — wraps both columns. Rounded, soft shadow, a faint
             slate ring so the edge is visible against the tinted backdrop. */}
-        <div className="grid w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_-30px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70 lg:grid-cols-[9fr_11fr]">
+        <div className="grid w-full max-w-7xl overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_-30px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70 lg:grid-cols-[9fr_11fr]">
           {/* Form column — left half on desktop, full width on mobile. */}
           <section className="relative flex flex-col px-8 py-8 sm:px-12 sm:py-10 lg:px-14 lg:py-10">
             <div className="my-auto w-full max-w-[420px] py-4">{children}</div>

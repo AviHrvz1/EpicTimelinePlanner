@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LogIn, LogOut, Settings, User } from "lucide-react";
+import { LogOut, Settings, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { signOut, useSession } from "@/lib/auth-client";
@@ -54,15 +53,11 @@ export function UserChip() {
   }
 
   if (!data?.user) {
-    return (
-      <Link
-        href="/login"
-        className="inline-flex h-[26px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 px-3 text-[12px] font-semibold leading-none tracking-wide text-indigo-950 ring-1 ring-indigo-300/75 transition-shadow hover:shadow-sm"
-      >
-        <LogIn className="size-3.5 shrink-0 opacity-50" aria-hidden />
-        Sign in
-      </Link>
-    );
+    // Middleware redirects unauthenticated visitors to /login before they can
+    // see the global header, so we should never actually render anything for
+    // the unauthenticated state here. Return null defensively in case the
+    // session check briefly returns no user mid-navigation.
+    return null;
   }
 
   const user = data.user;
@@ -76,6 +71,9 @@ export function UserChip() {
     try {
       await signOut();
       toast.success("Signed out");
+      // Redirect to /login after sign-out so the user lands on the auth page
+      // instead of staying on an authenticated route that flashes empty data.
+      router.push("/login");
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unable to sign out";
@@ -112,13 +110,16 @@ export function UserChip() {
             {initials}
           </span>
         )}
+        {/* Lucide User icon between the avatar and the display name — makes the
+            "this chip represents your account" affordance explicit. */}
+        <User className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2.2} aria-hidden />
         <span className="max-w-[140px] truncate">{displayName}</span>
       </button>
 
       {menuOpen && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+          className="absolute left-0 top-full z-[1000] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
         >
           <div className="px-3 py-2 border-b border-slate-100">
             <p className="truncate text-[12px] font-semibold text-slate-800">{displayName}</p>

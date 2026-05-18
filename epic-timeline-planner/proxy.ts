@@ -1,62 +1,93 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Next.js 16 proxy (formerly `middleware.ts`). Runs on every matched request and lets us
- * shape the response *before* the route handler executes.
+ * Next.js 16 proxy (formerly `middleware.ts`). Runs on every matched request and
+ * lets us shape the response *before* the route handler executes.
  *
- * Auth gating policy (v1):
- *   • GET requests are NEVER blocked — the app reads stay public for safe rollout.
- *   • POST / PATCH / PUT / DELETE on /api/* require a Better Auth session cookie.
- *     If the cookie is missing the request is rejected with 401 JSON before it ever
- *     hits the route handler. (The handler can still do a `requireAuth` for extra
- *     safety, but most writes are covered here.)
+ * Auth gating policy (v2 — full route protection):
+ *   • Public routes (auth pages, legal pages, /api/auth/*) always pass through.
+ *   • Any other navigation without the Better Auth session cookie is redirected
+ *     to /login?redirect=<original-path>.
+ *   • Write requests (POST/PATCH/PUT/DELETE) under /api/* without the cookie
+ *     still get a 401 JSON response so XHR/fetch callers see a clean error.
  *
- * We intentionally do NOT redirect unauthed UI navigations to /login — the UserChip
- * in the header surfaces the Sign-in link, and the page itself stays viewable so
- * existing readers don't get bounced. Tighten this once the auth UX is verified.
- *
- * Note: middleware/proxy runs on the Edge runtime by default, which means we can't
- * import `lib/auth.ts` (it pulls in Prisma + Node-only modules). Instead we sniff
- * the session cookie name we configured (cookiePrefix: "epic-timeline") to do a
- * cheap presence check. Cryptographic validation still happens server-side inside
- * each route handler / Better Auth flow.
+ * Proxy runs on the Edge runtime by default, so we can't import lib/auth.ts
+ * (it pulls in Prisma + Node-only modules). Instead we sniff the session cookie
+ * name we configured (cookiePrefix: "epic-timeline") for a cheap presence check.
+ * Cryptographic validation still happens server-side inside the route handler.
  */
 
-const SESSION_COOKIE_NAME = "epic-timeline.session_token";
+const SESSION_COOKIE_NAMES = [
+  "epic-timeline.session_token",
+  "epic-timeline.session_token-multi.0",
+];
 const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
-/** Endpoints that must stay open even for unauthed users (the auth flow itself). */
-const PUBLIC_PREFIXES = ["/api/auth/"];
+/** UI routes that must be reachable for an unauthenticated visitor. */
+const PUBLIC_UI_PREFIXES = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/legal",
+];
+/** Endpoints that must stay open for the auth flow itself. */
+const PUBLIC_API_PREFIXES = ["/api/auth/"];
+
+function isPublicUi(pathname: string): boolean {
+  return PUBLIC_UI_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return SESSION_COOKIE_NAMES.some((name) => request.cookies.get(name)?.value);
+}
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Auth-flow endpoints (sign-in, sign-up, forgot-password, callbacks) must run for
-  // unauthed visitors — otherwise nobody could ever log in.
-  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
+  // Auth-flow API endpoints must run for unauthed visitors — otherwise nobody
+  // could ever log in.
+  if (PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
-  if (!WRITE_METHODS.has(request.method)) {
-    return NextResponse.next();
-  }
-  if (!pathname.startsWith("/api/")) {
+  const sessionOk = hasSessionCookie(request);
+
+  // API write requests: reject early with 401 JSON if no session.
+  if (pathname.startsWith("/api/")) {
+    if (!WRITE_METHODS.has(request.method)) {
+      return NextResponse.next();
+    }
+    if (!sessionOk) {
+      return NextResponse.json(
+        { message: "Authentication required" },
+        { status: 401 },
+      );
+    }
     return NextResponse.next();
   }
 
-  const cookie = request.cookies.get(SESSION_COOKIE_NAME);
-  if (!cookie?.value) {
-    return NextResponse.json(
-      { message: "Authentication required" },
-      { status: 401 },
-    );
+  // UI navigation: enforce auth unless the route is public.
+  if (isPublicUi(pathname)) {
+    return NextResponse.next();
   }
 
-  return NextResponse.next();
+  if (sessionOk) {
+    return NextResponse.next();
+  }
+
+  // No session → bounce to /login, preserving where the user was trying to go.
+  const loginUrl = new URL("/login", request.url);
+  if (pathname !== "/") {
+    loginUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
+  }
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
-  // Only match API routes — UI page navigation is left alone so existing visitors
-  // keep their read-only experience even before they sign in.
-  matcher: ["/api/:path*"],
+  // Match every request except Next.js internals + static assets, so we can
+  // gate both UI navigation and API writes.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map|woff|woff2|ttf)).*)",
+  ],
 };
