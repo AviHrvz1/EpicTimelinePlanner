@@ -10,11 +10,19 @@ import { LoginForm } from "@/components/auth/login-form";
 export default function LoginPage() {
   return (
     <div className="space-y-7">
-      <div className="space-y-2">
-        <h1 className="text-[28px] font-extrabold tracking-tight text-slate-900">Sign in</h1>
-        <p className="text-[13px] leading-relaxed text-slate-500">
-          Welcome back. Pick up where you left off.
-        </p>
+      <div className="space-y-3">
+        {/* Tiny gradient accent above the heading echoes the LOGIN button's
+            sky → indigo → violet gradient, tying the form into the brand
+            palette without adding heavy chrome. */}
+        <div className="h-1 w-10 rounded-full bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600" />
+        <div className="space-y-1.5">
+          <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
+            Sign in
+          </h1>
+          <p className="text-[13px] leading-relaxed text-slate-500">
+            Welcome back. Pick up where you left off.
+          </p>
+        </div>
       </div>
       <LoginForm enabledProviders={ENABLED_OAUTH_PROVIDERS} />
     </div>

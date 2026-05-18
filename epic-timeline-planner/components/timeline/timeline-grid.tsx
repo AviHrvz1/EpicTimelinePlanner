@@ -1534,10 +1534,10 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-[26px] shrink-0 items-stretch overflow-hidden whitespace-nowrap rounded-full border-0 bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 shadow-sm ring-1 ring-blue-300/75 select-none [&_svg]:opacity-35">
+    <div className="inline-flex h-[26px] shrink-0 items-stretch box-border overflow-hidden whitespace-nowrap rounded-full border-0 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-1 ring-indigo-300/75 select-none leading-none [&_svg]:opacity-35">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
-        <span className="flex shrink-0 items-center gap-1 border-r border-blue-300/60 pl-3 pr-2 text-[12px] font-semibold leading-none tracking-wide text-blue-950">
+        <span className="flex shrink-0 items-center gap-1 border-r border-indigo-300/60 pl-3 pr-2 text-[12px] font-semibold leading-none tracking-wide text-indigo-950">
           <MapIcon className="size-3.5 shrink-0" aria-hidden />
           Roadmap
         </span>
@@ -1551,11 +1551,11 @@ function RoadmapSelector({
             onFocus={() => { setDropdownOpen(true); setQuery(""); }}
             onClick={() => { if (!dropdownOpen) { setDropdownOpen(true); setQuery(""); } }}
             onKeyDown={(e) => { if (e.key === "Escape") { setDropdownOpen(false); inputRef.current?.blur(); } }}
-            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12px] font-semibold leading-none text-blue-950 placeholder:text-blue-900/55 outline-none"
+            className="h-[26px] cursor-pointer bg-transparent py-0 pl-2 pr-6 text-[12px] font-semibold leading-none text-indigo-950 placeholder:text-indigo-900/55 outline-none"
             style={{ width: `${Math.max(5, Math.min(18, ((dropdownOpen ? query : (selectedRoadmap?.name ?? "")).length * 0.52) + 2))}rem` }}
             aria-label="Select roadmap"
           />
-          <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-blue-950 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
+          <ChevronDown className={cn("pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-indigo-950 transition sm:right-1.5", dropdownOpen && "rotate-180")} aria-hidden />
         </div>
 
         {/* Dropdown */}
@@ -1639,14 +1639,14 @@ function RoadmapSelector({
         )}
       </div>
 
-      {/* Manage roadmap button — sits inside the same light-blue pill as the rest of the
-          toolbar group; dark-blue icon, subtle hover. */}
+      {/* Manage roadmap button — sits inside the same pale-indigo pill as the rest of
+          the toolbar group; dark-indigo icon, subtle hover. */}
       {selectedRoadmap && (
-        <div ref={manageRef} className="relative flex items-center border-l border-blue-300/60">
+        <div ref={manageRef} className="relative flex items-center border-l border-indigo-300/60">
           <button
             type="button"
             onClick={() => setManageOpen((v) => !v)}
-            className="flex h-full w-7 items-center justify-center text-blue-950 transition hover:bg-blue-300/40"
+            className="flex h-full w-7 items-center justify-center text-indigo-950 transition hover:bg-indigo-300/40"
             title="Manage roadmap"
             aria-label="Manage roadmap"
           >
@@ -1724,11 +1724,11 @@ function RoadmapSelector({
 
       {/* Year sub-picker */}
       {years.length > 0 && (
-        <div className="flex items-center border-l border-blue-300/60 pl-1.5 pr-2">
+        <div className="flex items-center border-l border-indigo-300/60 pl-1.5 pr-2">
           <select
             value={year}
             onChange={(e) => void onYearChange(Number(e.target.value))}
-            className="h-6 cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[12px] font-semibold tabular-nums text-blue-950 outline-none hover:bg-blue-300/40"
+            className="appearance-none h-[22px] leading-none cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[12px] font-semibold tabular-nums text-indigo-950 outline-none hover:bg-indigo-300/40"
           >
             {years.map((y) => (
               <option key={y} value={y} className="text-slate-900">{y}</option>
@@ -2635,22 +2635,34 @@ export function TimelineGrid({
     return Math.round((scopedEpicsForEstimatePanel.estimated.length / scopedEpicsForEstimatePanel.all.length) * 100);
   }, [scopedEpicsForEstimatePanel]);
   const estimatedEpicsPercentClamped = Math.max(0, Math.min(100, estimatedEpicsPercentForScope));
-  const summaryChipBaseClass =
-    "inline-flex h-[26px] max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition [&_svg]:opacity-35";
-  const summaryChipInitiativesIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-950 ring-violet-200/75 hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40`;
-  const summaryChipInitiativesOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-violet-200 via-violet-300 to-violet-300 text-violet-950 ring-violet-300/75 shadow-sm hover:from-violet-100 hover:via-violet-200 hover:to-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50`;
-  const summaryChipEpicsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-950 ring-orange-200/75 hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40`;
-  const summaryChipEpicsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-950 ring-orange-300/75 shadow-sm hover:from-orange-100 hover:via-orange-200 hover:to-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50`;
-  const summaryChipSprintsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40`;
-  const summaryChipSprintsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-indigo-200 via-indigo-300 to-indigo-300 text-indigo-950 ring-indigo-300/75 shadow-sm hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50`;
-  const summaryChipProgressIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-950 ring-green-200/75 hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/40`;
-  const summaryChipProgressOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-green-200 via-green-300 to-green-300 text-green-950 ring-green-300/75 shadow-sm hover:from-green-100 hover:via-green-200 hover:to-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400/50`;
-  const summaryChipTeamsIdleClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-950 ring-slate-200/75 hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40`;
-  const summaryChipTeamsOnClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-300 text-slate-950 ring-slate-300/75 shadow-sm hover:from-slate-100 hover:via-slate-200 hover:to-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50`;
-  const summaryChipEstimatedClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-sky-200 via-sky-300 to-sky-300 text-sky-950 ring-sky-200/75 hover:from-sky-100 hover:via-sky-200 hover:to-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40`;
-  const summaryChipStoriesClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-blue-200 via-blue-300 to-blue-300 text-blue-950 ring-blue-200/75 hover:from-blue-100 hover:via-blue-200 hover:to-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40`;
+  // Top-toolbar summary chips. IDLE variants match the toolbar "Sign in" button
+  // (pale indigo gradient, dark indigo text, indigo ring). The ON variant
+  // inverts to a saturated indigo gradient with white text + a stronger ring +
+  // shadow lift so the selected state reads instantly. Sizes (h-[26px] / px-3
+  // / text-[12px]) are preserved so the toolbar layout doesn't reflow.
+  const summaryChipShared =
+    "inline-flex h-[26px] max-w-full shrink-0 items-center gap-1 whitespace-nowrap rounded-full border-0 px-3 text-[12px] font-semibold leading-none tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2";
+  // The Sign-In look used by every non-selected chip + every static chip.
+  const summaryChipBaseClass = `${summaryChipShared} text-indigo-950 bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 ring-1 ring-indigo-300/75 focus-visible:ring-indigo-400`;
+  const summaryChipIdleClass = `${summaryChipBaseClass} hover:shadow-sm hover:from-indigo-50 hover:via-indigo-100 hover:to-indigo-100`;
+  // ON — selected state. Saturated indigo, white text, deeper ring + shadow so
+  // it pops against the row of pale idle chips.
+  const summaryChipOnClass = `${summaryChipShared} text-white bg-gradient-to-br from-indigo-500 via-indigo-600 to-indigo-700 ring-1 ring-indigo-700/60 shadow-md shadow-indigo-500/35 hover:shadow-indigo-500/45 hover:from-indigo-400 hover:via-indigo-500 hover:to-indigo-600 focus-visible:ring-indigo-300`;
+  const summaryChipStaticClass = `${summaryChipBaseClass} hover:shadow-sm`;
+  const summaryChipInitiativesIdleClass = summaryChipIdleClass;
+  const summaryChipInitiativesOnClass = summaryChipOnClass;
+  const summaryChipEpicsIdleClass = summaryChipIdleClass;
+  const summaryChipEpicsOnClass = summaryChipOnClass;
+  const summaryChipSprintsIdleClass = summaryChipIdleClass;
+  const summaryChipSprintsOnClass = summaryChipOnClass;
+  const summaryChipProgressIdleClass = summaryChipIdleClass;
+  const summaryChipProgressOnClass = summaryChipOnClass;
+  const summaryChipTeamsIdleClass = summaryChipIdleClass;
+  const summaryChipTeamsOnClass = summaryChipOnClass;
+  const summaryChipEstimatedClass = summaryChipStaticClass;
+  const summaryChipStoriesClass = summaryChipStaticClass;
   const summaryChipStoriesStaticClass = summaryChipStoriesClass;
-  const summaryChipUnscheduledClass = `${summaryChipBaseClass} border-0 bg-gradient-to-br from-orange-200 via-orange-300 to-orange-300 text-orange-950 ring-orange-200/75`;
+  const summaryChipUnscheduledClass = summaryChipStaticClass;
   const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
   const estimatePanelScopeLabel = activeMonth

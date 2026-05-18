@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
-import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+import { Eye, EyeOff, Loader2, LogIn, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 import { signIn } from "@/lib/auth-client";
@@ -90,17 +90,23 @@ export function LoginForm({
         <label htmlFor="login-email" className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
           Email
         </label>
-        <input
-          id="login-email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[14px] text-slate-900 outline-none transition-shadow focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-          placeholder="you@example.com"
-        />
+        <div className="group relative">
+          {/* Leading icon — sits inside the input's left padding so the cursor and
+              text never collide with it. Color shifts to indigo on focus to echo
+              the focus ring's hue. */}
+          <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
+          <input
+            id="login-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-[14px] text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+            placeholder="you@example.com"
+          />
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -115,7 +121,8 @@ export function LoginForm({
             Forgot password?
           </Link>
         </div>
-        <div className="relative">
+        <div className="group relative">
+          <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
           <input
             id="login-password"
             name="password"
@@ -124,7 +131,7 @@ export function LoginForm({
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pr-11 text-[14px] text-slate-900 outline-none transition-shadow focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+            className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-11 py-3 text-[14px] text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
             placeholder="••••••••••"
           />
           <button
@@ -171,9 +178,23 @@ export function LoginForm({
         </p>
       )}
 
-      <OAuthButtons enabledProviders={enabledProviders} callbackURL={callbackURL} />
+      {(enabledProviders.google || enabledProviders.apple || enabledProviders.microsoft) && (
+        <>
+          {/* "or continue with" divider — only shown when there's actually an OAuth
+              section to introduce. Two slate hairlines flank a small label so the
+              transition between credential auth and social auth feels intentional. */}
+          <div className="flex items-center gap-3 py-1">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+              or continue with
+            </span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+          <OAuthButtons enabledProviders={enabledProviders} callbackURL={callbackURL} />
+        </>
+      )}
 
-      <p className="pt-1 text-center text-[12px] text-slate-500">
+      <p className="pt-2 text-center text-[12px] text-slate-500">
         Don&apos;t have an account?{" "}
         <Link href="/signup" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
           Create account

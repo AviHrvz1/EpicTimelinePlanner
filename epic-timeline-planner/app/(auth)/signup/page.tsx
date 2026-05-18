@@ -9,14 +9,17 @@ import { SignupForm } from "@/components/auth/signup-form";
 export default function SignupPage() {
   return (
     <div className="space-y-7">
-      <div className="space-y-2">
-        <h1 className="text-[28px] font-extrabold tracking-tight text-slate-900">
-          Create your account
-        </h1>
-        <p className="text-[13px] leading-relaxed text-slate-500">
-          Free, takes a minute. Already invited?{" "}
-          <span className="font-medium text-slate-700">Use the email your admin added.</span>
-        </p>
+      <div className="space-y-3">
+        <div className="h-1 w-10 rounded-full bg-gradient-to-r from-sky-500 via-indigo-600 to-violet-600" />
+        <div className="space-y-1.5">
+          <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
+            Create your account
+          </h1>
+          <p className="text-[13px] leading-relaxed text-slate-500">
+            Free, takes a minute. Already invited?{" "}
+            <span className="font-medium text-slate-700">Use the email your admin added.</span>
+          </p>
+        </div>
       </div>
       <SignupForm enabledProviders={ENABLED_OAUTH_PROVIDERS} />
     </div>
