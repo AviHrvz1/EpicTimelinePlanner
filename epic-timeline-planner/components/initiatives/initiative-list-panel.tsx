@@ -186,6 +186,31 @@ function quarterFromMonth(month: number): string {
   return "Q4";
 }
 
+/** Returns the sorted unique list of quarters spanned by a [start, end] month
+ *  range. Used to render one chip per quarter an initiative or epic touches —
+ *  a single Q1 chip if it's only Jan–Mar, but [Q1, Q2] if it spans Mar–Apr. */
+function quartersFromMonthRange(start: number | null | undefined, end: number | null | undefined): string[] {
+  if (start == null) return [];
+  const finish = end ?? start;
+  const lo = Math.max(1, Math.min(12, start));
+  const hi = Math.max(lo, Math.min(12, finish));
+  const set = new Set<string>();
+  for (let m = lo; m <= hi; m++) set.add(quarterFromMonth(m));
+  return Array.from(set).sort();
+}
+
+/** Returns the sorted unique list of quarters an initiative touches via its
+ *  own startMonth/endMonth AND any of its planned epics. Mirrors the union
+ *  that the Gantt would show. */
+function quartersForInitiative(initiative: InitiativeItem): string[] {
+  const set = new Set<string>();
+  for (const q of quartersFromMonthRange(initiative.startMonth ?? null, initiative.endMonth ?? null)) set.add(q);
+  for (const epic of initiative.epics ?? []) {
+    for (const q of quartersFromMonthRange(epic.planStartMonth ?? null, epic.planEndMonth ?? null)) set.add(q);
+  }
+  return Array.from(set).sort();
+}
+
 type IconFilterOption<T extends string> = {
   value: T;
   label: string;
@@ -956,9 +981,17 @@ function InitiativeTreeEpicRow({
                     {epicTeamChip.label}
                   </span>
                 ) : null}
-                <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
-                  {epicPlanStatus.label}
-                </span>
+                {epicPlanStatus.label === "Unscheduled" ? (
+                  <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                    {epicPlanStatus.label}
+                  </span>
+                ) : (
+                  quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth).map((q) => (
+                    <span key={q} className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                      {q}
+                    </span>
+                  ))
+                )}
                 <span className={cn(statusBadgeBase, epicExecutionStatus.className)}>
                   {epicExecutionStatus.label}
                 </span>
@@ -1264,11 +1297,13 @@ function InitiativeTreeCard({
                         : `${epics.length} epic${epics.length !== 1 ? "s" : ""}`}
                     </span>
                     <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
-                      {initiative.status === "scheduled" && initiative.startMonth != null ? (
-                        <span className={cn(statusBadgeBase, "bg-violet-100 text-violet-700")}>
-                          {quarterFromMonth(initiative.startMonth)}
-                        </span>
-                      ) : null}
+                      {initiative.status === "scheduled"
+                        ? quartersForInitiative(initiative).map((q) => (
+                            <span key={q} className={cn(statusBadgeBase, "bg-violet-100 text-violet-700")}>
+                              {q}
+                            </span>
+                          ))
+                        : null}
                       {initiative.status === "scheduled" ? (
                         <span className={cn(statusBadgeBase, "border border-emerald-200/90 bg-emerald-50 text-emerald-800")}>
                           Scheduled
@@ -1609,9 +1644,17 @@ function SprintEpicCard({
                         {epicTeamChip.label}
                       </span>
                     ) : null}
-                    <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
-                      {epicPlanStatus.label}
-                    </span>
+                    {epicPlanStatus.label === "Unscheduled" ? (
+                      <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                        {epicPlanStatus.label}
+                      </span>
+                    ) : (
+                      quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth).map((q) => (
+                        <span key={q} className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                          {q}
+                        </span>
+                      ))
+                    )}
                     <span className={cn(statusBadgeBase, epicExecutionStatus.className)}>
                       {epicExecutionStatus.label}
                     </span>
