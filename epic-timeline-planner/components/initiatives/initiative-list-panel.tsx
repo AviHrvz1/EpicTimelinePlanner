@@ -756,7 +756,11 @@ function DraggableInitiativeCard({
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-center gap-1 pl-0">
               <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
+                {/* Force the canonical initiative icon (Zap) in the list
+                    panel — ignore the per-initiative custom icon here so the
+                    middle panel reads as a uniform list of initiatives. The
+                    custom icon (emoji) still shows on Gantt bars and forms. */}
+                <InitiativePlanBarIcon icon={null} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
               </span>
               <p className="min-w-0 truncate text-[18px] leading-6 font-normal text-slate-900">{initiative.title}</p>
             </div>
@@ -1199,7 +1203,11 @@ function InitiativeTreeCard({
                   <div className="flex w-full min-w-0 items-center gap-1">
                     <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-0">
                       <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
-                        <InitiativePlanBarIcon icon={initiative.icon} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
+                        {/* Force the canonical initiative icon (Zap) in the list
+                    panel — ignore the per-initiative custom icon here so the
+                    middle panel reads as a uniform list of initiatives. The
+                    custom icon (emoji) still shows on Gantt bars and forms. */}
+                <InitiativePlanBarIcon icon={null} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
                       </span>
                       <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
                         {initiative.title}
