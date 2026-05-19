@@ -126,7 +126,6 @@ type InitiativeTimelineBarProps = {
 export function InitiativeTimelineBar({
   id,
   title,
-  icon,
   color,
   progressPercent = 0,
   progressLabel,
@@ -194,7 +193,10 @@ export function InitiativeTimelineBar({
               : lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]",
           )}
         >
-          <InitiativePlanBarIcon icon={icon} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-blue-200/95")} />
+          {/* Always render the canonical Zap glyph regardless of `icon` —
+              matches the middle-panel treatment so initiative bars stay
+              recognisable across the app even when a custom emoji is set. */}
+          <InitiativePlanBarIcon icon={null} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-blue-200/95")} />
           <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
