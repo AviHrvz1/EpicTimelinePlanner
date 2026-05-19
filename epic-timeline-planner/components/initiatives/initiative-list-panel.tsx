@@ -146,11 +146,14 @@ function MiddlePanelStoryTitleButton({
   ariaLabel,
   onOpen,
   className,
+  highlight = false,
 }: {
   storyTitle: string;
   ariaLabel: string;
   onOpen: () => void;
   className: string;
+  /** When true, paints a yellow highlight on the title — used by search. */
+  highlight?: boolean;
 }) {
   const { ref, isTruncated } = useStoryTitleTruncationFlag(storyTitle);
   const [hover, setHover] = useState(false);
@@ -166,7 +169,7 @@ function MiddlePanelStoryTitleButton({
           type="button"
           onClick={onOpen}
           aria-label={ariaLabel}
-          className={cn("min-w-0 w-full truncate", className)}
+          className={cn("min-w-0 w-full truncate rounded px-1", highlight && "bg-yellow-100", className)}
         >
           {storyTitle}
         </button>
@@ -821,6 +824,7 @@ function InitiativeTreeEpicRow({
   storyProgressDetailsVisible,
   showDragHint = false,
   isCapacityMode = false,
+  searchQuery,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -835,6 +839,10 @@ function InitiativeTreeEpicRow({
   onCreateStoryQuick?: (epicId: string, title: string) => Promise<void>;
   storyProgressDetailsVisible: boolean;
   showDragHint?: boolean;
+  /** Lowercased active search query. Epic title gets a yellow highlight
+   *  when it contains this string; matched story titles ride the same
+   *  treatment via MiddlePanelStoryTitleButton's `highlight` prop. */
+  searchQuery?: string;
 }) {
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
@@ -925,7 +933,12 @@ function InitiativeTreeEpicRow({
           aria-label={`Open epic ${epic.title}`}
         >
           <div className="flex min-w-0 items-center gap-0 pl-0">
-            <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
+            <p
+              className={cn(
+                "min-w-0 truncate rounded px-1 text-[18px] font-normal leading-7 tracking-tight text-slate-900",
+                searchQuery && epic.title.toLowerCase().includes(searchQuery) && "bg-yellow-100",
+              )}
+            >
               {epic.title}
             </p>
           </div>
@@ -999,6 +1012,7 @@ function InitiativeTreeEpicRow({
                             ariaLabel={a11y}
                             onOpen={() => onOpenStory(story.id)}
                             className="text-left text-[14px] font-normal text-slate-700 antialiased hover:text-foreground"
+                            highlight={Boolean(searchQuery && story.title.toLowerCase().includes(searchQuery))}
                           />
                           <div className="flex max-w-[58%] shrink-0 items-center justify-end gap-1">
                             {assigneeName ? (
@@ -1090,6 +1104,8 @@ function InitiativeTreeCard({
   epicPlanDragEnabled,
   isCapacityPlanningMode = false,
   storyProgressDetailsVisible,
+  forceOpenEpicIds,
+  searchQuery,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -1108,6 +1124,13 @@ function InitiativeTreeCard({
   epicPlanDragEnabled: boolean;
   isCapacityPlanningMode?: boolean;
   storyProgressDetailsVisible: boolean;
+  /** Search-driven force-open set — when an epic id is in this set the epic
+   *  accordion opens regardless of the user's local toggle state. Used by
+   *  the parent panel to expand epics that contain a matching story. */
+  forceOpenEpicIds?: Set<string>;
+  /** Lowercased search query — children use this to apply a yellow highlight
+   *  ring to titles that include the query. Empty string = no highlight. */
+  searchQuery?: string;
 }) {
   const inMonthView = planContextMonth != null;
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
@@ -1209,7 +1232,14 @@ function InitiativeTreeCard({
                     custom icon (emoji) still shows on Gantt bars and forms. */}
                 <InitiativePlanBarIcon icon={null} className="mr-0 text-slate-700 [&_svg]:text-blue-600" />
                       </span>
-                      <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
+                      <p
+                        className={cn(
+                          "min-w-0 truncate rounded px-1 text-[18px] font-normal leading-7 tracking-tight text-slate-900",
+                          // Yellow highlight when the live search query
+                          // matches this initiative's title.
+                          searchQuery && initiative.title.toLowerCase().includes(searchQuery) && "bg-yellow-100",
+                        )}
+                      >
                         {initiative.title}
                       </p>
                     </div>
@@ -1288,7 +1318,10 @@ function InitiativeTreeCard({
                 ) : (
                   <div>
                     {epics.map((epic, epicIdx) => {
-                      const isEpicOpen = openEpicIds[epic.id] ?? false;
+                      // Force-open when search matched a story inside this
+                      // epic; otherwise honor the user's local toggle.
+                      const isEpicOpen =
+                        (forceOpenEpicIds?.has(epic.id) ?? false) || (openEpicIds[epic.id] ?? false);
                       const isLast = epicIdx === epics.length - 1;
                       return (
                         <div key={epic.id} className="relative pl-6">
@@ -1298,6 +1331,7 @@ function InitiativeTreeCard({
                             epic={epic}
                             initiative={initiative}
                             isEpicOpen={isEpicOpen}
+                            searchQuery={searchQuery}
                             showDragHint={hintEpicId === epic.id}
                             onToggleEpic={() =>
                               setOpenEpicIds((prev) => {
@@ -2169,6 +2203,38 @@ export function InitiativeListPanel({
         }),
     [initiatives],
   );
+  // Search-driven auto-expansion: when the user types a query that matches an
+  // epic or a story (not just the initiative title), automatically force-open
+  // the parent initiative AND the parent epic so the match is visible without
+  // requiring extra clicks. When the query clears or stops matching, the
+  // forced-open state lifts and the user's own toggle state takes over again.
+  const searchExpandedInitiativeIds = useMemo(() => {
+    const q = initiativeSearch.trim().toLowerCase();
+    if (!q) return new Set<string>();
+    const ids = new Set<string>();
+    for (const initiative of initiativeList) {
+      const epicMatch = (initiative.epics ?? []).some((epic) => epic.title.toLowerCase().includes(q));
+      const storyMatch = (initiative.epics ?? []).some((epic) =>
+        (epic.userStories ?? []).some((story) => story.title.toLowerCase().includes(q)),
+      );
+      if (epicMatch || storyMatch) ids.add(initiative.id);
+    }
+    return ids;
+  }, [initiativeList, initiativeSearch]);
+  const searchExpandedEpicIds = useMemo(() => {
+    const q = initiativeSearch.trim().toLowerCase();
+    if (!q) return new Set<string>();
+    const ids = new Set<string>();
+    for (const initiative of initiativeList) {
+      for (const epic of initiative.epics ?? []) {
+        const storyMatch = (epic.userStories ?? []).some((story) => story.title.toLowerCase().includes(q));
+        if (storyMatch) ids.add(epic.id);
+      }
+    }
+    return ids;
+  }, [initiativeList, initiativeSearch]);
+  const searchQueryLower = initiativeSearch.trim().toLowerCase();
+
   const filteredInitiatives = useMemo(() => {
     const q = initiativeSearch.trim().toLowerCase();
     return initiativeList.filter((initiative) => {
@@ -2909,7 +2975,15 @@ export function InitiativeListPanel({
                 <div key={initiative.id}>
                   <InitiativeTreeCard
                     initiative={initiative}
-                    isOpen={openInitiativeIds[initiative.id] ?? false}
+                    // Search overrides the user's manual toggle — when the
+                    // query matches an epic / story inside this initiative,
+                    // force the card open so the match is visible.
+                    isOpen={
+                      searchExpandedInitiativeIds.has(initiative.id) ||
+                      (openInitiativeIds[initiative.id] ?? false)
+                    }
+                    forceOpenEpicIds={searchExpandedEpicIds}
+                    searchQuery={searchQueryLower}
                     isSprintModeActive={isSprintModeActive}
                     backlogDropIndex={idx}
                     planContextMonth={activeMonth}
