@@ -381,7 +381,7 @@ function GanttLaneRow({
   showProgress = true,
 }: GanttLaneRowProps) {
   const resizeEdgeClass =
-    "pointer-events-auto absolute top-0.5 bottom-[16px] z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+    "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
   const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
@@ -401,7 +401,7 @@ function GanttLaneRow({
               else barElsRef.current.delete(initiative.id);
             }}
             className={cn(
-              "relative min-w-0 rounded-lg pt-0.5 pb-2",
+              "relative min-w-0 rounded-lg pt-2 pb-2",
               rz ? "z-0 opacity-70" : "z-20",
               emphasize ? "overflow-visible" : "overflow-hidden",
             )}
@@ -1079,7 +1079,7 @@ function EpicGanttLaneRow({
           {/* Left resize handle */}
           {onDayRangeChange && (epic.planStartMonth == null || month! <= epic.planStartMonth) ? (
             <div
-              className="pointer-events-auto absolute top-0.5 bottom-[16px] z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 left-0 cursor-ew-resize"
+              className="pointer-events-auto absolute inset-y-0.5 z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 left-0 cursor-ew-resize"
               onPointerDown={startPointerDown("left")}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -1089,7 +1089,7 @@ function EpicGanttLaneRow({
           {/* Right resize handle */}
           {onDayRangeChange && (epic.planEndMonth == null || month! >= epic.planEndMonth) ? (
             <div
-              className="pointer-events-auto absolute top-0.5 bottom-[16px] z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 right-0 cursor-ew-resize"
+              className="pointer-events-auto absolute inset-y-0.5 z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 right-0 cursor-ew-resize"
               onPointerDown={startPointerDown("right")}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -1102,7 +1102,7 @@ function EpicGanttLaneRow({
       // Year / quarter view: original grid layout
       <div className="relative grid min-w-0 gap-2" style={gridStyle}>
         <div
-          className={cn("relative z-20 min-w-0 pt-0.5 pb-0.5", emphasize && "overflow-visible")}
+          className={cn("relative z-20 min-w-0 pt-2.5 pb-2.5", emphasize && "overflow-visible")}
           style={{ gridColumn: "1 / span 1", gridRow: 1 }}
         >
           <EpicPlanTimelineBar
@@ -1128,7 +1128,7 @@ function EpicGanttLaneRow({
 
   return (
     <div
-      className={cn("relative min-w-0 py-0.5", emphasize ? "z-[25]" : "z-10")}
+      className={cn("relative min-w-0 py-2.5", emphasize ? "z-[25]" : "z-10")}
       data-gantt-lane-index={ganttLaneSortIndex}
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
@@ -1163,13 +1163,13 @@ function MonthInitiativeGanttLaneRow({
 
   return (
     <div
-      className="relative z-10 min-w-0 py-0.5"
+      className="relative z-10 min-w-0 py-2.5"
       data-gantt-lane-index={ganttLaneSortIndex}
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
       <GanttLaneSprintBackdrop columnCount={2} />
       <div className="relative z-[1] grid min-w-0 gap-2" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-        <div className="relative z-20 min-w-0 pt-0.5 pb-0.5" style={{ gridColumn: "1 / span 2", gridRow: 1 }}>
+        <div className="relative z-20 min-w-0 pt-2.5 pb-2.5" style={{ gridColumn: "1 / span 2", gridRow: 1 }}>
           <InitiativeTimelineBar
             id={initiative.id}
             title={initiative.title}
@@ -4270,7 +4270,7 @@ export function TimelineGrid({
                 <div
                   key={`year-init-row-${group.timelineRow}`}
                   className={cn(
-                    "relative min-w-0 z-10 py-0.5",
+                    "relative min-w-0 z-10 py-2.5",
                     idx < ganttSearchAppliedYearInitiativeRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
@@ -4287,7 +4287,7 @@ export function TimelineGrid({
                       return (
                         <div
                           key={`year-init-${row.initiative.id}`}
-                          className="relative min-w-0 rounded-lg pt-0.5 pb-2 z-20"
+                          className="relative min-w-0 rounded-lg pt-2 pb-2 z-20"
                           style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                         >
                           <InitiativeTimelineBar
@@ -4375,7 +4375,7 @@ export function TimelineGrid({
                             ? ganttScheduledFilterEmphasis!.tick
                             : 0;
                       const resizeEdgeClass =
-                        "pointer-events-auto absolute top-0.5 bottom-[16px] z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                        "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                       const yearInset = epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
                       return (
                         <div
@@ -4384,7 +4384,7 @@ export function TimelineGrid({
                             if (node) barElsRef.current.set(row.epic.id, node);
                             else barElsRef.current.delete(row.epic.id);
                           }}
-                          className={cn("relative min-w-0 rounded-lg pt-0.5 pb-1", rz ? "z-0 opacity-70" : "z-20")}
+                          className={cn("relative min-w-0 rounded-lg pt-2 pb-2", rz ? "z-0 opacity-70" : "z-20")}
                           style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                         >
                           <div
@@ -6290,7 +6290,7 @@ export function TimelineGrid({
                           <div
                             key={`q-init-row-${group.timelineRow}`}
                             className={cn(
-                              "relative min-w-0 z-10 py-0.5",
+                              "relative min-w-0 z-10 py-2.5",
                               idx < ganttSearchAppliedQuarterInitiativeRows.length - 1 && "border-b border-slate-200/50",
                             )}
                             data-gantt-lane-index={idx}
@@ -6308,7 +6308,7 @@ export function TimelineGrid({
                                 return (
                                   <div
                                     key={`q-init-${row.initiative.id}`}
-                                    className="relative min-w-0 rounded-lg pt-0.5 pb-2 z-20"
+                                    className="relative min-w-0 rounded-lg pt-2 pb-2 z-20"
                                     style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                                   >
                                     <InitiativeTimelineBar
@@ -6366,7 +6366,7 @@ export function TimelineGrid({
                         <div
                           key={`q-epic-row-${group.timelineRow}`}
                           className={cn(
-                            "relative min-w-0 z-10 py-0.5",
+                            "relative min-w-0 z-10 py-2.5",
                             idx < ganttSearchAppliedQuarterEpicRows.length - 1 && "border-b border-slate-200/50",
                           )}
                           data-gantt-lane-index={idx}
@@ -6403,7 +6403,7 @@ export function TimelineGrid({
                                     ? ganttScheduledFilterEmphasis!.tick
                                     : 0;
                               const resizeEdgeClass =
-                                "pointer-events-auto absolute top-0.5 bottom-[16px] z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                                "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                               const qDayAbs = quarterBarAbsoluteDayPct(row.epic, row.startS, span, currentYear);
                               const qInset = qDayAbs ? null : epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
                               return (
@@ -6413,7 +6413,7 @@ export function TimelineGrid({
                                     if (node) barElsRef.current.set(row.epic.id, node);
                                     else barElsRef.current.delete(row.epic.id);
                                   }}
-                                  className={cn("relative min-w-0 rounded-lg pt-0.5 pb-0", rz ? "z-0 opacity-70" : "z-20")}
+                                  className={cn("relative min-w-0 rounded-lg pt-2 pb-2", rz ? "z-0 opacity-70" : "z-20")}
                                   style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1, minHeight: qDayAbs ? "2.5rem" : undefined }}
                                 >
                                   {/* day-precision: absolute positioning for single-sprint bars, margin inset for multi-sprint.

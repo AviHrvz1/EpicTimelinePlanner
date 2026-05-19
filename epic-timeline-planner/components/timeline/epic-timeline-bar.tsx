@@ -75,31 +75,27 @@ export function TimelineBarDragPreview({
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
   return (
-    <div className="flex h-full w-full flex-col space-y-0">
-      <div
-        className={cn("relative z-10 flex h-8 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em] shadow-lg ring-1 ring-black/15", lightBg ? "text-slate-900" : "text-white")}
-        style={{ backgroundColor: color }}
-      >
-        <span className={cn("relative z-10 flex min-w-0 flex-1 items-center gap-1.5 px-3 text-left antialiased", lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]")}>
-          <EpicPlanBarIcon icon={icon} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-white/95")} />
-          <span className="min-w-0 truncate">{title}</span>
-        </span>
-      </div>
-      <div className="mt-0.5 flex min-w-0 items-center gap-0.5 pl-1.5 pr-0.5">
-        <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-[2px] bg-slate-100 ring-1 ring-slate-200/80">
-          <div
-            className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500"
-            style={{ width: `${safeProgress}%` }}
-            aria-hidden
-          />
-        </div>
+    <div
+      className={cn(
+        "relative z-10 flex h-8 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md border text-[13px] font-medium tracking-[0.01em] shadow-lg ring-1 ring-black/15",
+        lightBg ? "text-slate-900" : "text-white",
+      )}
+      style={{
+        backgroundColor: color,
+        backgroundImage: `linear-gradient(to right, transparent 0%, transparent ${Math.max(0, safeProgress - 0.5)}%, rgba(255,255,255,0.35) ${Math.min(100, safeProgress + 0.5)}%, rgba(255,255,255,0.35) 100%)`,
+        borderColor: color,
+      }}
+    >
+      <span className={cn("relative z-10 flex min-w-0 flex-1 items-center gap-1.5 px-3 text-left antialiased", lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]")}>
+        <EpicPlanBarIcon icon={icon} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-white/95")} />
+        <span className="min-w-0 flex-1 truncate">{title}</span>
         <span
-          className="shrink-0 text-[10px] font-semibold text-slate-500"
+          className="shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none]"
           title={progressLabel}
         >
           {safeProgress}%
         </span>
-      </div>
+      </span>
     </div>
   );
 }
@@ -173,14 +169,24 @@ export function InitiativeTimelineBar({
       ) : null}
       <div
         className={cn(
-          "relative z-10 flex h-8 w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em]",
+          "relative z-10 flex h-[30px] w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em]",
           lightBg ? "text-slate-900" : "text-white",
           emphasizeFlash
             ? "ring-1 ring-white/20"
             : "shadow-lg ring-1 ring-black/15",
+          showProgress && "border",
           isResizing && "cursor-ew-resize",
         )}
-        style={{ backgroundColor: color }}
+        style={{
+          backgroundColor: color,
+          // Bar itself is the progress meter — solid color on the left, a
+          // white-tinted (lighter) version of the same color on the right,
+          // with a 2% soft transition for a polished look.
+          backgroundImage: showProgress
+            ? `linear-gradient(to right, transparent 0%, transparent ${Math.max(0, safeProgress - 0.5)}%, rgba(255,255,255,0.35) ${Math.min(100, safeProgress + 0.5)}%, rgba(255,255,255,0.35) 100%)`
+            : undefined,
+          borderColor: showProgress ? color : undefined,
+        }}
       >
         {emphasizeFlash ? (
           <div
@@ -201,47 +207,32 @@ export function InitiativeTimelineBar({
               matches the middle-panel treatment so initiative bars stay
               recognisable across the app even when a custom emoji is set. */}
           <InitiativePlanBarIcon icon={null} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-blue-200/95")} />
-          <span className="min-w-0 truncate">{title}</span>
+          <span className="min-w-0 flex-1 truncate">{title}</span>
+          {showProgress ? (
+            onInsightsClick ? (
+              <button
+                type="button"
+                aria-label="Open initiative insights"
+                title={progressLabel ?? "Initiative insights"}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInsightsClick();
+                }}
+                className="relative z-40 shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none] transition-transform duration-150 hover:scale-110 hover:bg-white/50"
+              >
+                {safeProgress}%
+              </button>
+            ) : (
+              <span
+                className="shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none]"
+                title={progressLabel}
+              >
+                {safeProgress}%
+              </span>
+            )
+          ) : null}
         </span>
-      </div>
-      <div
-        className={cn(
-          "mt-0.5 flex min-w-0 items-center gap-0.5 pl-1.5 pr-0.5",
-          showProgress ? "visible" : "invisible pointer-events-none",
-        )}
-        aria-hidden={!showProgress}
-      >
-        {progressRowPrefix ? (
-          <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
-        ) : null}
-        <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-[2px] bg-slate-100 ring-1 ring-slate-200/80">
-          <div
-            className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
-            style={{ width: `${safeProgress}%` }}
-            aria-hidden
-          />
-        </div>
-        <span
-          className="shrink-0 text-[10px] font-semibold text-slate-500"
-          title={progressLabel}
-        >
-          {safeProgress}%
-        </span>
-        {showProgress && onInsightsClick ? (
-          <button
-            type="button"
-            aria-label="Open initiative insights"
-            title="Initiative insights"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onInsightsClick();
-            }}
-            className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-transform duration-150 hover:scale-125 hover:bg-slate-100"
-          >
-            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
-          </button>
-        ) : null}
       </div>
     </div>
   );
@@ -350,13 +341,20 @@ export function EpicPlanTimelineBar({
         className={cn(
           "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-medium tracking-[0.01em] active:cursor-grabbing",
           lightBg ? "text-slate-900" : "text-white",
-          compact ? "h-[30px] text-[13px]" : "h-8 text-[13px]",
+          compact ? "h-[28px] text-[13px]" : "h-[30px] text-[13px]",
           emphasizeFlash
             ? "ring-1 ring-white/20"
             : "shadow-lg ring-1 ring-black/15",
+          showProgress && "border",
           isResizing && "cursor-ew-resize",
         )}
-        style={{ backgroundColor: color }}
+        style={{
+          backgroundColor: color,
+          backgroundImage: showProgress
+            ? `linear-gradient(to right, transparent 0%, transparent ${Math.max(0, safeProgress - 0.5)}%, rgba(255,255,255,0.35) ${Math.min(100, safeProgress + 0.5)}%, rgba(255,255,255,0.35) 100%)`
+            : undefined,
+          borderColor: showProgress ? color : undefined,
+        }}
       >
         {emphasizeFlash ? (
           <div
@@ -378,60 +376,43 @@ export function EpicPlanTimelineBar({
             <EpicPlanBarIcon icon={icon} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-white/95")} />
           ) : null}
           <span className="min-w-0 flex-1 truncate">{title}</span>
-          {teamAssignmentChip ? (
-            <span
-              className="relative z-30 ml-auto inline-flex max-w-[6.5rem] shrink-0 -translate-x-0.5 translate-y-0 items-center gap-0.5 truncate rounded bg-white/55 px-1.5 py-0.5 text-[11px] font-normal leading-none text-black [text-shadow:none]"
-              title={teamAssignmentChip.label}
-            >
-              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
-              {teamAssignmentChip.label}
-            </span>
+          {showProgress ? (
+            onInsightsClick ? (
+              <button
+                type="button"
+                aria-label="Open epic insights"
+                title={progressLabel ?? "Epic insights"}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInsightsClick();
+                }}
+                className="relative z-40 shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none] transition-transform duration-150 hover:scale-110 hover:bg-white/50"
+              >
+                {safeProgress}%
+              </button>
+            ) : (
+              <span
+                className="shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none]"
+                title={progressLabel}
+              >
+                {safeProgress}%
+              </span>
+            )
           ) : null}
         </span>
       </div>
-      <div
-        className={cn(
-          "flex min-w-0 items-center gap-0.5 pl-1.5 pr-0.5",
-          compact ? "mt-0.25" : "mt-0.5",
-          showProgress ? "visible" : "invisible pointer-events-none",
-        )}
-        aria-hidden={!showProgress}
-      >
-        {progressRowPrefix ? (
-          <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
-        ) : null}
-        <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-[2px] bg-slate-100 ring-1 ring-slate-200/80">
-          <div
-            className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
-            style={{ width: `${safeProgress}%` }}
-            aria-hidden
-          />
-        </div>
-        <span
-          className="shrink-0 text-[10px] font-semibold text-slate-500"
-          title={progressLabel}
-        >
-          {safeProgress}%
-        </span>
-        {showProgress && onInsightsClick ? (
-          <button
-            type="button"
-            aria-label="Open epic insights"
-            title="Epic insights"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onInsightsClick();
-            }}
-            className={cn(
-              "inline-flex shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-transform duration-150 hover:scale-125 hover:bg-slate-100",
-              compact ? "size-4" : "size-[18px]",
-            )}
+      {teamAssignmentChip ? (
+        <div className="-mb-1.5 mt-0.5 flex justify-end pr-1">
+          <span
+            className={cn("inline-flex items-center gap-1", teamAssignmentChip.className)}
+            title={teamAssignmentChip.label}
           >
-            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
-          </button>
-        ) : null}
-      </div>
+            <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
+            {teamAssignmentChip.label}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
