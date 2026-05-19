@@ -381,7 +381,7 @@ function GanttLaneRow({
   showProgress = true,
 }: GanttLaneRowProps) {
   const resizeEdgeClass =
-    "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+    "pointer-events-auto absolute top-0.5 bottom-[16px] z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
   const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
@@ -1079,7 +1079,7 @@ function EpicGanttLaneRow({
           {/* Left resize handle */}
           {onDayRangeChange && (epic.planStartMonth == null || month! <= epic.planStartMonth) ? (
             <div
-              className="pointer-events-auto absolute inset-y-0.5 z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 left-0 cursor-ew-resize"
+              className="pointer-events-auto absolute top-0.5 bottom-[16px] z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 left-0 cursor-ew-resize"
               onPointerDown={startPointerDown("left")}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -1089,7 +1089,7 @@ function EpicGanttLaneRow({
           {/* Right resize handle */}
           {onDayRangeChange && (epic.planEndMonth == null || month! >= epic.planEndMonth) ? (
             <div
-              className="pointer-events-auto absolute inset-y-0.5 z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 right-0 cursor-ew-resize"
+              className="pointer-events-auto absolute top-0.5 bottom-[16px] z-30 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40 right-0 cursor-ew-resize"
               onPointerDown={startPointerDown("right")}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -4375,7 +4375,7 @@ export function TimelineGrid({
                             ? ganttScheduledFilterEmphasis!.tick
                             : 0;
                       const resizeEdgeClass =
-                        "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                        "pointer-events-auto absolute top-0.5 bottom-[16px] z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                       const yearInset = epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
                       return (
                         <div
@@ -6403,7 +6403,7 @@ export function TimelineGrid({
                                     ? ganttScheduledFilterEmphasis!.tick
                                     : 0;
                               const resizeEdgeClass =
-                                "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
+                                "pointer-events-auto absolute top-0.5 bottom-[16px] z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                               const qDayAbs = quarterBarAbsoluteDayPct(row.epic, row.startS, span, currentYear);
                               const qInset = qDayAbs ? null : epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
                               return (

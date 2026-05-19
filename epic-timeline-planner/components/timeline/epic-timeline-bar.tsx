@@ -85,8 +85,8 @@ export function TimelineBarDragPreview({
           <span className="min-w-0 truncate">{title}</span>
         </span>
       </div>
-      <div className="mt-0.5 flex min-w-0 items-center gap-1.5 px-2">
-        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+      <div className="mt-0.5 flex min-w-0 items-center gap-0.5 pl-1.5 pr-0.5">
+        <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-[2px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500"
             style={{ width: `${safeProgress}%` }}
@@ -206,30 +206,15 @@ export function InitiativeTimelineBar({
       </div>
       <div
         className={cn(
-          "mt-0.5 flex min-w-0 items-center gap-1.5 px-2",
+          "mt-0.5 flex min-w-0 items-center gap-0.5 pl-1.5 pr-0.5",
           showProgress ? "visible" : "invisible pointer-events-none",
         )}
         aria-hidden={!showProgress}
       >
-        {showProgress && onInsightsClick ? (
-          <button
-            type="button"
-            aria-label="Open initiative insights"
-            title="Initiative insights"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onInsightsClick();
-            }}
-            className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-colors hover:bg-slate-100"
-          >
-            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
-          </button>
-        ) : null}
         {progressRowPrefix ? (
           <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
         ) : null}
-        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+        <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-[2px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
             style={{ width: `${safeProgress}%` }}
@@ -242,6 +227,21 @@ export function InitiativeTimelineBar({
         >
           {safeProgress}%
         </span>
+        {showProgress && onInsightsClick ? (
+          <button
+            type="button"
+            aria-label="Open initiative insights"
+            title="Initiative insights"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onInsightsClick();
+            }}
+            className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-transform duration-150 hover:scale-125 hover:bg-slate-100"
+          >
+            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -380,7 +380,7 @@ export function EpicPlanTimelineBar({
           <span className="min-w-0 flex-1 truncate">{title}</span>
           {teamAssignmentChip ? (
             <span
-              className="relative z-30 ml-auto inline-flex max-w-[6.5rem] shrink-0 -translate-x-0.5 translate-y-0 items-center gap-0.5 truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal leading-none text-slate-700 shadow-[inset_0_2px_4px_rgba(15,23,42,0.32),inset_0_-1px_0_rgba(255,255,255,0.55),0_0_0_1px_rgba(15,23,42,0.14)]"
+              className="relative z-30 ml-auto inline-flex max-w-[6.5rem] shrink-0 -translate-x-0.5 translate-y-0 items-center gap-0.5 truncate rounded bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-1.5 py-0.5 text-[11px] font-normal leading-none text-black [text-shadow:none]"
               title={teamAssignmentChip.label}
             >
               <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
@@ -391,34 +391,16 @@ export function EpicPlanTimelineBar({
       </div>
       <div
         className={cn(
-          "flex min-w-0 items-center gap-1.5 px-2",
+          "flex min-w-0 items-center gap-0.5 pl-1.5 pr-0.5",
           compact ? "mt-0.25" : "mt-0.5",
           showProgress ? "visible" : "invisible pointer-events-none",
         )}
         aria-hidden={!showProgress}
       >
-        {showProgress && onInsightsClick ? (
-          <button
-            type="button"
-            aria-label="Open epic insights"
-            title="Epic insights"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onInsightsClick();
-            }}
-            className={cn(
-              "inline-flex shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-colors hover:bg-slate-100",
-              compact ? "size-4" : "size-[18px]",
-            )}
-          >
-            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
-          </button>
-        ) : null}
         {progressRowPrefix ? (
           <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
         ) : null}
-        <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-[3px] bg-slate-100 ring-1 ring-slate-200/80">
+        <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-[2px] bg-slate-100 ring-1 ring-slate-200/80">
           <div
             className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-all"
             style={{ width: `${safeProgress}%` }}
@@ -431,6 +413,24 @@ export function EpicPlanTimelineBar({
         >
           {safeProgress}%
         </span>
+        {showProgress && onInsightsClick ? (
+          <button
+            type="button"
+            aria-label="Open epic insights"
+            title="Epic insights"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onInsightsClick();
+            }}
+            className={cn(
+              "inline-flex shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-transform duration-150 hover:scale-125 hover:bg-slate-100",
+              compact ? "size-4" : "size-[18px]",
+            )}
+          >
+            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
+          </button>
+        ) : null}
       </div>
     </div>
   );
