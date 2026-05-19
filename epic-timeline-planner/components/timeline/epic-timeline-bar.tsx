@@ -121,6 +121,9 @@ type InitiativeTimelineBarProps = {
   progressRowPrefix?: ReactNode;
   /** Optional delete handler — renders an X chip on hover. */
   onDelete?: () => void;
+  /** When set, a chart icon appears at the start of the progress row;
+   * clicking it opens the insights view in a new tab (initiative scope). */
+  onInsightsClick?: () => void;
 };
 
 export function InitiativeTimelineBar({
@@ -136,6 +139,7 @@ export function InitiativeTimelineBar({
   showProgress = true,
   progressRowPrefix,
   onDelete,
+  onInsightsClick,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -207,6 +211,21 @@ export function InitiativeTimelineBar({
         )}
         aria-hidden={!showProgress}
       >
+        {showProgress && onInsightsClick ? (
+          <button
+            type="button"
+            aria-label="Open initiative insights"
+            title="Initiative insights"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onInsightsClick();
+            }}
+            className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-colors hover:bg-slate-100"
+          >
+            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
+          </button>
+        ) : null}
         {progressRowPrefix ? (
           <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
         ) : null}
@@ -247,6 +266,9 @@ type EpicPlanTimelineBarProps = {
   progressRowPrefix?: ReactNode;
   /** Small pill after the title: delivery team assignment (Gantt middle panel). */
   teamAssignmentChip?: { label: string; className: string } | null;
+  /** When set, a chart icon appears at the start of the progress row;
+   * clicking it opens the insights view in a new tab (epic scope). */
+  onInsightsClick?: () => void;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -267,6 +289,7 @@ export function EpicPlanTimelineBar({
   showProgress = true,
   progressRowPrefix,
   teamAssignmentChip = null,
+  onInsightsClick,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -371,6 +394,24 @@ export function EpicPlanTimelineBar({
         )}
         aria-hidden={!showProgress}
       >
+        {showProgress && onInsightsClick ? (
+          <button
+            type="button"
+            aria-label="Open epic insights"
+            title="Epic insights"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onInsightsClick();
+            }}
+            className={cn(
+              "inline-flex shrink-0 items-center justify-center rounded-[3px] p-[1px] transition-colors hover:bg-slate-100",
+              compact ? "size-4" : "size-[18px]",
+            )}
+          >
+            <img src="/insights-dashboard.png" alt="" aria-hidden className="size-full select-none object-contain" draggable={false} />
+          </button>
+        ) : null}
         {progressRowPrefix ? (
           <span className="pointer-events-none flex min-w-0 shrink-0 items-center">{progressRowPrefix}</span>
         ) : null}

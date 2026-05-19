@@ -3,6 +3,7 @@
 import {
   Activity as ActivityIcon,
   ArrowUpDown,
+  BarChart3,
   Bold,
   CalendarDays,
   Check,
@@ -599,6 +600,25 @@ export function InitiativeFormDialog({
     }
   }
 
+  /**
+   * Opens the insights view in a new tab, scoped to this initiative — mirrors
+   * the BarChart3 button in the epic dialog. The `/epic-insights` route picks
+   * up `initiativeId` and defaults the Epic / Initiative Scope dropdown to
+   * this initiative.
+   */
+  function openInsightsWindow() {
+    if (!initiative) return;
+    const params = new URLSearchParams();
+    params.set("initiativeId", initiative.id);
+    const cur = new URLSearchParams(window.location.search);
+    for (const key of ["month", "planTab", "sprint"] as const) {
+      const v = cur.get(key);
+      if (v) params.set(key, v);
+    }
+    params.set("sprintView", "epic-insights");
+    window.open(`/epic-insights?${params.toString()}`, "_blank");
+  }
+
   function beginDialogDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -833,6 +853,17 @@ export function InitiativeFormDialog({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              {initiative ? (
+                <button
+                  type="button"
+                  onClick={openInsightsWindow}
+                  aria-label="Open initiative insights in new window"
+                  title="Initiative insights"
+                  className="inline-flex size-7 items-center justify-center rounded-md text-indigo-700 transition-colors hover:bg-indigo-50 hover:text-indigo-800"
+                >
+                  <BarChart3 className="size-4" />
+                </button>
+              ) : null}
               {initiative && onDelete && (
                 <button
                   type="button"

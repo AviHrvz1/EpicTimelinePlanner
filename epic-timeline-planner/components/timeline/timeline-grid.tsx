@@ -100,6 +100,31 @@ export type InitiativeScheduleRangePatch = {
   endYearSprint: number;
 };
 
+/**
+ * Opens the insights view (Epic Scope Burnup etc.) in a new tab, scoped to a
+ * specific epic or initiative. Used by the chart-icon button on Gantt bars
+ * and by the chart button in both the epic and initiative dialogs.
+ *
+ * Passes the raw UUID via `epicId` / `initiativeId` — the server route also
+ * accepts a display ID like `EPIC-01` but UUIDs sidestep any display-ID
+ * ordering drift between client and server.
+ */
+function openInsightsTab(kind: "epic" | "initiative", id: string) {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams();
+  if (kind === "epic") params.set("epicId", id);
+  else params.set("initiativeId", id);
+  // Carry over a handful of context params so the insights page can pick up
+  // the same period / sprint context the user was viewing.
+  const cur = new URLSearchParams(window.location.search);
+  for (const key of ["month", "planTab", "sprint"] as const) {
+    const v = cur.get(key);
+    if (v) params.set(key, v);
+  }
+  params.set("sprintView", "epic-insights");
+  window.open(`/epic-insights?${params.toString()}`, "_blank");
+}
+
 /** Vertical sprint columns + subtle month pairs (2 sprints) for roadmap Gantt lanes. */
 function GanttLaneSprintBackdrop({ columnCount, className }: { columnCount: number; className?: string }) {
   if (columnCount <= 0) return null;
@@ -396,6 +421,7 @@ function GanttLaneRow({
               emphasizeTick={emphasizeTick}
               showProgress={showProgress}
               onClick={() => onOpenInitiative(initiative.id)}
+              onInsightsClick={() => openInsightsTab("initiative", initiative.id)}
             />
             {onResizeInitiativeRange ? (
               <>
@@ -1047,6 +1073,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
+            onInsightsClick={() => openInsightsTab("epic", epic.id)}
             teamAssignmentChip={teamAssignmentChip}
           />
           {/* Left resize handle */}
@@ -1092,6 +1119,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
+            onInsightsClick={() => openInsightsTab("epic", epic.id)}
             teamAssignmentChip={teamAssignmentChip}
           />
         </div>
@@ -1151,6 +1179,7 @@ function MonthInitiativeGanttLaneRow({
             progressLabel={totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"}
             showProgress={showProgress}
             onClick={() => onOpenInitiative(initiative.id)}
+            onInsightsClick={() => openInsightsTab("initiative", initiative.id)}
           />
         </div>
       </div>
@@ -4271,6 +4300,7 @@ export function TimelineGrid({
                             showProgress={showRoadmapProgress}
                             onClick={() => onOpenInitiative(row.initiative.id)}
                             onDelete={onDeleteInitiative ? () => onDeleteInitiative(row.initiative.id) : undefined}
+                            onInsightsClick={() => openInsightsTab("initiative", row.initiative.id)}
                           />
                         </div>
                       );
@@ -4375,6 +4405,7 @@ export function TimelineGrid({
                               showProgress={showRoadmapProgress}
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
+                              onInsightsClick={() => openInsightsTab("epic", row.epic.id)}
                             />
                             {showGanttTeamChips && row.epic.team ? (
                               <div className={cn("flex px-0.5", showRoadmapProgress ? "mt-1" : "-mt-3")}>
@@ -6301,6 +6332,7 @@ export function TimelineGrid({
                                       progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
                                       showProgress={showRoadmapProgress}
                                       onClick={() => onOpenInitiative(row.initiative.id)}
+                                      onInsightsClick={() => openInsightsTab("initiative", row.initiative.id)}
                                     />
                                   </div>
                                 );
@@ -6419,6 +6451,7 @@ export function TimelineGrid({
                                       showProgress={showRoadmapProgress}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
+                                      onInsightsClick={() => openInsightsTab("epic", row.epic.id)}
                                       teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
                                     />
                                     {onResizeEpicPlanRange ? (
