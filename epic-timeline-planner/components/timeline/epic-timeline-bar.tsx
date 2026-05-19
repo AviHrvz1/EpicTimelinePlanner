@@ -379,8 +379,11 @@ export function EpicPlanTimelineBar({
           ) : null}
           <span className="min-w-0 flex-1 truncate">{title}</span>
           {teamAssignmentChip ? (
-            <span className={teamAssignmentChip.className} title={teamAssignmentChip.label}>
-              <Users className="mr-1 inline-block size-3 shrink-0 opacity-70" aria-hidden />
+            <span
+              className="relative z-30 ml-auto inline-flex max-w-[6.5rem] shrink-0 -translate-x-0.5 translate-y-0 items-center gap-0.5 truncate rounded bg-white px-1.5 py-0.5 text-[11px] font-normal leading-none text-slate-700 shadow-[inset_0_2px_4px_rgba(15,23,42,0.32),inset_0_-1px_0_rgba(255,255,255,0.55),0_0_0_1px_rgba(15,23,42,0.14)]"
+              title={teamAssignmentChip.label}
+            >
+              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
               {teamAssignmentChip.label}
             </span>
           ) : null}

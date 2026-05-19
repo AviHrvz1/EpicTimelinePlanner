@@ -4406,20 +4406,8 @@ export function TimelineGrid({
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
                               onInsightsClick={() => openInsightsTab("epic", row.epic.id)}
+                              teamAssignmentChip={showGanttTeamChips && row.epic.team ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
                             />
-                            {showGanttTeamChips && row.epic.team ? (
-                              <div className={cn("flex px-0.5", showRoadmapProgress ? "mt-1" : "-mt-3")}>
-                                {(() => {
-                                  const chip = epicDeliveryTeamAssignmentChip(row.epic.team);
-                                  return (
-                                    <span className={chip.className} title={chip.label}>
-                                      <Users className="mr-1 inline-block size-2.5 shrink-0 opacity-70" aria-hidden />
-                                      {chip.label}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                            ) : null}
                             {onResizeEpicPlanRange ? (
                               <>
                                 <div
