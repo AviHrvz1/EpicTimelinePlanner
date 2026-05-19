@@ -4,6 +4,7 @@ import {
   Activity as ActivityIcon,
   ArrowUpDown,
   Bold,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
@@ -45,7 +46,6 @@ import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
-import { MONTHS } from "@/lib/timeline";
 import { type EpicItem, InitiativeItem, type RoadmapItem } from "@/lib/types";
 import { useDialogPresence } from "@/lib/use-dialog-presence";
 import { planningDetailPanelAnchorStyle, usePlanningSurfaceRect } from "@/lib/use-planning-surface-rect";
@@ -54,6 +54,12 @@ import { cn } from "@/lib/utils";
 
 function sumUserStoryEstDaysForEpic(epic: EpicItem): number {
   return (epic.userStories ?? []).reduce((sum, story) => sum + (story.estimatedDays ?? 0), 0);
+}
+
+function formatShortDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return "";
+  return `${m[3]}/${m[2]}/${m[1].slice(-2)}`;
 }
 
 const INIT_CHILD_TABLE_DEFAULT_WIDTHS = [72, 220, 116, 120, 96, 96] as const;
@@ -280,7 +286,7 @@ export function InitiativeFormDialog({
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(68);
-  const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
+  const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(380);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(190);
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
@@ -351,7 +357,7 @@ export function InitiativeFormDialog({
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
       setDialogWidthVw(68);
-      setDetailsPanelWidthPx(296);
+      setDetailsPanelWidthPx(380);
       setActivityPanelHeightPx(190);
       setActivityOpen((initiative?.epics?.length ?? 0) === 0);
       setDescriptionAccordionOpen(true);
@@ -487,27 +493,43 @@ export function InitiativeFormDialog({
 
   const hasChildren = (initiative?.epics?.length ?? 0) > 0;
 
-  const initiativePlanningQuarter = useMemo(() => {
-    const m = initiative?.startMonth;
-    if (m == null) return "Not set";
-    if (m <= 3) return "Q1";
-    if (m <= 6) return "Q2";
-    if (m <= 9) return "Q3";
-    return "Q4";
-  }, [initiative?.startMonth]);
-
-  const initiativePlanningMonth = useMemo(() => {
-    if (initiative?.startMonth == null) return "Not set";
-    const s = initiative.startMonth;
-    const e = initiative.endMonth;
-    if (e != null && e !== s) return `${MONTHS[s - 1]}-${MONTHS[e - 1]}`;
-    return MONTHS[s - 1];
-  }, [initiative?.startMonth, initiative?.endMonth]);
-
-  const initiativePlanningYear = useMemo(() => {
-    if (initiative == null) return "Not set";
-    return String(initiative.year);
-  }, [initiative]);
+  // Initiative timeline is read-only — derived from child epics' actual
+  // start/end dates: earliest start across all epics, latest end across all
+  // epics. Returned as ISO date strings (YYYY-MM-DD) so an `<input type="date">`
+  // can display them; empty string when no child is scheduled yet.
+  const initiativeTimelineStart = useMemo(() => {
+    const year = initiative?.year ?? new Date().getFullYear();
+    const stamps = (initiative?.epics ?? [])
+      .filter((e): e is typeof e & { planStartMonth: number } =>
+        typeof e.planStartMonth === "number" && e.planStartMonth >= 1 && e.planStartMonth <= 12,
+      )
+      .map((e) => {
+        const day = e.planStartDay ?? 1;
+        return { month: e.planStartMonth, day, stamp: e.planStartMonth * 100 + day };
+      });
+    if (stamps.length === 0) return "";
+    const min = stamps.reduce((a, b) => (b.stamp < a.stamp ? b : a));
+    const mm = String(min.month).padStart(2, "0");
+    const dd = String(min.day).padStart(2, "0");
+    return `${year}-${mm}-${dd}`;
+  }, [initiative?.epics, initiative?.year]);
+  const initiativeTimelineEnd = useMemo(() => {
+    const year = initiative?.year ?? new Date().getFullYear();
+    const stamps = (initiative?.epics ?? [])
+      .filter((e) =>
+        typeof e.planEndMonth === "number" && e.planEndMonth >= 1 && e.planEndMonth <= 12,
+      )
+      .map((e) => {
+        const month = e.planEndMonth as number;
+        const day = e.planEndDay ?? new Date(year, month, 0).getDate();
+        return { month, day, stamp: month * 100 + day };
+      });
+    if (stamps.length === 0) return "";
+    const max = stamps.reduce((a, b) => (b.stamp > a.stamp ? b : a));
+    const mm = String(max.month).padStart(2, "0");
+    const dd = String(max.day).padStart(2, "0");
+    return `${year}-${mm}-${dd}`;
+  }, [initiative?.epics, initiative?.year]);
   const existingLabelSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const row of initiative?.epics ?? []) {
@@ -1211,16 +1233,29 @@ export function InitiativeFormDialog({
                 </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-500 shadow-sm" /></label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Year</p>
-                  <input readOnly value={initiativePlanningYear} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
-                </div>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
-                  <input readOnly value={initiativePlanningQuarter} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
-                </div>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Month</p>
-                  <input readOnly value={initiativePlanningMonth} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
+                  <p className="text-[15px] font-normal text-slate-700">Timeline</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div
+                      className="inline-flex h-8 w-full cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 pl-2.5 pr-2 text-[13px] text-slate-600 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.55)]"
+                      aria-label="Earliest start across epics"
+                      title="Earliest start date across the initiative's epics"
+                    >
+                      <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                      <span className={formatShortDate(initiativeTimelineStart) ? "text-slate-600" : "text-slate-400"}>
+                        {formatShortDate(initiativeTimelineStart) || "Start"}
+                      </span>
+                    </div>
+                    <div
+                      className="inline-flex h-8 w-full cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 pl-2.5 pr-2 text-[13px] text-slate-600 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.55)]"
+                      aria-label="Latest end across epics"
+                      title="Latest end date across the initiative's epics"
+                    >
+                      <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                      <span className={formatShortDate(initiativeTimelineEnd) ? "text-slate-600" : "text-slate-400"}>
+                        {formatShortDate(initiativeTimelineEnd) || "End"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 {(() => {
                   const selectedRoadmap = roadmaps.find((r) => r.id === formRoadmapId);

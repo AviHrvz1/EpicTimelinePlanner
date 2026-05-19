@@ -5,6 +5,7 @@ import {
   BarChart3,
   ArrowUpDown,
   Bold,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
@@ -37,6 +38,7 @@ import Link from "@tiptap/extension-link";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { createPortal } from "react-dom";
+import { TimelineDatePopover } from "@/components/epics/timeline-date-popover";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -78,6 +80,36 @@ function monthIndicesForQuarter(q: 1 | 2 | 3 | 4 | null): number[] {
   if (q === null) return Array.from({ length: 12 }, (_, i) => i + 1);
   const start = (q - 1) * 3 + 1;
   return [start, start + 1, start + 2];
+}
+
+function formatShortDate(iso: string): string {
+  const parsed = parseIsoDate(iso);
+  if (!parsed) return "";
+  const dd = String(parsed.day).padStart(2, "0");
+  const mm = String(parsed.month).padStart(2, "0");
+  const yy = String(parsed.year).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+}
+
+function toIsoDate(year: number, month: number, day: number): string {
+  const mm = String(Math.max(1, Math.min(12, month))).padStart(2, "0");
+  const dd = String(Math.max(1, Math.min(31, day))).padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
+}
+
+function parseIsoDate(value: string): { year: number; month: number; day: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year, month, day };
+}
+
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
 }
 
 function parseSprintDraftValue(value: string): number | null {
@@ -131,6 +163,8 @@ type EpicFormDialogProps = {
     originalEstimateDays: number | null;
     planStartMonth: number | null;
     planEndMonth: number | null;
+    planStartDay: number | null;
+    planEndDay: number | null;
   }) => Promise<void> | void;
   onDelete?: (epicId: string) => Promise<void> | void;
   storyRefById?: Record<string, string>;
@@ -189,7 +223,11 @@ export function EpicFormDialog({
   );
   const [initiativeId, setInitiativeId] = useState(epic?.initiativeId ?? lockInitiativeId ?? "");
   const [planQuarterDraft, setPlanQuarterDraft] = useState("");
-  const [planMonthDraft, setPlanMonthDraft] = useState("");
+  // Timeline range as ISO date strings (YYYY-MM-DD). On save these are parsed
+  // back into separate month + day fields. End date never goes earlier than
+  // start.
+  const [planStartDateDraft, setPlanStartDateDraft] = useState("");
+  const [planEndDateDraft, setPlanEndDateDraft] = useState("");
   const [teamDraft, setTeamDraft] = useState("");
   const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
@@ -206,7 +244,7 @@ export function EpicFormDialog({
   const [dialogWidthVw, setDialogWidthVw] = useState(64);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
-  const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(296);
+  const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(380);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(300);
   const [childStoryDrafts, setChildStoryDrafts] = useState<Record<string, ChildStoryDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
@@ -227,6 +265,10 @@ export function EpicFormDialog({
   const dialogShellRef = useRef<HTMLDivElement | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
   const sprintInputRef = useRef<HTMLInputElement | null>(null);
+  const timelineStartAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const timelineEndAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const [startCalendarOpen, setStartCalendarOpen] = useState(false);
+  const [endCalendarOpen, setEndCalendarOpen] = useState(false);
   const descriptionEditor = useEditor({
     extensions: [
       StarterKit,
@@ -264,17 +306,28 @@ export function EpicFormDialog({
             ? quarterNumFromMonth(epic.planStartMonth)
             : null;
       setPlanQuarterDraft(q != null ? `Q${q}` : "");
-      if (epic.planStartMonth != null) {
-        setPlanMonthDraft(MONTHS[epic.planStartMonth - 1] ?? "");
-      } else {
-        setPlanMonthDraft("");
-      }
+      const epicYear = epic.planYear ?? init?.year ?? new Date().getFullYear();
+      setPlanStartDateDraft(
+        epic.planStartMonth != null
+          ? toIsoDate(epicYear, epic.planStartMonth, epic.planStartDay ?? 1)
+          : "",
+      );
+      const endMonth = epic.planEndMonth ?? epic.planStartMonth ?? null;
+      const endDay = epic.planEndDay ?? epic.planStartDay ?? null;
+      setPlanEndDateDraft(
+        endMonth != null
+          ? toIsoDate(epicYear, endMonth, endDay ?? lastDayOfMonth(epicYear, endMonth))
+          : "",
+      );
     } else if (init?.startMonth != null) {
       setPlanQuarterDraft(`Q${quarterNumFromMonth(init.startMonth)}`);
-      setPlanMonthDraft(MONTHS[init.startMonth - 1] ?? "");
+      const initIso = toIsoDate(init.year, init.startMonth, 1);
+      setPlanStartDateDraft(initIso);
+      setPlanEndDateDraft(initIso);
     } else {
       setPlanQuarterDraft("");
-      setPlanMonthDraft("");
+      setPlanStartDateDraft("");
+      setPlanEndDateDraft("");
     }
     setForceTeamFieldEdit(false);
     setTeamDraft(epic?.team ? normalizeWorkspaceUserTeam(epic.team) : "");
@@ -303,7 +356,7 @@ export function EpicFormDialog({
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
       setDialogWidthVw(64);
-      setDetailsPanelWidthPx(296);
+      setDetailsPanelWidthPx(380);
       setActivityPanelHeightPx(340);
       setActivityOpen((epic?.userStories?.length ?? 0) === 0);
       setDescriptionAccordionOpen(true);
@@ -666,9 +719,21 @@ export function EpicFormDialog({
 
     setIsSaving(true);
     try {
-      const monthIdx = planMonthDraft.trim() === "" ? -1 : MONTHS.indexOf(planMonthDraft as (typeof MONTHS)[number]);
-      const planStartMonth = monthIdx >= 0 ? monthIdx + 1 : null;
-      const planEndMonth = planStartMonth;
+      const start = parseIsoDate(planStartDateDraft);
+      const end = parseIsoDate(planEndDateDraft);
+      const planStartMonth = start ? start.month : null;
+      const planStartDay = start ? start.day : null;
+      // End: if missing, fall back to start. If earlier than start, clamp.
+      let planEndMonth = end ? end.month : planStartMonth;
+      let planEndDay = end ? end.day : planStartDay;
+      if (start && end) {
+        const startStamp = start.year * 10000 + start.month * 100 + start.day;
+        const endStamp = end.year * 10000 + end.month * 100 + end.day;
+        if (endStamp < startStamp) {
+          planEndMonth = start.month;
+          planEndDay = start.day;
+        }
+      }
       await onSubmit({
         title: normalizedTitle,
         icon: icon.trim() || "📁",
@@ -681,6 +746,8 @@ export function EpicFormDialog({
           originalEstimateDaysDraft.trim() === "" ? null : Math.max(0, Math.round(Number(originalEstimateDaysDraft) || 0)),
         planStartMonth,
         planEndMonth,
+        planStartDay,
+        planEndDay,
       });
       onClose();
     } finally {
@@ -1566,10 +1633,13 @@ export function EpicFormDialog({
                       const nextInit = initiatives.find((i) => i.id === next);
                       if (nextInit?.startMonth != null) {
                         setPlanQuarterDraft(`Q${quarterNumFromMonth(nextInit.startMonth)}`);
-                        setPlanMonthDraft(MONTHS[nextInit.startMonth - 1] ?? "");
+                        const iso = toIsoDate(nextInit.year, nextInit.startMonth, 1);
+                        setPlanStartDateDraft(iso);
+                        setPlanEndDateDraft(iso);
                       } else {
                         setPlanQuarterDraft("");
-                        setPlanMonthDraft("");
+                        setPlanStartDateDraft("");
+                        setPlanEndDateDraft("");
                       }
                     }}
                     options={initiativeOptions.map((o) => ({ id: o.id, title: o.label }))}
@@ -1654,16 +1724,70 @@ export function EpicFormDialog({
                   />
                 </label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Year</p>
-                  <input readOnly value={planningYearDisplay} title="Year comes from the parent initiative" className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm" />
-                </div>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Quarter</p>
-                  <select value={planQuarterDraft} onChange={(event) => { const nextQ = event.target.value; setPlanQuarterDraft(nextQ); if (!planMonthDraft) return; const allowed = monthIndicesForQuarter(parseQuarterSelect(nextQ)).map((i) => MONTHS[i - 1]); if (!allowed.includes(planMonthDraft as (typeof MONTHS)[number])) { setPlanMonthDraft(""); } }} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm"><option value="">Not set</option><option value="Q1">Q1</option><option value="Q2">Q2</option><option value="Q3">Q3</option><option value="Q4">Q4</option></select>
-                </div>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Month</p>
-                  <select value={planMonthDraft} onChange={(event) => { const name = event.target.value; setPlanMonthDraft(name); if (!name) return; const idx = MONTHS.indexOf(name as (typeof MONTHS)[number]); if (idx >= 0) { setPlanQuarterDraft(`Q${quarterNumFromMonth(idx + 1)}`); } }} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-2 text-[14px] text-slate-800 shadow-sm"><option value="">Not set</option>{allowedMonthNames.map((month) => (<option key={month} value={month}>{month}</option>))}</select>
+                  <p className="text-[15px] font-normal text-slate-700">Timeline</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Each pill opens its own calendar popover (see
+                        TimelineDatePopover) — the popover shows a Q1-Q4 chip
+                        above the month grid so the user can see the quarter
+                        without parsing the month name. */}
+                    <button
+                      ref={timelineStartAnchorRef}
+                      type="button"
+                      onClick={() => setStartCalendarOpen((p) => !p)}
+                      aria-label="Pick start date"
+                      aria-expanded={startCalendarOpen}
+                      className="group inline-flex h-8 w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 pl-2.5 pr-2 text-left text-[13px] text-slate-800 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] transition-colors hover:border-slate-300 hover:bg-white focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                    >
+                      <CalendarDays className="size-3.5 shrink-0 text-slate-400 transition-colors group-focus:text-indigo-500" aria-hidden />
+                      <span className={formatShortDate(planStartDateDraft) ? "text-slate-800" : "text-slate-400"}>
+                        {formatShortDate(planStartDateDraft) || "Start"}
+                      </span>
+                    </button>
+                    <button
+                      ref={timelineEndAnchorRef}
+                      type="button"
+                      onClick={() => setEndCalendarOpen((p) => !p)}
+                      aria-label="Pick end date"
+                      aria-expanded={endCalendarOpen}
+                      className="group inline-flex h-8 w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 pl-2.5 pr-2 text-left text-[13px] text-slate-800 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] transition-colors hover:border-slate-300 hover:bg-white focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                    >
+                      <CalendarDays className="size-3.5 shrink-0 text-slate-400 transition-colors group-focus:text-indigo-500" aria-hidden />
+                      <span className={formatShortDate(planEndDateDraft) ? "text-slate-800" : "text-slate-400"}>
+                        {formatShortDate(planEndDateDraft) || "End"}
+                      </span>
+                    </button>
+                  </div>
+                  <TimelineDatePopover
+                    open={startCalendarOpen}
+                    anchorRef={timelineStartAnchorRef}
+                    value={planStartDateDraft}
+                    fallbackYear={sprintPlanningYear}
+                    fallbackMonth1={1}
+                    onChange={(next) => {
+                      setPlanStartDateDraft(next);
+                      const parsed = parseIsoDate(next);
+                      if (parsed) setPlanQuarterDraft(`Q${quarterNumFromMonth(parsed.month)}`);
+                      // If the new start is after current end, snap end to start.
+                      if (planEndDateDraft && next > planEndDateDraft) {
+                        setPlanEndDateDraft(next);
+                      } else if (!planEndDateDraft) {
+                        setPlanEndDateDraft(next);
+                      }
+                    }}
+                    onClose={() => setStartCalendarOpen(false)}
+                  />
+                  <TimelineDatePopover
+                    open={endCalendarOpen}
+                    anchorRef={timelineEndAnchorRef}
+                    value={planEndDateDraft}
+                    min={planStartDateDraft || undefined}
+                    fallbackYear={sprintPlanningYear}
+                    fallbackMonth1={1}
+                    onChange={(next) => {
+                      setPlanEndDateDraft(next);
+                    }}
+                    onClose={() => setEndCalendarOpen(false)}
+                  />
                 </div>
                 {(() => {
                   const parentInit = initiatives.find((i) => i.id === initiativeId);

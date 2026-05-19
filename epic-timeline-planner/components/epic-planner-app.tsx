@@ -2679,6 +2679,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     originalEstimateDays: number | null;
     planStartMonth: number | null;
     planEndMonth: number | null;
+    planStartDay: number | null;
+    planEndDay: number | null;
   }) {
     const epicId = editingEpic?.id;
     if (epicId && payload.team === null) {
