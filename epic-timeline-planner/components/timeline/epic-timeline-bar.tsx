@@ -380,7 +380,7 @@ export function EpicPlanTimelineBar({
           <span className="min-w-0 flex-1 truncate">{title}</span>
           {teamAssignmentChip ? (
             <span
-              className="relative z-30 ml-auto inline-flex max-w-[6.5rem] shrink-0 -translate-x-0.5 translate-y-0 items-center gap-0.5 truncate rounded bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-1.5 py-0.5 text-[11px] font-normal leading-none text-black [text-shadow:none]"
+              className="relative z-30 ml-auto inline-flex max-w-[6.5rem] shrink-0 -translate-x-0.5 translate-y-0 items-center gap-0.5 truncate rounded bg-white/55 px-1.5 py-0.5 text-[11px] font-normal leading-none text-black [text-shadow:none]"
               title={teamAssignmentChip.label}
             >
               <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
