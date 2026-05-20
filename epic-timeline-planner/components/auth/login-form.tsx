@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Eye, EyeOff, Loader2, LogIn, Lock, Mail } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, LogIn, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 import { signIn } from "@/lib/auth-client";
@@ -62,6 +62,11 @@ export function LoginForm({
   // feedback and a hard pause before they can keep trying.
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldownTick, setCooldownTick] = useState(0);
+  // Full-screen "welcome overlay" shown briefly between a successful login
+  // and the redirect to the roadmap. Gives the navigation a branded handoff
+  // instead of a hard page swap. `undefined` = not shown, `null` = shown
+  // with a generic greeting, `string` = shown with personalized greeting.
+  const [welcomeName, setWelcomeName] = useState<string | null | undefined>(undefined);
 
   const needsCaptcha = failedAttempts >= TURNSTILE_THRESHOLD;
   const captchaConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim());
@@ -80,6 +85,12 @@ export function LoginForm({
   }, [cooldownActive]);
   // cooldownTick is intentionally read so its change re-renders the countdown.
   void cooldownTick;
+
+  // Prefetch the redirect target so the page is ready to render by the time
+  // the welcome overlay finishes its animation — the handoff feels snappy.
+  useEffect(() => {
+    router.prefetch(callbackURL);
+  }, [router, callbackURL]);
 
   const COOLDOWN_THRESHOLD = 5;
   const COOLDOWN_DURATION_MS = 60_000;
@@ -107,6 +118,7 @@ export function LoginForm({
     if (submitBlocked) return;
     setPending(true);
     setErrorMessage(null);
+    let succeeded = false;
     try {
       const result = await signIn.email({
         email: email.trim(),
@@ -125,15 +137,29 @@ export function LoginForm({
         setErrorMessage(msg);
         return;
       }
-      toast.success("Welcome back!");
-      router.push(callbackURL);
-      router.refresh();
+      // Show a branded welcome overlay, then navigate after the animation
+      // settles. We pull the first name from the returned user when present
+      // and fall back to a generic greeting otherwise.
+      const userName =
+        (result.data && "user" in result.data && result.data.user?.name) || null;
+      const firstName = userName ? userName.split(" ")[0] : null;
+      succeeded = true;
+      setWelcomeName(firstName);
+      // Keep `pending` true so the submit button stays in its loading state
+      // behind the overlay (no UI flicker if the overlay is dismissed).
+      setTimeout(() => {
+        router.push(callbackURL);
+        router.refresh();
+      }, 1100);
+      return;
     } catch (err) {
       registerFailure();
       const msg = err instanceof Error ? err.message : "Unable to sign in";
       setErrorMessage(msg);
     } finally {
-      setPending(false);
+      // Only flip pending off on the error/early-return paths — the success
+      // path leaves the button "loading" until the route swap completes.
+      if (!succeeded) setPending(false);
     }
   }
 
@@ -153,7 +179,9 @@ export function LoginForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <>
+      <WelcomeOverlay name={welcomeName} />
+      <form onSubmit={onSubmit} className="space-y-5">
       {/* Inline error banner — surfaces credential / lockout / rate-limit
           messages right above the inputs where the user is already looking,
           instead of relying on a toast notification that can be missed. */}
@@ -313,6 +341,48 @@ export function LoginForm({
           </Link>
         )}
       </p>
-    </form>
+      </form>
+    </>
+  );
+}
+
+/**
+ * Full-viewport handoff shown briefly between successful login and the
+ * route swap to the roadmap. Brand-gradient backdrop with a check badge,
+ * personalized greeting, and a bouncing-dots loader so the navigation
+ * doesn't feel like a hard cut. Renders nothing when `name` is undefined
+ * (i.e. before sign-in succeeds).
+ */
+function WelcomeOverlay({ name }: { name: string | null | undefined }) {
+  // `name === undefined` would skip the overlay entirely. We pass null when
+  // the user's name isn't on the response (e.g. only email), and render a
+  // generic greeting in that case.
+  if (name === undefined) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-gradient-to-br from-sky-500 via-indigo-600 to-violet-600 px-6 animate-in fade-in duration-300"
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.45),transparent_60%)]" />
+      <div className="pointer-events-none absolute -top-32 -right-32 size-96 rounded-full bg-white/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -left-32 size-[28rem] rounded-full bg-white/10 blur-3xl" />
+      <div className="relative flex flex-col items-center text-center text-white animate-in zoom-in-95 slide-in-from-bottom-2 duration-500">
+        <div className="mb-6 flex size-24 items-center justify-center rounded-full bg-white/20 ring-4 ring-white/30 backdrop-blur-sm">
+          <Check className="size-12 stroke-[3]" />
+        </div>
+        <h2 className="text-[36px] font-extrabold leading-tight tracking-tight">
+          {name ? `Welcome back, ${name}!` : "Welcome back!"}
+        </h2>
+        <p className="mt-2 text-[15px] font-medium text-white/85">
+          Loading your roadmap…
+        </p>
+        <div className="mt-7 flex items-center gap-1.5">
+          <span className="size-2 animate-bounce rounded-full bg-white/90 [animation-delay:0ms]" />
+          <span className="size-2 animate-bounce rounded-full bg-white/90 [animation-delay:150ms]" />
+          <span className="size-2 animate-bounce rounded-full bg-white/90 [animation-delay:300ms]" />
+        </div>
+      </div>
+    </div>
   );
 }
