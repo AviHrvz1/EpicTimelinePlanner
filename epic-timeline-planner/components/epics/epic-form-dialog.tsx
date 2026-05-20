@@ -2,7 +2,6 @@
 
 import {
   Activity as ActivityIcon,
-  BarChart3,
   ArrowUpDown,
   Bold,
   CalendarDays,
@@ -186,6 +185,10 @@ type EpicFormDialogProps = {
     },
   ) => Promise<void>;
   onAddComment?: (epicId: string, body: string) => Promise<void>;
+  /** If provided, the BarChart3 header button switches the in-app view to
+   * the insights surface (scoped to this epic) and closes the dialog,
+   * instead of opening /epic-insights in a new tab. */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
   onExitComplete?: () => void;
   surfaceAnchorRef?: RefObject<HTMLElement | null>;
   /** Users directory — custom team slugs appear in the team combobox alongside delivery teams. */
@@ -209,6 +212,7 @@ export function EpicFormDialog({
   onCreateInitiativeQuick,
   onPatchStory,
   onAddComment,
+  onOpenInsights,
   surfaceAnchorRef,
   workspaceDirectoryUsers = [],
   roadmaps = [],
@@ -638,14 +642,19 @@ export function EpicFormDialog({
     selectedInitiative?.year != null ? String(selectedInitiative.year) : epic?.planYear != null ? String(epic.planYear) : "Not set";
   function openInsightsWindow() {
     if (!epic) return;
-    // Compute display ID (EPIC-01, EPIC-16, …) from the full initiatives list
+    // Preferred: in-app navigation (parent switches view + closes dialog).
+    if (onOpenInsights) {
+      onOpenInsights("epic", epic.id);
+      onClose();
+      return;
+    }
+    // Fallback: open the standalone /epic-insights page in a new tab.
     const allEpicsSorted = [...initiatives]
       .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime() || a.title.localeCompare(b.title))
       .flatMap((i) => i.epics ?? [])
       .sort((a, b) => new Date(a.createdAt as string).getTime() - new Date(b.createdAt as string).getTime() || a.title.localeCompare(b.title));
     const idx = allEpicsSorted.findIndex((e) => e.id === epic.id);
     const displayId = idx >= 0 ? `EPIC-${String(idx + 1).padStart(2, "0")}` : epic.id;
-    // Carry over relevant URL context params from the current page
     const cur = new URLSearchParams(window.location.search);
     const p = new URLSearchParams();
     p.set("epicDisplayId", displayId);
@@ -1059,27 +1068,42 @@ export function EpicFormDialog({
             </div>
             <div className="flex items-center gap-2">
               {epic ? (
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={openInsightsWindow}
-                  aria-label="Open epic insights in new window"
-                  title="Epic insights"
-                  className="text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
-                >
-                  <BarChart3 className="size-4" />
-                </Button>
+                <span className="group relative inline-flex">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={openInsightsWindow}
+                    aria-label="Open epic insights"
+                    className="text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                  >
+                    <img
+                      src="/dialog-insights-icon.png"
+                      alt=""
+                      aria-hidden
+                      className="size-5 select-none object-contain"
+                      draggable={false}
+                    />
+                  </Button>
+                  <span role="tooltip" className={infoTooltipClass}>
+                    Open the insights view scoped to this epic — see scope burnup, sprint progress, and team workload.
+                  </span>
+                </span>
               ) : null}
               {epic ? (
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={handleDelete}
-                  aria-label="Delete epic"
-                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                >
-                  <Trash className="size-4" />
-                </Button>
+                <span className="group relative inline-flex">
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={handleDelete}
+                    aria-label="Delete epic"
+                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                  >
+                    <Trash className="size-4" />
+                  </Button>
+                  <span role="tooltip" className={infoTooltipClass}>
+                    Permanently delete this epic and all of its user stories. This cannot be undone.
+                  </span>
+                </span>
               ) : null}
               <Button
                 type="button"

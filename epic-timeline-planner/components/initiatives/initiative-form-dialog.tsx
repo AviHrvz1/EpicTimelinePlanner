@@ -3,7 +3,6 @@
 import {
   Activity as ActivityIcon,
   ArrowUpDown,
-  BarChart3,
   Bold,
   CalendarDays,
   Check,
@@ -237,6 +236,10 @@ type InitiativeFormDialogProps = {
     },
   ) => Promise<void>;
   onAddComment?: (initiativeId: string, body: string) => Promise<void>;
+  /** If provided, the BarChart3 header button switches the in-app view to
+   * the insights surface (scoped to this initiative) and closes the dialog,
+   * instead of opening /epic-insights in a new tab. */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
   onExitComplete?: () => void;
   surfaceAnchorRef?: RefObject<HTMLElement | null>;
   roadmaps?: RoadmapItem[];
@@ -257,6 +260,7 @@ export function InitiativeFormDialog({
   onRequestCreateEpic,
   onPatchEpic,
   onAddComment,
+  onOpenInsights,
   surfaceAnchorRef,
   roadmaps = [],
   selectedRoadmapId,
@@ -608,6 +612,13 @@ export function InitiativeFormDialog({
    */
   function openInsightsWindow() {
     if (!initiative) return;
+    // Preferred: in-app navigation (parent switches view + closes dialog).
+    if (onOpenInsights) {
+      onOpenInsights("initiative", initiative.id);
+      onClose();
+      return;
+    }
+    // Fallback: open the standalone /epic-insights page in a new tab.
     const params = new URLSearchParams();
     params.set("initiativeId", initiative.id);
     const cur = new URLSearchParams(window.location.search);
@@ -854,25 +865,40 @@ export function InitiativeFormDialog({
             </div>
             <div className="flex items-center gap-2">
               {initiative ? (
-                <button
-                  type="button"
-                  onClick={openInsightsWindow}
-                  aria-label="Open initiative insights in new window"
-                  title="Initiative insights"
-                  className="inline-flex size-7 items-center justify-center rounded-md text-indigo-700 transition-colors hover:bg-indigo-50 hover:text-indigo-800"
-                >
-                  <BarChart3 className="size-4" />
-                </button>
+                <span className="group relative inline-flex">
+                  <button
+                    type="button"
+                    onClick={openInsightsWindow}
+                    aria-label="Open initiative insights"
+                    className="inline-flex size-7 items-center justify-center rounded-md text-indigo-700 transition-colors hover:bg-indigo-50 hover:text-indigo-800"
+                  >
+                    <img
+                      src="/dialog-insights-icon.png"
+                      alt=""
+                      aria-hidden
+                      className="size-5 select-none object-contain"
+                      draggable={false}
+                    />
+                  </button>
+                  <span role="tooltip" className={infoTooltipClass}>
+                    Open the insights view scoped to this initiative — see scope burnup, sprint progress, and team workload across all child epics.
+                  </span>
+                </span>
               ) : null}
               {initiative && onDelete && (
-                <button
-                  type="button"
-                  onClick={() => { onDelete(initiative.id); onClose(); }}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-red-200 px-3.5 text-[12px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
-                >
-                  <Trash2 className="size-3.5" />
-                  Delete
-                </button>
+                <span className="group relative inline-flex">
+                  <button
+                    type="button"
+                    onClick={() => { onDelete(initiative.id); onClose(); }}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-red-200 px-3.5 text-[12px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete
+                  </button>
+                  <span role="tooltip" className={infoTooltipClass}>
+                    Permanently delete this initiative and every child epic and user story under it. This cannot be undone.
+                  </span>
+                </span>
               )}
               <Button
                 type="button"

@@ -1894,7 +1894,7 @@ export function MonthAnalytics({
         backgroundSize: "24px 24px",
       }}
     >
-      <div className="-mt-1 rounded-xl bg-slate-100/70 px-4 py-4">
+      <div className="-mt-1 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 py-4 shadow-[inset_0_2px_5px_rgba(15,23,42,0.16),inset_0_-1px_0_rgba(255,255,255,0.55)]">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
             <ChartNoAxesCombined className="size-4 text-slate-500" aria-hidden />

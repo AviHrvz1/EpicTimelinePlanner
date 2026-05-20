@@ -421,7 +421,7 @@ function GanttLaneRow({
               emphasizeTick={emphasizeTick}
               showProgress={showProgress}
               onClick={() => onOpenInitiative(initiative.id)}
-              onInsightsClick={() => openInsightsTab("initiative", initiative.id)}
+              onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", initiative.id)}
             />
             {onResizeInitiativeRange ? (
               <>
@@ -1073,7 +1073,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
-            onInsightsClick={() => openInsightsTab("epic", epic.id)}
+            onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
             teamAssignmentChip={teamAssignmentChip}
           />
           {/* Left resize handle */}
@@ -1119,7 +1119,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
-            onInsightsClick={() => openInsightsTab("epic", epic.id)}
+            onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
             teamAssignmentChip={teamAssignmentChip}
           />
         </div>
@@ -1179,7 +1179,7 @@ function MonthInitiativeGanttLaneRow({
             progressLabel={totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"}
             showProgress={showProgress}
             onClick={() => onOpenInitiative(initiative.id)}
-            onInsightsClick={() => openInsightsTab("initiative", initiative.id)}
+            onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", initiative.id)}
           />
         </div>
       </div>
@@ -1307,6 +1307,10 @@ type TimelineGridProps = {
   initialInsightsScopeInitId?: string | null;
   /** Fired when the user selects an epic or initiative in any insights scope picker. */
   onInsightsScopeChange?: (epicId: string | null, initId: string | null) => void;
+  /** Switch the current view to the insights surface, scoped to the given
+   * epic or initiative. Called when the user clicks the % chip on a Gantt bar.
+   * If omitted, the bar falls back to opening /epic-insights in a new tab. */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
   /** Roadmap management props */
   roadmaps?: RoadmapItem[];
   selectedRoadmapId?: string;
@@ -2039,6 +2043,7 @@ export function TimelineGrid({
   initialInsightsScopeEpicId,
   initialInsightsScopeInitId,
   onInsightsScopeChange,
+  onOpenInsights,
   onMonthEpicDayRangeChange,
   roadmaps = [],
   selectedRoadmapId,
@@ -2130,6 +2135,34 @@ export function TimelineGrid({
     });
   };
   const [insightsTeamIds, setInsightsTeamIds] = useState<string[]>([]);
+  /**
+   * Sync the breadcrumb-area Teams filter with the Epic / Initiative Scope
+   * dropdown: picking an epic narrows to that epic's delivery team; picking
+   * an initiative (or clearing the scope) shows all teams. Fires for manual
+   * dropdown selection AND for scope set externally (e.g. clicking the %
+   * chip on a Gantt bar updates initialInsightsScopeEpicId, which
+   * MonthAnalytics syncs into selectedEpicId, which triggers onScopeChange).
+   */
+  const handleInsightsScopeChange = useCallback(
+    (type: "epic" | "initiative" | null, id: string | null) => {
+      onInsightsScopeChange?.(type === "epic" ? id : null, type === "initiative" ? id : null);
+      let next: string[] = [];
+      if (type === "epic" && id) {
+        const epic = initiatives.flatMap((i) => i.epics ?? []).find((e) => e.id === id);
+        const team = epic?.team?.trim() ?? null;
+        if (team) next = [team];
+      }
+      // Functional update — bails out (returns prev) when content matches, so
+      // the array reference stays stable across renders. Without this,
+      // [team] !== [team] would trigger an effect loop in MonthAnalytics,
+      // which calls onScopeChange every render when onScopeChange's ref
+      // changes (inline arrow at the callsite).
+      setInsightsTeamIds((prev) =>
+        prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next,
+      );
+    },
+    [initiatives, onInsightsScopeChange],
+  );
   const [isInsightsTeamMenuOpen, setIsInsightsTeamMenuOpen] = useState(false);
   const [insightsTeamSearch, setInsightsTeamSearch] = useState("");
   const insightsTeamMenuRef = useRef<HTMLDivElement | null>(null);
@@ -4300,7 +4333,7 @@ export function TimelineGrid({
                             showProgress={showRoadmapProgress}
                             onClick={() => onOpenInitiative(row.initiative.id)}
                             onDelete={onDeleteInitiative ? () => onDeleteInitiative(row.initiative.id) : undefined}
-                            onInsightsClick={() => openInsightsTab("initiative", row.initiative.id)}
+                            onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", row.initiative.id)}
                           />
                         </div>
                       );
@@ -4405,7 +4438,7 @@ export function TimelineGrid({
                               showProgress={showRoadmapProgress}
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
-                              onInsightsClick={() => openInsightsTab("epic", row.epic.id)}
+                              onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
                               teamAssignmentChip={showGanttTeamChips && row.epic.team ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
                             />
                             {onResizeEpicPlanRange ? (
@@ -4789,7 +4822,7 @@ export function TimelineGrid({
                   <span
                     aria-current="page"
                     className={cn(
-                      "whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em] underline-offset-4 transition-colors hover:text-indigo-600 hover:underline",
+                      "whitespace-nowrap px-1 py-0.5 text-[15px] font-medium leading-snug tracking-[0.01em]",
                       item.currentTone === "sprint"
                         ? "text-indigo-700"
                         : "text-slate-800",
@@ -6114,7 +6147,7 @@ export function TimelineGrid({
                   }
                   initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
                   initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-                  onScopeChange={(type, id) => onInsightsScopeChange?.(type === "epic" ? id : null, type === "initiative" ? id : null)}
+                  onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
                 />
               </div>
             ) : (
@@ -6320,7 +6353,7 @@ export function TimelineGrid({
                                       progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
                                       showProgress={showRoadmapProgress}
                                       onClick={() => onOpenInitiative(row.initiative.id)}
-                                      onInsightsClick={() => openInsightsTab("initiative", row.initiative.id)}
+                                      onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", row.initiative.id)}
                                     />
                                   </div>
                                 );
@@ -6439,7 +6472,7 @@ export function TimelineGrid({
                                       showProgress={showRoadmapProgress}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
-                                      onInsightsClick={() => openInsightsTab("epic", row.epic.id)}
+                                      onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
                                       teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
                                     />
                                     {onResizeEpicPlanRange ? (
@@ -6509,7 +6542,7 @@ export function TimelineGrid({
             }
             initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
             initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-            onScopeChange={(type, id) => onInsightsScopeChange?.(type === "epic" ? id : null, type === "initiative" ? id : null)}
+            onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
           />
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
           <MonthAnalytics
@@ -6526,7 +6559,7 @@ export function TimelineGrid({
             }
             initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
             initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-            onScopeChange={(type, id) => onInsightsScopeChange?.(type === "epic" ? id : null, type === "initiative" ? id : null)}
+            onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
           />
         ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard

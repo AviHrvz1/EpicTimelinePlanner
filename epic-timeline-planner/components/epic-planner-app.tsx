@@ -2711,6 +2711,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     await refresh();
   }
 
+  /**
+   * Switch the current planning view to the Insights tab, with the
+   * Epic / Initiative Scope selector pre-filled to the given entity.
+   * Used by the chart-icon launchers on Gantt bars and the chart button
+   * in the epic/initiative dialogs, replacing the previous "open
+   * /epic-insights in a new tab" behavior.
+   */
+  function handleOpenInsightsInApp(kind: "epic" | "initiative", id: string) {
+    if (kind === "epic") {
+      setInsightsScopeEpicId(id);
+      setInsightsScopeInitId(null);
+    } else {
+      setInsightsScopeInitId(id);
+      setInsightsScopeEpicId(null);
+    }
+    setActiveQuarterViewTab("insights");
+  }
 
 
   async function createEpicQuick(initiativeId: string, title: string) {
@@ -4927,6 +4944,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   setInsightsScopeEpicId(epicId);
                   setInsightsScopeInitId(initId);
                 }}
+                onOpenInsights={handleOpenInsightsInApp}
                 summaryBadges={roadmapSummary}
                 summaryBarPortalElement={summaryBarEl}
                 suppressInlineChips
@@ -5582,6 +5600,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             toast.error("Failed to add comment");
           }
         }}
+        onOpenInsights={handleOpenInsightsInApp}
         onClose={() => {
           setInitiativeDialogOpen(false);
         }}
@@ -5659,6 +5678,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         onSubmit={handleUpsertEpic}
         storyRefById={storyRefMaps.byId}
         onDelete={requestDeleteEpic}
+        onOpenInsights={handleOpenInsightsInApp}
         workspaceDirectoryUsers={workspaceDirectoryUsers}
         surfaceAnchorRef={planningRightSurfaceRef}
         roadmaps={roadmaps}
