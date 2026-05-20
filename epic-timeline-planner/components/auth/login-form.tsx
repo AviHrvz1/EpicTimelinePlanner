@@ -182,10 +182,23 @@ export function LoginForm({
         </div>
       )}
 
-      <div className="space-y-2">
-        <label htmlFor="login-email" className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-          Email
-        </label>
+      {(enabledProviders.google || enabledProviders.apple || enabledProviders.microsoft) && (
+        <>
+          <OAuthButtons enabledProviders={enabledProviders} callbackURL={callbackURL} />
+          <div className="flex items-center gap-4 py-2">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-500">Or</span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+        </>
+      )}
+
+      <div className="space-y-2.5">
+        <div className="flex h-5 items-center justify-between">
+          <label htmlFor="login-email" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
+            Email
+          </label>
+        </div>
         <div className="group relative" suppressHydrationWarning>
           {/* Leading icon — sits inside the input's left padding so the cursor and
               text never collide with it. Color shifts to indigo on focus to echo
@@ -208,14 +221,14 @@ export function LoginForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label htmlFor="login-password" className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+      <div className="space-y-2.5">
+        <div className="flex h-5 items-center justify-between">
+          <label htmlFor="login-password" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
             Password
           </label>
           <Link
             href="/forgot-password"
-            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+            className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
           >
             Forgot password?
           </Link>
@@ -245,7 +258,7 @@ export function LoginForm({
         </div>
       </div>
 
-      <label className="flex items-center gap-2.5 text-[12px] text-slate-600">
+      <label className="flex items-center gap-2.5 text-[13px] text-slate-600">
         <input
           type="checkbox"
           checked={rememberMe}
@@ -284,23 +297,7 @@ export function LoginForm({
         </p>
       )}
 
-      {(enabledProviders.google || enabledProviders.apple || enabledProviders.microsoft) && (
-        <>
-          {/* "or continue with" divider — only shown when there's actually an OAuth
-              section to introduce. Two slate hairlines flank a small label so the
-              transition between credential auth and social auth feels intentional. */}
-          <div className="flex items-center gap-3 py-1">
-            <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-              or continue with
-            </span>
-            <div className="h-px flex-1 bg-slate-200" />
-          </div>
-          <OAuthButtons enabledProviders={enabledProviders} callbackURL={callbackURL} />
-        </>
-      )}
-
-      <p className="pt-2 text-center text-[12px] text-slate-500">
+      <p className="pt-2 text-center text-[13px] text-slate-500">
         Don&apos;t have an account?{" "}
         {onSwitchToSignup ? (
           <button

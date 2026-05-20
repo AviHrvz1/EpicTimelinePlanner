@@ -71,8 +71,18 @@ export function SignupForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <label htmlFor="signup-name" className="text-[12px] font-semibold text-slate-700">
+      {(enabledProviders.google || enabledProviders.apple || enabledProviders.microsoft) && (
+        <>
+          <OAuthButtons enabledProviders={enabledProviders} />
+          <div className="flex items-center gap-4 py-2">
+            <div className="h-px flex-1 bg-slate-200" />
+            <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-500">Or</span>
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+        </>
+      )}
+      <div className="space-y-2.5">
+        <label htmlFor="signup-name" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
           Name
         </label>
         <input
@@ -89,8 +99,8 @@ export function SignupForm({
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="signup-email" className="text-[12px] font-semibold text-slate-700">
+      <div className="space-y-2.5">
+        <label htmlFor="signup-email" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
           Email
         </label>
         <input
@@ -106,8 +116,8 @@ export function SignupForm({
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="signup-password" className="text-[12px] font-semibold text-slate-700">
+      <div className="space-y-2.5">
+        <label htmlFor="signup-password" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
           Password
         </label>
         <div className="relative">
@@ -176,8 +186,6 @@ export function SignupForm({
         {pending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
         <span>{pending ? "Creating your account…" : "Create account"}</span>
       </button>
-
-      <OAuthButtons enabledProviders={enabledProviders} />
 
       <p className="pt-2 text-center text-[12px] text-slate-500">
         Already have an account?{" "}

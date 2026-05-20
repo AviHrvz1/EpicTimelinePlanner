@@ -5,6 +5,11 @@ import { ENABLED_OAUTH_PROVIDERS } from "@/lib/auth";
 
 import { SignupForm } from "@/components/auth/signup-form";
 
+const VISIBLE_OAUTH_PROVIDERS = {
+  ...ENABLED_OAUTH_PROVIDERS,
+  google: true,
+};
+
 /**
  * /signup — create a new account. Server enforces the same password rules as the live
  * strength meter (see lib/password-strength.ts → scorePassword + lib/auth.ts).
@@ -19,16 +24,26 @@ export default function SignupPage() {
         <ArrowLeft className="size-3.5" />
         Back to sign in
       </Link>
-      <div className="space-y-1.5">
-        <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
-          Create your account
+      <div className="space-y-2 text-center">
+        <h1 className="text-[34px] font-extrabold leading-tight tracking-tight text-slate-900">
+          Welcome to Bird Eye Viewer
         </h1>
-        <p className="text-[13px] leading-relaxed text-slate-500">
-          Free, takes a minute. Already invited?{" "}
-          <span className="font-medium text-slate-700">Use the email your admin added.</span>
+        <p className="text-[14px] leading-relaxed text-slate-500">
+          Get started — it&apos;s free.
         </p>
       </div>
-      <SignupForm enabledProviders={ENABLED_OAUTH_PROVIDERS} />
+      <SignupForm enabledProviders={VISIBLE_OAUTH_PROVIDERS} />
+      <p className="pt-4 text-center text-[13.5px] leading-relaxed text-slate-500">
+        By proceeding, you agree to the{" "}
+        <Link href="/legal/terms" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link href="/legal/privacy" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </div>
   );
 }
