@@ -5579,6 +5579,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           setEditingEpicInitiativeId(initiativeId);
           setEpicDialogOpen(true);
         }}
+        onCreateChildEpicQuick={async (initiativeId, title) => {
+          try {
+            await createEpicQuick(initiativeId, title);
+            toast.success("Epic added");
+          } catch {
+            toast.error("Failed to add epic");
+          }
+        }}
         onPatchEpic={async (epicId, patch) => {
           try {
             const response = await fetch(`/api/epics/${epicId}`, {
@@ -5657,6 +5665,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         onRequestCreateStory={(epicId) => {
           setSelectedStoryId(null);
           setCreatingStoryEpicId(epicId);
+        }}
+        onCreateChildStoryQuick={async (epicId, title) => {
+          try {
+            await createStoryQuick(epicId, title);
+            toast.success("User story added");
+          } catch {
+            toast.error("Failed to add user story");
+          }
         }}
         onAddComment={async (epicId, body) => {
           try {

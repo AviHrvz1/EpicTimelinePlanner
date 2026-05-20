@@ -225,6 +225,10 @@ type InitiativeFormDialogProps = {
   onDelete?: (id: string) => void;
   onOpenEpic?: (epicId: string) => void;
   onRequestCreateEpic?: (initiativeId: string) => void;
+  /** Inline-create: posts a new child epic directly under the initiative
+   * without opening the epic popup. Called by the Add button next to the
+   * child row's title input. */
+  onCreateChildEpicQuick?: (initiativeId: string, title: string) => Promise<void>;
   onPatchEpic?: (
     epicId: string,
     patch: {
@@ -258,6 +262,7 @@ export function InitiativeFormDialog({
   onDelete,
   onOpenEpic,
   onRequestCreateEpic,
+  onCreateChildEpicQuick,
   onPatchEpic,
   onAddComment,
   onOpenInsights,
@@ -280,7 +285,7 @@ export function InitiativeFormDialog({
   const roadmapInputRef = useRef<HTMLInputElement>(null);
   const roadmapDropdownRef = useRef<HTMLDivElement>(null);
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
-  const [activityOpen, setActivityOpen] = useState(() => (initiative?.epics?.length ?? 0) === 0);
+  const [activityOpen, setActivityOpen] = useState(true);
   const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
@@ -292,7 +297,7 @@ export function InitiativeFormDialog({
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [dialogWidthVw, setDialogWidthVw] = useState(68);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(380);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(190);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(360);
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
@@ -338,7 +343,7 @@ export function InitiativeFormDialog({
     setRoadmapQuery("");
     setRoadmapDropdownOpen(false);
     setActivityTab("comments");
-    setActivityOpen((initiative?.epics?.length ?? 0) === 0);
+    setActivityOpen(true);
     if (initiative?.id) {
       const raw = window.localStorage.getItem(`initiative-labels:${initiative.id}`) ?? "";
       setLabelsDraft(
@@ -363,8 +368,8 @@ export function InitiativeFormDialog({
       setIsDraggingDialog(false);
       setDialogWidthVw(68);
       setDetailsPanelWidthPx(380);
-      setActivityPanelHeightPx(190);
-      setActivityOpen((initiative?.epics?.length ?? 0) === 0);
+      setActivityPanelHeightPx(360);
+      setActivityOpen(true);
       setDescriptionAccordionOpen(true);
       dragStartRef.current = null;
     }
@@ -493,6 +498,23 @@ export function InitiativeFormDialog({
           return 0;
       }
     });
+    // After the user's column sort, hoist the most-recently-created epic to
+    // the top so a freshly-added child appears in the first data row.
+    if (list.length > 1) {
+      let newestIdx = 0;
+      let newestStamp = new Date(list[0].createdAt as string).getTime();
+      for (let i = 1; i < list.length; i++) {
+        const t = new Date(list[i].createdAt as string).getTime();
+        if (t > newestStamp) {
+          newestIdx = i;
+          newestStamp = t;
+        }
+      }
+      if (newestIdx !== 0) {
+        const [newest] = list.splice(newestIdx, 1);
+        list.unshift(newest);
+      }
+    }
     return list;
   }, [initiative?.epics, childEpicSortKey, childEpicSortDir, childEpicDrafts, displayIds]);
 
@@ -798,9 +820,16 @@ export function InitiativeFormDialog({
     await onPatchEpic(epicId, patch);
   }
 
-  function handleAddChildEpic() {
-    if (!initiative || !onRequestCreateEpic || !newChildEpicTitle.trim()) return;
-    onRequestCreateEpic(initiative.id);
+  async function handleAddChildEpic() {
+    const title = newChildEpicTitle.trim();
+    if (!initiative || !title) return;
+    // Prefer inline-create when wired; fall back to legacy popup flow.
+    if (onCreateChildEpicQuick) {
+      await onCreateChildEpicQuick(initiative.id, title);
+      setNewChildEpicTitle("");
+    } else if (onRequestCreateEpic) {
+      onRequestCreateEpic(initiative.id);
+    }
   }
 
   if (!visible) return null;
@@ -870,15 +899,16 @@ export function InitiativeFormDialog({
                     type="button"
                     onClick={openInsightsWindow}
                     aria-label="Open initiative insights"
-                    className="inline-flex size-7 items-center justify-center rounded-md text-indigo-700 transition-colors hover:bg-indigo-50 hover:text-indigo-800"
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-indigo-200 px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
                   >
                     <img
                       src="/dialog-insights-icon.png"
                       alt=""
                       aria-hidden
-                      className="size-5 select-none object-contain"
+                      className="size-4 select-none object-contain"
                       draggable={false}
                     />
+                    Insights
                   </button>
                   <span role="tooltip" className={infoTooltipClass}>
                     Open the insights view scoped to this initiative — see scope burnup, sprint progress, and team workload across all child epics.
@@ -890,9 +920,9 @@ export function InitiativeFormDialog({
                   <button
                     type="button"
                     onClick={() => { onDelete(initiative.id); onClose(); }}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-red-200 px-3.5 text-[12px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-red-200 px-4 text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 className="size-4" />
                     Delete
                   </button>
                   <span role="tooltip" className={infoTooltipClass}>
@@ -904,32 +934,32 @@ export function InitiativeFormDialog({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="inline-flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold [&_svg]:text-slate-500"
+                className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
                 onClick={onClose}
               >
-                <X className="size-3.5" />
+                <X className="size-4" />
                 Cancel
               </Button>
               <Button
                 type="button"
                 size="sm"
-                className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 text-[12px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                className="inline-flex h-9 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                 onClick={handleSave}
                 disabled={isSaving}
               >
-                <Check className="size-3.5" />
+                <Check className="size-4" />
                 {isSaving ? "Saving..." : initiative ? "Save" : "Create"}
               </Button>
             </div>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <div ref={splitLayoutRef} className="grid h-full min-h-0 gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
-              <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+              <div ref={splitLayoutRef} className="grid shrink-0 items-stretch gap-0" style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}>
+              <section className="flex h-full flex-col gap-3 overflow-x-hidden rounded-xl border-0 bg-white py-3 pl-[5px] pr-0 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
-                  <p className="flex shrink-0 items-center gap-2 text-base font-normal text-slate-800">
-                    <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  <p className="flex shrink-0 items-center gap-2 text-lg font-semibold text-slate-800">
+                    <Type className="size-5 shrink-0 text-slate-500" aria-hidden />
                     Title
                   </p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm focus-within:ring-2 focus-within:ring-slate-300/70">
@@ -937,30 +967,12 @@ export function InitiativeFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-4 flex shrink-0 flex-col gap-1">
-                  <button
-                    type="button"
-                    id="initiative-form-description-accordion-trigger"
-                    aria-expanded={descriptionAccordionOpen}
-                    aria-controls="initiative-form-description-accordion-panel"
-                    onClick={() => setDescriptionAccordionOpen((v) => !v)}
-                    className="-ml-1 flex w-full shrink-0 items-center gap-2 rounded-md py-1 text-left text-base font-normal text-slate-800 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
-                  >
-                    {descriptionAccordionOpen ? (
-                      <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
-                    ) : (
-                      <ChevronRight className="size-4 shrink-0 text-slate-500" aria-hidden />
-                    )}
-                    <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
+                <div className="mt-4 flex flex-1 flex-col gap-1">
+                  <h3 className="flex shrink-0 items-center gap-2 py-1 text-lg font-semibold text-slate-800">
+                    <FileText className="size-5 shrink-0 text-slate-500" aria-hidden />
                     Description
-                  </button>
-                  <div
-                    id="initiative-form-description-accordion-panel"
-                    role="region"
-                    aria-labelledby="initiative-form-description-accordion-trigger"
-                    hidden={!descriptionAccordionOpen}
-                    className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]"
-                  >
+                  </h3>
+                  <div className="flex flex-1 flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
                     <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Italic className="size-3.5" /></button>
@@ -972,7 +984,7 @@ export function InitiativeFormDialog({
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading3 className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><LinkIcon className="size-3.5" /></button>
                     </div>
-                    <div className="min-h-[10rem] rounded-md px-1 py-2">
+                    <div className="min-h-[10rem] flex-1 rounded-md px-1 py-2">
                       <EditorContent
                         editor={descriptionEditor}
                         className="focus:outline-none [&_.ProseMirror]:min-h-[10rem] [&_.ProseMirror]:outline-none"
@@ -981,307 +993,18 @@ export function InitiativeFormDialog({
                   </div>
                 </div>
 
-                <section className="mt-5 flex shrink-0 flex-col gap-3 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
-                  <div className="flex shrink-0 items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
-                      <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
-                      Child Epics
-                    </h3>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">{initiative?.epics?.length ?? 0}</span>
-                  </div>
-
-                  {!initiative ? (
-                    <p className="shrink-0 rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">Save this initiative first, then add and manage epics here.</p>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        {(initiative.epics ?? []).length === 0 ? (
-                          <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">No epics yet.</p>
-                        ) : (
-                          <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
-                            <table className="w-full table-fixed text-left text-sm">
-                              <colgroup>
-                                {initChildTableWidths.map((w, i) => (
-                                  <col key={i} style={{ width: w }} />
-                                ))}
-                              </colgroup>
-                              <thead className="bg-[#0897d5] text-white">
-                                <tr>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[0] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildEpicSort("id")}
-                                    >
-                                      ID
-                                      {childEpicSortKey === "id" ? (
-                                        childEpicSortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onInitChildTableColResize(0, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[1] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildEpicSort("title")}
-                                    >
-                                      Epic
-                                      {childEpicSortKey === "title" ? (
-                                        childEpicSortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onInitChildTableColResize(1, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[2] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildEpicSort("team")}
-                                    >
-                                      Team
-                                      {childEpicSortKey === "team" ? (
-                                        childEpicSortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onInitChildTableColResize(2, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[3] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildEpicSort("assignee")}
-                                    >
-                                      Assignee
-                                      {childEpicSortKey === "assignee" ? (
-                                        childEpicSortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onInitChildTableColResize(3, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[4] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildEpicSort("originalEstimateDays")}
-                                    >
-                                      Days Est
-                                      {childEpicSortKey === "originalEstimateDays" ? (
-                                        childEpicSortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onInitChildTableColResize(4, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th
-                                    className="relative px-2 py-1.5 text-left text-[14px] font-semibold"
-                                    style={{ width: initChildTableWidths[5] }}
-                                    title="Sum of estimated days from all user stories under this epic"
-                                  >
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildEpicSort("childSum")}
-                                    >
-                                      Σ Child Est.
-                                      {childEpicSortKey === "childSum" ? (
-                                        childEpicSortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onInitChildTableColResize(5, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr className="border-t border-[#7cd3f7]/95 bg-white">
-                                  <td className="px-2 py-1.5 text-slate-400">-</td>
-                                  <td className="px-2 py-1.5">
-                                    <div className="flex gap-1">
-                                      <input
-                                        value={newChildEpicTitle}
-                                        onChange={(event) => setNewChildEpicTitle(event.target.value)}
-                                        placeholder="Add child epic title"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800"
-                                      />
-                                      <Button type="button" size="sm" variant="outline" onClick={handleAddChildEpic}>
-                                        Add
-                                      </Button>
-                                    </div>
-                                  </td>
-                                  <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                                  <td className="px-2 py-1.5 text-slate-400">Unassigned</td>
-                                  <td className="px-2 py-1.5 text-slate-400">-</td>
-                                  <td className="px-2 py-1.5 text-slate-400">-</td>
-                                </tr>
-                                {sortedInitiativeChildEpics.map((row, rowIndex) => (
-                                  <tr
-                                    key={row.id}
-                                    className={cn(
-                                      "border-t border-[#7cd3f7]/95 text-slate-700 transition hover:bg-[#c5ebff]",
-                                      rowIndex % 2 === 0 ? "bg-white" : "bg-[#d8f2ff]",
-                                    )}
-                                  >
-                                    <td className="px-2 py-1.5 text-slate-600"><button type="button" onClick={() => onOpenEpic?.(row.id)} className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline">{displayIds.byEpicId.get(row.id) ?? row.id}</button></td>
-                                    <td className="px-2 py-1.5 text-slate-800">{childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? <div className="relative z-20 flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.title ?? row.title}</button>}</td>
-                                    <td className="px-2 py-1.5 text-slate-600">
-                                      {childEditingCell?.rowId === row.id && childEditingCell.field === "team" ? (
-                                        <div className="relative z-20 flex items-center gap-1">
-                                          <select
-                                            value={childEditingValue}
-                                            onChange={(event) => setChildEditingValue(event.target.value)}
-                                            className="min-w-[7.5rem] flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                          >
-                                            <option value="">Not set</option>
-                                            {MONTH_TEAM_COLUMNS.map((t) => (
-                                              <option key={t.id} value={t.id}>
-                                                {t.label}
-                                              </option>
-                                            ))}
-                                          </select>
-                                          <button
-                                            type="button"
-                                            onClick={() => void confirmChildCellEdit(row.id)}
-                                            className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"
-                                          >
-                                            <Check className="size-3.5" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setChildEditingCell(null)}
-                                            className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
-                                          >
-                                            <X className="size-3.5" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(row.id, "team")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {MONTH_TEAM_COLUMNS.find((t) => t.id === (childEpicDrafts[row.id]?.team ?? row.team))?.label ?? (childEpicDrafts[row.id]?.team ?? row.team) ?? "Not set"}
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-slate-600">
-                                      {childEditingCell?.rowId === row.id && childEditingCell.field === "assignee" ? (
-                                        <div className="relative z-20 flex min-w-0 items-center gap-1">
-                                          <AssigneeCombobox
-                                            value={childEditingValue}
-                                            onChange={setChildEditingValue}
-                                            suggestions={assigneeNameSuggestions}
-                                            placeholder="Assignee"
-                                            className="min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                          />
-                                          <button
-                                            type="button"
-                                            onClick={() => void confirmChildCellEdit(row.id)}
-                                            className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"
-                                          >
-                                            <Check className="size-3.5" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setChildEditingCell(null)}
-                                            className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
-                                          >
-                                            <X className="size-3.5" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => beginChildCellEdit(row.id, "assignee")}
-                                          className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
-                                        >
-                                          {(childEpicDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "originalEstimateDays" ? <div className="relative z-20 flex items-center gap-1"><input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "originalEstimateDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.originalEstimateDays || (row.originalEstimateDays == null ? "-" : String(row.originalEstimateDays))}</button>}</td>
-                                    <td className="px-2 py-1.5 text-slate-600 tabular-nums" title="Sum of estimated days from child user stories">
-                                      {sumUserStoryEstDaysForEpic(row)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-
-                    </>
-                  )}
-                </section>
               </section>
 
               <div className="relative mx-1.5">
                 <div className="group absolute inset-y-0 left-1/2 flex w-3 -translate-x-[calc(50%+2px)] cursor-col-resize items-stretch justify-center" onPointerDown={beginDetailsPanelResize} title="Resize details panel" aria-label="Resize details panel" role="separator">
-                  <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
+                  <div className="self-start h-[calc(80%+70px)] w-px bg-slate-300 transition group-hover:bg-slate-500" />
                   <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-[calc(50%+2px)]" />
                 </div>
               </div>
 
-              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
-                  <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
+              <section className="relative z-20 h-full space-y-5 rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <h3 className="flex items-center gap-2 text-lg font-semibold leading-snug tracking-tight text-slate-800">
+                  <ClipboardList className="size-5 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -1516,6 +1239,34 @@ export function InitiativeFormDialog({
                         className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-[12px] outline-none placeholder:text-slate-400"
                         placeholder="Type to search labels..."
                       />
+                      {newLabel.trim().length > 0 ? (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Add label"
+                            title="Add label"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              addLabel(newLabel);
+                            }}
+                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            <Check className="size-3" strokeWidth={2.5} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Clear input"
+                            title="Clear"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              setNewLabel("");
+                            }}
+                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                          >
+                            <X className="size-3" strokeWidth={2.5} aria-hidden />
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                     {labelsAutocompleteOpen && filteredLabelSuggestions.length > 0 ? (
                       <ul
@@ -1548,45 +1299,318 @@ export function InitiativeFormDialog({
                 </label>
               </section>
             </div>
-            </div>
-
-          <div className="relative z-0 mt-3 shrink-0">
-            {activityOpen ? (
-              <div className="group relative mb-3 flex h-3 cursor-row-resize items-center justify-center" onPointerDown={beginActivityPanelResize} title="Resize activity panel height" aria-label="Resize activity panel height" role="separator">
-                <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
-                <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
+            <section className="flex shrink-0 flex-col gap-3 rounded-xl bg-white px-3 pt-3 pb-5 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
+              <div className="flex shrink-0 items-center justify-between">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+                  <ListTree className="size-5 shrink-0 text-slate-500" aria-hidden />
+                  Child Epics
+                </h3>
+                <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">{initiative?.epics?.length ?? 0}</span>
               </div>
-            ) : null}
+
+              {!initiative ? (
+                <p className="shrink-0 rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">Save this initiative first, then add and manage epics here.</p>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {(initiative.epics ?? []).length === 0 ? (
+                      <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">No epics yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
+                        <table className="w-full table-fixed text-left text-sm">
+                          <colgroup>
+                            {initChildTableWidths.map((w, i) => (
+                              <col key={i} style={{ width: w }} />
+                            ))}
+                          </colgroup>
+                          <thead className="bg-[#0897d5] text-white">
+                            <tr>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[0] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildEpicSort("id")}
+                                >
+                                  ID
+                                  {childEpicSortKey === "id" ? (
+                                    childEpicSortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onInitChildTableColResize(0, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[1] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildEpicSort("title")}
+                                >
+                                  Epic
+                                  {childEpicSortKey === "title" ? (
+                                    childEpicSortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onInitChildTableColResize(1, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[2] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildEpicSort("team")}
+                                >
+                                  Team
+                                  {childEpicSortKey === "team" ? (
+                                    childEpicSortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onInitChildTableColResize(2, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[3] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildEpicSort("assignee")}
+                                >
+                                  Assignee
+                                  {childEpicSortKey === "assignee" ? (
+                                    childEpicSortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onInitChildTableColResize(3, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: initChildTableWidths[4] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildEpicSort("originalEstimateDays")}
+                                >
+                                  Days Est
+                                  {childEpicSortKey === "originalEstimateDays" ? (
+                                    childEpicSortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onInitChildTableColResize(4, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th
+                                className="relative px-2 py-1.5 text-left text-[14px] font-semibold"
+                                style={{ width: initChildTableWidths[5] }}
+                                title="Sum of estimated days from all user stories under this epic"
+                              >
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildEpicSort("childSum")}
+                                >
+                                  Σ Child Est.
+                                  {childEpicSortKey === "childSum" ? (
+                                    childEpicSortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onInitChildTableColResize(5, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-t border-[#7cd3f7]/95 bg-white">
+                              <td className="px-2 py-1.5 text-slate-400">-</td>
+                              <td className="px-2 py-1.5">
+                                <div className="flex gap-1">
+                                  <input
+                                    value={newChildEpicTitle}
+                                    onChange={(event) => setNewChildEpicTitle(event.target.value)}
+                                    placeholder="Add child epic title"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                    data-form-type="other"
+                                    className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800"
+                                  />
+                                  <Button type="button" size="sm" variant="outline" onClick={handleAddChildEpic}>
+                                    Add
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="px-2 py-1.5 text-slate-400">Not set</td>
+                              <td className="px-2 py-1.5 text-slate-400">Unassigned</td>
+                              <td className="px-2 py-1.5 text-slate-400">-</td>
+                              <td className="px-2 py-1.5 text-slate-400">-</td>
+                            </tr>
+                            {sortedInitiativeChildEpics.map((row, rowIndex) => (
+                              <tr
+                                key={row.id}
+                                className={cn(
+                                  "border-t border-[#7cd3f7]/95 text-slate-700 transition hover:bg-[#c5ebff]",
+                                  rowIndex % 2 === 0 ? "bg-white" : "bg-[#d8f2ff]",
+                                )}
+                              >
+                                <td className="px-2 py-1.5 text-slate-600"><button type="button" onClick={() => onOpenEpic?.(row.id)} className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline">{displayIds.byEpicId.get(row.id) ?? row.id}</button></td>
+                                <td className="px-2 py-1.5 text-slate-800">{childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? <div className="relative z-20 flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.title ?? row.title}</button>}</td>
+                                <td className="px-2 py-1.5 text-slate-600">
+                                  {childEditingCell?.rowId === row.id && childEditingCell.field === "team" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <select
+                                        value={childEditingValue}
+                                        onChange={(event) => setChildEditingValue(event.target.value)}
+                                        className="min-w-[7.5rem] flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                      >
+                                        <option value="">Not set</option>
+                                        {MONTH_TEAM_COLUMNS.map((t) => (
+                                          <option key={t.id} value={t.id}>
+                                            {t.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={() => void confirmChildCellEdit(row.id)}
+                                        className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"
+                                      >
+                                        <Check className="size-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setChildEditingCell(null)}
+                                        className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
+                                      >
+                                        <X className="size-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(row.id, "team")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {MONTH_TEAM_COLUMNS.find((t) => t.id === (childEpicDrafts[row.id]?.team ?? row.team))?.label ?? (childEpicDrafts[row.id]?.team ?? row.team) ?? "Not set"}
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 text-slate-600">
+                                  {childEditingCell?.rowId === row.id && childEditingCell.field === "assignee" ? (
+                                    <div className="relative z-20 flex min-w-0 items-center gap-1">
+                                      <AssigneeCombobox
+                                        value={childEditingValue}
+                                        onChange={setChildEditingValue}
+                                        suggestions={assigneeNameSuggestions}
+                                        placeholder="Assignee"
+                                        className="min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => void confirmChildCellEdit(row.id)}
+                                        className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"
+                                      >
+                                        <Check className="size-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setChildEditingCell(null)}
+                                        className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
+                                      >
+                                        <X className="size-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => beginChildCellEdit(row.id, "assignee")}
+                                      className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
+                                    >
+                                      {(childEpicDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "originalEstimateDays" ? <div className="relative z-20 flex items-center gap-1"><input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "originalEstimateDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.originalEstimateDays || (row.originalEstimateDays == null ? "-" : String(row.originalEstimateDays))}</button>}</td>
+                                <td className="px-2 py-1.5 text-slate-600 tabular-nums" title="Sum of estimated days from child user stories">
+                                  {sumUserStoryEstDaysForEpic(row)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                </>
+              )}
+            </section>
+
             <section
               className={cn(
-                "mx-3 flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
-                activityOpen ? "space-y-3 p-3" : "p-3",
+                "mt-4 flex min-h-0 shrink-0 flex-col space-y-3 rounded-xl bg-white p-3 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
+                activityOpen ? "" : "h-auto",
               )}
-              style={
-                activityOpen
-                  ? { height: `${hasChildren ? Math.max(180, Math.min(440, activityPanelHeightPx - 40)) : activityPanelHeightPx}px` }
-                  : undefined
-              }
+              style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
             >
               <button
                 type="button"
-                className="group flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
-                onClick={() => {
-                  setActivityOpen((wasOpen) => {
-                    if (!wasOpen) {
-                      setActivityPanelHeightPx((h) => Math.min(560, h + 96));
-                    }
-                    return !wasOpen;
-                  });
-                }}
+                onClick={() => setActivityOpen((v) => !v)}
                 aria-expanded={activityOpen}
+                className="group flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
               >
-                <span className="flex items-center gap-2 text-base font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
+                <span className="flex items-center gap-2 text-lg font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
-                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                    className={cn("size-5 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden
                   />
-                  <ActivityIcon className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  <ActivityIcon className="size-5 shrink-0 text-slate-500" aria-hidden />
                   Activity
                 </span>
                 {activityOpen ? (
@@ -1603,12 +1627,12 @@ export function InitiativeFormDialog({
               </button>
 
               {activityOpen ? (
-                <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="flex min-h-0 flex-1 flex-col gap-2">
                   {!initiative ? (
                     <p className="text-sm text-slate-500">Save this initiative first to add comments and history.</p>
                   ) : activityTab === "comments" ? (
                     <>
-                      <div className="space-y-2">
+                      <div className="min-h-0 max-h-[40%] shrink space-y-2 overflow-y-auto">
                         {(initiative.comments ?? []).length === 0 ? <p className="text-sm text-slate-500">No comments yet.</p> : initiative.comments.map((comment) => (
                           <div
                             key={comment.id}
@@ -1626,7 +1650,7 @@ export function InitiativeFormDialog({
                       />
                     </>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
                       {(initiative.history ?? []).length === 0 ? <p className="text-sm text-slate-500">No history yet.</p> : initiative.history.map((entry) => (
                         <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
                           <p className="text-slate-800">{entry.entry}</p>
@@ -1638,7 +1662,8 @@ export function InitiativeFormDialog({
                 </div>
               ) : null}
             </section>
-          </div>
+            </div>
+
           </div>
         </div>
       </div>

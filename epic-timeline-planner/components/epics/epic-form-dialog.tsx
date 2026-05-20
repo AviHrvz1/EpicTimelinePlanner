@@ -168,6 +168,10 @@ type EpicFormDialogProps = {
   onDelete?: (epicId: string) => Promise<void> | void;
   storyRefById?: Record<string, string>;
   onRequestCreateStory?: (epicId: string) => void;
+  /** Inline-create: posts a new user story directly under the epic without
+   * opening the story popup. Called by the Add button next to the child
+   * row's title input. */
+  onCreateChildStoryQuick?: (epicId: string, title: string) => Promise<void>;
   onOpenStory?: (storyId: string) => void;
   onOpenInitiative?: (initiativeId: string) => void;
   /** Create a backlog initiative from the Parent field; must return the new row id. */
@@ -207,6 +211,7 @@ export function EpicFormDialog({
   onDelete,
   storyRefById,
   onRequestCreateStory,
+  onCreateChildStoryQuick,
   onOpenStory,
   onOpenInitiative,
   onCreateInitiativeQuick,
@@ -235,7 +240,7 @@ export function EpicFormDialog({
   const [teamDraft, setTeamDraft] = useState("");
   const [forceTeamFieldEdit, setForceTeamFieldEdit] = useState(false);
   const [activityTab, setActivityTab] = useState<"comments" | "history">("comments");
-  const [activityOpen, setActivityOpen] = useState(() => (epic?.userStories?.length ?? 0) === 0);
+  const [activityOpen, setActivityOpen] = useState(true);
   const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
   const [newLabel, setNewLabel] = useState("");
@@ -336,7 +341,7 @@ export function EpicFormDialog({
     setForceTeamFieldEdit(false);
     setTeamDraft(epic?.team ? normalizeWorkspaceUserTeam(epic.team) : "");
     setActivityTab("comments");
-    setActivityOpen((epic?.userStories?.length ?? 0) === 0);
+    setActivityOpen(true);
     if (epic?.id) {
       const raw = window.localStorage.getItem(`epic-labels:${epic.id}`) ?? "";
       setLabelsDraft(
@@ -362,7 +367,7 @@ export function EpicFormDialog({
       setDialogWidthVw(64);
       setDetailsPanelWidthPx(380);
       setActivityPanelHeightPx(340);
-      setActivityOpen((epic?.userStories?.length ?? 0) === 0);
+      setActivityOpen(true);
       setDescriptionAccordionOpen(true);
       dragStartRef.current = null;
     }
@@ -565,6 +570,23 @@ export function EpicFormDialog({
           return 0;
       }
     });
+    // After the user's column sort, hoist the most-recently-created story to
+    // the top so a freshly-added child appears in the first data row.
+    if (list.length > 1) {
+      let newestIdx = 0;
+      let newestStamp = new Date(list[0].createdAt as string).getTime();
+      for (let i = 1; i < list.length; i++) {
+        const t = new Date(list[i].createdAt as string).getTime();
+        if (t > newestStamp) {
+          newestIdx = i;
+          newestStamp = t;
+        }
+      }
+      if (newestIdx !== 0) {
+        const [newest] = list.splice(newestIdx, 1);
+        list.unshift(newest);
+      }
+    }
     return list;
   }, [epic?.userStories, childStorySortKey, childStorySortDir, childStoryDrafts, displayIds, storyRefById]);
 
@@ -1069,21 +1091,21 @@ export function EpicFormDialog({
             <div className="flex items-center gap-2">
               {epic ? (
                 <span className="group relative inline-flex">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
+                  <button
+                    type="button"
                     onClick={openInsightsWindow}
                     aria-label="Open epic insights"
-                    className="text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-indigo-200 px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
                   >
                     <img
                       src="/dialog-insights-icon.png"
                       alt=""
                       aria-hidden
-                      className="size-5 select-none object-contain"
+                      className="size-4 select-none object-contain"
                       draggable={false}
                     />
-                  </Button>
+                    Insights
+                  </button>
                   <span role="tooltip" className={infoTooltipClass}>
                     Open the insights view scoped to this epic — see scope burnup, sprint progress, and team workload.
                   </span>
@@ -1091,15 +1113,15 @@ export function EpicFormDialog({
               ) : null}
               {epic ? (
                 <span className="group relative inline-flex">
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
+                  <button
+                    type="button"
                     onClick={handleDelete}
                     aria-label="Delete epic"
-                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-red-200 px-4 text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
                   >
                     <Trash className="size-4" />
-                  </Button>
+                    Delete
+                  </button>
                   <span role="tooltip" className={infoTooltipClass}>
                     Permanently delete this epic and all of its user stories. This cannot be undone.
                   </span>
@@ -1109,36 +1131,36 @@ export function EpicFormDialog({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="inline-flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold [&_svg]:text-slate-500"
+                className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
                 onClick={onClose}
               >
-                <X className="size-3.5" />
+                <X className="size-4" />
                 Cancel
               </Button>
               <Button
                 type="button"
                 size="sm"
-                className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 text-[12px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                className="inline-flex h-9 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                 onClick={handleSave}
                 disabled={isSaving}
               >
-                <Check className="size-3.5" />
+                <Check className="size-4" />
                 {isSaving ? "Saving…" : epic ? "Save" : "Create"}
               </Button>
             </div>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
               <div
                 ref={splitLayoutRef}
-                className="grid h-full min-h-0 gap-0"
+                className="grid shrink-0 items-stretch gap-0"
                 style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
               >
-              <section className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border-0 bg-white p-4 [scrollbar-gutter:stable]">
+              <section className="flex h-full flex-col gap-3 overflow-x-hidden rounded-xl border-0 bg-white py-3 pl-[5px] pr-0 [scrollbar-gutter:stable]">
                 <label className="block shrink-0 space-y-1">
-                  <p className="flex shrink-0 items-center gap-2 text-base font-normal text-slate-800">
-                    <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  <p className="flex shrink-0 items-center gap-2 text-lg font-semibold text-slate-800">
+                    <Type className="size-5 shrink-0 text-slate-500" aria-hidden />
                     Title
                   </p>
                   <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm focus-within:ring-2 focus-within:ring-slate-300/70">
@@ -1151,30 +1173,12 @@ export function EpicFormDialog({
                   </div>
                 </label>
 
-                <div className="mt-4 flex shrink-0 flex-col gap-1">
-                  <button
-                    type="button"
-                    id="epic-form-description-accordion-trigger"
-                    aria-expanded={descriptionAccordionOpen}
-                    aria-controls="epic-form-description-accordion-panel"
-                    onClick={() => setDescriptionAccordionOpen((v) => !v)}
-                    className="-ml-1 flex w-full items-center gap-2 rounded-md py-1 text-left text-base font-normal text-slate-800 transition-colors hover:bg-slate-100/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300/60"
-                  >
-                    {descriptionAccordionOpen ? (
-                      <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
-                    ) : (
-                      <ChevronRight className="size-4 shrink-0 text-slate-500" aria-hidden />
-                    )}
-                    <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
+                <div className="mt-4 flex flex-1 flex-col gap-1">
+                  <h3 className="flex shrink-0 items-center gap-2 py-1 text-lg font-semibold text-slate-800">
+                    <FileText className="size-5 shrink-0 text-slate-500" aria-hidden />
                     Description
-                  </button>
-                  <div
-                    id="epic-form-description-accordion-panel"
-                    role="region"
-                    aria-labelledby="epic-form-description-accordion-trigger"
-                    hidden={!descriptionAccordionOpen}
-                    className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]"
-                  >
+                  </h3>
+                  <div className="flex flex-1 flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
                     <div className="flex flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Italic className="size-3.5" /></button>
@@ -1186,7 +1190,7 @@ export function EpicFormDialog({
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading3 className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><LinkIcon className="size-3.5" /></button>
                     </div>
-                    <div className="min-h-[14rem] rounded-md px-1 py-2">
+                    <div className="min-h-[10rem] flex-1 rounded-md px-1 py-2">
                       <EditorContent
                         editor={descriptionEditor}
                         className="focus:outline-none [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:outline-none"
@@ -1195,438 +1199,6 @@ export function EpicFormDialog({
                   </div>
                 </div>
 
-                <section className="mt-5 flex shrink-0 flex-col gap-3 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
-                  <div className="flex shrink-0 items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-base font-normal text-slate-800">
-                      <ListTree className="size-4 shrink-0 text-slate-500" aria-hidden />
-                      Child User Stories
-                    </h3>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">
-                      {epic?.userStories?.length ?? 0}
-                    </span>
-                  </div>
-
-                  {!epic ? (
-                    <p className="shrink-0 rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
-                      Save this epic first, then add and manage user stories here.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        {(epic.userStories ?? []).length === 0 ? (
-                          <p className="rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
-                            No user stories yet.
-                          </p>
-                        ) : (
-                          <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
-                            <table className="w-full table-fixed text-left text-sm">
-                              <colgroup>
-                                {childTableWidths.map((w, i) => (
-                                  <col key={i} style={{ width: w }} />
-                                ))}
-                              </colgroup>
-                              <thead className="bg-[#0897d5] text-white">
-                                <tr>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[0] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("id")}
-                                    >
-                                      ID
-                                      {childStorySortKey === "id" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(0, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[1] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("title")}
-                                    >
-                                      Story
-                                      {childStorySortKey === "title" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(1, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[2] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("sprint")}
-                                    >
-                                      Sprint
-                                      {childStorySortKey === "sprint" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(2, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[3] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("status")}
-                                    >
-                                      Status
-                                      {childStorySortKey === "status" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(3, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[4] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("assignee")}
-                                    >
-                                      Assignee
-                                      {childStorySortKey === "assignee" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(4, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[5] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("priority")}
-                                    >
-                                      Priority
-                                      {childStorySortKey === "priority" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(5, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[6] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("estimatedDays")}
-                                    >
-                                      Est. days
-                                      {childStorySortKey === "estimatedDays" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(6, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                  <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[7] }}>
-                                    <button
-                                      type="button"
-                                      className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                      onClick={() => toggleChildStorySort("daysLeft")}
-                                    >
-                                      Days left
-                                      {childStorySortKey === "daysLeft" ? (
-                                        childStorySortDir === "asc" ? (
-                                          <ChevronUp className="size-3.5 shrink-0" />
-                                        ) : (
-                                          <ChevronDown className="size-3.5 shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                      )}
-                                    </button>
-                                    <span
-                                      className={CHILD_TABLE_RESIZE_HANDLE}
-                                      onPointerDown={(e) => onChildTableColResize(7, e)}
-                                      aria-hidden
-                                    />
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr className="border-t border-[#7cd3f7]/95 bg-white">
-                                  <td className="px-2 py-1.5 text-slate-400">-</td>
-                                  <td className="px-2 py-1.5">
-                                    <div className="flex gap-1">
-                                      <input
-                                        value={newChildTitle}
-                                        onChange={(event) => setNewChildTitle(event.target.value)}
-                                        placeholder="Add child user story title"
-                                        autoComplete="off"
-                                        spellCheck={false}
-                                        className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800"
-                                      />
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                          if (!epic || !onRequestCreateStory || !newChildTitle.trim()) return;
-                                          onRequestCreateStory(epic.id);
-                                        }}
-                                      >
-                                        Add
-                                      </Button>
-                                    </div>
-                                  </td>
-                                  <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                                  <td className="px-2 py-1.5 text-slate-400">To Do</td>
-                                  <td className="px-2 py-1.5 text-slate-400">Unassigned</td>
-                                  <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                                  <td className="px-2 py-1.5 text-slate-400">-</td>
-                                  <td className="px-2 py-1.5 text-slate-400">-</td>
-                                </tr>
-                                {sortedEpicChildStories.map((story, rowIndex) => (
-                                  <tr
-                                    key={story.id}
-                                    className={cn(
-                                      "border-t border-[#7cd3f7]/95 align-middle text-slate-700 transition hover:bg-[#c5ebff]",
-                                      rowIndex % 2 === 0 ? "bg-white" : "bg-[#d8f2ff]",
-                                    )}
-                                  >
-                                    <td className="px-2 py-1.5 text-slate-600">
-                                      <button
-                                        type="button"
-                                        onClick={() => onOpenStory?.(story.id)}
-                                        className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline"
-                                        title={story.title}
-                                      >
-                                        {displayIds.byStoryId.get(story.id) ?? storyRefById?.[story.id] ?? story.id}
-                                      </button>
-                                    </td>
-                                    <td className="px-2 py-1.5 text-slate-800">
-                                      {childEditingCell?.rowId === story.id && childEditingCell.field === "title" ? (
-                                        <div className="relative z-20 flex items-center gap-1">
-                                          <input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(story.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {childStoryDrafts[story.id]?.title ?? story.title}
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-slate-600">
-                                      {childEditingCell?.rowId === story.id && childEditingCell.field === "sprint" ? (
-                                        <div className="relative z-20 flex items-center gap-1">
-                                          <input
-                                            ref={sprintInputRef}
-                                            value={childEditingValue}
-                                            onChange={(event) => {
-                                              setChildEditingValue(event.target.value);
-                                              setIsSprintAutocompleteOpen(true);
-                                              updateSprintAutocompletePosition();
-                                            }}
-                                            onFocus={() => {
-                                              setIsSprintAutocompleteOpen(true);
-                                              updateSprintAutocompletePosition();
-                                            }}
-                                            onBlur={() => {
-                                              window.setTimeout(() => setIsSprintAutocompleteOpen(false), 120);
-                                            }}
-                                            placeholder="Sprint 1-24"
-                                            className="w-[7.25rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                          />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setChildEditingCell(null);
-                                              setIsSprintAutocompleteOpen(false);
-                                              setSprintAutocompletePosition(null);
-                                            }}
-                                            className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
-                                          >
-                                            <X className="size-3.5" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(story.id, "sprint")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {(() => {
-                                            const sprint = parseSprintDraftValue(childStoryDrafts[story.id]?.sprint ?? "");
-                                            return sprint != null ? `Sprint ${sprint}` : "Not set";
-                                          })()}
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2">
-                                      {childEditingCell?.rowId === story.id && childEditingCell.field === "status" ? (
-                                        <div className="relative z-20 flex items-center gap-1">
-                                          <select
-                                            value={childEditingValue}
-                                            onChange={(event) => setChildEditingValue(event.target.value)}
-                                            className="w-[7rem] min-w-[7rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                          >
-                                            <option value="todo">To Do</option>
-                                            <option value="inProgress">In Progress</option>
-                                            <option value="done">Done</option>
-                                            <option value="approved">Approved</option>
-                                          </select>
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(story.id, "status")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          <span
-                                            className={cn(
-                                              "inline-flex items-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
-                                              statusTone[childStoryDrafts[story.id]?.status ?? story.status] ?? "bg-muted text-muted-foreground",
-                                            )}
-                                          >
-                                            {storyStatusLabel[childStoryDrafts[story.id]?.status ?? story.status] ?? (childStoryDrafts[story.id]?.status ?? story.status)}
-                                          </span>
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2 text-slate-600">
-                                      {childEditingCell?.rowId === story.id && childEditingCell.field === "assignee" ? (
-                                        <div className="relative z-20 flex min-w-0 flex-1 items-center gap-1">
-                                          <AssigneeCombobox
-                                            value={childEditingValue}
-                                            onChange={setChildEditingValue}
-                                            suggestions={assigneeNameSuggestions}
-                                            placeholder="Assignee"
-                                            className="min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                          />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(story.id, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {(childStoryDrafts[story.id]?.assignee ?? story.assignee)?.trim() || "Unassigned"}
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-slate-600">
-                                      {childEditingCell?.rowId === story.id && childEditingCell.field === "priority" ? (
-                                        <div className="relative z-20 flex items-center gap-1">
-                                          <select
-                                            value={childEditingValue}
-                                            onChange={(event) => setChildEditingValue(event.target.value)}
-                                            className="w-[6rem] min-w-[6rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                          >
-                                            <option value="">Not set</option>
-                                            <option value="P0">P0</option>
-                                            <option value="P1">P1</option>
-                                            <option value="P2">P2</option>
-                                            <option value="P3">P3</option>
-                                          </select>
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(story.id, "priority")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {childStoryDrafts[story.id]?.priority?.trim() || "Not set"}
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2 text-slate-700">
-                                      {childEditingCell?.rowId === story.id && childEditingCell.field === "estimatedDays" ? (
-                                        <div className="relative z-20 flex items-center gap-1">
-                                          <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(story.id, "estimatedDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {childStoryDrafts[story.id]?.estimatedDays || "-"}
-                                        </button>
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2 text-slate-700">
-                                      {childEditingCell?.rowId === story.id && childEditingCell.field === "daysLeft" ? (
-                                        <div className="relative z-20 flex items-center gap-1">
-                                          <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
-                                          <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                          <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
-                                        </div>
-                                      ) : (
-                                        <button type="button" onClick={() => beginChildCellEdit(story.id, "daysLeft")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                          {childStoryDrafts[story.id]?.daysLeft || "-"}
-                                        </button>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </section>
               </section>
 
               <div className="relative mx-1.5">
@@ -1637,14 +1209,14 @@ export function EpicFormDialog({
                   aria-label="Resize details panel"
                   role="separator"
                 >
-                  <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
+                  <div className="self-start h-[calc(80%+80px)] w-px bg-slate-300 transition group-hover:bg-slate-500" />
                   <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-[calc(50%+2px)]" />
                 </div>
               </div>
 
-              <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-                <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
-                  <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
+              <section className="relative z-20 h-full space-y-5 rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+                <h3 className="flex items-center gap-2 text-lg font-semibold leading-snug tracking-tight text-slate-800">
+                  <ClipboardList className="size-5 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -1915,6 +1487,34 @@ export function EpicFormDialog({
                         className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-[12px] outline-none placeholder:text-slate-400"
                         placeholder="Type to search labels..."
                       />
+                      {newLabel.trim().length > 0 ? (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Add label"
+                            title="Add label"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              addLabel(newLabel);
+                            }}
+                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            <Check className="size-3" strokeWidth={2.5} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Clear input"
+                            title="Clear"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              setNewLabel("");
+                            }}
+                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                          >
+                            <X className="size-3" strokeWidth={2.5} aria-hidden />
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                     {labelsAutocompleteOpen && filteredLabelSuggestions.length > 0 ? (
                       <ul
@@ -1947,53 +1547,462 @@ export function EpicFormDialog({
                 </label>
               </section>
             </div>
-            </div>
-
-          <div className="relative z-0 mt-0 shrink-0">
-            {activityOpen ? (
-              <div
-                className="group relative mb-3 flex h-3 cursor-row-resize items-center justify-center"
-                onPointerDown={beginActivityPanelResize}
-                title="Resize activity panel height"
-                aria-label="Resize activity panel height"
-                role="separator"
-              >
-                <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
-                <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
+            <section className="flex shrink-0 flex-col gap-3 rounded-xl bg-white px-3 pt-3 pb-5 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
+              <div className="flex shrink-0 items-center justify-between">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+                  <ListTree className="size-5 shrink-0 text-slate-500" aria-hidden />
+                  Child User Stories
+                </h3>
+                <span className="rounded-full bg-white px-2 py-0.5 text-sm text-slate-600 ring-1 ring-slate-200">
+                  {epic?.userStories?.length ?? 0}
+                </span>
               </div>
-            ) : null}
+
+              {!epic ? (
+                <p className="shrink-0 rounded-md bg-white p-2 text-sm text-slate-600 ring-1 ring-slate-200">
+                  Save this epic first, then add and manage user stories here.
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <div className="overflow-x-auto rounded-md bg-white ring-1 ring-slate-200">
+                        <table className="w-full table-fixed text-left text-sm">
+                          <colgroup>
+                            {childTableWidths.map((w, i) => (
+                              <col key={i} style={{ width: w }} />
+                            ))}
+                          </colgroup>
+                          <thead className="bg-[#0897d5] text-white">
+                            <tr>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[0] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("id")}
+                                >
+                                  ID
+                                  {childStorySortKey === "id" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(0, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[1] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("title")}
+                                >
+                                  Story
+                                  {childStorySortKey === "title" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(1, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[2] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("sprint")}
+                                >
+                                  Sprint
+                                  {childStorySortKey === "sprint" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(2, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[3] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("status")}
+                                >
+                                  Status
+                                  {childStorySortKey === "status" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(3, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[4] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("assignee")}
+                                >
+                                  Assignee
+                                  {childStorySortKey === "assignee" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(4, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[5] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("priority")}
+                                >
+                                  Priority
+                                  {childStorySortKey === "priority" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(5, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[6] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("estimatedDays")}
+                                >
+                                  Est. days
+                                  {childStorySortKey === "estimatedDays" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(6, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[7] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("daysLeft")}
+                                >
+                                  Days left
+                                  {childStorySortKey === "daysLeft" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(7, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-t border-[#7cd3f7]/95 bg-white">
+                              <td className="px-2 py-1.5 text-slate-400">-</td>
+                              <td className="px-2 py-1.5">
+                                <div className="flex gap-1">
+                                  <input
+                                    value={newChildTitle}
+                                    onChange={(event) => setNewChildTitle(event.target.value)}
+                                    placeholder="Add child user story title"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                    data-form-type="other"
+                                    className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      const title = newChildTitle.trim();
+                                      if (!epic || !title) return;
+                                      // Prefer inline-create when wired; fall back to legacy popup flow.
+                                      if (onCreateChildStoryQuick) {
+                                        await onCreateChildStoryQuick(epic.id, title);
+                                        setNewChildTitle("");
+                                      } else if (onRequestCreateStory) {
+                                        onRequestCreateStory(epic.id);
+                                      }
+                                    }}
+                                  >
+                                    Add
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="px-2 py-1.5 text-slate-400">Not set</td>
+                              <td className="px-2 py-1.5 text-slate-400">To Do</td>
+                              <td className="px-2 py-1.5 text-slate-400">Unassigned</td>
+                              <td className="px-2 py-1.5 text-slate-400">Not set</td>
+                              <td className="px-2 py-1.5 text-slate-400">-</td>
+                              <td className="px-2 py-1.5 text-slate-400">-</td>
+                            </tr>
+                            {sortedEpicChildStories.map((story, rowIndex) => (
+                              <tr
+                                key={story.id}
+                                className={cn(
+                                  "border-t border-[#7cd3f7]/95 align-middle text-slate-700 transition hover:bg-[#c5ebff]",
+                                  rowIndex % 2 === 0 ? "bg-white" : "bg-[#d8f2ff]",
+                                )}
+                              >
+                                <td className="px-2 py-1.5 text-slate-600">
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenStory?.(story.id)}
+                                    className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline"
+                                    title={story.title}
+                                  >
+                                    {displayIds.byStoryId.get(story.id) ?? storyRefById?.[story.id] ?? story.id}
+                                  </button>
+                                </td>
+                                <td className="px-2 py-1.5 text-slate-800">
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "title" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" />
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {childStoryDrafts[story.id]?.title ?? story.title}
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 text-slate-600">
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "sprint" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <input
+                                        ref={sprintInputRef}
+                                        value={childEditingValue}
+                                        onChange={(event) => {
+                                          setChildEditingValue(event.target.value);
+                                          setIsSprintAutocompleteOpen(true);
+                                          updateSprintAutocompletePosition();
+                                        }}
+                                        onFocus={() => {
+                                          setIsSprintAutocompleteOpen(true);
+                                          updateSprintAutocompletePosition();
+                                        }}
+                                        onBlur={() => {
+                                          window.setTimeout(() => setIsSprintAutocompleteOpen(false), 120);
+                                        }}
+                                        placeholder="Sprint 1-24"
+                                        className="w-[7.25rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                      />
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setChildEditingCell(null);
+                                          setIsSprintAutocompleteOpen(false);
+                                          setSprintAutocompletePosition(null);
+                                        }}
+                                        className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
+                                      >
+                                        <X className="size-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "sprint")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {(() => {
+                                        const sprint = parseSprintDraftValue(childStoryDrafts[story.id]?.sprint ?? "");
+                                        return sprint != null ? `Sprint ${sprint}` : "Not set";
+                                      })()}
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "status" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <select
+                                        value={childEditingValue}
+                                        onChange={(event) => setChildEditingValue(event.target.value)}
+                                        className="w-[7rem] min-w-[7rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                      >
+                                        <option value="todo">To Do</option>
+                                        <option value="inProgress">In Progress</option>
+                                        <option value="done">Done</option>
+                                        <option value="approved">Approved</option>
+                                      </select>
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "status")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      <span
+                                        className={cn(
+                                          "inline-flex items-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
+                                          statusTone[childStoryDrafts[story.id]?.status ?? story.status] ?? "bg-muted text-muted-foreground",
+                                        )}
+                                      >
+                                        {storyStatusLabel[childStoryDrafts[story.id]?.status ?? story.status] ?? (childStoryDrafts[story.id]?.status ?? story.status)}
+                                      </span>
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-slate-600">
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "assignee" ? (
+                                    <div className="relative z-20 flex min-w-0 flex-1 items-center gap-1">
+                                      <AssigneeCombobox
+                                        value={childEditingValue}
+                                        onChange={setChildEditingValue}
+                                        suggestions={assigneeNameSuggestions}
+                                        placeholder="Assignee"
+                                        className="min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                      />
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {(childStoryDrafts[story.id]?.assignee ?? story.assignee)?.trim() || "Unassigned"}
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 text-slate-600">
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "priority" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <select
+                                        value={childEditingValue}
+                                        onChange={(event) => setChildEditingValue(event.target.value)}
+                                        className="w-[6rem] min-w-[6rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                      >
+                                        <option value="">Not set</option>
+                                        <option value="P0">P0</option>
+                                        <option value="P1">P1</option>
+                                        <option value="P2">P2</option>
+                                        <option value="P3">P3</option>
+                                      </select>
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "priority")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {childStoryDrafts[story.id]?.priority?.trim() || "Not set"}
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "estimatedDays" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "estimatedDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {childStoryDrafts[story.id]?.estimatedDays || "-"}
+                                    </button>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "daysLeft" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[3.5rem] rounded-md border bg-white px-1.5 py-1 text-xs text-slate-700" />
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "daysLeft")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {childStoryDrafts[story.id]?.daysLeft || "-"}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                  </div>
+                </>
+              )}
+            </section>
+
             <section
               className={cn(
-                "mx-3 flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
-                activityOpen ? "space-y-3 p-3" : "p-3",
+                "mt-4 flex min-h-0 shrink-0 flex-col space-y-3 rounded-xl bg-white p-3 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
+                activityOpen ? "" : "h-auto",
               )}
-              style={
-                activityOpen
-                  ? { height: `${hasChildren ? Math.max(180, Math.min(440, activityPanelHeightPx - 40)) : activityPanelHeightPx}px` }
-                  : undefined
-              }
+              style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
             >
-              <div
-                role="button"
-                tabIndex={0}
-                className="group flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-slate-400"
-                onClick={() => {
-                  setActivityOpen((wasOpen) => {
-                    if (!wasOpen) {
-                      setActivityPanelHeightPx((h) => Math.min(560, h + 96));
-                    }
-                    return !wasOpen;
-                  });
-                }}
+              <button
+                type="button"
+                onClick={() => setActivityOpen((v) => !v)}
                 aria-expanded={activityOpen}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActivityOpen((wasOpen) => { if (!wasOpen) setActivityPanelHeightPx((h) => Math.min(560, h + 96)); return !wasOpen; }); } }}
+                className="group flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
               >
-                <span className="flex items-center gap-2 text-base font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
+                <span className="flex items-center gap-2 text-lg font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
-                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                    className={cn("size-5 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden
                   />
-                  <ActivityIcon className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  <ActivityIcon className="size-5 shrink-0 text-slate-500" aria-hidden />
                   Activity
                 </span>
                 {activityOpen ? (
@@ -2031,15 +2040,15 @@ export function EpicFormDialog({
                     </button>
                   </div>
                 ) : null}
-              </div>
+              </button>
 
               {activityOpen ? (
-                <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="flex min-h-0 flex-1 flex-col gap-2">
                   {!epic ? (
                     <p className="text-sm text-slate-500">Save this epic first to add comments and history.</p>
                   ) : activityTab === "comments" ? (
                     <>
-                      <div className="space-y-2">
+                      <div className="min-h-0 max-h-[40%] shrink space-y-2 overflow-y-auto">
                         {(epic.comments ?? []).length === 0 ? (
                           <p className="text-sm text-slate-500">No comments yet.</p>
                         ) : (
@@ -2063,7 +2072,7 @@ export function EpicFormDialog({
                       />
                     </>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
                       {(epic.history ?? []).length === 0 ? (
                         <p className="text-sm text-slate-500">No history yet.</p>
                       ) : (
@@ -2079,7 +2088,8 @@ export function EpicFormDialog({
                 </div>
               ) : null}
             </section>
-          </div>
+            </div>
+
           </div>
         </div>
       </div>

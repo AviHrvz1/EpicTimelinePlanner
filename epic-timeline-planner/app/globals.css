@@ -296,6 +296,16 @@
 
 @layer base {
   /**
+   * Hide the Keeper password-manager UI elements that the browser extension
+   * injects into input fields (it adds a small lock badge / floating chip).
+   * We're not a credential surface and this clutters our own iconography.
+   */
+  keeper-lock,
+  [data-keeper-lock-state] {
+    display: none !important;
+  }
+
+  /**
    * Global professional thin scrollbars (Firefox + WebKit).
    * Keeps UI lightweight while preserving clear hover/active affordances.
    */

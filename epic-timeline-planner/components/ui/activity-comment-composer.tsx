@@ -32,7 +32,7 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: "outline-none min-h-[5rem] px-2 py-1.5 text-[13px] text-slate-800",
+        class: "outline-none min-h-[10rem] flex-1 px-2 py-1.5 text-[13px] text-slate-800",
       },
     },
   });
@@ -45,8 +45,8 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
   }
 
   return (
-    <div className="mt-2 space-y-3">
-      <div className="flex flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+    <div className="mt-2 flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
       <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
         <button
           type="button"
@@ -158,7 +158,7 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           <LinkIcon className="size-3.5" />
         </button>
       </div>
-      <EditorContent editor={editor} className="focus-within:outline-none [&_.ProseMirror]:outline-none" />
+      <EditorContent editor={editor} className="flex min-h-0 flex-1 flex-col focus-within:outline-none [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none" />
       </div>
       <div className="flex justify-end">
         <Button size="sm" variant="outline" type="button" onClick={() => void handleSubmit()} disabled={disabled}>

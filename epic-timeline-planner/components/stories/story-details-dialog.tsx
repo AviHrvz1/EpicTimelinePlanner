@@ -212,7 +212,7 @@ export function StoryDetailsDialog({
   const [dialogWidthVw, setDialogWidthVw] = useState(60);
   const [activityOpen, setActivityOpen] = useState(true);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(264);
-  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(240);
+  const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(560);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
@@ -431,7 +431,7 @@ export function StoryDetailsDialog({
       setDialogWidthVw(60);
       setActivityOpen(true);
       setDetailsPanelWidthPx(340);
-      setActivityPanelHeightPx(280);
+      setActivityPanelHeightPx(560);
       setDialogOffset({ x: 0, y: 0 });
       setIsDraggingDialog(false);
       dragStartRef.current = null;
@@ -617,7 +617,7 @@ export function StoryDetailsDialog({
       const delta = moveEvent.clientY - startY;
       // Drag up => larger activity panel.
       const next = startHeight - delta;
-      setActivityPanelHeightPx(Math.max(180, Math.min(560, next)));
+      setActivityPanelHeightPx(Math.max(180, Math.min(720, next)));
     }
 
     function onPointerUp() {
@@ -795,20 +795,20 @@ export function StoryDetailsDialog({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold [&_svg]:text-slate-500"
+                  className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
                   onClick={onClose}
                 >
-                  <X className="size-3.5" />
+                  <X className="size-4" />
                   Cancel
                 </Button>
                 <Button
                   type="button"
                   size="sm"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 text-[12px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                  className="inline-flex h-9 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                   onClick={handleSave}
                   disabled={saving}
                 >
-                  <Check className="size-3.5" />
+                  <Check className="size-4" />
                   {saving ? "Saving..." : "Save"}
                 </Button>
               </>
@@ -818,20 +818,20 @@ export function StoryDetailsDialog({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md px-3.5 text-[12px] font-semibold [&_svg]:text-slate-500"
+                  className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
                   onClick={onClose}
                 >
-                  <X className="size-3.5" />
+                  <X className="size-4" />
                   Cancel
                 </Button>
                 <Button
                   type="button"
                   size="sm"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 text-[12px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                  className="inline-flex h-9 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                   onClick={handleSave}
                   disabled={saving}
                 >
-                  <Check className="size-3.5" />
+                  <Check className="size-4" />
                   {saving ? "Creating..." : "Create"}
                 </Button>
               </>
@@ -840,16 +840,16 @@ export function StoryDetailsDialog({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="min-h-0 max-h-[580px] flex-1 overflow-hidden">
             <div
               ref={splitLayoutRef}
-              className="grid h-full min-h-0 gap-0"
+              className="grid h-full min-h-0 items-stretch gap-0"
               style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
             >
-          <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border-0 bg-white p-4">
+          <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border-0 bg-white pt-3 pb-0 pl-[5px] pr-[10px]">
             <label className="block shrink-0 space-y-1">
-              <p className="flex shrink-0 items-center gap-2 text-base font-normal text-slate-800 transition-colors hover:text-indigo-600">
-                <Type className="size-4 shrink-0 text-slate-500" aria-hidden />
+              <p className="flex shrink-0 items-center gap-2 text-lg font-semibold text-slate-800 transition-colors hover:text-indigo-600">
+                <Type className="size-5 shrink-0 text-slate-500" aria-hidden />
                 Title
               </p>
               <div className="flex items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm focus-within:ring-2 focus-within:ring-slate-300/70">
@@ -861,8 +861,8 @@ export function StoryDetailsDialog({
               </div>
             </label>
             <label className="mt-5 flex min-h-0 flex-1 flex-col gap-1">
-              <p className="-ml-1 flex shrink-0 items-center gap-2 text-base font-normal text-slate-800">
-                <FileText className="size-4 shrink-0 text-slate-500" aria-hidden />
+              <p className="flex shrink-0 items-center gap-2 text-lg font-semibold text-slate-800">
+                <FileText className="size-5 shrink-0 text-slate-500" aria-hidden />
                 Description
               </p>
                 <div className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
@@ -980,7 +980,7 @@ export function StoryDetailsDialog({
                 <div className="min-h-0 flex-1 overflow-y-auto rounded-md px-1 py-2">
                   <EditorContent
                     editor={descriptionEditor}
-                    className="focus:outline-none [&_.ProseMirror]:min-h-[calc(16.5rem+16px)] [&_.ProseMirror]:outline-none"
+                    className="focus:outline-none [&_.ProseMirror]:min-h-[calc(17.5rem+16px)] [&_.ProseMirror]:outline-none"
                   />
                 </div>
                 </div>
@@ -994,14 +994,14 @@ export function StoryDetailsDialog({
               aria-label="Resize details panel"
               role="separator"
             >
-              <div className="h-full w-px bg-slate-300 transition group-hover:bg-slate-500" />
+              <div className="self-start h-[calc(80%+60px)] w-px bg-slate-300 transition group-hover:bg-slate-500" />
               <div className="absolute inset-y-0 left-1/2 w-3 -translate-x-[calc(50%+2px)]" />
             </div>
           </div>
 
-          <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl border border-slate-200/80 border-l-0 bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
-            <h3 className="flex items-center gap-2 border-b border-slate-200/90 pb-2 text-lg font-normal leading-snug tracking-tight text-slate-900">
-              <ClipboardList className="size-4 shrink-0 text-slate-500" aria-hidden />
+          <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+            <h3 className="flex items-center gap-2 text-lg font-semibold leading-snug tracking-tight text-slate-800">
+              <ClipboardList className="size-5 shrink-0 text-slate-500" aria-hidden />
               Details
             </h3>
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
@@ -1215,6 +1215,34 @@ export function StoryDetailsDialog({
                     className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-[12px] outline-none placeholder:text-slate-400"
                     placeholder="Type to search labels..."
                   />
+                  {newLabel.trim().length > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Add label"
+                        title="Add label"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          addLabel(newLabel);
+                        }}
+                        className="inline-flex size-4 shrink-0 items-center justify-center rounded text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                      >
+                        <Check className="size-3" strokeWidth={2.5} aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Clear input"
+                        title="Clear"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setNewLabel("");
+                        }}
+                        className="inline-flex size-4 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <X className="size-3" strokeWidth={2.5} aria-hidden />
+                      </button>
+                    </>
+                  ) : null}
                 </div>
                 {labelsAutocompleteOpen && filteredLabelSuggestions.length > 0 ? (
                   <ul
@@ -1249,22 +1277,10 @@ export function StoryDetailsDialog({
             </div>
             </div>
 
-        <div className="relative z-0 mt-3 shrink-0">
-          {activityOpen ? (
-            <div
-              className="group relative mb-3 flex h-3 cursor-row-resize items-center justify-center"
-              onPointerDown={beginActivityPanelResize}
-              title="Resize activity panel height"
-              aria-label="Resize activity panel height"
-              role="separator"
-            >
-              <div className="h-px w-full bg-slate-300 transition group-hover:bg-slate-500" />
-              <div className="absolute left-0 top-1/2 h-3 w-full -translate-y-1/2" />
-            </div>
-          ) : null}
+        <div className="relative z-0 -mt-2 shrink-0">
           <section
             className={cn(
-              "mx-3 flex min-h-0 flex-col rounded-xl bg-gradient-to-b from-white to-slate-50 ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
+              "ml-[5px] mr-0 mb-0 flex min-h-0 flex-col rounded-xl bg-white ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
               activityOpen ? "space-y-3 p-3" : "p-3",
             )}
             style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
@@ -1276,12 +1292,12 @@ export function StoryDetailsDialog({
                 onClick={() => setActivityOpen((open) => !open)}
                 aria-expanded={activityOpen}
               >
-                <span className="flex items-center gap-2 text-base font-normal text-slate-800 transition-colors group-hover:text-indigo-600">
+                <span className="flex items-center gap-2 text-lg font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
                   <ChevronDown
-                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                    className={cn("size-5 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
                     aria-hidden
                   />
-                  <ActivityIcon className="size-4 shrink-0 text-slate-500" aria-hidden />
+                  <ActivityIcon className="size-5 shrink-0 text-slate-500" aria-hidden />
                   Activity
                 </span>
               </button>
@@ -1326,12 +1342,12 @@ export function StoryDetailsDialog({
             </div>
 
             {activityOpen ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="flex min-h-0 flex-1 flex-col gap-2">
                 {isCreateMode ? (
                   <p className="text-sm text-slate-500">Create the story first to add comments and history.</p>
                 ) : activityTab === "comments" ? (
                   <>
-                    <div className="space-y-2">
+                    <div className="min-h-0 max-h-[40%] shrink space-y-2 overflow-y-auto">
                       {story.comments.length === 0 ? (
                         <p className="text-sm text-slate-500">No comments yet.</p>
                       ) : (
@@ -1355,7 +1371,7 @@ export function StoryDetailsDialog({
                     />
                   </>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
                     {story.history.length === 0 ? (
                       <p className="text-sm text-slate-500">No history yet.</p>
                     ) : (
