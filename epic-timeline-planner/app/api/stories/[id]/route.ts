@@ -76,6 +76,32 @@ export async function PATCH(
 
   const changes: string[] = [];
   const patch = parsed.data;
+
+  // Maintain three invariants on (estimatedDays, daysLeft, status) so the
+  // year-roadmap health/at-risk math can trust the fields without fallbacks:
+  //   (a) done/approved stories always have daysLeft = 0
+  //   (b) when estimatedDays is set on a story with no daysLeft, daysLeft is
+  //       initialized to match (i.e. "no progress made yet")
+  //   (c) when estimatedDays is lowered below daysLeft, clamp daysLeft down
+  //       so daysLeft <= estimatedDays always holds
+  const effectiveStatus = patch.status ?? existing.status;
+  const effectiveEstimatedDays =
+    patch.estimatedDays !== undefined ? patch.estimatedDays : existing.estimatedDays;
+  let effectiveDaysLeft =
+    patch.daysLeft !== undefined ? patch.daysLeft : existing.daysLeft;
+  if (effectiveStatus === "done" || effectiveStatus === "approved") {
+    effectiveDaysLeft = 0;
+  } else if (effectiveDaysLeft == null && effectiveEstimatedDays != null) {
+    effectiveDaysLeft = effectiveEstimatedDays;
+  } else if (
+    effectiveEstimatedDays != null &&
+    effectiveDaysLeft != null &&
+    effectiveDaysLeft > effectiveEstimatedDays
+  ) {
+    effectiveDaysLeft = effectiveEstimatedDays;
+  }
+  const persistDaysLeft = effectiveDaysLeft !== existing.daysLeft;
+  if (persistDaysLeft && patch.daysLeft === undefined) changes.push("Days left adjusted");
   if (patch.title !== undefined && patch.title !== existing.title) changes.push("Title updated");
   if (patch.icon !== undefined && patch.icon !== existing.icon) changes.push("Icon updated");
   if (patch.description !== undefined && patch.description !== existing.description)
@@ -124,7 +150,7 @@ export async function PATCH(
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.sprint !== undefined ? { sprint: patch.sprint } : {}),
       ...(patch.estimatedDays !== undefined ? { estimatedDays: patch.estimatedDays } : {}),
-      ...(patch.daysLeft !== undefined ? { daysLeft: patch.daysLeft } : {}),
+      ...(persistDaysLeft ? { daysLeft: effectiveDaysLeft } : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.backlogOrder !== undefined ? { backlogOrder: patch.backlogOrder } : {}),
       ...(patch.epicId !== undefined ? { epicId: patch.epicId } : {}),

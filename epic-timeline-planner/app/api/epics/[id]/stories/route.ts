@@ -55,6 +55,25 @@ export async function POST(
     return NextResponse.json({ message: "Epic not found" }, { status: 404 });
   }
 
+  // Same invariants as the PATCH route — see app/api/stories/[id]/route.ts
+  // for the full explanation. Done/approved stories have daysLeft=0; an
+  // unset daysLeft initializes to estimatedDays so health math has a value
+  // to read; daysLeft is clamped not to exceed estimatedDays.
+  const createStatus = parsed.data.status ?? StoryStatus.todo;
+  const createEstimatedDays = parsed.data.estimatedDays ?? null;
+  let createDaysLeft = parsed.data.daysLeft ?? null;
+  if (createStatus === "done" || createStatus === "approved") {
+    createDaysLeft = 0;
+  } else if (createDaysLeft == null && createEstimatedDays != null) {
+    createDaysLeft = createEstimatedDays;
+  } else if (
+    createEstimatedDays != null &&
+    createDaysLeft != null &&
+    createDaysLeft > createEstimatedDays
+  ) {
+    createDaysLeft = createEstimatedDays;
+  }
+
   const story = await db.userStory.create({
     data: {
       title: parsed.data.title,
@@ -64,9 +83,9 @@ export async function POST(
       labels: parsed.data.labels ?? null,
       priority: parsed.data.priority ?? null,
       sprint: parsed.data.sprint ?? null,
-      estimatedDays: parsed.data.estimatedDays ?? null,
-      daysLeft: parsed.data.daysLeft ?? null,
-      status: parsed.data.status ?? StoryStatus.todo,
+      estimatedDays: createEstimatedDays,
+      daysLeft: createDaysLeft,
+      status: createStatus,
       epicId: id,
       roadmapId: epic.roadmapId,
       planYear: epic.initiative.year,

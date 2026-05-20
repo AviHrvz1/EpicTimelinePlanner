@@ -9,8 +9,10 @@ import {
   type GanttTimelineBarDragData,
   epicTimelineDraggableId,
 } from "@/lib/epic-dnd-ids";
+import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { HealthBadge } from "@/components/timeline/health-badge";
 
 function isLightColor(hex: string): boolean {
   const h = hex.replace("#", "");
@@ -120,6 +122,10 @@ type InitiativeTimelineBarProps = {
   /** When set, a chart icon appears at the start of the progress row;
    * clicking it opens the insights view in a new tab (initiative scope). */
   onInsightsClick?: () => void;
+  /** Work-based health verdict — renders a colored badge inside the bar when `showProgress`. */
+  healthStatus?: HealthStatus | null;
+  /** Tooltip shown on hover of the health badge; falls back to the status label. */
+  healthTooltip?: string;
 };
 
 export function InitiativeTimelineBar({
@@ -136,6 +142,8 @@ export function InitiativeTimelineBar({
   progressRowPrefix,
   onDelete,
   onInsightsClick,
+  healthStatus = null,
+  healthTooltip,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -209,31 +217,24 @@ export function InitiativeTimelineBar({
           <InitiativePlanBarIcon icon={null} className={cn("mr-0 text-[12px] [&_svg]:size-3.5", lightBg ? "[&_svg]:text-slate-700" : "[&_svg]:text-blue-200/95")} />
           <span className="min-w-0 flex-1 truncate">{title}</span>
           {showProgress ? (
-            onInsightsClick ? (
-              <button
-                type="button"
-                aria-label="Open initiative insights"
-                title={progressLabel ?? "Initiative insights"}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onInsightsClick();
-                }}
-                className="relative z-40 shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none] transition-transform duration-150 hover:scale-110 hover:bg-white/50"
-              >
-                {safeProgress}%
-              </button>
-            ) : (
-              <span
-                className="shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none]"
-                title={progressLabel}
-              >
-                {safeProgress}%
-              </span>
-            )
+            <span
+              className="shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none]"
+              title={progressLabel}
+            >
+              {safeProgress}%
+            </span>
           ) : null}
         </span>
       </div>
+      {showProgress && healthStatus ? (
+        <div className="-mb-1.5 mt-0.5 flex justify-end pr-1">
+          <HealthBadge
+            status={healthStatus}
+            tooltip={healthTooltip}
+            onClick={onInsightsClick}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -260,6 +261,10 @@ type EpicPlanTimelineBarProps = {
   /** When set, a chart icon appears at the start of the progress row;
    * clicking it opens the insights view in a new tab (epic scope). */
   onInsightsClick?: () => void;
+  /** Work-based health verdict — renders a colored badge inside the bar when `showProgress`. */
+  healthStatus?: HealthStatus | null;
+  /** Tooltip shown on hover of the health badge; falls back to the status label. */
+  healthTooltip?: string;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -281,6 +286,8 @@ export function EpicPlanTimelineBar({
   progressRowPrefix,
   teamAssignmentChip = null,
   onInsightsClick,
+  healthStatus = null,
+  healthTooltip,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -377,40 +384,33 @@ export function EpicPlanTimelineBar({
           ) : null}
           <span className="min-w-0 flex-1 truncate">{title}</span>
           {showProgress ? (
-            onInsightsClick ? (
-              <button
-                type="button"
-                aria-label="Open epic insights"
-                title={progressLabel ?? "Epic insights"}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onInsightsClick();
-                }}
-                className="relative z-40 shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none] transition-transform duration-150 hover:scale-110 hover:bg-white/50"
-              >
-                {safeProgress}%
-              </button>
-            ) : (
-              <span
-                className="shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none]"
-                title={progressLabel}
-              >
-                {safeProgress}%
-              </span>
-            )
+            <span
+              className="shrink-0 rounded-sm bg-white/30 px-1 py-px text-[10px] font-bold tabular-nums leading-none text-black [text-shadow:none]"
+              title={progressLabel}
+            >
+              {safeProgress}%
+            </span>
           ) : null}
         </span>
       </div>
-      {teamAssignmentChip ? (
-        <div className="-mb-1.5 mt-0.5 flex justify-end pr-1">
-          <span
-            className={cn("inline-flex items-center gap-1", teamAssignmentChip.className)}
-            title={teamAssignmentChip.label}
-          >
-            <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
-            {teamAssignmentChip.label}
-          </span>
+      {(showProgress && healthStatus) || teamAssignmentChip ? (
+        <div className="-mb-1.5 mt-0.5 flex items-center justify-between gap-2 px-1">
+          {showProgress && healthStatus ? (
+            <HealthBadge
+              status={healthStatus}
+              tooltip={healthTooltip}
+              onClick={onInsightsClick}
+            />
+          ) : <span />}
+          {teamAssignmentChip ? (
+            <span
+              className={cn("inline-flex items-center gap-1", teamAssignmentChip.className)}
+              title={teamAssignmentChip.label}
+            >
+              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
+              {teamAssignmentChip.label}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>
