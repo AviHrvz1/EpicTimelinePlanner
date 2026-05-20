@@ -297,7 +297,7 @@ export function LoginForm({
         </p>
       )}
 
-      <p className="pt-2 text-center text-[13px] text-slate-500">
+      <p className="pt-2 text-center text-[15px] text-slate-600">
         Don&apos;t have an account?{" "}
         {onSwitchToSignup ? (
           <button

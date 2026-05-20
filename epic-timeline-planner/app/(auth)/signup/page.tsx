@@ -25,8 +25,8 @@ export default function SignupPage() {
         Back to sign in
       </Link>
       <div className="space-y-2 text-center">
-        <h1 className="text-[34px] font-extrabold leading-tight tracking-tight text-slate-900">
-          Welcome to Bird Eye Viewer
+        <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
+          Create your account
         </h1>
         <p className="text-[14px] leading-relaxed text-slate-500">
           Get started — it&apos;s free.

@@ -20,15 +20,15 @@ export default function LoginPage() {
   return (
     <div className="space-y-7">
       <div className="space-y-2 text-center">
-        <h1 className="text-[34px] font-extrabold leading-tight tracking-tight text-slate-900">
-          Welcome to Bird Eye Viewer
+        <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
+          Welcome back
         </h1>
         <p className="text-[14px] leading-relaxed text-slate-500">
           Sign in to keep planning.
         </p>
       </div>
       <LoginForm enabledProviders={VISIBLE_OAUTH_PROVIDERS} />
-      <p className="pt-4 text-center text-[13.5px] leading-relaxed text-slate-500">
+      <p className="pt-1 text-center text-[13.5px] leading-relaxed text-slate-500">
         By proceeding, you agree to the{" "}
         <Link href="/legal/terms" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
           Terms of Service
