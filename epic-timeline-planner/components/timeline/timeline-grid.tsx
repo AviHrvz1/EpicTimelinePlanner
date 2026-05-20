@@ -4293,7 +4293,7 @@ export function TimelineGrid({
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
-                  "relative z-10 min-h-0 flex-1 space-y-1.5 overflow-y-auto",
+                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-auto",
                   !yearRoadmapHScroll && "overflow-x-hidden",
                 )}
               >
@@ -4303,7 +4303,7 @@ export function TimelineGrid({
                 <div
                   key={`year-init-row-${group.timelineRow}`}
                   className={cn(
-                    "relative min-w-0 z-10 py-2.5",
+                    "relative min-w-0 z-10 py-1.5",
                     idx < ganttSearchAppliedYearInitiativeRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
@@ -4362,7 +4362,7 @@ export function TimelineGrid({
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
-                  "relative z-10 min-h-0 flex-1 space-y-0 overflow-y-auto",
+                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-auto",
                   !yearRoadmapHScroll && "overflow-x-hidden",
                 )}
               >
@@ -4372,7 +4372,7 @@ export function TimelineGrid({
                 <div
                   key={`year-epic-row-${group.timelineRow}`}
                   className={cn(
-                    "relative min-w-0 z-10 py-px",
+                    "relative min-w-0 z-10 py-1.5",
                     idx < ganttSearchAppliedYearEpicRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
