@@ -1097,6 +1097,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const [isLeftPanelHidden, setIsLeftPanelHidden] = useState(false);
   /** Synced with TimelineGrid “Progress” chip — Gantt bar rows + left-panel story progress. */
   const [showRoadmapProgress, setShowRoadmapProgress] = useState(false);
+  /** Shared with TimelineGrid + InitiativeListPanel — chooses whether progress
+   * is presented as story-count completion or estimated-days burn-down.
+   * Lives here so the middle panel + the Gantt show consistent numbers. */
+  const [progressBasis, setProgressBasis] = useState<"days" | "stories">("days");
   const layoutRef = useRef<HTMLDivElement | null>(null);
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
   const leftInitiativePanelAutoCollapsedForInsightsRef = useRef(false);
@@ -4769,6 +4773,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     <InitiativeListPanel
                       initiatives={initiatives}
                       activeMonth={initiativeListActiveMonth}
+                      progressBasis={progressBasis}
                       storyProgressDetailsVisible={showRoadmapProgress}
                       useEpicPlanLeftPanel={initiativeListActiveMonth != null}
                       activeYearSprint={activeYearSprint}
@@ -4933,6 +4938,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 currentYear={selectedYear}
                 showRoadmapProgress={showRoadmapProgress}
                 onShowRoadmapProgressChange={setShowRoadmapProgress}
+                progressBasis={progressBasis}
+                onProgressBasisChange={setProgressBasis}
                 initialInsightsScopeEpicId={insightsScopeEpicId}
                 initialInsightsScopeInitId={insightsScopeInitId}
                 onInsightsScopeChange={(epicId, initId) => {

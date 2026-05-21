@@ -592,16 +592,57 @@ const leftPanelProgressRowClass = "flex min-w-0 flex-nowrap items-center gap-x-2
 const leftPanelProgressSummaryClass =
   "shrink-0 whitespace-nowrap text-[13px] font-medium tabular-nums tracking-tight text-slate-600";
 
-function epicCompletionMeta(epic: EpicItem): {
+function epicCompletionMeta(
+  epic: EpicItem,
+  basis: "days" | "stories" = "stories",
+): {
   total: number;
   finished: number;
   percent: number;
+  progressSummary: string;
+  progressAria: string;
 } {
   const stories = epic.userStories ?? [];
   const total = stories.length;
   const finished = stories.filter((story) => story.status === "done" || story.status === "approved").length;
-  const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
-  return { total, finished, percent };
+  if (basis === "stories") {
+    const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
+    return {
+      total,
+      finished,
+      percent,
+      progressSummary: `${finished}/${total} stories done · ${percent}%`,
+      progressAria:
+        total > 0
+          ? `${finished} of ${total} stories done or approved`
+          : "No user stories",
+    };
+  }
+  // days basis — effort burndown across estimated stories
+  let totalEffort = 0;
+  let remainingEffort = 0;
+  for (const story of stories) {
+    if (story.estimatedDays == null) continue;
+    totalEffort += story.estimatedDays;
+    if (story.status !== "done" && story.status !== "approved") {
+      remainingEffort += story.daysLeft ?? story.estimatedDays;
+    }
+  }
+  const completedEffort = totalEffort - remainingEffort;
+  const percent = totalEffort > 0 ? Math.round((completedEffort / totalEffort) * 100) : 0;
+  return {
+    total,
+    finished,
+    percent,
+    progressSummary:
+      totalEffort > 0
+        ? `${completedEffort}d / ${totalEffort}d burned · ${percent}%`
+        : "No estimated work",
+    progressAria:
+      totalEffort > 0
+        ? `${completedEffort} of ${totalEffort} estimated days burned down`
+        : "No estimated work",
+  };
 }
 
 function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: string } {
@@ -702,6 +743,9 @@ type InitiativeListPanelProps = {
    * Parent keeps this in sync with the timeline grid.
    */
   storyProgressDetailsVisible: boolean;
+  /** Whether progress is presented as story-count completion or estimated-days
+   *  burn-down. Lifted to the parent so middle panel + Gantt agree. */
+  progressBasis?: "days" | "stories";
   /**
    * When true, show the month epic backlog layout (Epics header, + Epic). When false, show the initiatives
    * tree. The parent sets this from timeline month scope: any drilled-in month (Gantt, sprint, capacity,
@@ -847,6 +891,7 @@ function InitiativeTreeEpicRow({
   onOpenStory,
   onCreateStoryQuick,
   storyProgressDetailsVisible,
+  progressBasis,
   showDragHint = false,
   isCapacityMode = false,
   searchQuery,
@@ -863,6 +908,7 @@ function InitiativeTreeEpicRow({
   onOpenStory: (storyId: string) => void;
   onCreateStoryQuick?: (epicId: string, title: string) => Promise<void>;
   storyProgressDetailsVisible: boolean;
+  progressBasis: "days" | "stories";
   showDragHint?: boolean;
   /** Lowercased active search query. Epic title gets a yellow highlight
    *  when it contains this string; matched story titles ride the same
@@ -886,7 +932,7 @@ function InitiativeTreeEpicRow({
     data: epicDragData,
   });
   const stories = [...(epic.userStories ?? [])].sort((a, b) => a.title.localeCompare(b.title));
-  const completion = epicCompletionMeta(epic);
+  const completion = epicCompletionMeta(epic, progressBasis);
   const epicPlanStatus = epicPlanningStatusMeta(epic);
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
   const [storyTitle, setStoryTitle] = useState("");
@@ -1005,7 +1051,7 @@ function InitiativeTreeEpicRow({
                   aria-valuenow={completion.percent}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  aria-label={`${completion.finished} of ${completion.total} stories done`}
+                  aria-label={completion.progressAria}
                 >
                   <div
                     className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
@@ -1013,7 +1059,7 @@ function InitiativeTreeEpicRow({
                   />
                 </div>
                 <span className={leftPanelProgressSummaryClass}>
-                  {completion.finished}/{completion.total} stories done · {completion.percent}%
+                  {completion.progressSummary}
                 </span>
               </div>
             ) : null}
@@ -1137,6 +1183,7 @@ function InitiativeTreeCard({
   epicPlanDragEnabled,
   isCapacityPlanningMode = false,
   storyProgressDetailsVisible,
+  progressBasis,
   forceOpenEpicIds,
   searchQuery,
 }: {
@@ -1157,6 +1204,7 @@ function InitiativeTreeCard({
   epicPlanDragEnabled: boolean;
   isCapacityPlanningMode?: boolean;
   storyProgressDetailsVisible: boolean;
+  progressBasis: "days" | "stories";
   /** Search-driven force-open set — when an epic id is in this set the epic
    *  accordion opens regardless of the user's local toggle state. Used by
    *  the parent panel to expand epics that contain a matching story. */
@@ -1185,8 +1233,48 @@ function InitiativeTreeCard({
   const initiativeStoryDone = initiativeStories.filter(
     (s) => s.status === "done" || s.status === "approved",
   ).length;
-  const initiativeProgressPct =
-    initiativeStoryTotal > 0 ? Math.round((initiativeStoryDone / initiativeStoryTotal) * 100) : 0;
+  // Basis-aware progress: stories mode counts done tickets, days mode burns
+  // down estimated effort. The summary text reflects whichever is active.
+  const initiativeProgress = (() => {
+    if (progressBasis === "stories") {
+      const percent =
+        initiativeStoryTotal > 0
+          ? Math.round((initiativeStoryDone / initiativeStoryTotal) * 100)
+          : 0;
+      return {
+        percent,
+        summary: `${initiativeStoryDone}/${initiativeStoryTotal} stories done · ${percent}%`,
+        aria:
+          initiativeStoryTotal > 0
+            ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories done or approved`
+            : "No user stories",
+      };
+    }
+    let totalEffort = 0;
+    let remainingEffort = 0;
+    for (const story of initiativeStories) {
+      if (story.estimatedDays == null) continue;
+      totalEffort += story.estimatedDays;
+      if (story.status !== "done" && story.status !== "approved") {
+        remainingEffort += story.daysLeft ?? story.estimatedDays;
+      }
+    }
+    const completedEffort = totalEffort - remainingEffort;
+    const percent =
+      totalEffort > 0 ? Math.round((completedEffort / totalEffort) * 100) : 0;
+    return {
+      percent,
+      summary:
+        totalEffort > 0
+          ? `${completedEffort}d / ${totalEffort}d burned · ${percent}%`
+          : "No estimated work",
+      aria:
+        totalEffort > 0
+          ? `${completedEffort} of ${totalEffort} estimated days burned down`
+          : "No estimated work",
+    };
+  })();
+  const initiativeProgressPct = initiativeProgress.percent;
   const initiativeExecutionStatus = initiativeExecutionStatusMeta(initiative);
   const [epicTitle, setEpicTitle] = useState("");
   const [isAddingEpic, setIsAddingEpic] = useState(false);
@@ -1322,11 +1410,7 @@ function InitiativeTreeCard({
                         aria-valuenow={initiativeProgressPct}
                         aria-valuemin={0}
                         aria-valuemax={100}
-                        aria-label={
-                          initiativeStoryTotal > 0
-                            ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories done or approved`
-                            : "No user stories"
-                        }
+                        aria-label={initiativeProgress.aria}
                       >
                         <div
                           className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
@@ -1334,7 +1418,7 @@ function InitiativeTreeCard({
                         />
                       </div>
                       <span className={leftPanelProgressSummaryClass}>
-                        {initiativeStoryDone}/{initiativeStoryTotal} stories done · {initiativeProgressPct}%
+                        {initiativeProgress.summary}
                       </span>
                     </div>
                   ) : null}
@@ -1386,6 +1470,7 @@ function InitiativeTreeCard({
                             onOpenStory={onOpenStory}
                             onCreateStoryQuick={onCreateStoryQuick}
                             storyProgressDetailsVisible={storyProgressDetailsVisible}
+                            progressBasis={progressBasis}
                           />
                         </div>
                       );
@@ -1460,6 +1545,7 @@ function SprintEpicCard({
   backlogDropSlot,
   planContextMonth,
   storyProgressDetailsVisible,
+  progressBasis,
   isOpenControlled,
   onToggleControlled,
   showDragHint = false,
@@ -1479,6 +1565,7 @@ function SprintEpicCard({
   planContextMonth: number | null;
   hideScheduledIcon?: boolean;
   storyProgressDetailsVisible: boolean;
+  progressBasis: "days" | "stories";
   isOpenControlled?: boolean;
   onToggleControlled?: () => void;
   showDragHint?: boolean;
@@ -1521,7 +1608,7 @@ function SprintEpicCard({
   });
   const epicPlanStatus = epicPlanningStatusMeta(epic);
   const epicExecutionStatus = epicExecutionStatusMeta(epic);
-  const completion = epicCompletionMeta(epic);
+  const completion = epicCompletionMeta(epic, progressBasis);
   const isOpen = isOpenControlled ?? isOpenLocal;
   function handleToggle() {
     if (onToggleControlled) {
@@ -1668,11 +1755,7 @@ function SprintEpicCard({
                       aria-valuenow={completion.percent}
                       aria-valuemin={0}
                       aria-valuemax={100}
-                      aria-label={
-                        completion.total > 0
-                          ? `${completion.finished} of ${completion.total} stories done or approved`
-                          : "No user stories"
-                      }
+                      aria-label={completion.progressAria}
                     >
                       <div
                         className="h-full rounded-[3px] bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
@@ -1680,7 +1763,7 @@ function SprintEpicCard({
                       />
                     </div>
                     <span className={leftPanelProgressSummaryClass}>
-                      {completion.finished}/{completion.total} stories done · {completion.percent}%
+                      {completion.progressSummary}
                     </span>
                   </div>
                 ) : null}
@@ -1832,6 +1915,7 @@ export function InitiativeListPanel({
   initiatives,
   activeMonth,
   storyProgressDetailsVisible,
+  progressBasis = "days",
   useEpicPlanLeftPanel,
   activeYearSprint,
   storyDragEnabled,
@@ -2792,6 +2876,7 @@ export function InitiativeListPanel({
                     planContextMonth={planAnchorMonth}
                     hideScheduledIcon={epicPlanPanelMode || isSprintModeActive}
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
+                            progressBasis={progressBasis}
                     showDragHint={newestEpicId === epic.id}
                     isCapacityMode={isCapacityPlanningMode}
                     isOpenControlled={monthEpicOpenIds[epic.id] ?? false}
@@ -3033,6 +3118,7 @@ export function InitiativeListPanel({
                     epicPlanDragEnabled={epicPlanDragEnabled}
                     isCapacityPlanningMode={isCapacityPlanningMode}
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
+                            progressBasis={progressBasis}
                     onToggle={() => {
                       const next = !(openInitiativeIds[initiative.id] ?? false);
                       setOpenInitiativeIds((prev) => ({ ...prev, [initiative.id]: next }));

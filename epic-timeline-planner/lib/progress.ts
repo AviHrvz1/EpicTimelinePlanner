@@ -16,6 +16,10 @@
  */
 export type HealthStatus = "onTrack" | "watch" | "atRisk" | "overdue";
 
+/** Which formula drives the rendered progress %. The at-risk verdict is
+ * always days-based because that's the only meaningful capacity check. */
+export type ProgressBasis = "days" | "stories";
+
 export interface ProgressStoryInput {
   estimatedDays: number | null;
   daysLeft: number | null;
@@ -30,6 +34,8 @@ export interface ProgressInputs {
   end: Date;
   /** Override "today" — defaults to new Date(). */
   now?: Date;
+  /** Which formula to use for `progressPercent`. Default = "days". */
+  basis?: ProgressBasis;
 }
 
 export interface ProgressResult {
@@ -74,11 +80,16 @@ export function workingDaysBetween(from: Date, to: Date): number {
 
 export function computeProgress(input: ProgressInputs): ProgressResult {
   const now = input.now ?? new Date();
+  const basis: ProgressBasis = input.basis ?? "days";
 
   let totalEffort = 0;
   let remainingEffort = 0;
   let unestimatedCount = 0;
+  let doneStoryCount = 0;
+  let totalStoryCount = 0;
   for (const story of input.stories) {
+    totalStoryCount += 1;
+    if (DONE_STATUSES.has(story.status)) doneStoryCount += 1;
     if (story.estimatedDays == null) {
       unestimatedCount += 1;
       continue;
@@ -88,17 +99,22 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
     // never null for estimated stories thanks to the auto-init rule. Defensive
     // fallback only matters if the invariant is somehow violated by a manual
     // DB edit — fall back to estimatedDays in that case (assume no progress).
-    if (DONE_STATUSES.has(story.status)) {
-      // remainingEffort += 0
-    } else {
+    if (!DONE_STATUSES.has(story.status)) {
       remainingEffort += story.daysLeft ?? story.estimatedDays;
     }
   }
 
-  const progressPercent =
+  // Days basis uses effort burn-down; stories basis uses headcount of done.
+  // Both clamp to 0..100. Stories basis treats unestimated stories the same
+  // as estimated ones (it doesn't care about days at all).
+  const daysProgressPercent =
     totalEffort > 0
       ? Math.round(((totalEffort - remainingEffort) / totalEffort) * 100)
       : 0;
+  const storiesProgressPercent =
+    totalStoryCount > 0 ? Math.round((doneStoryCount / totalStoryCount) * 100) : 0;
+  const progressPercent =
+    basis === "stories" ? storiesProgressPercent : daysProgressPercent;
 
   const daysRemaining = workingDaysBetween(now, input.end);
   const deltaDays = remainingEffort - daysRemaining;
@@ -142,6 +158,7 @@ export interface InitiativeRollupInputs {
   start: Date;
   end: Date;
   now?: Date;
+  basis?: ProgressBasis;
 }
 
 const STATUS_RANK: Record<HealthStatus, number> = {
@@ -159,6 +176,7 @@ export function computeInitiativeProgress(input: InitiativeRollupInputs): Progre
     start: input.start,
     end: input.end,
     now: input.now,
+    basis: input.basis,
   });
 
   // Then override the status to be the worst of (own status, child statuses)
