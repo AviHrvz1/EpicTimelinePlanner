@@ -300,13 +300,13 @@ export function RoadmapHealthPopover({
                 >
                   <span
                     className={cn(
-                      "inline-flex size-5 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
+                      "inline-flex size-4 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
                       meta.dotBg,
                     )}
                   >
-                    <Icon className={cn("size-2.5 stroke-[2.5]", meta.dotFg)} aria-hidden />
+                    <Icon className={cn("size-2 stroke-[2.5]", meta.dotFg)} aria-hidden />
                   </span>
-                  <span className="text-[12.5px] font-semibold text-slate-800">{meta.label}</span>
+                  <span className="text-[11.5px] font-semibold text-slate-800">{meta.label}</span>
                   <span
                     className={cn(
                       "ml-auto text-[14px] font-extrabold tabular-nums leading-none",
@@ -347,7 +347,7 @@ export function RoadmapHealthPopover({
         </div>
 
         {/* Footer — meta + View Insights CTA */}
-        <div className="mt-3 flex items-center justify-between gap-4">
+        <div className="mt-5 flex items-center justify-between gap-4">
           <div className="text-[12px] text-slate-500">
             <span className="font-semibold text-slate-700">{totalBars}</span>{" "}
             {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
@@ -399,7 +399,7 @@ function ToggleGroup({
 }) {
   return (
     <div>
-      <div className="mb-1 text-[11.5px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</div>
+      <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</div>
       <div className="inline-flex w-full rounded-lg border border-slate-200 bg-slate-50 p-0.5">
         {options.map((opt) => {
           const isOn = opt.value === value;
