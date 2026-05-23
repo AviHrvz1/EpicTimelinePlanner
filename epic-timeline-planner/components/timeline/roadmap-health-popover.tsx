@@ -291,9 +291,9 @@ export function RoadmapHealthPopover({
                   onClick={() => toggle(status)}
                   aria-pressed={isActive}
                   className={cn(
-                    "group relative inline-flex items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border px-2 py-1.5 text-left transition-all",
+                    "group relative inline-flex items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border px-2 py-1.5 text-left transition-colors",
                     isActive
-                      ? `${meta.activeBg} ${meta.activeBorder} shadow-sm`
+                      ? `${meta.activeBg} ${meta.activeBorder}`
                       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
                     isZero && !isActive && "opacity-75",
                   )}
@@ -315,15 +315,9 @@ export function RoadmapHealthPopover({
                   >
                     {count}
                   </span>
-                  {isActive ? (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "pointer-events-none absolute inset-x-0 bottom-0 h-[2px]",
-                        meta.dotBg,
-                      )}
-                    />
-                  ) : null}
+                  {/* Active state is conveyed by the soft tint + matching
+                      border alone — no bottom underline so the row doesn't
+                      feel over-emphasized. */}
                 </button>
               );
             })}
@@ -371,7 +365,7 @@ export function RoadmapHealthPopover({
                 onOpenInsights();
                 onClose();
               }}
-              className="group inline-flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-[11.5px] font-semibold text-white transition-colors hover:bg-indigo-700"
+              className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-indigo-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-indigo-700 transition-colors hover:bg-indigo-50"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -486,8 +480,8 @@ const STATUS_META: Record<
     icon: AlertOctagon,
     dotBg: "bg-rose-700",
     dotFg: "text-white",
-    activeBg: "bg-rose-100",
-    activeBorder: "border-rose-400",
+    activeBg: "bg-rose-50",
+    activeBorder: "border-rose-300",
     fillBg: "bg-gradient-to-r from-rose-300/80 to-transparent",
     countFg: "text-rose-800",
   },
