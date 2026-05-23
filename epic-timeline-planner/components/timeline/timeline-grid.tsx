@@ -4678,6 +4678,42 @@ export function TimelineGrid({
         />
       ) : null}
       <button
+        type="button"
+        onClick={() => { setRoadmapBarMode("initiatives"); onSummaryStatusQuickFilterChange?.(null); }}
+        className={cn(summaryChipBaseClass, roadmapBarMode === "initiatives" ? summaryChipInitiativesOnClass : summaryChipInitiativesIdleClass)}
+      >
+        <Zap className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
+        <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
+        <span className="hidden xl:inline">Initiatives</span>
+        <span className="xl:hidden">Inits</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => { setRoadmapBarMode("epics"); onSummaryStatusQuickFilterChange?.(null); }}
+        className={cn(summaryChipBaseClass, roadmapBarMode === "epics" && summaryStatusQuickFilter == null ? summaryChipEpicsOnClass : summaryChipEpicsIdleClass)}
+      >
+        <Folder className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
+        {("totalEpics" in summaryBadgesForScope ? summaryBadgesForScope.totalEpics : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}Epics
+      </button>
+      <div className={summaryChipStoriesStaticClass}>
+        {/* Stroke-based FileText icon — strokeWidth 1.25 + opacity-70 keeps
+            it noticeably lighter than the neighbouring chip icons. */}
+        <FileText className="size-3 shrink-0 sm:size-3.5 opacity-70" strokeWidth={1.25} aria-hidden />
+        <span className="truncate">{summaryBadgesForScope.totalStories}</span>
+        <span>Stories</span>
+      </div>
+      {showGanttTeamPicker ? (
+        <button
+          type="button"
+          aria-pressed={showGanttTeamChips}
+          onClick={() => setShowGanttTeamChips((prev) => !prev)}
+          className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+        >
+          <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+          Teams
+        </button>
+      ) : null}
+      <button
         ref={progressBtnRef}
         type="button"
         aria-pressed={showRoadmapProgress}
@@ -4719,31 +4755,6 @@ export function TimelineGrid({
           }
         }}
       />
-      <button
-        type="button"
-        onClick={() => { setRoadmapBarMode("initiatives"); onSummaryStatusQuickFilterChange?.(null); }}
-        className={cn(summaryChipBaseClass, roadmapBarMode === "initiatives" ? summaryChipInitiativesOnClass : summaryChipInitiativesIdleClass)}
-      >
-        <Zap className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
-        <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
-        <span className="hidden xl:inline">Initiatives</span>
-        <span className="xl:hidden">Inits</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => { setRoadmapBarMode("epics"); onSummaryStatusQuickFilterChange?.(null); }}
-        className={cn(summaryChipBaseClass, roadmapBarMode === "epics" && summaryStatusQuickFilter == null ? summaryChipEpicsOnClass : summaryChipEpicsIdleClass)}
-      >
-        <Folder className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
-        {("totalEpics" in summaryBadgesForScope ? summaryBadgesForScope.totalEpics : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}Epics
-      </button>
-      <div className={summaryChipStoriesStaticClass}>
-        {/* Stroke-based FileText icon — strokeWidth 1.25 + opacity-70 keeps
-            it noticeably lighter than the neighbouring chip icons. */}
-        <FileText className="size-3 shrink-0 sm:size-3.5 opacity-70" strokeWidth={1.25} aria-hidden />
-        <span className="truncate">{summaryBadgesForScope.totalStories}</span>
-        <span>Stories</span>
-      </div>
       <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
         {/* Donut chart visualizing Epic Estimated %. Track was slate-200
             (#e2e8f0) which is nearly identical to the chip's indigo-100
@@ -4773,17 +4784,6 @@ export function TimelineGrid({
           <Flag className="size-3 shrink-0 sm:size-3.5" aria-hidden />
           <span className="hidden xl:inline">Sprints</span>
           <span className="xl:hidden">Spr</span>
-        </button>
-      ) : null}
-      {showGanttTeamPicker ? (
-        <button
-          type="button"
-          aria-pressed={showGanttTeamChips}
-          onClick={() => setShowGanttTeamChips((prev) => !prev)}
-          className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
-        >
-          <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-          Teams
         </button>
       ) : null}
     </>
