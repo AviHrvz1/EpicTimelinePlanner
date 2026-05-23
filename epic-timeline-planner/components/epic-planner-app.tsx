@@ -4686,7 +4686,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               priority
               quality={100}
               sizes="44px"
-              className="block size-[40px] shrink-0 transition-transform duration-150 group-hover:rotate-[-4deg]"
+              className="block size-[40px] shrink-0 -translate-x-[3px] transition-transform duration-150 group-hover:rotate-[-4deg]"
             />
           </button>
           <div className="ml-1 mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
