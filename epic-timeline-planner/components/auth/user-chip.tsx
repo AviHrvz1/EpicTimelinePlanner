@@ -47,7 +47,7 @@ export function UserChip() {
     return (
       <div
         aria-busy
-        className="inline-flex h-[26px] w-[26px] shrink-0 animate-pulse rounded-full bg-slate-200"
+        className="inline-flex h-[32px] w-[32px] shrink-0 animate-pulse rounded-full bg-slate-200"
       />
     );
   }
@@ -94,18 +94,18 @@ export function UserChip() {
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         title={displayName}
-        className="group inline-flex h-[26px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border-0 bg-white px-1 pr-2.5 text-[12px] font-semibold leading-none tracking-wide text-slate-800 ring-1 ring-slate-200 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+        className="group inline-flex h-[32px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border-0 bg-white px-1.5 pr-3 text-[12.5px] font-semibold leading-none tracking-wide text-slate-800 ring-1 ring-slate-200 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
       >
         {user.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={user.image}
             alt=""
-            className="size-[22px] shrink-0 rounded-full object-cover"
+            className="size-[26px] shrink-0 rounded-full object-cover"
           />
         ) : (
           <span
-            className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+            className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
             style={{ background: avatarBg }}
             aria-hidden
           >
@@ -114,8 +114,8 @@ export function UserChip() {
         )}
         {/* Lucide User icon between the avatar and the display name — makes the
             "this chip represents your account" affordance explicit. */}
-        <User className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2.2} aria-hidden />
-        <span className="max-w-[140px] truncate">{displayName}</span>
+        <User className="size-4 shrink-0 text-indigo-500" strokeWidth={2.2} aria-hidden />
+        <span className="max-w-[160px] truncate">{displayName}</span>
       </button>
 
       {menuOpen && (

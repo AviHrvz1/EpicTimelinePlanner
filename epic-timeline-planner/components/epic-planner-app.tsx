@@ -4661,7 +4661,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             UserChip lives at the LEFT edge so the signed-in user identity
             is the first thing you see; summary chips sit on the right pushed
             by ml-auto. */}
-        <div className="relative -mr-[5px] flex shrink-0 items-center gap-1 overflow-visible border-b border-slate-200 bg-white pl-14 pr-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
+        <div className="relative -mr-[5px] flex shrink-0 items-center gap-1 overflow-visible border-b border-slate-200 bg-white pl-[3.75rem] pr-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
           {/* Bird-eye logo — clickable home button that resets the planner
               to the full-year roadmap view (clears any drilled-in quarter or
               month and any non-roadmap top mode). Wrapped in a white badge
@@ -4676,7 +4676,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             }}
             title="Back to all-quarters roadmap"
             aria-label="Back to all-quarters roadmap"
-            className="group absolute left-1 top-1/2 -translate-y-1/2 cursor-pointer bg-white py-1 px-[4.5px] shadow-[0_4px_10px_-2px_rgba(15,23,42,0.18),0_2px_4px_-2px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70 transition-all duration-150 hover:scale-[1.06] hover:shadow-[0_6px_14px_-2px_rgba(15,23,42,0.22),0_3px_6px_-2px_rgba(15,23,42,0.14)] hover:ring-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="group absolute left-1 top-1/2 -translate-y-1/2 cursor-pointer bg-white pl-2 pr-[5px] pt-[11px] pb-1.5 shadow-[6px_0_8px_-4px_rgba(15,23,42,0.10),0_6px_8px_-4px_rgba(15,23,42,0.22)] transition-transform duration-150 hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Image
               src="/bird-eye-logo-simple.png"
@@ -4686,10 +4686,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               priority
               quality={100}
               sizes="44px"
-              className="block size-[44px] shrink-0 transition-transform duration-150 group-hover:rotate-[-4deg]"
+              className="block size-[40px] shrink-0 transition-transform duration-150 group-hover:rotate-[-4deg]"
             />
           </button>
-          <div className="ml-[13px] mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
+          <div className="ml-1 mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
             <UserChip />
           </div>
           <div ref={setSummaryBarEl} className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
