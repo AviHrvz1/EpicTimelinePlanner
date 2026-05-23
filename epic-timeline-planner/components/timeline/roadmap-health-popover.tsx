@@ -199,7 +199,7 @@ export function RoadmapHealthPopover({
       role="dialog"
       aria-label="Roadmap health summary"
       style={{ left: pos.left, top: pos.top }}
-      className="fixed z-[9000] w-[640px] overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-[9000] w-[600px] overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
     >
       {/* Gradient header — drag handle + title + close */}
       <div
@@ -238,9 +238,9 @@ export function RoadmapHealthPopover({
         </button>
       </div>
 
-      <div className="px-6 pb-4 pt-5">
+      <div className="px-5 pb-4 pt-4">
         {/* Toggles row — Group by + Progress basis side by side */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <ToggleGroup
             label="Group by"
             options={[
@@ -277,7 +277,7 @@ export function RoadmapHealthPopover({
               </button>
             ) : null}
           </div>
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-4 gap-2">
             {STATUS_ORDER.map((status) => {
               const meta = STATUS_META[status];
               const count = counts[status];
@@ -291,11 +291,11 @@ export function RoadmapHealthPopover({
                   onClick={() => toggle(status)}
                   aria-pressed={isActive}
                   className={cn(
-                    "group relative inline-flex items-center gap-2 overflow-hidden rounded-lg border px-2 py-1 text-left transition-all",
+                    "group relative inline-flex items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border px-2 py-1.5 text-left transition-all",
                     isActive
                       ? `${meta.activeBg} ${meta.activeBorder} shadow-sm`
                       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
-                    isZero && !isActive && "opacity-70",
+                    isZero && !isActive && "opacity-75",
                   )}
                 >
                   <span
@@ -306,16 +306,14 @@ export function RoadmapHealthPopover({
                   >
                     <Icon className={cn("size-2.5 stroke-[2.5]", meta.dotFg)} aria-hidden />
                   </span>
-                  <span className="flex min-w-0 flex-1 items-center justify-between gap-1.5">
-                    <span className="truncate text-[12px] font-semibold text-slate-800">{meta.label}</span>
-                    <span
-                      className={cn(
-                        "text-[14px] font-extrabold tabular-nums leading-none",
-                        isZero ? "text-slate-300" : meta.countFg,
-                      )}
-                    >
-                      {count}
-                    </span>
+                  <span className="text-[12.5px] font-semibold text-slate-800">{meta.label}</span>
+                  <span
+                    className={cn(
+                      "ml-auto text-[14px] font-extrabold tabular-nums leading-none",
+                      isZero ? "text-slate-300" : meta.countFg,
+                    )}
+                  >
+                    {count}
                   </span>
                   {isActive ? (
                     <span
@@ -333,7 +331,7 @@ export function RoadmapHealthPopover({
         </div>
 
         {/* Health distribution bar — stacked segments showing % of each status */}
-        <div className="mt-3">
+        <div className="mt-5">
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
             {statusTotal > 0 ? (
               <div className="flex h-full w-full">
@@ -373,10 +371,18 @@ export function RoadmapHealthPopover({
                 onOpenInsights();
                 onClose();
               }}
-              className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-[12px] font-bold text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/15 transition-all hover:shadow-lg hover:shadow-indigo-500/35 hover:brightness-110 active:scale-[0.99]"
+              className="group inline-flex shrink-0 items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1 text-[11.5px] font-semibold text-white transition-colors hover:bg-indigo-700"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/dialog-insights-icon.png"
+                alt=""
+                aria-hidden
+                className="size-3.5 select-none object-contain"
+                draggable={false}
+              />
               <span>View Insights</span>
-              <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
+              <ChevronRight className="size-3.5" aria-hidden />
             </button>
           ) : null}
         </div>
