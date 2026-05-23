@@ -668,6 +668,17 @@ export function MonthAnalytics({
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
     [monthEpics, selectedEpicId],
   );
+  /** Suffix appended to every chart title so they read e.g. "Status (Epic
+   *  Title)" or "Status (Initiative Title)" when a scope is pinned. Empty
+   *  when the scope is "all". */
+  const scopeTitleSuffix = useMemo(() => {
+    if (selectedEpicOption) return ` (${selectedEpicOption.epic.title})`;
+    if (selectedInitiativeId !== "all") {
+      const init = scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId);
+      if (init) return ` (${init.title})`;
+    }
+    return "";
+  }, [selectedEpicOption, selectedInitiativeId, scopeInitiativeOptions]);
   useEffect(() => {
     if (!initialSelectedEpicId) return;
     setSelectedEpicId(initialSelectedEpicId);
@@ -2024,8 +2035,7 @@ export function MonthAnalytics({
             )}
           >
             <PieChartIcon className="size-4 text-slate-600" />
-            {statusPanelTitle}
-            {selectedEpicOption ? ` (${selectedEpicOption.epic.title})` : ""}
+            {statusPanelTitle}{scopeTitleSuffix}
           </h3>
           {statusDrilldownFilter ? (
             <button
@@ -2297,7 +2307,7 @@ export function MonthAnalytics({
             )}
           >
             <Activity className="size-4 text-slate-600" />
-            Epic Scope Burndown
+            Epic Scope Burndown{scopeTitleSuffix}
           </h3>
           <div className="flex items-center gap-2">
             <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
@@ -2534,7 +2544,7 @@ export function MonthAnalytics({
             )}
           >
             <ChartNoAxesCombined className="size-4 text-slate-600" />
-            Workload Balance
+            Workload Balance{scopeTitleSuffix}
           </h3>
           {workloadDrilldownAssignee ? (
             <button
@@ -2846,7 +2856,7 @@ export function MonthAnalytics({
             )}
           >
             <Activity className="size-4 text-slate-600" />
-            Cumulative Flow
+            Cumulative Flow{scopeTitleSuffix}
           </h3>
           <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
             <button
@@ -3010,7 +3020,7 @@ export function MonthAnalytics({
                 <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
                   <h3 className={cn("inline-flex items-center gap-1.5 font-semibold text-slate-800", isMultiPeriodInsights ? "text-[16px]" : "text-[15px]")}>
                     <Users className="size-4 text-slate-600" />
-                    Month Load
+                    Month Load{scopeTitleSuffix}
                   </h3>
                   {monthLoadDrilldownAssignee && (
                     <button
@@ -3189,7 +3199,7 @@ export function MonthAnalytics({
                 )}
               >
                 <TrendingUp className="size-4 text-slate-600" />
-                Epic Scope Burnup
+                Epic Scope Burnup{scopeTitleSuffix}
               </h3>
               <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
                 <button
