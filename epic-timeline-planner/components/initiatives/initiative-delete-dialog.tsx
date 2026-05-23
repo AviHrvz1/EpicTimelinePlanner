@@ -55,23 +55,25 @@ export function InitiativeDeleteDialog({ initiative, onConfirm, onCancel, deleti
 
   const content = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+      <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]" onClick={onCancel} />
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-2xl ring-4 ring-rose-100/70 flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="relative flex items-start gap-4 border-b border-slate-100 bg-gradient-to-br from-rose-50/80 via-white to-white px-6 py-5">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 shadow-md shadow-rose-200 ring-1 ring-white">
-            <AlertTriangle className="size-5 text-white" />
+        <div className="relative flex items-start gap-4 border-b border-slate-100 px-6 py-5">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-red-600 shadow-md shadow-rose-200/70 ring-1 ring-white">
+            <AlertTriangle className="size-5 text-white" strokeWidth={2.5} />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-bold tracking-tight text-slate-900">
+            <h2 className="text-[18px] font-extrabold tracking-tight text-slate-900">
               Delete &ldquo;{initiative.title}&rdquo;?
             </h2>
-            <p className="mt-1 text-[13px] leading-relaxed text-slate-500">
-              This permanently deletes the initiative along with{" "}
-              <strong className="text-slate-800">{epics.length} epic{epics.length !== 1 ? "s" : ""}</strong>
+            <p className="mt-1 text-[13.5px] leading-relaxed text-slate-600">
+              This will permanently remove the initiative,{" "}
+              <strong className="font-semibold text-slate-800">{epics.length} epic{epics.length !== 1 ? "s" : ""}</strong>
               {" "}and{" "}
-              <strong className="text-slate-800">{totalStories} user stor{totalStories !== 1 ? "ies" : "y"}</strong>.
-              <span className="ml-1 font-medium text-rose-600">This cannot be undone.</span>
+              <strong className="font-semibold text-slate-800">{totalStories} associated user stor{totalStories !== 1 ? "ies" : "y"}</strong>.
+            </p>
+            <p className="mt-1 text-[13.5px] font-semibold text-rose-600">
+              Once deleted, it cannot be recovered.
             </p>
           </div>
           <button

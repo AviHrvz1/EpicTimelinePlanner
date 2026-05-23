@@ -37,26 +37,29 @@ export function EpicDeleteDialog({ epic, onConfirm, onCancel, deleting = false }
 
   const content = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative w-full max-w-2xl rounded-2xl border border-red-200 bg-white shadow-2xl flex flex-col max-h-[85vh]">
+      <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]" onClick={onCancel} />
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-2xl ring-4 ring-rose-100/70 flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="flex items-start gap-3 border-b border-slate-100 px-6 py-4">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-50">
-            <AlertTriangle className="size-5 text-red-500" />
+        <div className="flex items-start gap-4 border-b border-slate-100 px-6 py-5">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-red-600 shadow-md shadow-rose-200/70 ring-1 ring-white">
+            <AlertTriangle className="size-5 text-white" strokeWidth={2.5} />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold text-slate-900">
+            <h2 className="text-[18px] font-extrabold tracking-tight text-slate-900">
               Delete &ldquo;{epic.title}&rdquo;?
             </h2>
-            <p className="mt-0.5 text-[13px] text-slate-500">
-              This will permanently delete the epic along with{" "}
-              <strong className="text-slate-700">{stories.length} user stor{stories.length !== 1 ? "ies" : "y"}</strong>.
-              This cannot be undone.
+            <p className="mt-1 text-[13.5px] leading-relaxed text-slate-600">
+              This will permanently remove the epic and{" "}
+              <strong className="font-semibold text-slate-800">{stories.length} associated user stor{stories.length !== 1 ? "ies" : "y"}</strong>.
+            </p>
+            <p className="mt-1 text-[13.5px] font-semibold text-rose-600">
+              Once deleted, it cannot be recovered.
             </p>
           </div>
           <button
             onClick={onCancel}
-            className="shrink-0 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Close"
           >
             <X className="size-4" />
           </button>
@@ -126,18 +129,18 @@ export function EpicDeleteDialog({ epic, onConfirm, onCancel, deleting = false }
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50/40 px-6 py-3.5">
           <button
             onClick={onCancel}
             disabled={deleting}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={deleting}
-            className="rounded-xl bg-red-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="rounded-lg bg-gradient-to-br from-rose-500 to-red-600 px-4 py-2 text-[13px] font-semibold text-white shadow-md shadow-rose-200/70 transition-all hover:from-rose-400 hover:to-red-500 hover:shadow-lg disabled:opacity-50"
           >
             {deleting ? "Deleting…" : "Delete Epic"}
           </button>

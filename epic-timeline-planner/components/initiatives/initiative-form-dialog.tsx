@@ -899,7 +899,7 @@ export function InitiativeFormDialog({
                     type="button"
                     onClick={openInsightsWindow}
                     aria-label="Open initiative insights"
-                    className="inline-flex h-9 items-center gap-2 rounded-md border border-indigo-200 px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
+                    className="inline-flex h-8 items-center gap-2 rounded-md border border-indigo-200 px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
                   >
                     <img
                       src="/dialog-insights-icon.png"
@@ -920,7 +920,7 @@ export function InitiativeFormDialog({
                   <button
                     type="button"
                     onClick={() => { onDelete(initiative.id); onClose(); }}
-                    className="inline-flex h-9 items-center gap-2 rounded-md border border-red-200 px-4 text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                    className="inline-flex h-8 items-center gap-2 rounded-md border border-red-200 px-4 text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
                   >
                     <Trash2 className="size-4" />
                     Delete
@@ -934,7 +934,7 @@ export function InitiativeFormDialog({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
+                className="inline-flex h-8 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
                 onClick={onClose}
               >
                 <X className="size-4" />
@@ -943,7 +943,7 @@ export function InitiativeFormDialog({
               <Button
                 type="button"
                 size="sm"
-                className="inline-flex h-9 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                className="inline-flex h-8 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                 onClick={handleSave}
                 disabled={isSaving}
               >

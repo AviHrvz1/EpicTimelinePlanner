@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { Archive, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Users } from "lucide-react";
+import { AlertTriangle, Archive, FileText, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Users, X as XIcon } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -1089,6 +1089,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     message: string;
     confirmLabel: string;
     onConfirm: () => void | Promise<void>;
+    /** When true, paint the dialog with a destructive theme: red ring,
+     *  alert icon, two-line message with the second line in red, and a
+     *  rose→red gradient confirm button. */
+    destructive?: boolean;
+    /** Secondary warning shown on its own line in red below the message.
+     *  Defaults to "Once deleted, it cannot be recovered." in destructive
+     *  mode. Pass an empty string to suppress. */
+    destructiveNote?: string;
   } | null>(null);
   const [isConfirmingDialog, setIsConfirmingDialog] = useState(false);
   const pendingStoryDialogNavigationRef = useRef<null | (() => void)>(null);
@@ -1369,12 +1377,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       message: string;
       confirmLabel?: string;
       onConfirm: () => void | Promise<void>;
+      destructive?: boolean;
+      destructiveNote?: string;
     }) => {
       setConfirmDialog({
         title: opts.title,
         message: opts.message,
         confirmLabel: opts.confirmLabel ?? "Confirm",
         onConfirm: opts.onConfirm,
+        destructive: opts.destructive,
+        destructiveNote: opts.destructiveNote,
       });
     },
     [],
@@ -5853,16 +5865,48 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       {confirmDialog ? (
         <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/15 backdrop-blur-[2px] p-4">
           <div
-            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl ring-1 ring-slate-200/60"
+            className={cn(
+              "relative w-full max-w-md overflow-hidden rounded-2xl border bg-white shadow-2xl",
+              confirmDialog.destructive
+                ? "border-rose-200 ring-4 ring-rose-100/70"
+                : "border-slate-200/80 ring-1 ring-slate-200/60",
+            )}
             role="dialog"
             aria-modal="true"
           >
-            <div className="bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50 px-5 py-4 border-b border-slate-200/70">
-              <h3 className="text-[15px] font-semibold tracking-tight text-slate-800">{confirmDialog.title}</h3>
-            </div>
-            <div className="px-5 py-4">
-              <p className="text-[13.5px] leading-relaxed text-slate-600">{confirmDialog.message}</p>
-            </div>
+            {confirmDialog.destructive ? (
+              <div className="flex items-start gap-4 border-b border-slate-100 px-5 py-5">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-red-600 shadow-md shadow-rose-200/70 ring-1 ring-white">
+                  <AlertTriangle className="size-5 text-white" strokeWidth={2.5} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[18px] font-extrabold tracking-tight text-slate-900">{confirmDialog.title}</h3>
+                  <p className="mt-1 text-[13.5px] leading-relaxed text-slate-600">{confirmDialog.message}</p>
+                  {confirmDialog.destructiveNote !== "" ? (
+                    <p className="mt-1 text-[13.5px] font-semibold text-rose-600">
+                      {confirmDialog.destructiveNote ?? "Once deleted, it cannot be recovered."}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Close"
+                >
+                  <XIcon className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50 px-5 py-4 border-b border-slate-200/70">
+                  <h3 className="text-[15px] font-semibold tracking-tight text-slate-800">{confirmDialog.title}</h3>
+                </div>
+                <div className="px-5 py-4">
+                  <p className="text-[13.5px] leading-relaxed text-slate-600">{confirmDialog.message}</p>
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-end gap-2 border-t border-slate-200/70 bg-slate-50/40 px-5 py-3">
               <Button
                 variant="outline"
@@ -5875,7 +5919,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               </Button>
               <Button
                 size="sm"
-                className="h-8 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
+                className={cn(
+                  "h-8 border-0 px-4 text-[13px] font-semibold text-white shadow-sm disabled:opacity-50",
+                  confirmDialog.destructive
+                    ? "bg-gradient-to-br from-rose-500 to-red-600 shadow-rose-200/70 hover:from-rose-400 hover:to-red-500"
+                    : "bg-gradient-to-r from-violet-600 to-indigo-600 shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500",
+                )}
                 disabled={isConfirmingDialog}
                 onClick={async () => {
                   setIsConfirmingDialog(true);

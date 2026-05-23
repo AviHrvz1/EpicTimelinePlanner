@@ -111,6 +111,8 @@ type StoryDetailsDialogProps = {
     message: string;
     confirmLabel?: string;
     onConfirm: () => void | Promise<void>;
+    destructive?: boolean;
+    destructiveNote?: string;
   }) => void;
   onAddComment: (storyId: string, body: string) => Promise<void>;
   /** Updates the parent epic’s delivery team (saved with the story). */
@@ -460,11 +462,11 @@ export function StoryDetailsDialog({
     };
     if (onRequestConfirm) {
       onRequestConfirm({
-        title: "Delete user story?",
+        title: `Delete “${storyTitle}”?`,
         message: usRef
-          ? `${usRef} · ${storyTitle} will be permanently deleted. This cannot be undone.`
-          : `“${storyTitle}” will be permanently deleted. This cannot be undone.`,
-        confirmLabel: "Delete",
+          ? `User story ${usRef} will be permanently removed from its epic. This cannot be undone.`
+          : "This user story will be permanently removed from its epic. This cannot be undone.",
+        confirmLabel: "Delete story",
         onConfirm: runDelete,
       });
       return;
@@ -782,20 +784,20 @@ export function StoryDetailsDialog({
           <div className="flex items-center gap-2">
             {!isCreateMode ? (
               <>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
+                <button
+                  type="button"
                   onClick={() => requestDeleteConfirmation()}
                   aria-label="Delete story"
-                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                  className="inline-flex h-8 items-center gap-2 rounded-md border border-red-200 px-4 text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
                 >
                   <Trash className="size-4" />
-                </Button>
+                  Delete
+                </button>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
+                  className="inline-flex h-8 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
                   onClick={onClose}
                 >
                   <X className="size-4" />
@@ -804,7 +806,7 @@ export function StoryDetailsDialog({
                 <Button
                   type="button"
                   size="sm"
-                  className="inline-flex h-9 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                  className="inline-flex h-8 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                   onClick={handleSave}
                   disabled={saving}
                 >
@@ -818,7 +820,7 @@ export function StoryDetailsDialog({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
+                  className="inline-flex h-8 items-center gap-2 rounded-md px-4 text-[13px] font-semibold [&_svg]:text-slate-500"
                   onClick={onClose}
                 >
                   <X className="size-4" />
@@ -827,7 +829,7 @@ export function StoryDetailsDialog({
                 <Button
                   type="button"
                   size="sm"
-                  className="inline-flex h-9 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
+                  className="inline-flex h-8 items-center gap-2 rounded-md border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-[13px] font-semibold text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 [&_svg]:text-white"
                   onClick={handleSave}
                   disabled={saving}
                 >
