@@ -5054,6 +5054,49 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   setInitiativeDialogOpen(true);
                 }}
                 onDeleteInitiative={requestDeleteInitiative}
+                onUnscheduleInitiative={(initiativeId) => {
+                  const target = initiatives.find((i) => i.id === initiativeId);
+                  if (!target) return;
+                  // Already unscheduled — nothing to do (chip shouldn't even
+                  // be visible since the bar wouldn't render, but stay safe).
+                  if (target.startMonth == null && target.endMonth == null) return;
+                  openConfirmDialog({
+                    title: "Move initiative back to backlog?",
+                    message: `Remove "${target.title}" from the Gantt and move it back to the unscheduled backlog?`,
+                    confirmLabel: "Move to backlog",
+                    onConfirm: async () => {
+                      flushSync(() => {
+                        setInitiatives((prev) =>
+                          prev.map((i) =>
+                            i.id === initiativeId
+                              ? {
+                                  ...i,
+                                  status: "backlog" as const,
+                                  startMonth: null,
+                                  endMonth: null,
+                                  startYearSprint: null,
+                                  endYearSprint: null,
+                                }
+                              : i,
+                          ),
+                        );
+                      });
+                      try {
+                        const response = await fetch(`/api/initiatives/${initiativeId}/schedule`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ year: selectedYear, startMonth: null, endMonth: null }),
+                        });
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        toast.success("Initiative moved to backlog");
+                      } catch (err) {
+                        await refresh();
+                        const description = err instanceof Error ? err.message : undefined;
+                        toast.error("Failed to move initiative to backlog", description ? { description } : undefined);
+                      }
+                    },
+                  });
+                }}
                 onUnscheduleEpic={async (epicId) => {
                   const before = initiatives;
                   const target = before.flatMap((i) => i.epics ?? []).find((e) => e.id === epicId);

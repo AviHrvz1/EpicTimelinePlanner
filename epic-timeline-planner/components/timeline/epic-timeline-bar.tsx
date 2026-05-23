@@ -117,8 +117,12 @@ type InitiativeTimelineBarProps = {
   showProgress?: boolean;
   /** Renders at the start of the progress row (below the title strip), not on the colored title row. */
   progressRowPrefix?: ReactNode;
-  /** Optional delete handler — renders an X chip on hover. */
+  /** Optional "remove from Gantt" handler — renders an X chip on hover.
+   *  The action is whatever the caller wires up (typically "move initiative
+   *  back to backlog"); the chip is just a UI affordance. */
   onDelete?: () => void;
+  /** Override the X chip's tooltip/aria-label (defaults to "Move to backlog"). */
+  onDeleteLabel?: string;
   /** When set, a chart icon appears at the start of the progress row;
    * clicking it opens the insights view in a new tab (initiative scope). */
   onInsightsClick?: () => void;
@@ -141,6 +145,7 @@ export function InitiativeTimelineBar({
   showProgress = true,
   progressRowPrefix,
   onDelete,
+  onDeleteLabel = "Move to backlog",
   onInsightsClick,
   healthStatus = null,
   healthTooltip,
@@ -163,8 +168,8 @@ export function InitiativeTimelineBar({
       {onDelete ? (
         <button
           type="button"
-          aria-label="Delete initiative"
-          title="Delete initiative"
+          aria-label={onDeleteLabel}
+          title={onDeleteLabel}
           className="pointer-events-none absolute right-1 -top-1.5 z-[70] inline-flex size-4 items-center justify-center rounded-full bg-white opacity-0 shadow ring-1 ring-slate-300/80 transition duration-150 hover:bg-rose-50 hover:ring-rose-300 group-hover/bar:pointer-events-auto group-hover/bar:opacity-100"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {

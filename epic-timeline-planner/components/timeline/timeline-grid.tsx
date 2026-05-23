@@ -480,6 +480,13 @@ type EpicGanttLaneRowProps = {
   emphasizeTick?: number;
   showProgress?: boolean;
   teamAssignmentChip?: { label: string; className: string } | null;
+  /** Work-based health verdict for the epic — feeds the health badge below
+   *  the bar. Passed in pre-computed so all views share one progress lib. */
+  healthStatus?: HealthStatus | null;
+  healthTooltip?: string;
+  /** Effort-based progress percent to show on the bar's chip. Defaults to
+   *  null which makes the bar fall back to the story-count formula. */
+  effortProgressPercent?: number | null;
 };
 
 function formatDayMonthYearShort(date: Date): string {
@@ -958,11 +965,15 @@ function EpicGanttLaneRow({
   emphasizeTick = 0,
   showProgress = true,
   teamAssignmentChip = null,
+  healthStatus = null,
+  healthTooltip,
+  effortProgressPercent = null,
 }: EpicGanttLaneRowProps) {
   const stories = epic.userStories ?? [];
   const totalStories = stories.length;
   const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
-  const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+  const storyCountPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+  const completionPercent = effortProgressPercent ?? storyCountPercent;
   const barColor = epic.color?.trim() ? epic.color : initiative.color;
 
   // Drag-resize state for month view
@@ -1069,11 +1080,13 @@ function EpicGanttLaneRow({
             color={barColor}
             progressPercent={completionPercent}
             progressLabel={
-              totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+              healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories")
             }
             emphasizeFlash={emphasize}
             emphasizeTick={emphasizeTick}
             showProgress={showProgress}
+            healthStatus={healthStatus}
+            healthTooltip={healthTooltip}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
@@ -1115,11 +1128,13 @@ function EpicGanttLaneRow({
             color={barColor}
             progressPercent={completionPercent}
             progressLabel={
-              totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+              healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories")
             }
             emphasizeFlash={emphasize}
             emphasizeTick={emphasizeTick}
             showProgress={showProgress}
+            healthStatus={healthStatus}
+            healthTooltip={healthTooltip}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
@@ -1153,16 +1168,23 @@ function MonthInitiativeGanttLaneRow({
   onOpenInitiative,
   ganttLaneSortIndex,
   showProgress = true,
+  healthStatus = null,
+  healthTooltip,
+  effortProgressPercent = null,
 }: {
   initiative: InitiativeItem;
   onOpenInitiative: (initiativeId: string) => void;
   ganttLaneSortIndex: number;
   showProgress?: boolean;
+  healthStatus?: HealthStatus | null;
+  healthTooltip?: string;
+  effortProgressPercent?: number | null;
 }) {
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
   const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
-  const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+  const storyCountPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
+  const completionPercent = effortProgressPercent ?? storyCountPercent;
 
   return (
     <div
@@ -1179,8 +1201,10 @@ function MonthInitiativeGanttLaneRow({
             icon={initiative.icon}
             color={initiative.color}
             progressPercent={completionPercent}
-            progressLabel={totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"}
+            progressLabel={healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories")}
             showProgress={showProgress}
+            healthStatus={healthStatus}
+            healthTooltip={healthTooltip}
             onClick={() => onOpenInitiative(initiative.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", initiative.id)}
           />
@@ -1282,8 +1306,12 @@ type TimelineGridProps = {
   onSprintTabChange?: (tab: "kanban" | "status") => void;
   onOpenEpic: (epicId: string) => void;
   onUnscheduleEpic?: (epicId: string) => void;
-  /** Delete an initiative from the Gantt — wired to the X chip that shows on
-   *  hover over an initiative bar (mirrors the unschedule X on epic bars). */
+  /** Move an initiative back to the backlog — wired to the X chip on
+   *  initiative bars (mirrors the unschedule X on epic bars). The handler
+   *  should confirm with the user before clearing the schedule. */
+  onUnscheduleInitiative?: (initiativeId: string) => void;
+  /** Delete an initiative from the database (used elsewhere — left list,
+   *  delete dialog). Kept distinct from the X-chip "unschedule" action. */
   onDeleteInitiative?: (initiativeId: string) => void;
   onOpenInitiative: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
@@ -2010,6 +2038,7 @@ export function TimelineGrid({
   onOpenEpic,
   onUnscheduleEpic,
   onDeleteInitiative,
+  onUnscheduleInitiative,
   onOpenInitiative,
   onOpenStory,
   onResizeInitiativeRange,
@@ -2491,22 +2520,31 @@ export function TimelineGrid({
     if (!focusedQuarter) return summaryBadges;
     const qStart = focusedQuarter.months[0];
     const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-    const quarterInitiatives = initiatives.filter((initiative) => {
-      if (initiative.status !== "scheduled") return false;
-      if (initiative.startMonth == null || initiative.endMonth == null) return false;
-      return !(initiative.endMonth < qStart || initiative.startMonth > qEnd);
-    });
-    const quarterEpics = quarterInitiatives.flatMap((initiative) => initiative.epics ?? []);
-    const scheduledEpics = quarterEpics.filter((epic) => {
-      if (epic.planStartMonth == null || epic.planEndMonth == null || epic.planSprint == null) return false;
-      return !(epic.planEndMonth < qStart || epic.planStartMonth > qEnd);
-    });
-    const unscheduledEpics = quarterEpics.length - scheduledEpics.length;
-    const totalStories = quarterEpics.reduce((sum, epic) => sum + (epic.userStories?.length ?? 0), 0);
+    // Match the Gantt's "this initiative has at least one epic landing in
+    // the quarter" rule rather than gating on the initiative's own status +
+    // top-level dates. The chip should agree with the bar count the user
+    // sees on the timeline.
+    const quarterInitiatives = initiatives.filter((initiative) =>
+      (initiative.epics ?? []).some(
+        (epic) =>
+          epic.planStartMonth != null &&
+          epic.planEndMonth != null &&
+          !(epic.planEndMonth < qStart || epic.planStartMonth > qEnd),
+      ),
+    );
+    const allEpicsInQuarter = quarterInitiatives.flatMap((initiative) => initiative.epics ?? []).filter(
+      (epic) =>
+        epic.planStartMonth != null &&
+        epic.planEndMonth != null &&
+        !(epic.planEndMonth < qStart || epic.planStartMonth > qEnd),
+    );
+    const scheduledEpics = allEpicsInQuarter.filter((epic) => epic.planSprint != null);
+    const unscheduledEpics = allEpicsInQuarter.length - scheduledEpics.length;
+    const totalStories = allEpicsInQuarter.reduce((sum, epic) => sum + (epic.userStories?.length ?? 0), 0);
     return {
       totalInitiatives: quarterInitiatives.length,
       scheduledInitiatives: quarterInitiatives.length,
-      totalEpics: quarterEpics.length,
+      totalEpics: allEpicsInQuarter.length,
       scheduledEpics: scheduledEpics.length,
       unscheduledEpics,
       totalStories,
@@ -4094,18 +4132,78 @@ export function TimelineGrid({
     }
   }, [roadmapBarMode]);
 
-  // Per-bar health for the currently-visible year-roadmap view. Computed
-  // once so the render path, the popover summary, and the dim-by-filter
-  // logic all share the same numbers.
+  // Per-bar health for the currently-visible roadmap view. Switches its
+  // source rows based on whether a quarter is focused, so the popover's
+  // counts always reflect what the user is actually looking at.
   const ganttHealthData = useMemo(() => {
     const counts: Record<HealthStatus, number> = { onTrack: 0, watch: 0, atRisk: 0, overdue: 0 };
     const statusByBarId = new Map<string, HealthStatus>();
     let totalBars = 0;
     let unestimatedStoryCount = 0;
     const isInitiativeView = roadmapBarMode === "initiatives";
+    // Month view is special — its rows are flat lists, not grouped by
+    // timeline row. Handle it inline below.
+    //
+    // For totalBars we count every bar the user sees on the Gantt — even
+    // bars without estimated work — so the popover's total matches the bar
+    // count. Status counts only include bars where we could compute health.
+    if (activeMonth != null) {
+      if (isInitiativeView) {
+        for (const initiative of ganttSearchAppliedMonthInitiativeRows) {
+          totalBars += 1;
+          const childStatuses: HealthStatus[] = [];
+          const aggregateStories = (initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+          for (const epic of initiative.epics ?? []) {
+            if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+            const start = sprintStartDate(currentYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1));
+            const end = sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2));
+            const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis: progressBasis });
+            childStatuses.push(h.status);
+          }
+          const initStart = sprintStartDate(currentYear, globalSprintFromMonthLane(activeMonth, 1));
+          const initEnd = sprintEndDate(currentYear, globalSprintFromMonthLane(activeMonth, 2));
+          const h = computeInitiativeProgress({
+            stories: aggregateStories,
+            childStatuses,
+            start: initStart,
+            end: initEnd,
+            basis: progressBasis,
+          });
+          const hasData = progressBasis === "days" ? h.totalEffort > 0 : aggregateStories.length > 0;
+          if (hasData) {
+            counts[h.status] += 1;
+            statusByBarId.set(initiative.id, h.status);
+          }
+          unestimatedStoryCount += h.unestimatedCount;
+        }
+      } else {
+        for (const { epic } of ganttSearchAppliedMonthEpicRows) {
+          totalBars += 1;
+          if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+          const start = sprintStartDate(currentYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1));
+          const end = sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2));
+          const epicStories = epic.userStories ?? [];
+          const h = computeProgress({ stories: epicStories, start, end, basis: progressBasis });
+          const hasData = progressBasis === "days" ? h.totalEffort > 0 : epicStories.length > 0;
+          if (hasData) {
+            counts[h.status] += 1;
+            statusByBarId.set(epic.id, h.status);
+          }
+          unestimatedStoryCount += h.unestimatedCount;
+        }
+      }
+      return { counts, statusByBarId, totalBars, unestimatedStoryCount };
+    }
+    const activeInitiativeRows = focusedQuarter
+      ? ganttSearchAppliedQuarterInitiativeRows
+      : ganttSearchAppliedYearInitiativeRows;
+    const activeEpicRows = focusedQuarter
+      ? ganttSearchAppliedQuarterEpicRows
+      : ganttSearchAppliedYearEpicRows;
     if (isInitiativeView) {
-      for (const group of ganttSearchAppliedYearInitiativeRows) {
+      for (const group of activeInitiativeRows) {
         for (const row of group.items) {
+          totalBars += 1;
           const initiativeStart = sprintStartDate(currentYear, row.startS);
           const initiativeEnd = sprintEndDate(currentYear, row.endS);
           const childStatuses: HealthStatus[] = [];
@@ -4129,21 +4227,22 @@ export function TimelineGrid({
             end: initiativeEnd,
             basis: progressBasis,
           });
-          // For "days" basis we gate the summary by totalEffort (need
-          // estimated work to make a verdict). For "stories" basis we gate
-          // by total story count instead.
+          // Status counts only include bars where we could compute health
+          // (i.e. there's estimated work in days mode or any story in
+          // stories mode). totalBars above always increments so the
+          // popover's total matches what's on the Gantt.
           const hasData = progressBasis === "days" ? h.totalEffort > 0 : stories.length > 0;
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(row.initiative.id, h.status);
-            totalBars += 1;
           }
           unestimatedStoryCount += h.unestimatedCount;
         }
       }
     } else {
-      for (const group of ganttSearchAppliedYearEpicRows) {
+      for (const group of activeEpicRows) {
         for (const row of group.items) {
+          totalBars += 1;
           const epicStories = row.epic.userStories ?? [];
           const h = computeProgress({
             stories: epicStories,
@@ -4155,7 +4254,6 @@ export function TimelineGrid({
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(row.epic.id, h.status);
-            totalBars += 1;
           }
           unestimatedStoryCount += h.unestimatedCount;
         }
@@ -4164,8 +4262,14 @@ export function TimelineGrid({
     return { counts, statusByBarId, totalBars, unestimatedStoryCount };
   }, [
     roadmapBarMode,
+    focusedQuarter,
+    activeMonth,
     ganttSearchAppliedYearInitiativeRows,
     ganttSearchAppliedYearEpicRows,
+    ganttSearchAppliedQuarterInitiativeRows,
+    ganttSearchAppliedQuarterEpicRows,
+    ganttSearchAppliedMonthEpicRows,
+    ganttSearchAppliedMonthInitiativeRows,
     currentYear,
     progressBasis,
   ]);
@@ -4199,6 +4303,53 @@ export function TimelineGrid({
       }))
       .filter((g) => g.items.length > 0);
   }, [ganttSearchAppliedYearEpicRows, ganttHealthData.statusByBarId, healthFilter]);
+
+  // Mirror of the above for the focused-quarter view so the popover's
+  // filter chips also hide non-matching bars when a single quarter is
+  // selected.
+  const ganttHealthFilteredQuarterInitiativeRows = useMemo(() => {
+    if (healthFilter.size === 0) return ganttSearchAppliedQuarterInitiativeRows;
+    return ganttSearchAppliedQuarterInitiativeRows
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((i) => {
+          const s = ganttHealthData.statusByBarId.get(i.initiative.id);
+          return s != null && healthFilter.has(s);
+        }),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [ganttSearchAppliedQuarterInitiativeRows, ganttHealthData.statusByBarId, healthFilter]);
+
+  const ganttHealthFilteredQuarterEpicRows = useMemo(() => {
+    if (healthFilter.size === 0) return ganttSearchAppliedQuarterEpicRows;
+    return ganttSearchAppliedQuarterEpicRows
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((i) => {
+          const s = ganttHealthData.statusByBarId.get(i.epic.id);
+          return s != null && healthFilter.has(s);
+        }),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [ganttSearchAppliedQuarterEpicRows, ganttHealthData.statusByBarId, healthFilter]);
+
+  // Month view is flat (not grouped by timeline row), so the filter just
+  // drops items whose status isn't in the active set.
+  const ganttHealthFilteredMonthEpicRows = useMemo(() => {
+    if (healthFilter.size === 0) return ganttSearchAppliedMonthEpicRows;
+    return ganttSearchAppliedMonthEpicRows.filter(({ epic }) => {
+      const s = ganttHealthData.statusByBarId.get(epic.id);
+      return s != null && healthFilter.has(s);
+    });
+  }, [ganttSearchAppliedMonthEpicRows, ganttHealthData.statusByBarId, healthFilter]);
+
+  const ganttHealthFilteredMonthInitiativeRows = useMemo(() => {
+    if (healthFilter.size === 0) return ganttSearchAppliedMonthInitiativeRows;
+    return ganttSearchAppliedMonthInitiativeRows.filter((initiative) => {
+      const s = ganttHealthData.statusByBarId.get(initiative.id);
+      return s != null && healthFilter.has(s);
+    });
+  }, [ganttSearchAppliedMonthInitiativeRows, ganttHealthData.statusByBarId, healthFilter]);
 
   // Clear the active health filter whenever the view mode swaps so a filter
   // pinned in "epics" view doesn't silently survive into "initiatives" view
@@ -4484,7 +4635,7 @@ export function TimelineGrid({
                             healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
                             healthTooltip={initiativeTooltip}
                             onClick={() => onOpenInitiative(row.initiative.id)}
-                            onDelete={onDeleteInitiative ? () => onDeleteInitiative(row.initiative.id) : undefined}
+                            onDelete={onUnscheduleInitiative ? () => onUnscheduleInitiative(row.initiative.id) : undefined}
                             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", row.initiative.id)}
                           />
                         </div>
@@ -4702,33 +4853,63 @@ export function TimelineGrid({
         <span className="truncate">{summaryBadgesForScope.totalStories}</span>
         <span>Stories</span>
       </div>
-      {showGanttTeamPicker ? (
-        <button
-          type="button"
-          aria-pressed={showGanttTeamChips}
-          onClick={() => setShowGanttTeamChips((prev) => !prev)}
-          className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
-        >
-          <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-          Teams
-        </button>
-      ) : null}
-      <button
-        ref={progressBtnRef}
-        type="button"
-        aria-pressed={showRoadmapProgress}
-        onClick={() => {
-          // First click while off turns progress on AND opens the summary.
-          // Subsequent clicks toggle the popover without flipping progress
-          // off — close it via the popover's X / Escape / click-outside.
-          if (!showRoadmapProgress) onShowRoadmapProgressChange(true);
-          setHealthPopoverOpen((prev) => (showRoadmapProgress ? !prev : true));
-        }}
-        className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-      >
-        <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-        Progress
-      </button>
+      {/* Teams + Progress order depends on view: in single-quarter view
+          Progress comes BEFORE Teams; elsewhere Teams comes BEFORE Progress. */}
+      {focusedQuarter ? (
+        <>
+          <button
+            ref={progressBtnRef}
+            type="button"
+            aria-pressed={showRoadmapProgress}
+            onClick={() => {
+              if (!showRoadmapProgress) onShowRoadmapProgressChange(true);
+              setHealthPopoverOpen((prev) => (showRoadmapProgress ? !prev : true));
+            }}
+            className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
+          >
+            <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+            Progress
+          </button>
+          {showGanttTeamPicker ? (
+            <button
+              type="button"
+              aria-pressed={showGanttTeamChips}
+              onClick={() => setShowGanttTeamChips((prev) => !prev)}
+              className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+            >
+              <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+              Teams
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {showGanttTeamPicker ? (
+            <button
+              type="button"
+              aria-pressed={showGanttTeamChips}
+              onClick={() => setShowGanttTeamChips((prev) => !prev)}
+              className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+            >
+              <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+              Teams
+            </button>
+          ) : null}
+          <button
+            ref={progressBtnRef}
+            type="button"
+            aria-pressed={showRoadmapProgress}
+            onClick={() => {
+              if (!showRoadmapProgress) onShowRoadmapProgressChange(true);
+              setHealthPopoverOpen((prev) => (showRoadmapProgress ? !prev : true));
+            }}
+            className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
+          >
+            <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+            Progress
+          </button>
+        </>
+      )}
       <RoadmapHealthPopover
         open={healthPopoverOpen}
         anchorRef={progressBtnRef}
@@ -5973,23 +6154,51 @@ export function TimelineGrid({
                         ) : roadmapBarMode !== "initiatives" && ganttSearchAppliedMonthEpicRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         ) : roadmapBarMode === "initiatives" ? (
-                          ganttSearchAppliedMonthInitiativeRows.map((initiative, rowIndex) => (
-                            <div
-                              key={initiative.id}
-                              className={cn(
-                                rowIndex < ganttSearchAppliedMonthInitiativeRows.length - 1 && "border-b border-slate-200/50",
-                              )}
-                            >
-                              <MonthInitiativeGanttLaneRow
-                                initiative={initiative}
-                                onOpenInitiative={onOpenInitiative}
-                                ganttLaneSortIndex={rowIndex}
-                                showProgress={showRoadmapProgress}
-                              />
-                            </div>
-                          ))
+                          ganttHealthFilteredMonthInitiativeRows.map((initiative, rowIndex) => {
+                            // Compute initiative-level health using epics'
+                            // own date bounds so the verdict is consistent
+                            // with the all-quarters / single-quarter views.
+                            const childStatuses: HealthStatus[] = [];
+                            const aggregateStories = (initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+                            for (const epic of initiative.epics ?? []) {
+                              if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+                              const start = sprintStartDate(currentYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1));
+                              const end = sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2));
+                              const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis: progressBasis });
+                              childStatuses.push(h.status);
+                            }
+                            const initStart = sprintStartDate(currentYear, globalSprintFromMonthLane(activeMonth, 1));
+                            const initEnd = sprintEndDate(currentYear, globalSprintFromMonthLane(activeMonth, 2));
+                            const initHealth = computeInitiativeProgress({
+                              stories: aggregateStories,
+                              childStatuses,
+                              start: initStart,
+                              end: initEnd,
+                              basis: progressBasis,
+                            });
+                            const initTooltip = formatHealthTooltip(initHealth);
+                            const initHasData = progressBasis === "days" ? initHealth.totalEffort > 0 : aggregateStories.length > 0;
+                            return (
+                              <div
+                                key={initiative.id}
+                                className={cn(
+                                  rowIndex < ganttHealthFilteredMonthInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                                )}
+                              >
+                                <MonthInitiativeGanttLaneRow
+                                  initiative={initiative}
+                                  onOpenInitiative={onOpenInitiative}
+                                  ganttLaneSortIndex={rowIndex}
+                                  showProgress={showRoadmapProgress}
+                                  healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
+                                  healthTooltip={initTooltip}
+                                  effortProgressPercent={initHealth.progressPercent}
+                                />
+                              </div>
+                            );
+                          })
                         ) : (
-                          ganttSearchAppliedMonthEpicRows.map(({ epic, initiative }, rowIndex) => {
+                          ganttHealthFilteredMonthEpicRows.map(({ epic, initiative }, rowIndex) => {
                             const isInitiativeEmphasis =
                               ganttEmphasis != null && ganttEmphasis.initiativeId === initiative.id;
                             const isEpicEmphasis =
@@ -6005,11 +6214,23 @@ export function TimelineGrid({
                                 : isScheduledFilterEmphasis
                                   ? ganttScheduledFilterEmphasis!.tick
                                   : 0;
+                            // Same health calc as year + quarter views so the
+                            // popover counts and the bar's badge stay in sync.
+                            const epicStart = epic.planStartMonth != null
+                              ? sprintStartDate(currentYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1))
+                              : sprintStartDate(currentYear, globalSprintFromMonthLane(activeMonth, 1));
+                            const epicEnd = epic.planEndMonth != null
+                              ? sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
+                              : sprintEndDate(currentYear, globalSprintFromMonthLane(activeMonth, 2));
+                            const epicStoriesM = epic.userStories ?? [];
+                            const epicHealthM = computeProgress({ stories: epicStoriesM, start: epicStart, end: epicEnd, basis: progressBasis });
+                            const epicTooltipM = formatHealthTooltip(epicHealthM);
+                            const epicHasDataM = progressBasis === "days" ? epicHealthM.totalEffort > 0 : epicStoriesM.length > 0;
                             return (
                               <div
                                 key={epic.id}
                                 className={cn(
-                                  rowIndex < ganttSearchAppliedMonthEpicRows.length - 1 && "border-b border-slate-200/50",
+                                  rowIndex < ganttHealthFilteredMonthEpicRows.length - 1 && "border-b border-slate-200/50",
                                 )}
                               >
                                 <EpicGanttLaneRow
@@ -6021,6 +6242,9 @@ export function TimelineGrid({
                                   onOpenEpic={onOpenEpic}
                                   onUnscheduleEpic={onUnscheduleEpic}
                                   onDayRangeChange={onMonthEpicDayRangeChange}
+                                  healthStatus={showRoadmapProgress && epicHasDataM ? epicHealthM.status : null}
+                                  healthTooltip={epicTooltipM}
+                                  effortProgressPercent={epicHealthM.progressPercent}
                                   ganttLaneSortIndex={rowIndex}
                                   emphasize={emphasize}
                                   emphasizeTick={emphasizeTick}
@@ -6484,12 +6708,12 @@ export function TimelineGrid({
                         rowGapClass="space-y-2"
                         minHeightStyle={{ minHeight: "72rem" }}
                       >
-                        {ganttSearchAppliedQuarterInitiativeRows.map((group, idx) => (
+                        {ganttHealthFilteredQuarterInitiativeRows.map((group, idx) => (
                           <div
                             key={`q-init-row-${group.timelineRow}`}
                             className={cn(
                               "relative min-w-0 z-10 py-2.5",
-                              idx < ganttSearchAppliedQuarterInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                              idx < ganttHealthFilteredQuarterInitiativeRows.length - 1 && "border-b border-slate-200/50",
                             )}
                             data-gantt-lane-index={idx}
                             data-gantt-timeline-row={group.timelineRow}
@@ -6500,9 +6724,31 @@ export function TimelineGrid({
                                 const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
                                 const columnStart = Math.max(1, row.startS - qLo + 1);
                                 const span = Math.max(row.endS - row.startS + 1, 1);
-                                const stories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
-                                const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
-                                const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                                const initiativeStart = sprintStartDate(currentYear, row.startS);
+                                const initiativeEnd = sprintEndDate(currentYear, row.endS);
+                                const childStatuses = (row.initiative.epics ?? []).map((epic) => {
+                                  const epicEnd = epic.planEndSprint != null
+                                    ? sprintEndDate(currentYear, epic.planEndSprint)
+                                    : initiativeEnd;
+                                  const h = computeProgress({
+                                    stories: epic.userStories ?? [],
+                                    start: initiativeStart,
+                                    end: epicEnd,
+                                    basis: progressBasis,
+                                  });
+                                  return h.status;
+                                });
+                                const aggregateStories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+                                const initHealth = computeInitiativeProgress({
+                                  stories: aggregateStories,
+                                  childStatuses,
+                                  start: initiativeStart,
+                                  end: initiativeEnd,
+                                  basis: progressBasis,
+                                });
+                                const initiativeTooltip = formatHealthTooltip(initHealth);
+                                const initHasData =
+                                  progressBasis === "days" ? initHealth.totalEffort > 0 : aggregateStories.length > 0;
                                 return (
                                   <div
                                     key={`q-init-${row.initiative.id}`}
@@ -6514,10 +6760,13 @@ export function TimelineGrid({
                                       title={row.initiative.title}
                                       icon={row.initiative.icon}
                                       color={row.initiative.color}
-                                      progressPercent={completionPercent}
-                                      progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                                      progressPercent={initHealth.progressPercent}
+                                      progressLabel={initiativeTooltip}
                                       showProgress={showRoadmapProgress}
+                                      healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
+                                      healthTooltip={initiativeTooltip}
                                       onClick={() => onOpenInitiative(row.initiative.id)}
+                                      onDelete={onUnscheduleInitiative ? () => onUnscheduleInitiative(row.initiative.id) : undefined}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", row.initiative.id)}
                                     />
                                   </div>
@@ -6560,12 +6809,12 @@ export function TimelineGrid({
                       rowGapClass="space-y-0.5"
                       minHeightStyle={{ minHeight: "72rem" }}
                     >
-                      {ganttSearchAppliedQuarterEpicRows.map((group, idx) => (
+                      {ganttHealthFilteredQuarterEpicRows.map((group, idx) => (
                         <div
                           key={`q-epic-row-${group.timelineRow}`}
                           className={cn(
                             "relative min-w-0 z-10 py-2.5",
-                            idx < ganttSearchAppliedQuarterEpicRows.length - 1 && "border-b border-slate-200/50",
+                            idx < ganttHealthFilteredQuarterEpicRows.length - 1 && "border-b border-slate-200/50",
                           )}
                           data-gantt-lane-index={idx}
                           data-gantt-timeline-row={group.timelineRow}
@@ -6583,9 +6832,16 @@ export function TimelineGrid({
                               }
                               const columnStart = Math.max(1, previewStart - qLo + 1);
                               const span = Math.max(previewEnd - previewStart + 1, 1);
-                              const stories = row.epic.userStories ?? [];
-                              const finishedStories = stories.filter((s) => s.status === "done" || s.status === "approved").length;
-                              const completionPercent = stories.length > 0 ? Math.round((finishedStories / stories.length) * 100) : 0;
+                              const epicStoriesQ = row.epic.userStories ?? [];
+                              const epicHealthQ = computeProgress({
+                                stories: epicStoriesQ,
+                                start: sprintStartDate(currentYear, previewStart),
+                                end: sprintEndDate(currentYear, previewEnd),
+                                basis: progressBasis,
+                              });
+                              const epicHealthTooltipQ = formatHealthTooltip(epicHealthQ);
+                              const epicHasDataQ =
+                                progressBasis === "days" ? epicHealthQ.totalEffort > 0 : epicStoriesQ.length > 0;
                               const isInitiativeEmphasis =
                                 ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                               const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
@@ -6629,12 +6885,14 @@ export function TimelineGrid({
                                       title={row.epic.title}
                                       icon={row.epic.icon}
                                       color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
-                                      progressPercent={completionPercent}
-                                      progressLabel={stories.length > 0 ? `${finishedStories}/${stories.length} done or approved` : "No user stories"}
+                                      progressPercent={epicHealthQ.progressPercent}
+                                      progressLabel={epicHealthTooltipQ}
                                       isResizing={Boolean(rz)}
                                       emphasizeFlash={emphasizeFlash}
                                       emphasizeTick={emphasizeTick}
                                       showProgress={showRoadmapProgress}
+                                      healthStatus={showRoadmapProgress && epicHasDataQ ? epicHealthQ.status : null}
+                                      healthTooltip={epicHealthTooltipQ}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
