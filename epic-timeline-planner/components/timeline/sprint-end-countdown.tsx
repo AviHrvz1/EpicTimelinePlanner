@@ -1,13 +1,13 @@
 "use client";
 
-import { CalendarDays, Clock, X } from "lucide-react";
+import { CalendarCheck2, CalendarDays, Clock, Send, Sun, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { sprintEndDate, sprintStartDate, monthLaneFromGlobalSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
 
-const DAY_SHORT = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatRemainder(ms: number): {
@@ -116,7 +116,7 @@ export function SprintTimelinePopup({
       onClick={close}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]" />
 
       {/* Card */}
       <div
@@ -151,30 +151,44 @@ export function SprintTimelinePopup({
           </button>
         </div>
 
-        {/* Progress bar */}
-        <div className="border-b border-slate-100 px-6 py-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-slate-700">Sprint progress</span>
-            <span className="text-[13px] font-bold text-slate-900 tabular-nums">{progressPct}%</span>
-          </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+        {/* Progress bar + circular % badge */}
+        <div className="border-b border-slate-100 px-8 pb-5 pt-6">
+          <div className="flex items-center gap-6">
+            <div className="min-w-0 flex-1">
+              <div className="mb-3 text-[14px] font-semibold text-slate-800">Sprint Progress</div>
+              <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 shadow-[0_0_10px_rgba(99,102,241,0.4)] transition-all duration-500"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              {todayInSprint && (
+                <div className="mt-3 text-center text-[13px] font-bold text-indigo-600">
+                  {workingDaysLeft} working day{workingDaysLeft !== 1 ? "s" : ""} left of {totalWorkingDays}
+                </div>
+              )}
+            </div>
+
+            {/* Circular % badge */}
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 shadow-[0_0_8px_rgba(99,102,241,0.3)] transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between text-[12px] font-medium text-slate-500">
-            <span>{MONTH_SHORT[start.getMonth()]} {start.getDate()}</span>
-            {todayInSprint && (
-              <span className="font-bold text-indigo-600">{workingDaysLeft} working day{workingDaysLeft !== 1 ? "s" : ""} left of {totalWorkingDays}</span>
-            )}
-            <span>{MONTH_SHORT[end.getMonth()]} {end.getDate()}</span>
+              className="relative flex size-[72px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 via-indigo-500 to-violet-600 text-white shadow-xl shadow-indigo-500/40 ring-[3px] ring-white"
+              aria-label={`${progressPct}% complete`}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-1 rounded-full bg-gradient-to-b from-white/30 to-transparent"
+              />
+              <span className="relative flex items-baseline gap-[1px] text-[22px] font-extrabold leading-none tabular-nums tracking-tight">
+                {progressPct}
+                <span className="text-[13px] font-bold opacity-90">%</span>
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Day cells */}
-        <div className="px-6 pt-7 pb-5">
-          <div className="flex gap-2">
+        <div className="px-8 pt-10 pb-6">
+          <div className="flex gap-2.5">
             {days.map((day, i) => {
               const dow = day.getDay();
               const isWeekend = dow === 0 || dow === 6;
@@ -184,11 +198,11 @@ export function SprintTimelinePopup({
               return (
                 <div
                   key={i}
-                  className="relative flex min-w-0 flex-1 flex-col items-center gap-1.5"
+                  className="relative flex min-w-0 flex-1 flex-col items-center gap-2"
                 >
-                  {/* "Today" label */}
+                  {/* "Today" pill */}
                   {isToday && (
-                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm shadow-indigo-300">
+                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 px-3 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.12em] text-white shadow-md shadow-indigo-400/50">
                       Today
                     </span>
                   )}
@@ -196,26 +210,26 @@ export function SprintTimelinePopup({
                   {/* Day name */}
                   <span
                     className={cn(
-                      "text-[11px] font-semibold",
+                      "text-[12px] font-semibold tracking-tight",
                       isWeekend ? "text-slate-400" : isToday ? "text-indigo-700" : isPast ? "text-slate-500" : "text-slate-700",
                     )}
                   >
                     {DAY_SHORT[dow]}
                   </span>
 
-                  {/* Day number cell */}
+                  {/* Day number cell — taller, softer shadow, more "card" feel */}
                   <div
                     className={cn(
-                      "flex w-full items-center justify-center rounded-lg py-2.5 text-[14px] font-bold tabular-nums transition-all",
+                      "flex w-full items-center justify-center rounded-xl py-3.5 text-[16px] font-extrabold tabular-nums tracking-tight transition-all",
                       isToday
-                        ? "bg-gradient-to-b from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-300 ring-2 ring-indigo-200"
+                        ? "bg-gradient-to-b from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-400/40 ring-2 ring-white"
                         : isPast && !isWeekend
-                          ? "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
+                          ? "bg-slate-100 text-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-200/60"
                           : isPast && isWeekend
-                            ? "bg-slate-50/60 text-slate-400 ring-1 ring-slate-100"
+                            ? "bg-slate-50 text-slate-300 ring-1 ring-slate-100"
                             : isWeekend
-                              ? "bg-slate-50/60 text-slate-400 ring-1 ring-slate-100"
-                              : "bg-white text-slate-800 ring-1 ring-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:ring-indigo-200",
+                              ? "bg-slate-50 text-slate-400 ring-1 ring-slate-100"
+                              : "bg-white text-slate-800 shadow-[0_1px_3px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70 hover:bg-indigo-50 hover:text-indigo-700 hover:ring-indigo-200",
                     )}
                   >
                     {day.getDate()}
@@ -224,9 +238,9 @@ export function SprintTimelinePopup({
                   {/* Dot indicator */}
                   <div
                     className={cn(
-                      "h-1.5 w-1.5 rounded-full",
+                      "size-1.5 rounded-full",
                       isToday
-                        ? "bg-indigo-500 shadow-[0_0_5px_2px_rgba(99,102,241,0.4)]"
+                        ? "bg-indigo-500 shadow-[0_0_6px_2px_rgba(99,102,241,0.5)]"
                         : isPast && !isWeekend
                           ? "bg-slate-300"
                           : "bg-transparent",
@@ -237,19 +251,19 @@ export function SprintTimelinePopup({
             })}
           </div>
 
-          {/* Today progress line */}
+          {/* Today progress scrubber */}
           {todayInSprint && (() => {
             const todayIndex = days.findIndex((d) => isSameDay(d, today));
             if (todayIndex < 0) return null;
             const pct = ((todayIndex + 0.5) / days.length) * 100;
             return (
-              <div className="relative mt-3 h-1 w-full rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+              <div className="relative mt-4 h-1.5 w-full rounded-full bg-slate-100 ring-1 ring-slate-200/60">
                 <div
                   className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-500"
                   style={{ width: `${pct}%` }}
                 />
                 <div
-                  className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500 shadow-md ring-2 ring-white"
+                  className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500 shadow-md ring-[3px] ring-white"
                   style={{ left: `${pct}%` }}
                 />
               </div>
@@ -257,24 +271,24 @@ export function SprintTimelinePopup({
           })()}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center gap-5 border-t border-slate-200 bg-slate-50 px-6 py-3">
-          <div className="flex items-center gap-2">
-            <div className="size-3 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 shadow-sm shadow-indigo-200" />
-            <span className="text-[12px] font-medium text-slate-700">Today</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="size-3 rounded-sm bg-slate-100 ring-1 ring-slate-300" />
-            <span className="text-[12px] font-medium text-slate-700">Past</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="size-3 rounded-sm bg-white ring-1 ring-slate-300" />
-            <span className="text-[12px] font-medium text-slate-700">Upcoming</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="size-3 rounded-sm bg-slate-50/60 ring-1 ring-slate-200" />
-            <span className="text-[12px] font-medium text-slate-500">Weekend</span>
-          </div>
+        {/* Footer — legend chips with flat colored icons */}
+        <div className="flex flex-wrap items-center gap-6 border-t border-slate-200 bg-slate-50/80 px-8 py-4">
+          <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-800">
+            <Clock className="size-4 text-indigo-600" strokeWidth={2.25} aria-hidden />
+            Today
+          </span>
+          <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-800">
+            <CalendarCheck2 className="size-4 text-slate-600" strokeWidth={2.25} aria-hidden />
+            Past
+          </span>
+          <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-800">
+            <Send className="size-4 text-sky-600" strokeWidth={2.25} aria-hidden />
+            Upcoming
+          </span>
+          <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-800">
+            <Sun className="size-4 text-amber-500" strokeWidth={2.25} aria-hidden />
+            Weekend
+          </span>
         </div>
       </div>
     </div>,

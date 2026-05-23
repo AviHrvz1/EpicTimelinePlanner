@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertOctagon, AlertTriangle, Check, ChevronRight, Folder, GripHorizontal, Hourglass, ListChecks, X, Zap } from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, Check, ChevronRight, Folder, GripHorizontal, Hourglass, ListChecks, X, Zap } from "lucide-react";
 
 import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -180,6 +180,18 @@ export function RoadmapHealthPopover({
     onFilterChange(next);
   };
 
+  // Total of the four status counts — used to size the proportional
+  // progress bar at the bottom.
+  const statusTotal =
+    counts.onTrack + counts.watch + counts.atRisk + counts.overdue;
+  // "Healthy share" — On Track + Watch over the rest. Drives the colored
+  // scrubber so the bar reads green→amber→red→deep-red left to right.
+  const onTrackPct = statusTotal > 0 ? (counts.onTrack / statusTotal) * 100 : 0;
+  const watchPct = statusTotal > 0 ? (counts.watch / statusTotal) * 100 : 0;
+  const atRiskPct = statusTotal > 0 ? (counts.atRisk / statusTotal) * 100 : 0;
+  const overduePct = statusTotal > 0 ? (counts.overdue / statusTotal) * 100 : 0;
+  const healthyPct = onTrackPct + watchPct;
+
   return createPortal(
     <div
       ref={popoverRef}
@@ -187,21 +199,31 @@ export function RoadmapHealthPopover({
       role="dialog"
       aria-label="Roadmap health summary"
       style={{ left: pos.left, top: pos.top }}
-      className="fixed z-[9000] w-[320px] rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-[9000] w-[640px] overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
     >
-      {/* Draggable header */}
+      {/* Gradient header — drag handle + title + close */}
       <div
         onPointerDown={onHandlePointerDown}
         onPointerMove={onHandlePointerMove}
         onPointerUp={onHandlePointerUp}
         onPointerCancel={onHandlePointerUp}
-        className="flex cursor-grab touch-none items-center justify-between gap-2 rounded-t-xl border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white px-3 py-2 select-none active:cursor-grabbing"
+        className="relative flex cursor-grab touch-none items-center justify-between gap-3 bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 px-6 py-4 text-white select-none active:cursor-grabbing"
         title="Drag to move"
       >
-        <div className="flex items-center gap-2">
-          <GripHorizontal className="size-3.5 text-slate-400" aria-hidden />
-          <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-600">
-            Roadmap health
+        {/* Subtle pattern overlay for depth */}
+        <span aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_120%,rgba(255,255,255,0.18),transparent_50%)]" />
+        <div className="relative flex items-center gap-3">
+          <GripHorizontal className="size-4 shrink-0 text-white/50" aria-hidden />
+          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-sm ring-1 ring-white/30 backdrop-blur-sm">
+            <Activity className="size-5 stroke-[2.5]" aria-hidden />
+          </span>
+          <div>
+            <div className="text-[18px] font-extrabold leading-tight tracking-tight">
+              Roadmap Health
+            </div>
+            <div className="text-[12px] font-medium leading-tight text-white/80">
+              {totalBars} {totalBars === 1 ? unitLabel : `${unitLabel}s`} in scope
+            </div>
           </div>
         </div>
         <button
@@ -209,111 +231,155 @@ export function RoadmapHealthPopover({
           type="button"
           onClick={onClose}
           onPointerDown={(e) => e.stopPropagation()}
-          className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          className="relative rounded-md p-1.5 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
           aria-label="Close health summary"
         >
-          <X className="size-3.5" />
+          <X className="size-4" />
         </button>
       </div>
 
-      <div className="p-3 space-y-2.5">
-        {/* Toggle group 1 — bar mode (Initiatives vs Epics) */}
-        <ToggleGroup
-          label="Group by"
-          options={[
-            { value: "initiatives", label: "Initiatives", icon: Zap },
-            { value: "epics", label: "Epics", icon: Folder },
-          ]}
-          value={barMode}
-          onChange={(v) => onBarModeChange(v as "initiatives" | "epics")}
-        />
+      <div className="px-6 pb-5 pt-5">
+        {/* Toggles row — Group by + Progress basis side by side */}
+        <div className="grid grid-cols-2 gap-4">
+          <ToggleGroup
+            label="Group by"
+            options={[
+              { value: "initiatives", label: "Initiatives", icon: Zap },
+              { value: "epics", label: "Epics", icon: Folder },
+            ]}
+            value={barMode}
+            onChange={(v) => onBarModeChange(v as "initiatives" | "epics")}
+          />
+          <ToggleGroup
+            label="Progress basis"
+            options={[
+              { value: "days", label: "Days Left", icon: Hourglass },
+              { value: "stories", label: "Stories Done", icon: ListChecks },
+            ]}
+            value={progressBasis}
+            onChange={(v) => onProgressBasisChange(v as ProgressBasis)}
+          />
+        </div>
 
-        {/* Toggle group 2 — progress basis (Stories count vs Days burned) */}
-        <ToggleGroup
-          label="Progress basis"
-          options={[
-            { value: "days", label: "Days Left", icon: Hourglass },
-            { value: "stories", label: "Stories Done", icon: ListChecks },
-          ]}
-          value={progressBasis}
-          onChange={(v) => onProgressBasisChange(v as ProgressBasis)}
-        />
-
-        {/* Status filter rows */}
-        <div className="pt-1">
-          <div className="mb-1.5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-slate-500">
-            Filter by status
+        {/* Status filter — horizontal pills */}
+        <div className="mt-5">
+          <div className="mb-2 flex items-baseline justify-between">
+            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-700">
+              Filter by status
+            </div>
+            {filter.size > 0 ? (
+              <button
+                type="button"
+                onClick={() => onFilterChange(new Set())}
+                className="text-[11.5px] font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
+              >
+                Clear all
+              </button>
+            ) : null}
           </div>
-          <ul className="space-y-1">
+          <div className="grid grid-cols-4 gap-2.5">
             {STATUS_ORDER.map((status) => {
               const meta = STATUS_META[status];
               const count = counts[status];
               const isActive = filter.has(status);
+              const isZero = count === 0;
               const Icon = meta.icon;
               return (
-                <li key={status}>
-                  <button
-                    type="button"
-                    onClick={() => toggle(status)}
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => toggle(status)}
+                  aria-pressed={isActive}
+                  className={cn(
+                    "group relative inline-flex items-center gap-2.5 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all",
+                    isActive
+                      ? `${meta.activeBg} ${meta.activeBorder} shadow-sm`
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                    isZero && !isActive && "opacity-70",
+                  )}
+                >
+                  <span
                     className={cn(
-                      "flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
-                      isActive
-                        ? `${meta.activeBg} ${meta.activeBorder}`
-                        : "border-transparent hover:bg-slate-50",
+                      "inline-flex size-7 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
+                      meta.dotBg,
                     )}
                   >
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "inline-flex size-5 items-center justify-center rounded-full ring-1 ring-white/40",
-                          isActive ? meta.dotBg : "bg-slate-200",
-                        )}
-                      >
-                        {isActive ? (
-                          <Check className="size-3 stroke-[3] text-white" aria-hidden />
-                        ) : (
-                          <Icon className={cn("size-3 stroke-[2.5]", meta.dotFg)} aria-hidden />
-                        )}
-                      </span>
-                      <span className="text-[13px] font-semibold text-slate-800">{meta.label}</span>
+                    <Icon className={cn("size-3.5 stroke-[2.5]", meta.dotFg)} aria-hidden />
+                  </span>
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-1.5">
+                    <span className="truncate text-[12.5px] font-semibold text-slate-800">{meta.label}</span>
+                    <span
+                      className={cn(
+                        "text-[16px] font-extrabold tabular-nums leading-none",
+                        isZero ? "text-slate-300" : meta.countFg,
+                      )}
+                    >
+                      {count}
                     </span>
-                    <span className="text-[13px] font-bold tabular-nums text-slate-700">{count}</span>
-                  </button>
-                </li>
+                  </span>
+                  {isActive ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "pointer-events-none absolute inset-x-0 bottom-0 h-[2px]",
+                        meta.dotBg,
+                      )}
+                    />
+                  ) : null}
+                </button>
               );
             })}
-          </ul>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-[11.5px] text-slate-500">
-          <span>
-            {totalBars} {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
-            {unestimatedStoryCount > 0 ? ` · ${unestimatedStoryCount} unestimated` : ""}
-          </span>
-          {filter.size > 0 ? (
+        {/* Health distribution bar — stacked segments showing % of each status */}
+        <div className="mt-5">
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+            {statusTotal > 0 ? (
+              <div className="flex h-full w-full">
+                <div className="h-full bg-emerald-500" style={{ width: `${onTrackPct}%` }} />
+                <div className="h-full bg-amber-400" style={{ width: `${watchPct}%` }} />
+                <div className="h-full bg-rose-500" style={{ width: `${atRiskPct}%` }} />
+                <div className="h-full bg-rose-700" style={{ width: `${overduePct}%` }} />
+              </div>
+            ) : null}
+            {/* Scrubber marker at the boundary between healthy and risky */}
+            {statusTotal > 0 ? (
+              <div
+                className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-indigo-600 shadow-md"
+                style={{ left: `${healthyPct}%` }}
+                aria-hidden
+              />
+            ) : null}
+          </div>
+        </div>
+
+        {/* Footer — meta + View Insights CTA */}
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <div className="text-[12px] text-slate-500">
+            <span className="font-semibold text-slate-700">{totalBars}</span>{" "}
+            {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
+            {unestimatedStoryCount > 0 ? (
+              <>
+                <span aria-hidden className="mx-1.5 text-slate-300">·</span>
+                <span className="font-semibold text-amber-700">{unestimatedStoryCount}</span> unestimated
+              </>
+            ) : null}
+          </div>
+          {onOpenInsights ? (
             <button
               type="button"
-              onClick={() => onFilterChange(new Set())}
-              className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+              onClick={() => {
+                onOpenInsights();
+                onClose();
+              }}
+              className="group inline-flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/15 transition-all hover:shadow-lg hover:shadow-indigo-500/35 hover:brightness-110 active:scale-[0.99]"
             >
-              Clear all
+              <span>View Insights</span>
+              <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
             </button>
           ) : null}
         </div>
-
-        {onOpenInsights ? (
-          <button
-            type="button"
-            onClick={() => {
-              onOpenInsights();
-              onClose();
-            }}
-            className="inline-flex w-full items-center justify-between rounded-lg bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-3 py-2 text-[13px] font-semibold text-indigo-700 ring-1 ring-indigo-200/60 transition-all hover:from-sky-100 hover:via-indigo-100 hover:to-violet-100"
-          >
-            <span>View insights</span>
-            <ChevronRight className="size-4" aria-hidden />
-          </button>
-        ) : null}
       </div>
     </div>,
     document.body,
@@ -367,42 +433,56 @@ const STATUS_META: Record<
   {
     label: string;
     icon: typeof Check;
+    /** Round status pill — solid color w/ white icon. */
     dotBg: string;
     dotFg: string;
+    /** Tinted row background + border when filter is active for this row. */
     activeBg: string;
     activeBorder: string;
+    /** Soft gradient fill behind the row, proportional to count. */
+    fillBg: string;
+    /** Count number color when count > 0. */
+    countFg: string;
   }
 > = {
   onTrack: {
     label: "On Track",
     icon: Check,
     dotBg: "bg-emerald-500",
-    dotFg: "text-emerald-700",
+    dotFg: "text-white",
     activeBg: "bg-emerald-50",
     activeBorder: "border-emerald-300",
+    fillBg: "bg-gradient-to-r from-emerald-200/80 to-transparent",
+    countFg: "text-emerald-700",
   },
   watch: {
     label: "Watch",
     icon: AlertTriangle,
     dotBg: "bg-amber-400",
-    dotFg: "text-amber-700",
+    dotFg: "text-amber-950",
     activeBg: "bg-amber-50",
     activeBorder: "border-amber-300",
+    fillBg: "bg-gradient-to-r from-amber-200/80 to-transparent",
+    countFg: "text-amber-700",
   },
   atRisk: {
     label: "At Risk",
     icon: AlertTriangle,
     dotBg: "bg-rose-500",
-    dotFg: "text-rose-700",
+    dotFg: "text-white",
     activeBg: "bg-rose-50",
     activeBorder: "border-rose-300",
+    fillBg: "bg-gradient-to-r from-rose-200/80 to-transparent",
+    countFg: "text-rose-700",
   },
   overdue: {
     label: "Overdue",
     icon: AlertOctagon,
     dotBg: "bg-rose-700",
-    dotFg: "text-rose-800",
+    dotFg: "text-white",
     activeBg: "bg-rose-100",
     activeBorder: "border-rose-400",
+    fillBg: "bg-gradient-to-r from-rose-300/80 to-transparent",
+    countFg: "text-rose-800",
   },
 };

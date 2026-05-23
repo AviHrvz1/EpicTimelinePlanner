@@ -4829,6 +4829,19 @@ export function TimelineGrid({
         />
       ) : null}
       <button
+        ref={progressBtnRef}
+        type="button"
+        aria-pressed={showRoadmapProgress}
+        onClick={() => {
+          if (!showRoadmapProgress) onShowRoadmapProgressChange(true);
+          setHealthPopoverOpen((prev) => (showRoadmapProgress ? !prev : true));
+        }}
+        className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
+      >
+        <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+        Progress
+      </button>
+      <button
         type="button"
         onClick={() => { setRoadmapBarMode("initiatives"); onSummaryStatusQuickFilterChange?.(null); }}
         className={cn(summaryChipBaseClass, roadmapBarMode === "initiatives" ? summaryChipInitiativesOnClass : summaryChipInitiativesIdleClass)}
@@ -4853,63 +4866,17 @@ export function TimelineGrid({
         <span className="truncate">{summaryBadgesForScope.totalStories}</span>
         <span>Stories</span>
       </div>
-      {/* Teams + Progress order depends on view: in single-quarter view
-          Progress comes BEFORE Teams; elsewhere Teams comes BEFORE Progress. */}
-      {focusedQuarter ? (
-        <>
-          <button
-            ref={progressBtnRef}
-            type="button"
-            aria-pressed={showRoadmapProgress}
-            onClick={() => {
-              if (!showRoadmapProgress) onShowRoadmapProgressChange(true);
-              setHealthPopoverOpen((prev) => (showRoadmapProgress ? !prev : true));
-            }}
-            className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-          >
-            <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-            Progress
-          </button>
-          {showGanttTeamPicker ? (
-            <button
-              type="button"
-              aria-pressed={showGanttTeamChips}
-              onClick={() => setShowGanttTeamChips((prev) => !prev)}
-              className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
-            >
-              <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-              Teams
-            </button>
-          ) : null}
-        </>
-      ) : (
-        <>
-          {showGanttTeamPicker ? (
-            <button
-              type="button"
-              aria-pressed={showGanttTeamChips}
-              onClick={() => setShowGanttTeamChips((prev) => !prev)}
-              className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
-            >
-              <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-              Teams
-            </button>
-          ) : null}
-          <button
-            ref={progressBtnRef}
-            type="button"
-            aria-pressed={showRoadmapProgress}
-            onClick={() => {
-              if (!showRoadmapProgress) onShowRoadmapProgressChange(true);
-              setHealthPopoverOpen((prev) => (showRoadmapProgress ? !prev : true));
-            }}
-            className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
-          >
-            <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-            Progress
-          </button>
-        </>
-      )}
+      {showGanttTeamPicker ? (
+        <button
+          type="button"
+          aria-pressed={showGanttTeamChips}
+          onClick={() => setShowGanttTeamChips((prev) => !prev)}
+          className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
+        >
+          <Users className="size-3 shrink-0 sm:size-3.5" aria-hidden />
+          Teams
+        </button>
+      ) : null}
       <RoadmapHealthPopover
         open={healthPopoverOpen}
         anchorRef={progressBtnRef}
