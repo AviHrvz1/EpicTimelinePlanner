@@ -18,6 +18,7 @@ import {
   Flag,
   Folder,
   Map as MapIcon,
+  MapPin,
   SquarePen,
   PieChart,
   Plus,
@@ -316,28 +317,67 @@ function YearRoadmapEmptyStripedLane({
           isDragging ? "opacity-0" : "opacity-100",
         )}>
           <div
-            className="rounded-2xl border border-slate-300/60 px-8 py-5 text-center shadow-[0_8px_24px_-8px_rgba(15,23,42,0.20),0_2px_6px_-2px_rgba(15,23,42,0.10)]"
+            className="flex max-w-2xl items-center gap-6 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-white to-indigo-50/30 px-8 py-6 shadow-[0_12px_32px_-12px_rgba(15,23,42,0.20),0_4px_10px_-4px_rgba(15,23,42,0.10)] ring-1 ring-slate-100/80"
             aria-hidden
           >
-            {variant === "initiatives" ? (
-              <>
-                <p className="text-base font-semibold leading-snug text-slate-800 sm:text-lg">
-                  No initiatives on the {currentYear} roadmap yet
-                </p>
-                <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500 sm:text-[15px]">
-                  Plan epics from the initiative list to fill the timeline.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-base font-semibold leading-snug text-slate-800 sm:text-lg">
-                  No epics on the {currentYear} roadmap yet
-                </p>
-                <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500 sm:text-[15px]">
-                  Drag an epic from the initiative list onto the timeline.
-                </p>
-              </>
-            )}
+            {/* Illustrated icon pair — calendar with a flag, dashed path,
+                map pin. Mirrors the empty-state mockup. */}
+            <div className="relative shrink-0">
+              <div className="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 via-indigo-100 to-violet-100 ring-1 ring-indigo-200/60 shadow-sm">
+                <CalendarDays className="size-9 text-indigo-500" strokeWidth={1.75} aria-hidden />
+                <Flag
+                  className="absolute left-7 top-9 size-4 text-indigo-600 drop-shadow-sm"
+                  strokeWidth={2.25}
+                  fill="currentColor"
+                  aria-hidden
+                />
+              </div>
+              {/* Dashed connector + map-pin destination */}
+              <svg
+                className="pointer-events-none absolute -bottom-2 -right-7 h-12 w-16 text-indigo-300"
+                viewBox="0 0 64 48"
+                fill="none"
+                aria-hidden
+              >
+                <path
+                  d="M2 26 C 16 38, 36 36, 52 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeDasharray="3 4"
+                  strokeLinecap="round"
+                />
+                <circle cx="2" cy="26" r="2.5" fill="currentColor" />
+              </svg>
+              <MapPin
+                className="absolute -right-6 -top-1 size-7 text-violet-500 drop-shadow-md"
+                strokeWidth={1.75}
+                fill="currentColor"
+                fillOpacity={0.25}
+                aria-hidden
+              />
+            </div>
+            {/* Copy */}
+            <div className="min-w-0">
+              {variant === "initiatives" ? (
+                <>
+                  <p className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900">
+                    No initiatives scheduled for {currentYear}
+                  </p>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-slate-500">
+                    Add epics from your initiative list to build out the roadmap timeline.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900">
+                    No epics on the {currentYear} roadmap yet
+                  </p>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-slate-500">
+                    Drag an epic from the initiative list onto the timeline to get started.
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1171,6 +1211,7 @@ function MonthInitiativeGanttLaneRow({
   healthStatus = null,
   healthTooltip,
   effortProgressPercent = null,
+  teamAssignmentChip = null,
 }: {
   initiative: InitiativeItem;
   onOpenInitiative: (initiativeId: string) => void;
@@ -1179,6 +1220,7 @@ function MonthInitiativeGanttLaneRow({
   healthStatus?: HealthStatus | null;
   healthTooltip?: string;
   effortProgressPercent?: number | null;
+  teamAssignmentChip?: { label: string; className: string } | null;
 }) {
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
@@ -1205,6 +1247,7 @@ function MonthInitiativeGanttLaneRow({
             showProgress={showProgress}
             healthStatus={healthStatus}
             healthTooltip={healthTooltip}
+            teamAssignmentChip={teamAssignmentChip}
             onClick={() => onOpenInitiative(initiative.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", initiative.id)}
           />
@@ -4634,6 +4677,7 @@ export function TimelineGrid({
                             showProgress={showRoadmapProgress}
                             healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
                             healthTooltip={initiativeTooltip}
+                            teamAssignmentChip={showGanttTeamChips && row.initiative.team ? epicDeliveryTeamAssignmentChip(row.initiative.team) : null}
                             onClick={() => onOpenInitiative(row.initiative.id)}
                             onDelete={onUnscheduleInitiative ? () => onUnscheduleInitiative(row.initiative.id) : undefined}
                             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", row.initiative.id)}
@@ -4839,7 +4883,7 @@ export function TimelineGrid({
         className={cn(showRoadmapProgress ? summaryChipProgressOnClass : summaryChipProgressIdleClass)}
       >
         <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
-        Progress
+        Health
       </button>
       <button
         type="button"
@@ -4885,7 +4929,13 @@ export function TimelineGrid({
         unestimatedStoryCount={ganttHealthData.unestimatedStoryCount}
         filter={healthFilter}
         onFilterChange={setHealthFilter}
-        onClose={() => setHealthPopoverOpen(false)}
+        onClose={() => {
+          // Closing the popover dismisses the entire health overlay — also
+          // turns off the bar-level progress + health labels so the toolbar
+          // chip reads as unpressed and the Gantt returns to its plain view.
+          setHealthPopoverOpen(false);
+          onShowRoadmapProgressChange(false);
+        }}
         unitLabel={roadmapBarMode === "initiatives" ? "initiative" : "epic"}
         barMode={roadmapBarMode}
         onBarModeChange={(mode) => { setRoadmapBarMode(mode); onSummaryStatusQuickFilterChange?.(null); }}
@@ -6160,6 +6210,7 @@ export function TimelineGrid({
                                   healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
                                   healthTooltip={initTooltip}
                                   effortProgressPercent={initHealth.progressPercent}
+                                  teamAssignmentChip={showGanttTeamChips && initiative.team ? epicDeliveryTeamAssignmentChip(initiative.team) : null}
                                 />
                               </div>
                             );
@@ -6732,6 +6783,7 @@ export function TimelineGrid({
                                       showProgress={showRoadmapProgress}
                                       healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
                                       healthTooltip={initiativeTooltip}
+                                      teamAssignmentChip={showGanttTeamChips && row.initiative.team ? epicDeliveryTeamAssignmentChip(row.initiative.team) : null}
                                       onClick={() => onOpenInitiative(row.initiative.id)}
                                       onDelete={onUnscheduleInitiative ? () => onUnscheduleInitiative(row.initiative.id) : undefined}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", row.initiative.id)}

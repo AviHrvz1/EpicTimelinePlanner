@@ -130,6 +130,9 @@ type InitiativeTimelineBarProps = {
   healthStatus?: HealthStatus | null;
   /** Tooltip shown on hover of the health badge; falls back to the status label. */
   healthTooltip?: string;
+  /** Optional team-assignment pill rendered below the bar (same pattern as
+   *  the epic bar) when the toolbar's Teams toggle is on. */
+  teamAssignmentChip?: { label: string; className: string } | null;
 };
 
 export function InitiativeTimelineBar({
@@ -149,6 +152,7 @@ export function InitiativeTimelineBar({
   onInsightsClick,
   healthStatus = null,
   healthTooltip,
+  teamAssignmentChip = null,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -231,13 +235,24 @@ export function InitiativeTimelineBar({
           ) : null}
         </span>
       </div>
-      {showProgress && healthStatus ? (
-        <div className="-mb-1.5 mt-0.5 flex justify-end pr-1">
-          <HealthBadge
-            status={healthStatus}
-            tooltip={healthTooltip}
-            onClick={onInsightsClick}
-          />
+      {(showProgress && healthStatus) || teamAssignmentChip ? (
+        <div className="-mb-1.5 mt-0.5 flex items-center justify-between gap-2 px-1">
+          {showProgress && healthStatus ? (
+            <HealthBadge
+              status={healthStatus}
+              tooltip={healthTooltip}
+              onClick={onInsightsClick}
+            />
+          ) : <span />}
+          {teamAssignmentChip ? (
+            <span
+              className={cn("inline-flex items-center gap-1", teamAssignmentChip.className)}
+              title={teamAssignmentChip.label}
+            >
+              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
+              {teamAssignmentChip.label}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>

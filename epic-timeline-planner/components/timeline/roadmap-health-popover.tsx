@@ -207,21 +207,21 @@ export function RoadmapHealthPopover({
         onPointerMove={onHandlePointerMove}
         onPointerUp={onHandlePointerUp}
         onPointerCancel={onHandlePointerUp}
-        className="relative flex cursor-grab touch-none items-center justify-between gap-3 bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 px-6 py-4 text-white select-none active:cursor-grabbing"
+        className="relative flex cursor-grab touch-none items-center justify-between gap-3 bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 px-6 py-2.5 text-white select-none active:cursor-grabbing"
         title="Drag to move"
       >
         {/* Subtle pattern overlay for depth */}
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_120%,rgba(255,255,255,0.18),transparent_50%)]" />
         <div className="relative flex items-center gap-3">
           <GripHorizontal className="size-4 shrink-0 text-white/50" aria-hidden />
-          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-sm ring-1 ring-white/30 backdrop-blur-sm">
-            <Activity className="size-5 stroke-[2.5]" aria-hidden />
+          <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white shadow-sm ring-1 ring-white/30 backdrop-blur-sm">
+            <Activity className="size-4 stroke-[2.5]" aria-hidden />
           </span>
           <div>
-            <div className="text-[18px] font-extrabold leading-tight tracking-tight">
+            <div className="text-[15px] font-extrabold leading-tight tracking-tight">
               Roadmap Health
             </div>
-            <div className="text-[12px] font-medium leading-tight text-white/80">
+            <div className="text-[11px] font-medium leading-tight text-white/80">
               {totalBars} {totalBars === 1 ? unitLabel : `${unitLabel}s`} in scope
             </div>
           </div>
@@ -238,7 +238,7 @@ export function RoadmapHealthPopover({
         </button>
       </div>
 
-      <div className="px-6 pb-5 pt-5">
+      <div className="px-6 pb-4 pt-5">
         {/* Toggles row — Group by + Progress basis side by side */}
         <div className="grid grid-cols-2 gap-4">
           <ToggleGroup
@@ -262,8 +262,8 @@ export function RoadmapHealthPopover({
         </div>
 
         {/* Status filter — horizontal pills */}
-        <div className="mt-5">
-          <div className="mb-2 flex items-baseline justify-between">
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-baseline justify-between">
             <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-700">
               Filter by status
             </div>
@@ -291,7 +291,7 @@ export function RoadmapHealthPopover({
                   onClick={() => toggle(status)}
                   aria-pressed={isActive}
                   className={cn(
-                    "group relative inline-flex items-center gap-2.5 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all",
+                    "group relative inline-flex items-center gap-2 overflow-hidden rounded-lg border px-2 py-1 text-left transition-all",
                     isActive
                       ? `${meta.activeBg} ${meta.activeBorder} shadow-sm`
                       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
@@ -300,17 +300,17 @@ export function RoadmapHealthPopover({
                 >
                   <span
                     className={cn(
-                      "inline-flex size-7 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
+                      "inline-flex size-5 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
                       meta.dotBg,
                     )}
                   >
-                    <Icon className={cn("size-3.5 stroke-[2.5]", meta.dotFg)} aria-hidden />
+                    <Icon className={cn("size-2.5 stroke-[2.5]", meta.dotFg)} aria-hidden />
                   </span>
                   <span className="flex min-w-0 flex-1 items-center justify-between gap-1.5">
-                    <span className="truncate text-[12.5px] font-semibold text-slate-800">{meta.label}</span>
+                    <span className="truncate text-[12px] font-semibold text-slate-800">{meta.label}</span>
                     <span
                       className={cn(
-                        "text-[16px] font-extrabold tabular-nums leading-none",
+                        "text-[14px] font-extrabold tabular-nums leading-none",
                         isZero ? "text-slate-300" : meta.countFg,
                       )}
                     >
@@ -333,8 +333,8 @@ export function RoadmapHealthPopover({
         </div>
 
         {/* Health distribution bar — stacked segments showing % of each status */}
-        <div className="mt-5">
-          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+        <div className="mt-3">
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
             {statusTotal > 0 ? (
               <div className="flex h-full w-full">
                 <div className="h-full bg-emerald-500" style={{ width: `${onTrackPct}%` }} />
@@ -355,7 +355,7 @@ export function RoadmapHealthPopover({
         </div>
 
         {/* Footer — meta + View Insights CTA */}
-        <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="mt-3 flex items-center justify-between gap-4">
           <div className="text-[12px] text-slate-500">
             <span className="font-semibold text-slate-700">{totalBars}</span>{" "}
             {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
@@ -373,10 +373,10 @@ export function RoadmapHealthPopover({
                 onOpenInsights();
                 onClose();
               }}
-              className="group inline-flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/15 transition-all hover:shadow-lg hover:shadow-indigo-500/35 hover:brightness-110 active:scale-[0.99]"
+              className="group inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 text-[12px] font-bold text-white shadow-md shadow-indigo-500/25 ring-1 ring-white/15 transition-all hover:shadow-lg hover:shadow-indigo-500/35 hover:brightness-110 active:scale-[0.99]"
             >
               <span>View Insights</span>
-              <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+              <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
             </button>
           ) : null}
         </div>

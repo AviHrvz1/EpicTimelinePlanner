@@ -5851,7 +5851,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         surfaceAnchorRef={planningRightSurfaceRef}
       />
       {confirmDialog ? (
-        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/15 backdrop-blur-[2px] p-4">
           <div
             className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl ring-1 ring-slate-200/60"
             role="dialog"
