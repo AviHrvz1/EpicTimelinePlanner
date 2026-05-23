@@ -4744,15 +4744,11 @@ export function TimelineGrid({
         progressBasis={progressBasis}
         onProgressBasisChange={onProgressBasisChange}
         onOpenInsights={() => {
-          if (typeof window !== "undefined") {
-            const params = new URLSearchParams();
-            params.set("sprintView", "epic-insights");
-            if (healthFilter.size > 0) {
-              params.set("healthFilter", Array.from(healthFilter).join(","));
-            }
-            params.set("progressBasis", progressBasis);
-            window.open(`/epic-insights?${params.toString()}`, "_blank");
-          }
+          // Same effect as clicking the side-rail's "Insights" menu item:
+          // switches the planner's in-page tab to the insights surface
+          // (MonthAnalytics) without leaving the screen or opening a new
+          // window. The popover then closes itself.
+          setQuarterViewTab("insights");
         }}
       />
       <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>
@@ -5422,7 +5418,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex h-[108px] flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-56" : "w-[3.25rem]",
             )}
             onMouseLeave={() => {
@@ -5637,7 +5633,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex h-[108px] flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-56" : "w-[3.25rem]",
             )}
             onMouseLeave={() => {
@@ -5730,7 +5726,7 @@ export function TimelineGrid({
         <div className="relative z-30 h-0">
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex h-[112px] flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
               isRailExpanded ? "w-56" : "w-[3.25rem]",
             )}
             onMouseLeave={() => setIsRailExpanded(false)}
@@ -5783,31 +5779,6 @@ export function TimelineGrid({
                 )}
               >
                 Portfolio Insights
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuarterViewTab("capacity")}
-              title="Portfolio Capacity"
-              onMouseEnter={() => setIsRailExpanded(true)}
-              className={cn(
-                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
-              isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
-                quarterViewTab === "capacity"
-                  ? planRailTabActiveClass
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-              )}
-            >
-              <Thermometer className="size-[18px]" aria-hidden />
-              <span className="sr-only">Portfolio Capacity</span>
-              <span
-                aria-hidden
-                className={cn(
-                  railLabelBaseClass,
-                  isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
-                )}
-              >
-                Portfolio Capacity
               </span>
             </button>
           </div>
@@ -5871,10 +5842,10 @@ export function TimelineGrid({
             )}
           >
             {monthPlanTab === "epic-gantt" && activeMonth != null ? (
-              <div className="relative flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5">
-                <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-4">
+              <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-3 pb-3 pt-0.5 sm:px-5 sm:pb-5 sm:pt-1">
+                <div className="relative z-[1] flex min-h-0 flex-1 flex-col gap-2">
                 <div className="grid min-w-0 shrink-0 gap-3" style={epicMonthGridStyle}>
-                  <div className="col-span-2 mb-2">
+                  <div className="col-span-2 mb-0">
                     <div className="grid min-w-0 grid-cols-2 gap-3">
                       <button
                         type="button"

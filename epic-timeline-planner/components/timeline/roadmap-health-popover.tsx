@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertOctagon, AlertTriangle, Check, ChevronRight, Folder, GripHorizontal, X, Zap } from "lucide-react";
+import { AlertOctagon, AlertTriangle, Check, ChevronRight, Folder, GripHorizontal, Hourglass, ListChecks, X, Zap } from "lucide-react";
 
 import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -232,8 +232,8 @@ export function RoadmapHealthPopover({
         <ToggleGroup
           label="Progress basis"
           options={[
-            { value: "days", label: "Days left" },
-            { value: "stories", label: "Stories done" },
+            { value: "days", label: "Days Left", icon: Hourglass },
+            { value: "stories", label: "Stories Done", icon: ListChecks },
           ]}
           value={progressBasis}
           onChange={(v) => onProgressBasisChange(v as ProgressBasis)}
