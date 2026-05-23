@@ -4170,6 +4170,36 @@ export function TimelineGrid({
     progressBasis,
   ]);
 
+  // Year-roadmap rows after the active health filter is applied. Mirrors the
+  // search-filter pattern: items whose status isn't in the filter set get
+  // dropped, and any row that ends up empty is dropped too. When the filter
+  // set is empty we return the input rows untouched.
+  const ganttHealthFilteredYearInitiativeRows = useMemo(() => {
+    if (healthFilter.size === 0) return ganttSearchAppliedYearInitiativeRows;
+    return ganttSearchAppliedYearInitiativeRows
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((i) => {
+          const s = ganttHealthData.statusByBarId.get(i.initiative.id);
+          return s != null && healthFilter.has(s);
+        }),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [ganttSearchAppliedYearInitiativeRows, ganttHealthData.statusByBarId, healthFilter]);
+
+  const ganttHealthFilteredYearEpicRows = useMemo(() => {
+    if (healthFilter.size === 0) return ganttSearchAppliedYearEpicRows;
+    return ganttSearchAppliedYearEpicRows
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((i) => {
+          const s = ganttHealthData.statusByBarId.get(i.epic.id);
+          return s != null && healthFilter.has(s);
+        }),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [ganttSearchAppliedYearEpicRows, ganttHealthData.statusByBarId, healthFilter]);
+
   // Clear the active health filter whenever the view mode swaps so a filter
   // pinned in "epics" view doesn't silently survive into "initiatives" view
   // (different bar set → could leave the user with an empty roadmap).
@@ -4397,12 +4427,12 @@ export function TimelineGrid({
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
               <StripedGanttHorizontalGuides />
-              {ganttSearchAppliedYearInitiativeRows.map((group, idx) => (
+              {ganttHealthFilteredYearInitiativeRows.map((group, idx) => (
                 <div
                   key={`year-init-row-${group.timelineRow}`}
                   className={cn(
                     "relative min-w-0 z-10 py-1.5",
-                    idx < ganttSearchAppliedYearInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                    idx < ganttHealthFilteredYearInitiativeRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
@@ -4437,16 +4467,10 @@ export function TimelineGrid({
                       const initiativeTooltip = formatHealthTooltip(initHealth);
                       const initHasData =
                         progressBasis === "days" ? initHealth.totalEffort > 0 : aggregateStories.length > 0;
-                      const initIsDimmed =
-                        healthFilter.size > 0 &&
-                        (!initHasData || !healthFilter.has(initHealth.status));
                       return (
                         <div
                           key={`year-init-${row.initiative.id}`}
-                          className={cn(
-                            "relative min-w-0 rounded-lg pt-2 pb-2 z-20 transition-opacity",
-                            initIsDimmed && "pointer-events-none opacity-25",
-                          )}
+                          className="relative min-w-0 rounded-lg pt-2 pb-2 z-20"
                           style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                         >
                           <InitiativeTimelineBar
@@ -4496,12 +4520,12 @@ export function TimelineGrid({
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
               <StripedGanttHorizontalGuides />
-              {ganttSearchAppliedYearEpicRows.map((group, idx) => (
+              {ganttHealthFilteredYearEpicRows.map((group, idx) => (
                 <div
                   key={`year-epic-row-${group.timelineRow}`}
                   className={cn(
                     "relative min-w-0 z-10 py-1.5",
-                    idx < ganttSearchAppliedYearEpicRows.length - 1 && "border-b border-slate-200/50",
+                    idx < ganttHealthFilteredYearEpicRows.length - 1 && "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
@@ -4545,9 +4569,6 @@ export function TimelineGrid({
                       const resizeEdgeClass =
                         "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
                       const yearInset = epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
-                      const epicIsDimmed =
-                        healthFilter.size > 0 &&
-                        (!epicHasData || !healthFilter.has(epicHealth.status));
                       return (
                         <div
                           key={`year-epic-${row.epic.id}`}
@@ -4555,11 +4576,7 @@ export function TimelineGrid({
                             if (node) barElsRef.current.set(row.epic.id, node);
                             else barElsRef.current.delete(row.epic.id);
                           }}
-                          className={cn(
-                            "relative min-w-0 rounded-lg pt-2 pb-2 transition-opacity",
-                            rz ? "z-0 opacity-70" : "z-20",
-                            epicIsDimmed && "pointer-events-none opacity-25",
-                          )}
+                          className={cn("relative min-w-0 rounded-lg pt-2 pb-2", rz ? "z-0 opacity-70" : "z-20")}
                           style={{ gridColumn: `${columnStart} / span ${span}`, gridRow: 1 }}
                         >
                           <div

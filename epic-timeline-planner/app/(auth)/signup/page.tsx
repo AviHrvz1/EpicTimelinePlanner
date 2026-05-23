@@ -16,7 +16,7 @@ const VISIBLE_OAUTH_PROVIDERS = {
  */
 export default function SignupPage() {
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
       <Link
         href="/login"
         className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-indigo-600 transition-colors hover:text-indigo-700 hover:underline"
@@ -24,16 +24,16 @@ export default function SignupPage() {
         <ArrowLeft className="size-3.5" />
         Back to sign in
       </Link>
-      <div className="space-y-2 text-center">
-        <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
+      <div className="space-y-1 text-center">
+        <h1 className="text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
           Create your account
         </h1>
-        <p className="text-[14px] leading-relaxed text-slate-500">
+        <p className="text-[13.5px] leading-relaxed text-slate-500">
           Get started — it&apos;s free.
         </p>
       </div>
       <SignupForm enabledProviders={VISIBLE_OAUTH_PROVIDERS} />
-      <p className="pt-4 text-center text-[13.5px] leading-relaxed text-slate-500">
+      <p className="pt-0 text-center text-[13px] leading-relaxed text-slate-500">
         By proceeding, you agree to the{" "}
         <Link href="/legal/terms" className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
           Terms of Service

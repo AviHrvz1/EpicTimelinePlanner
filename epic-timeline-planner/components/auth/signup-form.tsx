@@ -70,53 +70,55 @@ export function SignupForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-3.5">
       {(enabledProviders.google || enabledProviders.apple || enabledProviders.microsoft) && (
         <>
           <OAuthButtons enabledProviders={enabledProviders} />
-          <div className="flex items-center gap-4 py-2">
+          <div className="flex items-center gap-4 py-0.5">
             <div className="h-px flex-1 bg-slate-200" />
             <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-500">Or</span>
             <div className="h-px flex-1 bg-slate-200" />
           </div>
         </>
       )}
-      <div className="space-y-2.5">
-        <label htmlFor="signup-name" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
-          Name
-        </label>
-        <input
-          id="signup-name"
-          name="name"
-          type="text"
-          autoComplete="name"
-          required
-          minLength={2}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-          placeholder="Your name"
-        />
+      <div className="grid gap-3.5 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <label htmlFor="signup-name" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
+            Name
+          </label>
+          <input
+            id="signup-name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            required
+            minLength={2}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            placeholder="Your name"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="signup-email" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
+            Email
+          </label>
+          <input
+            id="signup-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            placeholder="you@example.com"
+          />
+        </div>
       </div>
 
-      <div className="space-y-2.5">
-        <label htmlFor="signup-email" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
-          Email
-        </label>
-        <input
-          id="signup-email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-          placeholder="you@example.com"
-        />
-      </div>
-
-      <div className="space-y-2.5">
+      <div className="space-y-1.5">
         <label htmlFor="signup-password" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
           Password
         </label>

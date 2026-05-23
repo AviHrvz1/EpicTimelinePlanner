@@ -181,7 +181,7 @@ export function LoginForm({
   return (
     <>
       <WelcomeOverlay name={welcomeName} />
-      <form onSubmit={onSubmit} className="space-y-5">
+      <form onSubmit={onSubmit} className="space-y-3.5">
       {/* Inline error banner — surfaces credential / lockout / rate-limit
           messages right above the inputs where the user is already looking,
           instead of relying on a toast notification that can be missed. */}
@@ -213,7 +213,7 @@ export function LoginForm({
       {(enabledProviders.google || enabledProviders.apple || enabledProviders.microsoft) && (
         <>
           <OAuthButtons enabledProviders={enabledProviders} callbackURL={callbackURL} />
-          <div className="flex items-center gap-4 py-2">
+          <div className="flex items-center gap-4 py-0.5">
             <div className="h-px flex-1 bg-slate-200" />
             <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-slate-500">Or</span>
             <div className="h-px flex-1 bg-slate-200" />
@@ -221,7 +221,7 @@ export function LoginForm({
         </>
       )}
 
-      <div className="space-y-2.5">
+      <div className="space-y-1.5">
         <div className="flex h-5 items-center justify-between">
           <label htmlFor="login-email" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
             Email
@@ -249,7 +249,7 @@ export function LoginForm({
         </div>
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-1.5">
         <div className="flex h-5 items-center justify-between">
           <label htmlFor="login-password" className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-600">
             Password
