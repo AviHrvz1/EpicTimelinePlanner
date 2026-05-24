@@ -47,7 +47,7 @@ import { formatHealthTooltip } from "@/components/timeline/health-badge";
 import { RoadmapHealthPopover, type ProgressBasis } from "@/components/timeline/roadmap-health-popover";
 import { computeInitiativeProgress, computeProgress, type HealthStatus } from "@/lib/progress";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
-import { MonthAnalytics } from "@/components/timeline/month-analytics";
+import { MonthAnalytics, MonthAnalyticsSkeleton } from "@/components/timeline/month-analytics";
 import { CapacityPlanTeamCombobox } from "@/components/timeline/capacity-plan-team-combobox";
 import { MonthTeamCapacityBoard } from "@/components/timeline/month-team-capacity";
 import { QuarterTeamCapacityBoard } from "@/components/timeline/quarter-team-capacity";
@@ -127,6 +127,91 @@ function openInsightsTab(kind: "epic" | "initiative", id: string) {
   }
   params.set("sprintView", "epic-insights");
   window.open(`/epic-insights?${params.toString()}`, "_blank");
+}
+
+/**
+ * Defer-mount heavy subtrees (e.g. the Insights panel) with a crossfade so the
+ * user sees a sized skeleton instantly and then a smooth fade into the real
+ * tree once it has laid out — no skeleton → content "pop".
+ *
+ * Phases:
+ *  1. `placeholder` — only the skeleton is mounted; click feels instant.
+ *  2. `settling`    — children mount underneath (opacity 0) so React commits
+ *     the heavy tree off-screen while the skeleton is still painted on top.
+ *  3. `ready`       — fade out the skeleton + fade in the children together.
+ *  4. `done`        — skeleton unmounts after the fade completes.
+ *
+ * The two stacked rAFs in step 2 → 3 give charts a paint to measure with
+ * `ResponsiveContainer` before the fade-in starts. Without that buffer, the
+ * fade would also be revealing the chart-settling jank we're trying to hide.
+ */
+const DEFERRED_MOUNT_FADE_MS = 160;
+function DeferredMount({
+  placeholder,
+  children,
+}: {
+  placeholder: ReactNode;
+  children: ReactNode;
+}) {
+  type Phase = "placeholder" | "settling" | "ready" | "done";
+  const [phase, setPhase] = useState<Phase>("placeholder");
+
+  useEffect(() => {
+    if (phase !== "placeholder") return;
+    const id = requestAnimationFrame(() => setPhase("settling"));
+    return () => cancelAnimationFrame(id);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "settling") return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setPhase("ready"));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    const t = window.setTimeout(() => setPhase("done"), DEFERRED_MOUNT_FADE_MS + 20);
+    return () => window.clearTimeout(t);
+  }, [phase]);
+
+  if (phase === "placeholder") return <>{placeholder}</>;
+  if (phase === "done") return <>{children}</>;
+
+  const fadeIn = phase === "ready";
+  return (
+    <div className="relative">
+      {/* Real content — stays mounted from `settling` on; fades up to 1 in `ready`. */}
+      <div
+        className="transition-opacity ease-out"
+        style={{
+          opacity: fadeIn ? 1 : 0,
+          transitionDuration: `${DEFERRED_MOUNT_FADE_MS}ms`,
+        }}
+      >
+        {children}
+      </div>
+      {/* Skeleton — overlayed on top, fades to 0 in `ready`, then unmounts in `done`. */}
+      <div
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute inset-0 transition-opacity ease-out",
+          fadeIn && "pointer-events-none",
+        )}
+        style={{
+          opacity: fadeIn ? 0 : 1,
+          transitionDuration: `${DEFERRED_MOUNT_FADE_MS}ms`,
+        }}
+      >
+        {placeholder}
+      </div>
+    </div>
+  );
 }
 
 /** Vertical sprint columns + subtle month pairs (2 sprints) for roadmap Gantt lanes. */
@@ -6598,22 +6683,24 @@ export function TimelineGrid({
                 );
               })()
             ) : monthPlanTab === "month-status" ? (
-              <div className="p-3 sm:p-5">
-                <MonthAnalytics
-                  initiatives={initiatives}
-                  month={activeMonth}
-                  planYear={currentYear}
-                  filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
-                  onOpenEpic={onOpenEpic}
-                  onOpenStory={onOpenStory ?? (() => {})}
-                  onOpenSprintKanban={(yearSprint, teamId) =>
-                    onEnterSprintStoryBoard?.(yearSprint, sprintStoryBoardEpicTeamFilter(teamId))
-                  }
-                  initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
-                  initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-                  onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
-                />
-              </div>
+              <DeferredMount placeholder={<MonthAnalyticsSkeleton />}>
+                <div className="p-3 sm:p-5">
+                  <MonthAnalytics
+                    initiatives={initiatives}
+                    month={activeMonth}
+                    planYear={currentYear}
+                    filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
+                    onOpenEpic={onOpenEpic}
+                    onOpenStory={onOpenStory ?? (() => {})}
+                    onOpenSprintKanban={(yearSprint, teamId) =>
+                      onEnterSprintStoryBoard?.(yearSprint, sprintStoryBoardEpicTeamFilter(teamId))
+                    }
+                    initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
+                    initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
+                    onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+                  />
+                </div>
+              </DeferredMount>
             ) : (
               <div className="p-3 sm:p-5">
                 <SprintAnalytics
@@ -7027,39 +7114,43 @@ export function TimelineGrid({
         )}
       >
         {activeMonth ? null : !focusedQuarter && quarterViewTab === "insights" ? (
-          <MonthAnalytics
-            initiatives={initiatives}
-            month={1}
-            periodMonths={MONTHS.map((_, i) => i + 1)}
-            periodLabel="Year"
-            planYear={currentYear}
-            filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
-            onOpenEpic={onOpenEpic}
-            onOpenStory={onOpenStory ?? (() => {})}
-            onOpenSprintKanban={(yearSprint, teamId) =>
-              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
-            }
-            initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
-            initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-            onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
-          />
+          <DeferredMount placeholder={<MonthAnalyticsSkeleton />}>
+            <MonthAnalytics
+              initiatives={initiatives}
+              month={1}
+              periodMonths={MONTHS.map((_, i) => i + 1)}
+              periodLabel="Year"
+              planYear={currentYear}
+              filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
+              onOpenEpic={onOpenEpic}
+              onOpenStory={onOpenStory ?? (() => {})}
+              onOpenSprintKanban={(yearSprint, teamId) =>
+                onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+              }
+              initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
+              initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
+              onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+            />
+          </DeferredMount>
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
-          <MonthAnalytics
-            initiatives={initiatives}
-            month={focusedQuarter.months[0]}
-            periodMonths={[...focusedQuarter.months]}
-            periodLabel={focusedQuarter.label}
-            planYear={currentYear}
-            filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
-            onOpenEpic={onOpenEpic}
-            onOpenStory={onOpenStory ?? (() => {})}
-            onOpenSprintKanban={(yearSprint, teamId) =>
-              onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
-            }
-            initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
-            initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-            onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
-          />
+          <DeferredMount placeholder={<MonthAnalyticsSkeleton />}>
+            <MonthAnalytics
+              initiatives={initiatives}
+              month={focusedQuarter.months[0]}
+              periodMonths={[...focusedQuarter.months]}
+              periodLabel={focusedQuarter.label}
+              planYear={currentYear}
+              filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
+              onOpenEpic={onOpenEpic}
+              onOpenStory={onOpenStory ?? (() => {})}
+              onOpenSprintKanban={(yearSprint, teamId) =>
+                onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
+              }
+              initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
+              initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
+              onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+            />
+          </DeferredMount>
         ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
           <QuarterTeamCapacityBoard
             initiatives={initiatives}

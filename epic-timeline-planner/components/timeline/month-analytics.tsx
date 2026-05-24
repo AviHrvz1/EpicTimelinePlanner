@@ -60,7 +60,9 @@ import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
-import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint } from "@/lib/year-sprint";
+import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
+import { computeProgress, computeInitiativeProgress, type HealthStatus } from "@/lib/progress";
+import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 
 type BurndownMetric = "daysLeft" | "storyCount";
 type WorkloadStatusKey = "todo" | "inProgress" | "done" | "approved";
@@ -601,6 +603,16 @@ export function MonthAnalytics({
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
+  /**
+   * Recharts' entry animations on a cold mount run *while* `ResponsiveContainer`
+   * is still measuring — bars/lines/pie slices visibly settle, which reads as
+   * a janky open. Disable animations on the very first paint and re-enable on
+   * subsequent renders (filter changes, drilldowns, etc.).
+   */
+  const [chartsReady, setChartsReady] = useState(false);
+  useEffect(() => {
+    setChartsReady(true);
+  }, []);
   const [selectedEpicId, setSelectedEpicId] = useState<string>(initialSelectedEpicId ?? "all");
   const [epicInput, setEpicInput] = useState("");
   const [isEpicDropdownOpen, setIsEpicDropdownOpen] = useState(false);
@@ -652,15 +664,48 @@ export function MonthAnalytics({
   );
   const epicComboOptions = useMemo(
     () =>
-      monthEpics.map(({ epic, initiative }) => ({
-        id: epic.id,
-        label: epic.title,
-        initiativeId: initiative.id,
-        initiativeTitle: initiative.title,
-        initiativeIcon: initiative.icon && initiative.icon.trim().length > 0 ? initiative.icon : "📁",
-        searchText: `${epic.title} ${initiative.title}`.toLowerCase(),
-      })),
-    [monthEpics],
+      monthEpics.map(({ epic, initiative }) => {
+        // Resolve display label for the epic's lane (e.g. "Mobile", "Platform").
+        // Falls back to the raw team id if it isn't in MONTH_TEAM_COLUMNS, and
+        // to null when the epic is unassigned — so the dropdown can show a
+        // "Unassigned" hint rather than blank space.
+        const teamLabel = epic.team
+          ? (MONTH_TEAM_COLUMNS.find((t) => t.id === epic.team)?.label ?? epic.team)
+          : null;
+        // Health from the epic's planned bounds. Falls back to null when the
+        // epic isn't scheduled — we hide the badge in that case rather than
+        // making something up.
+        let health: HealthStatus | null = null;
+        let healthTooltip: string | null = null;
+        if (epic.planStartMonth != null && epic.planEndMonth != null) {
+          const start = sprintStartDate(
+            planYear,
+            globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
+          );
+          const end = sprintEndDate(
+            planYear,
+            globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
+          );
+          const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis: "days" });
+          if ((epic.userStories ?? []).length > 0) {
+            health = h.status;
+            healthTooltip = formatHealthTooltip(h);
+          }
+        }
+        return {
+          id: epic.id,
+          label: epic.title,
+          initiativeId: initiative.id,
+          initiativeTitle: initiative.title,
+          initiativeIcon: initiative.icon && initiative.icon.trim().length > 0 ? initiative.icon : "📁",
+          searchText: `${epic.title} ${initiative.title} ${teamLabel ?? ""}`.toLowerCase(),
+          teamLabel,
+          teamId: epic.team,
+          health,
+          healthTooltip,
+        };
+      }),
+    [monthEpics, planYear],
   );
   const selectedEpicOption = useMemo(
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
@@ -721,6 +766,8 @@ export function MonthAnalytics({
       initiativeTitle: string;
       initiativeIcon: string;
       epics: typeof filteredEpicOptions;
+      health: HealthStatus | null;
+      healthTooltip: string | null;
     }> = [];
     const byInitiative = new Map<string, number>();
     filteredEpicOptions.forEach((opt) => {
@@ -732,13 +779,67 @@ export function MonthAnalytics({
           initiativeTitle: opt.initiativeTitle,
           initiativeIcon: opt.initiativeIcon,
           epics: [opt],
+          health: null,
+          healthTooltip: null,
         });
       } else {
         groups[idx]!.epics.push(opt);
       }
     });
+    // For each initiative group: a rollup health from the matching
+    // InitiativeItem. We resolve the initiative via `monthEpics` since the
+    // filtered options only carry the id.
+    for (const group of groups) {
+      // Find the matching initiative row in monthEpics. Use the FIRST epic's
+      // initiative as the source — they all share the same one by construction.
+      const initRow = monthEpics.find((row) => row.initiative.id === group.initiativeId);
+      if (!initRow) continue;
+      const initiative = initRow.initiative;
+      const epicsForInit = monthEpics.filter((row) => row.initiative.id === group.initiativeId).map((row) => row.epic);
+      const childStatuses: HealthStatus[] = [];
+      const aggregateStories = epicsForInit.flatMap((epic) => epic.userStories ?? []);
+      for (const epic of epicsForInit) {
+        if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+        const start = sprintStartDate(
+          planYear,
+          globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
+        );
+        const end = sprintEndDate(
+          planYear,
+          globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
+        );
+        childStatuses.push(
+          computeProgress({ stories: epic.userStories ?? [], start, end, basis: "days" }).status,
+        );
+      }
+      // The initiative's own bar bounds — use the union of its epics, mirroring
+      // how the year-Gantt rolls up. Fall back to the period bounds when the
+      // initiative has no scheduled epics so we still get a meaningful date.
+      const scheduledEpics = epicsForInit.filter((e) => e.planStartMonth != null && e.planEndMonth != null);
+      const periodStartMonth = scopeStartMonth;
+      const periodEndMonth = scopeEndMonth;
+      const initStartMonth = scheduledEpics.length > 0
+        ? Math.min(...scheduledEpics.map((e) => e.planStartMonth as number))
+        : periodStartMonth;
+      const initEndMonth = scheduledEpics.length > 0
+        ? Math.max(...scheduledEpics.map((e) => e.planEndMonth as number))
+        : periodEndMonth;
+      const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(initStartMonth, 1));
+      const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(initEndMonth, 2));
+      const initHealth = computeInitiativeProgress({
+        stories: aggregateStories,
+        childStatuses,
+        start: initStart,
+        end: initEnd,
+        basis: "days",
+      });
+      if (aggregateStories.length > 0) {
+        group.health = initHealth.status;
+        group.healthTooltip = `${initiative.title} · ${formatHealthTooltip(initHealth)}`;
+      }
+    }
     return groups;
-  }, [filteredEpicOptions]);
+  }, [filteredEpicOptions, monthEpics, planYear, scopeStartMonth, scopeEndMonth]);
   const selectedWorkloadStatuses = useMemo<WorkloadStatusKey[]>(
     () =>
       workloadStatusFilters.includes("all")
@@ -2002,7 +2103,12 @@ export function MonthAnalytics({
                         className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 transition hover:bg-indigo-50 hover:text-indigo-700"
                       >
                         <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
-                        {group.initiativeTitle}
+                        <span className="truncate">{group.initiativeTitle}</span>
+                        {group.health ? (
+                          <span className="ml-auto inline-flex shrink-0 normal-case tracking-normal">
+                            <HealthBadge status={group.health} tooltip={group.healthTooltip ?? undefined} />
+                          </span>
+                        ) : null}
                       </button>
                       {group.epics.map((opt) => (
                         <button
@@ -2018,7 +2124,18 @@ export function MonthAnalytics({
                           className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
                         >
                           <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
-                          {opt.label}
+                          <span className="truncate">{opt.label}</span>
+                          {opt.teamLabel ? (
+                            <span className="ml-auto inline-flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
+                              {opt.teamLabel}
+                            </span>
+                          ) : null}
+                          {opt.health ? (
+                            <span className={cn("inline-flex shrink-0", !opt.teamLabel && "ml-auto")}>
+                              <HealthBadge status={opt.health} tooltip={opt.healthTooltip ?? undefined} />
+                            </span>
+                          ) : null}
                         </button>
                       ))}
                     </div>
@@ -2245,6 +2362,7 @@ export function MonthAnalytics({
                     label={piePercentLabel}
                     labelLine={false}
                     filter="url(#monthPieShadow)"
+                    isAnimationActive={chartsReady}
                     onClick={(entry) => openStatusDrilldown(String((entry as { name?: string }).name ?? ""))}
                   >
                     {pieData.map((entry) => (
@@ -2409,6 +2527,7 @@ export function MonthAnalytics({
                         strokeWidth={2}
                         dot={false}
                         name={burndownFocusedEpicOption.epic.title}
+                        isAnimationActive={chartsReady}
                       />
                     ) : monthBurndownEpics.map((epic, idx) =>
                       burndownVisibleKeys.includes(epic.id) ? (
@@ -2420,6 +2539,7 @@ export function MonthAnalytics({
                         strokeWidth={2}
                         dot={false}
                         name={epic.title}
+                        isAnimationActive={chartsReady}
                       />
                       ) : null,
                     )}
@@ -2432,6 +2552,7 @@ export function MonthAnalytics({
                         strokeDasharray="5 4"
                         dot={false}
                         name="Epic ideal to due"
+                        isAnimationActive={chartsReady}
                       />
                     ) : null}
                     {burndownFocusedEpicOption && monthEndMarker ? (
@@ -2751,6 +2872,7 @@ export function MonthAnalytics({
                     {WORKLOAD_BAR_SEGMENTS.map((s) => (
                       <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
                         minPointSize={2}
+                        isAnimationActive={chartsReady}
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
                         style={{ cursor: "pointer" }}
@@ -3297,6 +3419,60 @@ export function MonthAnalytics({
 
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * Placeholder rendered for one frame before the full {@link MonthAnalytics}
+ * tree mounts (see `DeferredMount` in timeline-grid). Matches the three-row
+ * panel grid so the layout doesn't shift when the real charts swap in.
+ */
+export function MonthAnalyticsSkeleton() {
+  const card = "rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3";
+  const band = "h-[clamp(12.5rem,27vh,20rem)] min-h-[12.5rem]";
+  const pieBand = "min-h-[14rem] lg:h-[clamp(14rem,30vh,22rem)]";
+  const shimmer = "animate-pulse bg-slate-100";
+  return (
+    <section className="p-3 sm:p-5" aria-busy="true" aria-live="polite">
+      <div className="mb-4 flex items-center gap-2">
+        <div className={cn("h-6 w-40 rounded-md", shimmer)} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+        <div className={cn(card, "lg:col-span-1 lg:h-full")}>
+          <div className={cn("mb-2 h-5 w-32 rounded", shimmer)} />
+          <div className={cn(pieBand, "flex items-center justify-center")}>
+            <div className={cn("size-36 rounded-full", shimmer)} />
+          </div>
+        </div>
+        <div className={cn(card, "lg:col-span-2 lg:h-full")}>
+          <div className={cn("mb-2 h-5 w-44 rounded", shimmer)} />
+          <div className={cn(band, "rounded-md", shimmer)} />
+        </div>
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+        <div className={cn(card, "lg:col-span-1")}>
+          <div className={cn("mb-2 h-5 w-36 rounded", shimmer)} />
+          <div className={cn(band, "rounded-md", shimmer)} />
+        </div>
+        <div className={cn(card, "lg:col-span-2")}>
+          <div className={cn("mb-2 h-5 w-40 rounded", shimmer)} />
+          <div className={cn(band, "rounded-md", shimmer)} />
+        </div>
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+        <div className={cn(card, "lg:col-span-1")}>
+          <div className={cn("mb-2 h-5 w-32 rounded", shimmer)} />
+          <div className={cn(band, "rounded-md", shimmer)} />
+        </div>
+        <div className={cn(card, "lg:col-span-2")}>
+          <div className={cn("mb-2 h-5 w-36 rounded", shimmer)} />
+          <div className={cn(band, "rounded-md", shimmer)} />
+        </div>
+      </div>
     </section>
   );
 }
