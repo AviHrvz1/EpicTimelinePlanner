@@ -31,6 +31,7 @@ import {
   Save,
   Search,
   TableProperties,
+  Tag,
   Trash2,
   UserRound,
   X,
@@ -137,6 +138,7 @@ type BacklogPlanningPanelProps = {
       planEndDay?: number | null;
       team?: string | null;
       labels?: string | null;
+      originalEstimateDays?: number | null;
     },
   ) => Promise<void>;
   summaryBarPortalElement?: HTMLElement | null;
@@ -335,10 +337,11 @@ function BacklogLabelsChipPanel({
           <span
             key={`${lab}-${i}`}
             className={cn(
-              "inline-flex max-w-[min(100%,10rem)] shrink-0 items-center rounded-md border px-2 py-0.5 text-[10.5px] font-semibold leading-tight",
+              "inline-flex max-w-[min(100%,10rem)] shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[10.5px] font-semibold leading-tight",
               labelChipClasses(lab),
             )}
           >
+            <Tag className="size-2.5 shrink-0 opacity-70" aria-hidden />
             <span className="truncate">{lab}</span>
           </span>
         ))}
@@ -911,21 +914,12 @@ function ParentTeamEditor({
   );
 }
 
-const LABEL_CHIP_PALETTES = [
-  "border-indigo-200/70 bg-indigo-50 text-indigo-700",
-  "border-violet-200/70 bg-violet-50 text-violet-700",
-  "border-sky-200/70 bg-sky-50 text-sky-700",
-  "border-emerald-200/70 bg-emerald-50 text-emerald-700",
-  "border-amber-200/70 bg-amber-50 text-amber-700",
-  "border-rose-200/70 bg-rose-50 text-rose-700",
-  "border-teal-200/70 bg-teal-50 text-teal-700",
-  "border-orange-200/70 bg-orange-50 text-orange-700",
-] as const;
+// Single uniform style for every label chip — no per-text hash-coloring so
+// users don't have to read meaning into the color of a chip.
+const LABEL_CHIP_CLASS = "border-indigo-200/70 bg-indigo-50 text-indigo-700";
 
-function labelChipClasses(label: string): string {
-  let hash = 0;
-  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) & 0xffff;
-  return LABEL_CHIP_PALETTES[hash % LABEL_CHIP_PALETTES.length]!;
+function labelChipClasses(_label: string): string {
+  return LABEL_CHIP_CLASS;
 }
 
 function sprintLabel(sprint: number | null) {
@@ -1967,6 +1961,24 @@ export function BacklogPlanningPanel({
   suppressInlineChips,
   workspaceDirectoryUsers,
 }: BacklogPlanningPanelProps) {
+  // Render-time diagnostic: count + time every commit to help spot whether
+  // slowness is the mount itself, re-renders from a parent, or some heavy
+  // useMemo recomputing on every change.
+  const renderStartRef = useRef<number>(0);
+  renderStartRef.current = typeof performance !== "undefined" ? performance.now() : 0;
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+  const isFirstRenderRef = useRef(true);
+  useEffect(() => {
+    const t = typeof performance !== "undefined" ? performance.now() : 0;
+    const renderMs = renderStartRef.current ? Math.round(t - renderStartRef.current) : 0;
+    if (isFirstRenderRef.current) {
+      console.log("[backlog] panel: first render committed", { renderMs });
+      isFirstRenderRef.current = false;
+    } else {
+      console.log("[backlog] panel: re-render", { renderCount: renderCountRef.current, renderMs });
+    }
+  });
   const [query, setQuery] = useState("");
   const [openInitiatives, setOpenInitiatives] = useState<Record<string, boolean>>({});
   const [openEpics, setOpenEpics] = useState<Record<string, boolean>>({});
@@ -2074,6 +2086,38 @@ export function BacklogPlanningPanel({
     id: string;
     value: string;
   } | null>(null);
+  // Inline editor for an epic's `originalEstimateDays` (the per-epic budget
+  // shown in the "Est" column). String value to preserve user input mid-typing.
+  const [editingEpicEstimate, setEditingEpicEstimate] = useState<{ id: string; value: string } | null>(null);
+  // Track newly-created user story so it can be bubbled to the top of its
+  // epic's story list — mirrors the `newestInitiativeId` pattern in the
+  // middle panel. Reset on each render of `initiatives` via the effect
+  // below; persists in state so the sort can read it.
+  const [newestStoryId, setNewestStoryId] = useState<string | null>(null);
+  const prevAllStoryIdsRef = useRef<Set<string>>(
+    new Set(initiatives.flatMap((i) => (i.epics ?? []).flatMap((e) => (e.userStories ?? []).map((s) => s.id)))),
+  );
+  useEffect(() => {
+    const currentIds = new Set(
+      initiatives.flatMap((i) => (i.epics ?? []).flatMap((e) => (e.userStories ?? []).map((s) => s.id))),
+    );
+    const newId = [...currentIds].find((id) => !prevAllStoryIdsRef.current.has(id)) ?? null;
+    prevAllStoryIdsRef.current = currentIds;
+    if (newId) setNewestStoryId(newId);
+  }, [initiatives]);
+  // Same idea for epics — pins the newly-created epic at the top of its
+  // initiative's epic list so the user sees what they just made without
+  // hunting for it among the alphabetical / API-creation-order siblings.
+  const [newestEpicId, setNewestEpicId] = useState<string | null>(null);
+  const prevAllEpicIdsRef = useRef<Set<string>>(
+    new Set(initiatives.flatMap((i) => (i.epics ?? []).map((e) => e.id))),
+  );
+  useEffect(() => {
+    const currentIds = new Set(initiatives.flatMap((i) => (i.epics ?? []).map((e) => e.id)));
+    const newId = [...currentIds].find((id) => !prevAllEpicIdsRef.current.has(id)) ?? null;
+    prevAllEpicIdsRef.current = currentIds;
+    if (newId) setNewestEpicId(newId);
+  }, [initiatives]);
   const [backlogReadonlyNotice, setBacklogReadonlyNotice] = useState<{ title: string; body: string } | null>(null);
 
   async function patchStoryInline(
@@ -2452,6 +2496,68 @@ export function BacklogPlanningPanel({
       return;
     }
     setEditingParentLabels(null);
+  }
+  function beginEpicEstimateEdit(epic: { id: string; originalEstimateDays?: number | null }) {
+    setEditingEpicEstimate({ id: epic.id, value: String(epic.originalEstimateDays ?? 0) });
+  }
+  async function commitEpicEstimateEdit() {
+    if (!editingEpicEstimate) return;
+    const raw = editingEpicEstimate.value.trim();
+    const parsed = raw === "" ? 0 : Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      toast.error("Estimate must be a non-negative number");
+      return;
+    }
+    const next = Math.round(parsed);
+    try {
+      await onPatchEpicQuick(editingEpicEstimate.id, { originalEstimateDays: next });
+      toast.success("Epic estimate updated");
+    } catch {
+      toast.error("Failed to update epic estimate");
+      return;
+    }
+    setEditingEpicEstimate(null);
+  }
+  function isEditingEpicEstimate(id: string): boolean {
+    return editingEpicEstimate?.id === id;
+  }
+  function renderEpicEstimateEditor(): ReactNode {
+    if (!editingEpicEstimate) return null;
+    return (
+      <span
+        className="inline-flex items-center gap-1"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <input
+          type="number"
+          min={0}
+          step={1}
+          inputMode="numeric"
+          value={editingEpicEstimate.value}
+          onChange={(event) =>
+            setEditingEpicEstimate((prev) => (prev ? { ...prev, value: event.target.value } : prev))
+          }
+          onBlur={() => {
+            window.setTimeout(() => {
+              if (editingEpicEstimate) void commitEpicEstimateEdit();
+            }, 120);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setEditingEpicEstimate(null);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              void commitEpicEstimateEdit();
+            }
+          }}
+          autoFocus
+          className="h-7 w-16 rounded-md bg-white px-2 text-center text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
+          aria-label="Epic estimate in days"
+        />
+        <span className="text-[12px] text-slate-500">d</span>
+      </span>
+    );
   }
   function isEditingParentLabels(kind: "epic" | "initiative", id: string): boolean {
     return (
@@ -3478,7 +3584,16 @@ export function BacklogPlanningPanel({
   function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
     return rows
       .slice()
-      .sort((a, b) => a.storyTitle.localeCompare(b.storyTitle))
+      .sort((a, b) => {
+        // The just-created story wins — keeps it pinned at the top of its
+        // epic's list until the next reload / new story, so the user
+        // doesn't have to hunt for the row they just made.
+        if (newestStoryId != null) {
+          if (a.storyId === newestStoryId) return -1;
+          if (b.storyId === newestStoryId) return 1;
+        }
+        return a.storyTitle.localeCompare(b.storyTitle);
+      })
       .map((row) => {
         const progress = storyCompletion({
           status: row.storyStatus,
@@ -3779,7 +3894,6 @@ export function BacklogPlanningPanel({
             </button>
               ),
             }, {
-              workItem: { kind: "lock" },
               team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: row.epicId, team: row.teamId }) },
               status: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "status", row.storyStatus) },
               sprint: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
@@ -3851,7 +3965,6 @@ export function BacklogPlanningPanel({
             daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
             progress: <span className="text-center text-[16px] text-slate-400">-</span>,
           }, {
-            workItem: { kind: "lock" },
             team: { kind: "lock" },
             year: { kind: "lock" },
             quarter: { kind: "lock" },
@@ -3998,7 +4111,7 @@ export function BacklogPlanningPanel({
                         epicId,
                       });
                     }}
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                     title="Add user story"
                   >
                     <Plus className="size-3.5 text-slate-600" />
@@ -4092,7 +4205,13 @@ export function BacklogPlanningPanel({
               labels: isEditingParentLabels("epic", epicId) ? (
                 renderParentLabelsEditor({ kind: "epic", id: epicId })
               ) : (
-                <span className="truncate text-[14px] text-slate-700">{epicModelForRow?.labels ?? ""}</span>
+                <BacklogLabelsChipPanel
+                  labelsSerialized={epicModelForRow?.labels}
+                  onMouseDownBeginEdit={(event) => {
+                    event.preventDefault();
+                    beginEpicLabelsEdit({ id: epicId, labels: epicModelForRow?.labels ?? null });
+                  }}
+                />
               ),
               estDays: (
                 <button
@@ -4103,10 +4222,20 @@ export function BacklogPlanningPanel({
                   Σ {estimated}d
                 </button>
               ),
-              epicOriginalEst: (
-                <span className="text-center text-[16px] font-medium text-slate-600">
+              epicOriginalEst: isEditingEpicEstimate(epicId) ? (
+                renderEpicEstimateEditor()
+              ) : (
+                <button
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    beginEpicEstimateEdit({ id: epicId, originalEstimateDays: originalEstimate });
+                  }}
+                  className="w-full text-center text-[16px] font-medium text-slate-600 hover:text-indigo-600"
+                  title="Click to edit estimate"
+                >
                   {originalEstimate}d
-                </span>
+                </button>
               ),
               daysLeft: (
                 <button
@@ -4119,7 +4248,6 @@ export function BacklogPlanningPanel({
               ),
               progress: renderCompletionCell(epicRows),
             }, {
-              workItem: { kind: "lock" },
               team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epicId, team: epicModelForRow?.team ?? epicRows[0]?.teamId ?? null }) },
               assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "epic", id: epicId, value: epicAssignee === "Unassigned" ? "" : epicAssignee }) },
               year: { kind: "lock" },
@@ -4151,7 +4279,7 @@ export function BacklogPlanningPanel({
               sprint: { kind: "lock" },
               labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epicId, labels: epicModelForRow?.labels ?? null }) },
               estDays: { kind: "lock" },
-              epicOriginalEst: { kind: "lock" },
+              epicOriginalEst: { kind: "edit", onEdit: () => beginEpicEstimateEdit({ id: epicId, originalEstimateDays: originalEstimate }) },
               daysLeft: { kind: "lock" },
               progress: { kind: "lock" },
             })}
@@ -4356,7 +4484,13 @@ export function BacklogPlanningPanel({
               labels: isEditingParentLabels("initiative", initiativeId) ? (
                 renderParentLabelsEditor({ kind: "initiative", id: initiativeId })
               ) : (
-                <span className="truncate text-[14px] text-slate-700">{initModelForRow?.labels ?? ""}</span>
+                <BacklogLabelsChipPanel
+                  labelsSerialized={initModelForRow?.labels}
+                  onMouseDownBeginEdit={(event) => {
+                    event.preventDefault();
+                    beginInitiativeLabelsEdit({ id: initiativeId, labels: initModelForRow?.labels ?? null });
+                  }}
+                />
               ),
               estDays: (
                 <button
@@ -4379,7 +4513,6 @@ export function BacklogPlanningPanel({
               ),
               progress: renderCompletionCell(initiativeRows),
             }, {
-              workItem: { kind: "lock" },
               team: { kind: "edit", onEdit: () => beginInitiativeTeamEdit({ id: initiativeId, team: initModelForRow?.team ?? null }) },
               assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "initiative", id: initiativeId, value: initiativeAssignee === "Unassigned" ? "" : initiativeAssignee }) },
               year: { kind: "lock" },
@@ -4451,7 +4584,13 @@ export function BacklogPlanningPanel({
                   byEpic.get(r.epicId)!.push(r);
                 }
                 return Array.from(byEpic.entries())
-                  .sort((a, b) => a[1][0]?.epicTitle.localeCompare(b[1][0]?.epicTitle ?? "") ?? 0)
+                  .sort(([aId, aRows], [bId, bRows]) => {
+                    if (newestEpicId != null) {
+                      if (aId === newestEpicId) return -1;
+                      if (bId === newestEpicId) return 1;
+                    }
+                    return aRows[0]?.epicTitle.localeCompare(bRows[0]?.epicTitle ?? "") ?? 0;
+                  })
                   .map(([epicId, epicRows]) => {
                     const first = epicRows[0];
                     return renderEpicRow(
@@ -4480,7 +4619,13 @@ export function BacklogPlanningPanel({
       // Honor the upstream sort when columnSort is active (Map preserves insertion order = sorted-row order).
       // Otherwise fall back to alphabetical-by-epic-title.
       if (!columnSort) {
-        epicEntries.sort((a, b) => (a[1][0]?.epicTitle ?? "").localeCompare(b[1][0]?.epicTitle ?? ""));
+        epicEntries.sort(([aId, aRows], [bId, bRows]) => {
+          if (newestEpicId != null) {
+            if (aId === newestEpicId) return -1;
+            if (bId === newestEpicId) return 1;
+          }
+          return (aRows[0]?.epicTitle ?? "").localeCompare(bRows[0]?.epicTitle ?? "");
+        });
       }
       return epicEntries.map(([epicId, epicRows]) => {
         const first = epicRows[0];
@@ -4708,7 +4853,13 @@ export function BacklogPlanningPanel({
                 labels: isEditingParentLabels("initiative", initiative.initiativeId) ? (
                   renderParentLabelsEditor({ kind: "initiative", id: initiative.initiativeId })
                 ) : (
-                  <span className="truncate text-[14px] text-slate-700">{standInitModel?.labels ?? ""}</span>
+                  <BacklogLabelsChipPanel
+                    labelsSerialized={standInitModel?.labels}
+                    onMouseDownBeginEdit={(event) => {
+                      event.preventDefault();
+                      beginInitiativeLabelsEdit({ id: initiative.initiativeId, labels: standInitModel?.labels ?? null });
+                    }}
+                  />
                 ),
                 estDays: (
                   <button
@@ -4743,7 +4894,6 @@ export function BacklogPlanningPanel({
                   </button>
                 ),
               }, {
-                workItem: { kind: "lock" },
                 team: { kind: "edit", onEdit: () => beginInitiativeTeamEdit({ id: initiative.initiativeId, team: standInitModel?.team ?? null }) },
                 year: { kind: "lock" },
                 quarter: { kind: "lock" },
@@ -4873,7 +5023,7 @@ export function BacklogPlanningPanel({
                                   epicId: epic.epicId,
                                 });
                               }}
-                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                               title="Add user story"
                             >
                               <Plus className="size-3.5 text-slate-600" />
@@ -4939,10 +5089,20 @@ export function BacklogPlanningPanel({
                             Σ 0d
                           </button>
                         ),
-                        epicOriginalEst: (
-                          <span className="text-center text-[16px] font-medium text-slate-600">
+                        epicOriginalEst: isEditingEpicEstimate(epic.epicId) ? (
+                          renderEpicEstimateEditor()
+                        ) : (
+                          <button
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              beginEpicEstimateEdit({ id: epic.epicId, originalEstimateDays: epic.epicOriginalEstimateDays });
+                            }}
+                            className="w-full text-center text-[16px] font-medium text-slate-600 hover:text-indigo-600"
+                            title="Click to edit estimate"
+                          >
                             {epic.epicOriginalEstimateDays}d
-                          </span>
+                          </button>
                         ),
                         daysLeft: (
                           <button
@@ -4967,7 +5127,6 @@ export function BacklogPlanningPanel({
                           </button>
                         ),
                       }, {
-                        workItem: { kind: "lock" },
                         team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epic.epicId, team: standEpicModel?.team ?? epic.epicTeamId ?? null }) },
                         year: { kind: "lock" },
                         quarter: { kind: "lock" },
@@ -4999,7 +5158,7 @@ export function BacklogPlanningPanel({
                         assignee: { kind: "lock" },
                         labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epic.epicId, labels: standEpicModel?.labels ?? null }) },
                         estDays: { kind: "lock" },
-                        epicOriginalEst: { kind: "lock" },
+                        epicOriginalEst: { kind: "edit", onEdit: () => beginEpicEstimateEdit({ id: epic.epicId, originalEstimateDays: epic.epicOriginalEstimateDays }) },
                         daysLeft: { kind: "lock" },
                         progress: { kind: "lock" },
                       })}
@@ -5149,7 +5308,13 @@ export function BacklogPlanningPanel({
         setRoadmapFilter(parsed.roadmapFilter.filter((v): v is string => typeof v === "string"));
       if (Array.isArray(parsed.groupLevels)) {
         const validLevels = parsed.groupLevels.filter(isGroupLevelValue);
-        setGroupLevels(validLevels);
+        // Only restore from localStorage when at least one valid level
+        // survives. A stored empty array (left over from a prior
+        // "ungroup" click) would otherwise stick across sessions and
+        // hide the default roadmap/year/quarter grouping every time the
+        // backlog opens — annoying for repeat visitors who'd want to see
+        // the standard structure on first paint each session.
+        if (validLevels.length > 0) setGroupLevels(validLevels);
       }
     } catch {
       // Ignore corrupt localStorage entries.
@@ -6074,7 +6239,7 @@ export function BacklogPlanningPanel({
                               event.stopPropagation();
                               setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
                             }}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                             title="Add from this row"
                           >
                             <Plus className="size-3.5 text-slate-600" />
@@ -6110,21 +6275,6 @@ export function BacklogPlanningPanel({
                               >
                                 <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
                                 Add epic
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openCreateComposer({
-                                    anchorKey: `initiative:${initiative.id}`,
-                                    scope: "initiative",
-                                    kind: "story",
-                                    initiativeId: initiative.id,
-                                  })
-                                }
-                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
-                              >
-                                <UserStoryIcon />
-                                Add user story
                               </button>
                             </div>
                           ) : null}
@@ -6213,7 +6363,13 @@ export function BacklogPlanningPanel({
                       labels: isEditingParentLabels("initiative", initiative.id) ? (
                         renderParentLabelsEditor({ kind: "initiative", id: initiative.id })
                       ) : (
-                        <span className="truncate text-[14px] text-slate-700">{initiative.labels ?? ""}</span>
+                        <BacklogLabelsChipPanel
+                          labelsSerialized={initiative.labels}
+                          onMouseDownBeginEdit={(event) => {
+                            event.preventDefault();
+                            beginInitiativeLabelsEdit({ id: initiative.id, labels: initiative.labels ?? null });
+                          }}
+                        />
                       ),
                       estDays: (
                         <button
@@ -6255,7 +6411,6 @@ export function BacklogPlanningPanel({
                         </button>
                       ),
                     }, {
-                      workItem: { kind: "lock" },
                       team: { kind: "edit", onEdit: () => beginInitiativeTeamEdit({ id: initiative.id, team: initiative.team ?? null }) },
                       year: { kind: "lock" },
                       quarter: { kind: "lock" },
@@ -6399,7 +6554,16 @@ export function BacklogPlanningPanel({
                           </div>
                         </form>
                       ) : null}
-                      {(initiative.epics ?? []).map((epic) => {
+                      {(initiative.epics ?? [])
+                        .slice()
+                        .sort((a, b) => {
+                          if (newestEpicId != null) {
+                            if (a.id === newestEpicId) return -1;
+                            if (b.id === newestEpicId) return 1;
+                          }
+                          return 0; // preserve API order otherwise
+                        })
+                        .map((epic) => {
                         const isEpicOpen = openEpics[epic.id] ?? defaultTreeExpanded;
                         const epicWorkflowStatus = rollupWorkflowStatus(epic.userStories ?? []);
                         const epicDays = sumStoryDays(epic.userStories ?? []);
@@ -6482,7 +6646,7 @@ export function BacklogPlanningPanel({
                                         event.stopPropagation();
                                         setOpenCreateMenuKey((prev) => (prev === `epic:${epic.id}` ? null : `epic:${epic.id}`));
                                       }}
-                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                                       title="Add from this row"
                                     >
                                       <Plus className="size-3.5 text-slate-600" />
@@ -6614,7 +6778,13 @@ export function BacklogPlanningPanel({
                                 labels: isEditingParentLabels("epic", epic.id) ? (
                                   renderParentLabelsEditor({ kind: "epic", id: epic.id })
                                 ) : (
-                                  <span className="truncate text-[14px] text-slate-700">{epic.labels ?? ""}</span>
+                                  <BacklogLabelsChipPanel
+                                    labelsSerialized={epic.labels}
+                                    onMouseDownBeginEdit={(event) => {
+                                      event.preventDefault();
+                                      beginEpicLabelsEdit({ id: epic.id, labels: epic.labels ?? null });
+                                    }}
+                                  />
                                 ),
                                 estDays: (
                                   <button
@@ -6625,10 +6795,20 @@ export function BacklogPlanningPanel({
                                     Σ {epicDays.estimated}d
                                   </button>
                                 ),
-                                epicOriginalEst: (
-                                  <span className="text-center text-[16px] font-medium text-slate-600">
+                                epicOriginalEst: isEditingEpicEstimate(epic.id) ? (
+                                  renderEpicEstimateEditor()
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      beginEpicEstimateEdit({ id: epic.id, originalEstimateDays: epic.originalEstimateDays });
+                                    }}
+                                    className="w-full text-center text-[16px] font-medium text-slate-600 hover:text-indigo-600"
+                                    title="Click to edit estimate"
+                                  >
                                     {epic.originalEstimateDays ?? 0}d
-                                  </span>
+                                  </button>
                                 ),
                                 daysLeft: (
                                   <button
@@ -6660,7 +6840,6 @@ export function BacklogPlanningPanel({
                                   </button>
                                 ),
                               }, {
-                                workItem: { kind: "lock" },
                                 team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epic.id, team: epic.team ?? null }) },
                                 year: { kind: "lock" },
                                 quarter: { kind: "lock" },
@@ -6692,7 +6871,7 @@ export function BacklogPlanningPanel({
                                 assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "epic", id: epic.id, value: epic.assignee?.trim() || "" }) },
                                 labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epic.id, labels: epic.labels ?? null }) },
                                 estDays: { kind: "lock" },
-                                epicOriginalEst: { kind: "lock" },
+                                epicOriginalEst: { kind: "edit", onEdit: () => beginEpicEstimateEdit({ id: epic.id, originalEstimateDays: epic.originalEstimateDays }) },
                                 daysLeft: { kind: "lock" },
                                 progress: { kind: "lock" },
                               })}
@@ -6819,7 +6998,7 @@ export function BacklogPlanningPanel({
                                           event.stopPropagation();
                                           setOpenCreateMenuKey((prev) => (prev === `story:${story.id}` ? null : `story:${story.id}`));
                                         }}
-                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
                                         title="Add from this row"
                                       >
                                         <Plus className="size-3.5 text-slate-600" />
@@ -7102,7 +7281,6 @@ export function BacklogPlanningPanel({
                                     </button>
                                       ),
                                     }, {
-                                      workItem: { kind: "lock" },
                                       team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epic.id, team: epic.team ?? null }) },
                                       status: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "status", story.status) },
                                       sprint: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "sprint", story.sprint == null ? "unscheduled" : String(story.sprint)) },

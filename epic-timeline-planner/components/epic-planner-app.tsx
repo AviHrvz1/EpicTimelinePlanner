@@ -16,6 +16,7 @@ import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
 import { DemoBuilderPanel } from "@/components/demo-builder/demo-builder-panel";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { GanttDebugOverlay } from "@/components/debug/gantt-debug-overlay";
+import { BacklogPanelSkeleton } from "@/components/deferred-mount";
 import { EpicDeleteDialog } from "@/components/epics/epic-delete-dialog";
 import { InitiativeDeleteDialog } from "@/components/initiatives/initiative-delete-dialog";
 import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-dialog";
@@ -1243,6 +1244,29 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   useEffect(() => {
     if (topMode === "dashboard") setHasMountedDashboard(true);
   }, [topMode]);
+  // Same stay-mounted pattern as the dashboard — once the user has visited
+  // the Backlog tab, its 7k-line panel stays mounted (hidden) so revisiting
+  // is instant. Without this, every Backlog click triggered a fresh ~1s
+  // mount of all 500 stories' useState/useMemo state.
+  //
+  // We also kick off the mount **during idle time after the initial app
+  // load**, so even the *first* click is instant: the heavy tree commits
+  // off-screen while the user is busy reading the roadmap. If the user
+  // clicks Backlog before idle fires, the click's own effect flips the
+  // flag the same way it always did.
+  const [hasMountedBacklog, setHasMountedBacklog] = useState(false);
+  useEffect(() => {
+    if (topMode === "backlog") setHasMountedBacklog(true);
+  }, [topMode]);
+  useEffect(() => {
+    if (hasMountedBacklog) return;
+    type IdleCb = (cb: () => void, opts?: { timeout?: number }) => number;
+    const win = window as Window & { requestIdleCallback?: IdleCb; cancelIdleCallback?: (id: number) => void };
+    const schedule = win.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500));
+    const cancel = win.cancelIdleCallback ?? window.clearTimeout;
+    const id = schedule(() => setHasMountedBacklog(true), { timeout: 4000 });
+    return () => cancel(id);
+  }, [hasMountedBacklog]);
   const [epicBacklogOrderByMonth, setEpicBacklogOrderByMonth] = useState<Record<number, string[]>>({});
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [creatingStoryEpicId, setCreatingStoryEpicId] = useState<string | null>(null);
@@ -2009,27 +2033,103 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     );
   }, [topMode]);
 
-  // Backlog Workspace shows initiatives across all roadmaps; refetch with roadmapId=all when entering it.
+  // Backlog Workspace shows initiatives across all roadmaps; refetch with roadmapId=all
+  // when entering it. Uses `slim=1` so the response excludes the heavy snapshots /
+  // comments / history trees the backlog table doesn't display — keeps the payload
+  // ~100KB instead of multiple MB on the demo dataset.
   const refreshBacklogInitiatives = useCallback(async () => {
+    const t0 = performance.now();
+    console.log("[backlog] refresh: fetch start", { year: selectedYear, source: "refreshBacklogInitiatives" });
     try {
-      const data = await parseJson<InitiativeItem[]>(
-        await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all`, { cache: "no-store" }),
-      );
+      const res = await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all&slim=1`, { cache: "no-store" });
+      const text = await res.text();
+      const tFetched = performance.now();
+      const data = JSON.parse(text) as InitiativeItem[];
+      const tParsed = performance.now();
       setBacklogInitiatives(data);
-    } catch {
+      backlogFetchedAtRef.current = { at: Date.now(), year: selectedYear };
+      console.log("[backlog] refresh: done", {
+        year: selectedYear,
+        initiativeCount: data.length,
+        payloadBytes: text.length,
+        payloadKB: Math.round(text.length / 1024),
+        fetchMs: Math.round(tFetched - t0),
+        parseMs: Math.round(tParsed - tFetched),
+        totalMs: Math.round(tParsed - t0),
+      });
+    } catch (err) {
+      console.log("[backlog] refresh: error", { err: err instanceof Error ? err.message : String(err) });
       setBacklogInitiatives([]);
     }
   }, [selectedYear]);
+  // Cache: skip the auto-refetch when entering Backlog if we fetched within
+  // the last 30 seconds AND the year hasn't changed. The previously-loaded
+  // data already lives in `backlogInitiatives` state and gets shown
+  // instantly. The user can still trigger a fresh fetch via any of the
+  // edit handlers that call `refreshBacklogInitiatives()` directly.
+  const backlogFetchedAtRef = useRef<{ at: number; year: number } | null>(null);
+  // Pre-warm the slim Backlog payload on idle so the first click never
+  // waits on the network at all. Bails if data is already loaded — the
+  // explicit-enter effect below will still fire on actual Backlog clicks
+  // and refresh if 30s+ has passed.
+  useEffect(() => {
+    if (backlogInitiatives !== null) return;
+    type IdleCb = (cb: () => void, opts?: { timeout?: number }) => number;
+    const win = window as Window & { requestIdleCallback?: IdleCb; cancelIdleCallback?: (id: number) => void };
+    const schedule = win.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1200));
+    const cancel = win.cancelIdleCallback ?? window.clearTimeout;
+    let cancelled = false;
+    const id = schedule(async () => {
+      if (cancelled || backlogInitiatives !== null) return;
+      try {
+        console.log("[backlog] idle prefetch start", { year: selectedYear });
+        const res = await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all&slim=1`, { cache: "no-store" });
+        const data = (await res.json()) as InitiativeItem[];
+        if (cancelled) return;
+        setBacklogInitiatives(data);
+        backlogFetchedAtRef.current = { at: Date.now(), year: selectedYear };
+        console.log("[backlog] idle prefetch done", { year: selectedYear, count: data.length });
+      } catch {
+        // Best-effort; the click-time effect will retry if it's still null.
+      }
+    }, { timeout: 4000 });
+    return () => { cancelled = true; cancel(id); };
+  }, [backlogInitiatives, selectedYear]);
   useEffect(() => {
     if (topMode !== "backlog") return;
+    const tClick = performance.now();
+    const last = backlogFetchedAtRef.current;
+    if (last && last.year === selectedYear && Date.now() - last.at < 30_000) {
+      const ageSec = Math.round((Date.now() - last.at) / 1000);
+      console.log("[backlog] enter: cache hit (skipping fetch)", { year: selectedYear, dataAgeSec: ageSec });
+      return;
+    }
+    console.log("[backlog] enter: cache miss → fetching", { year: selectedYear });
     let cancelled = false;
     (async () => {
+      const t0 = performance.now();
       try {
-        const data = await parseJson<InitiativeItem[]>(
-          await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all`, { cache: "no-store" }),
-        );
-        if (!cancelled) setBacklogInitiatives(data);
-      } catch {
+        const res = await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all&slim=1`, { cache: "no-store" });
+        const text = await res.text();
+        const tFetched = performance.now();
+        const data = JSON.parse(text) as InitiativeItem[];
+        const tParsed = performance.now();
+        if (!cancelled) {
+          setBacklogInitiatives(data);
+          backlogFetchedAtRef.current = { at: Date.now(), year: selectedYear };
+          console.log("[backlog] fetch done", {
+            year: selectedYear,
+            initiativeCount: data.length,
+            payloadBytes: text.length,
+            payloadKB: Math.round(text.length / 1024),
+            fetchMs: Math.round(tFetched - t0),
+            parseMs: Math.round(tParsed - tFetched),
+            totalMs: Math.round(tParsed - t0),
+            sinceClickMs: Math.round(performance.now() - tClick),
+          });
+        }
+      } catch (err) {
+        console.log("[backlog] fetch error", { err: err instanceof Error ? err.message : String(err) });
         if (!cancelled) setBacklogInitiatives([]);
       }
     })();
@@ -2927,7 +3027,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     }
     const created = (await response.clone().json().catch(() => null)) as { id?: string } | null;
     console.log("[create-epic] POST ok", { initiativeId, createdId: created?.id });
-    await refresh();
+    // Refresh BOTH the regular roadmap-scoped initiatives AND the backlog's
+    // `roadmapId=all&slim=1` cache. The backlog table reads from
+    // `backlogInitiatives`, so without the second refresh new rows created
+    // from the backlog table itself never show up.
+    await Promise.all([refresh(), refreshBacklogInitiatives()]);
   }
 
   async function createInitiativeQuick(title: string): Promise<string> {
@@ -2940,7 +3044,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       throw new Error("Failed to create initiative");
     }
     const created = (await response.json()) as { id: string };
-    await refresh();
+    await Promise.all([refresh(), refreshBacklogInitiatives()]);
     return created.id;
   }
 
@@ -2953,7 +3057,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     if (!response.ok) {
       throw new Error("Failed to create user story");
     }
-    await refresh();
+    await Promise.all([refresh(), refreshBacklogInitiatives()]);
   }
 
   async function scheduleInitiative(initiativeId: string, month: number, timelineRow?: number) {
@@ -5635,16 +5739,30 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
               </div>
             </div>
-          ) : (
-            <div className="flex h-full min-h-0 min-w-0 flex-1 flex-row">
+          ) : null}
+          {/* Backlog stays mounted once visited — same pattern as Dashboard
+              below — so revisiting the tab is instant instead of paying the
+              ~1s mount cost every click. Hidden via the `hidden` class when
+              another mode is active. */}
+          {hasMountedBacklog ? (
+            <div className={cn("flex h-full min-h-0 min-w-0 flex-1 flex-row", topMode !== "backlog" && "hidden")}>
               <div
                 ref={planningRightSurfaceRef}
                 className="mt-3 mb-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-hidden"
               >
+                {backlogInitiatives === null ? (
+                  // Show the skeleton while the slim fetch is in flight.
+                  // Rendering the 7k-line panel against the stale `initiatives`
+                  // fallback was kicking off 4-5 main-thread-blocking renders
+                  // that held the fetch promise hostage — the server returned
+                  // in 30ms but the client took 3.7s to "receive" the response
+                  // because the JS thread was busy.
+                  <BacklogPanelSkeleton />
+                ) : (
                 <BacklogPlanningPanel
                 summaryBarPortalElement={summaryBarEl}
                 suppressInlineChips
-                initiatives={backlogInitiatives ?? initiatives}
+                initiatives={backlogInitiatives}
                 roadmaps={roadmaps}
                 storyRefById={storyRefMaps.byId}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
@@ -5768,6 +5886,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   }
                 }}
               />
+                )}
               </div>
               {/* Slimmed-down mirror of rightEdgeSeparator for backlog mode —
                   same visual treatment but ~18px instead of 24px so the table
@@ -5779,7 +5898,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
               </div>
             </div>
-          )}
+          ) : null}
           {/* Dashboard stays mounted once visited so unsaved drafts persist when the user temporarily navigates to another mode. */}
           {hasMountedDashboard ? (
             <div className={cn("min-h-0 min-w-0 flex-1", topMode !== "dashboard" && "hidden")}>

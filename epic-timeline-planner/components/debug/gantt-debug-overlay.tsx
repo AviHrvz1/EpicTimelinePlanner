@@ -24,6 +24,8 @@ const WATCHED_PREFIXES = [
   "[gantt-drop][epic]",
   "[epic-row-persist]",
   "[team-filter]",
+  "[backlog]",
+  "[deferred-mount]",
 ];
 
 type LogEntry = {
@@ -35,11 +37,10 @@ type LogEntry = {
 };
 
 /**
- * Hidden by default — flip on via:
+ * Hidden by default. Enable explicitly via:
  *   - `localStorage.setItem("ganttDebug", "1")` in DevTools, OR
- *   - append `?debug=gantt` to the URL
- * Disable by clearing the key (or `?debug=off`). When disabled, the hook
- * never patches `console.log`, so there's zero runtime cost.
+ *   - append `?debug=gantt` to the URL (persists in localStorage)
+ * Disable via `localStorage.removeItem("ganttDebug")` or `?debug=off`.
  */
 function useGanttDebugEnabled(): boolean {
   const [enabled, setEnabled] = useState(false);
@@ -84,12 +85,20 @@ export function GanttDebugOverlay() {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const message = first.slice(matched.length).trim();
       const payload = args.length > 1 ? (args.length === 2 ? args[1] : args.slice(1)) : null;
-      setEntries((prev) => {
-        const next = [...prev, { id, prefix: matched, message, payload, at: new Date() }];
-        return next.length > 200 ? next.slice(next.length - 200) : next;
+      // Defer the state updates so we never call setState during another
+      // component's render. Without this, a `console.log` fired from a
+      // setState updater (e.g. our `[team-filter] setGanttTeamIds` log
+      // that runs inside React's commit phase) would synchronously try
+      // to update the overlay's state and React would throw "Cannot
+      // update a component while rendering a different component".
+      queueMicrotask(() => {
+        setEntries((prev) => {
+          const next = [...prev, { id, prefix: matched, message, payload, at: new Date() }];
+          return next.length > 200 ? next.slice(next.length - 200) : next;
+        });
+        setOpen(true);
+        setCollapsed(false);
       });
-      setOpen(true);
-      setCollapsed(false);
     };
     return () => {
       console.log = originalLog;
