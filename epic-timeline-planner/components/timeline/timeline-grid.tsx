@@ -2163,12 +2163,12 @@ export function TimelineGrid({
   onQuarterGanttFromMonthBreadcrumb,
   onSprintModeChange,
   onSprintTabChange,
-  onOpenEpic,
+  onOpenEpic: _onOpenEpicProp,
   onUnscheduleEpic,
   onDeleteInitiative,
   onUnscheduleInitiative,
-  onOpenInitiative,
-  onOpenStory,
+  onOpenInitiative: _onOpenInitiativeProp,
+  onOpenStory: _onOpenStoryProp,
   onResizeInitiativeRange,
   onResizeEpicPlanRange,
   ganttEmphasis = null,
@@ -2262,6 +2262,45 @@ export function TimelineGrid({
   const [showGanttTeamChips, setShowGanttTeamChips] = useState(false);
   /** Health-summary popover anchored to the toolbar's Progress button. */
   const [healthPopoverOpen, setHealthPopoverOpen] = useState(false);
+
+  /**
+   * Wrappers around the three "open dialog" callbacks. The dialogs live in the
+   * parent (epic-planner-app.tsx) and render as modals over this surface — if
+   * the health popover stays open behind them, it looks broken when the user
+   * dismisses the dialog. Close it on the way out so the popover doesn't
+   * resurface unexpectedly.
+   *
+   * Uses `useCallback` so prop identity is stable (matters for `useMemo` /
+   * `React.memo` consumers downstream like `GanttLaneRow`).
+   */
+  const closeHealthPopover = useCallback(() => {
+    setHealthPopoverOpen(false);
+    onShowRoadmapProgressChange(false);
+  }, [onShowRoadmapProgressChange]);
+  const onOpenEpic = useCallback(
+    (epicId: string) => {
+      closeHealthPopover();
+      _onOpenEpicProp(epicId);
+    },
+    [_onOpenEpicProp, closeHealthPopover],
+  );
+  const onOpenInitiative = useCallback(
+    (initiativeId: string) => {
+      closeHealthPopover();
+      _onOpenInitiativeProp(initiativeId);
+    },
+    [_onOpenInitiativeProp, closeHealthPopover],
+  );
+  // `onOpenStory` is optional on the prop type, and several downstream UI
+  // branches check its presence to disable cursors / hover states. Preserve
+  // that signal by leaving the wrapper undefined when the prop is.
+  const onOpenStory = useMemo<((storyId: string) => void) | undefined>(() => {
+    if (!_onOpenStoryProp) return undefined;
+    return (storyId: string) => {
+      closeHealthPopover();
+      _onOpenStoryProp(storyId);
+    };
+  }, [_onOpenStoryProp, closeHealthPopover]);
   /** Multi-select set of pinned statuses; bars not in the set get dimmed.
    * Empty set = no filter active (all bars visible at full opacity). */
   const [healthFilter, setHealthFilter] = useState<Set<HealthStatus>>(() => new Set());
@@ -2884,6 +2923,25 @@ export function TimelineGrid({
     isFullYearGanttLayout ||
     isQuarterGanttLayout ||
     (activeMonth != null && monthPlanTab === "epic-gantt");
+
+  /**
+   * Auto-close the health popover when the user navigates away from any Gantt
+   * surface (insights / capacity / sprint kanban / sprint retro / etc.).
+   * Scope-changing navigations like drilling into a single quarter or month
+   * are deliberately NOT in this list — the popover should follow the scope
+   * and just update its counts. Dialog opens (epic / story / initiative) are
+   * handled separately via the wrapped onOpen* callbacks above.
+   */
+  useEffect(() => {
+    if (!healthPopoverOpen) return;
+    const onGanttSurface =
+      (activeMonth == null && quarterViewTab === "gantt") ||
+      (activeMonth != null && monthPlanTab === "epic-gantt");
+    if (!onGanttSurface) {
+      setHealthPopoverOpen(false);
+      onShowRoadmapProgressChange(false);
+    }
+  }, [healthPopoverOpen, activeMonth, quarterViewTab, monthPlanTab, onShowRoadmapProgressChange]);
   const scopedEpicsForEstimatePanel = useMemo(() => {
     let scopedRows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     if (activeMonth) {

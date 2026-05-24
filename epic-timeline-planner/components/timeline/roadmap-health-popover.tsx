@@ -91,32 +91,10 @@ export function RoadmapHealthPopover({
     };
   }, [open, anchorRef]);
 
-  // Click-outside + Escape to close. Elements marked
-  // `data-roadmap-health-keepopen` (e.g. the toolbar's Initiatives/Epics
-  // toggle, Teams chip, Sprints chip) are whitelisted so the user can
-  // interact with them without dismissing the popover.
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (e: PointerEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-      const inside = (target as HTMLElement).closest?.("[data-roadmap-health-popover]");
-      if (inside) return;
-      const keepOpen = (target as HTMLElement).closest?.("[data-roadmap-health-keepopen]");
-      if (keepOpen) return;
-      if (anchorRef.current && anchorRef.current.contains(target)) return;
-      onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose, anchorRef]);
+  // The popover is now closed only by explicit user action: the X button in
+  // its header, or toggling the toolbar's Progress chip again. Click-outside
+  // and Escape no longer dismiss it — too easy to lose by accident while
+  // dragging the popover or interacting with the rest of the page.
 
   const onHandlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {

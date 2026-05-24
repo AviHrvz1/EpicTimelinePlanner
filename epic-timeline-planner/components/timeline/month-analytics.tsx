@@ -711,6 +711,58 @@ export function MonthAnalytics({
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
     [monthEpics, selectedEpicId],
   );
+  /**
+   * Compact metadata for the selected scope — surfaces as chips next to the
+   * "Epic / Initiative Scope" picker so the user can see at a glance what they
+   * pinned. Epic scope shows team + assignee + health; initiative scope shows
+   * the roll-up health only (team would be an aggregate, deliberately omitted
+   * per design — too noisy here, already visible in the dropdown).
+   */
+  const selectedEpicMeta = useMemo(() => {
+    if (!selectedEpicOption) return null;
+    return epicComboOptions.find((opt) => opt.id === selectedEpicOption.epic.id) ?? null;
+  }, [selectedEpicOption, epicComboOptions]);
+  const selectedInitiativeMeta = useMemo(() => {
+    if (selectedInitiativeId === "all") return null;
+    const epicsForInit = monthEpics
+      .filter((row) => row.initiative.id === selectedInitiativeId)
+      .map((row) => row.epic);
+    if (epicsForInit.length === 0) return null;
+    const childStatuses: HealthStatus[] = [];
+    const aggregateStories = epicsForInit.flatMap((e) => e.userStories ?? []);
+    for (const epic of epicsForInit) {
+      if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+      const start = sprintStartDate(
+        planYear,
+        globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
+      );
+      const end = sprintEndDate(
+        planYear,
+        globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
+      );
+      childStatuses.push(
+        computeProgress({ stories: epic.userStories ?? [], start, end, basis: "days" }).status,
+      );
+    }
+    if (aggregateStories.length === 0) return null;
+    const scheduled = epicsForInit.filter((e) => e.planStartMonth != null && e.planEndMonth != null);
+    const startMonth = scheduled.length > 0
+      ? Math.min(...scheduled.map((e) => e.planStartMonth as number))
+      : scopeStartMonth;
+    const endMonth = scheduled.length > 0
+      ? Math.max(...scheduled.map((e) => e.planEndMonth as number))
+      : scopeEndMonth;
+    const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(startMonth, 1));
+    const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(endMonth, 2));
+    const h = computeInitiativeProgress({
+      stories: aggregateStories,
+      childStatuses,
+      start: initStart,
+      end: initEnd,
+      basis: "days",
+    });
+    return { health: h.status, tooltip: formatHealthTooltip(h) };
+  }, [selectedInitiativeId, monthEpics, planYear, scopeStartMonth, scopeEndMonth]);
   /** Suffix appended to every chart title so they read e.g. "Status (Epic
    *  Title)" or "Status (Initiative Title)" when a scope is pinned. Empty
    *  when the scope is "all". */
@@ -2154,6 +2206,37 @@ export function MonthAnalytics({
             >
               Epic Details
             </button>
+          ) : null}
+          {/* Selected-scope chips — pinned right. Epic shows team + assignee +
+              health; initiative shows health only (team would be an aggregate). */}
+          {selectedEpicOption && selectedEpicMeta ? (
+            <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
+              {selectedEpicMeta.teamLabel ? (
+                <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200">
+                  <Users className="size-3 shrink-0 opacity-70" aria-hidden />
+                  {selectedEpicMeta.teamLabel}
+                </span>
+              ) : null}
+              {selectedEpicOption.epic.assignee ? (
+                <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200">
+                  <User className="size-3 shrink-0 opacity-70" aria-hidden />
+                  {selectedEpicOption.epic.assignee}
+                </span>
+              ) : null}
+              {selectedEpicMeta.health ? (
+                <HealthBadge
+                  status={selectedEpicMeta.health}
+                  tooltip={selectedEpicMeta.healthTooltip ?? undefined}
+                />
+              ) : null}
+            </div>
+          ) : selectedInitiativeId !== "all" && selectedInitiativeMeta ? (
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <HealthBadge
+                status={selectedInitiativeMeta.health}
+                tooltip={selectedInitiativeMeta.tooltip}
+              />
+            </div>
           ) : null}
         </div>
       </div>
