@@ -4466,6 +4466,11 @@ export function TimelineGrid({
   const ganttHealthData = useMemo(() => {
     const counts: Record<HealthStatus, number> = { onTrack: 0, watch: 0, atRisk: 0, overdue: 0 };
     const statusByBarId = new Map<string, HealthStatus>();
+    // Items list parallel to `statusByBarId` so the popover can render an
+    // autocomplete of "what's currently in scope on the Gantt" without
+    // re-walking the data. Only includes bars where we could compute health
+    // — items without estimated work / stories aren't useful insight targets.
+    const items: Array<{ id: string; title: string; kind: "epic" | "initiative"; status: HealthStatus }> = [];
     let totalBars = 0;
     let unestimatedStoryCount = 0;
     const isInitiativeView = roadmapBarMode === "initiatives";
@@ -4501,6 +4506,7 @@ export function TimelineGrid({
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(initiative.id, h.status);
+            items.push({ id: initiative.id, title: initiative.title, kind: "initiative", status: h.status });
           }
           unestimatedStoryCount += h.unestimatedCount;
         }
@@ -4516,11 +4522,12 @@ export function TimelineGrid({
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(epic.id, h.status);
+            items.push({ id: epic.id, title: epic.title, kind: "epic", status: h.status });
           }
           unestimatedStoryCount += h.unestimatedCount;
         }
       }
-      return { counts, statusByBarId, totalBars, unestimatedStoryCount };
+      return { counts, statusByBarId, items, totalBars, unestimatedStoryCount };
     }
     const activeInitiativeRows = focusedQuarter
       ? ganttSearchAppliedQuarterInitiativeRows
@@ -4563,6 +4570,7 @@ export function TimelineGrid({
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(row.initiative.id, h.status);
+            items.push({ id: row.initiative.id, title: row.initiative.title, kind: "initiative", status: h.status });
           }
           unestimatedStoryCount += h.unestimatedCount;
         }
@@ -4582,12 +4590,13 @@ export function TimelineGrid({
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(row.epic.id, h.status);
+            items.push({ id: row.epic.id, title: row.epic.title, kind: "epic", status: h.status });
           }
           unestimatedStoryCount += h.unestimatedCount;
         }
       }
     }
-    return { counts, statusByBarId, totalBars, unestimatedStoryCount };
+    return { counts, statusByBarId, items, totalBars, unestimatedStoryCount };
   }, [
     roadmapBarMode,
     focusedQuarter,
@@ -5269,6 +5278,7 @@ export function TimelineGrid({
         counts={ganttHealthData.counts}
         totalBars={ganttHealthData.totalBars}
         unestimatedStoryCount={ganttHealthData.unestimatedStoryCount}
+        items={ganttHealthData.items}
         filter={healthFilter}
         onFilterChange={setHealthFilter}
         onClose={() => {
@@ -5283,12 +5293,13 @@ export function TimelineGrid({
         onBarModeChange={(mode) => { setRoadmapBarMode(mode); onSummaryStatusQuickFilterChange?.(null); }}
         progressBasis={progressBasis}
         onProgressBasisChange={onProgressBasisChange}
-        onOpenInsights={() => {
-          // Same effect as clicking the side-rail's "Insights" menu item:
-          // switches the planner's in-page tab to the insights surface
-          // (MonthAnalytics) without leaving the screen or opening a new
-          // window. The popover then closes itself.
-          setQuarterViewTab("insights");
+        onOpenInsights={(kind, id) => {
+          // Route through the parent's insights handler when available —
+          // it pre-scopes the Insights tab to the picked initiative/epic
+          // and switches surface in one call. Falls back to plain tab
+          // switch if no parent handler is wired (legacy callsite).
+          if (onOpenInsights) onOpenInsights(kind, id);
+          else setQuarterViewTab("insights");
         }}
       />
       <button type="button" onClick={() => openEstEpicsPanel()} className={summaryChipEstimatedClass}>

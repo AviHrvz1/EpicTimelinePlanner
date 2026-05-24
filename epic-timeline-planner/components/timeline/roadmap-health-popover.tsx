@@ -1,13 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, AlertOctagon, AlertTriangle, Check, ChevronRight, Folder, GripHorizontal, Hourglass, ListChecks, X, Zap } from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, Check, ChevronDown, ChevronRight, Folder, GripHorizontal, Hourglass, ListChecks, Search, X, Zap } from "lucide-react";
 
 import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 
 export type ProgressBasis = "stories" | "days";
+
+export type RoadmapHealthItem = {
+  id: string;
+  title: string;
+  kind: "epic" | "initiative";
+  status: HealthStatus;
+};
 
 export interface RoadmapHealthPopoverProps {
   open: boolean;
@@ -18,7 +25,12 @@ export interface RoadmapHealthPopoverProps {
   filter: Set<HealthStatus>;
   onFilterChange: (filter: Set<HealthStatus>) => void;
   onClose: () => void;
-  onOpenInsights?: () => void;
+  /**
+   * Fires when the user clicks "View Insights" with a pick from the
+   * autocomplete. Receives the picked item's kind + id so the consumer can
+   * pre-scope the Insights tab to that specific initiative/epic.
+   */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
   unitLabel: string;
   /** "initiatives" or "epics" — which scope the popover summary describes. */
   barMode: "initiatives" | "epics";
@@ -26,6 +38,14 @@ export interface RoadmapHealthPopoverProps {
   /** Whether progress % is computed from story counts or estimated-days burndown. */
   progressBasis: ProgressBasis;
   onProgressBasisChange: (basis: ProgressBasis) => void;
+  /**
+   * Bars currently visible on the Gantt with their computed health status.
+   * Used to populate the "pick an initiative/epic to inspect" autocomplete
+   * — filtered to the active `barMode` (epic vs initiative) and the active
+   * `filter` set (so unticking "On Track" hides on-track items from the
+   * suggestions just like it dims them on the chart).
+   */
+  items: ReadonlyArray<RoadmapHealthItem>;
 }
 
 /**
@@ -53,8 +73,60 @@ export function RoadmapHealthPopover({
   onBarModeChange,
   progressBasis,
   onProgressBasisChange,
+  items,
 }: RoadmapHealthPopoverProps) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  const targetKind: "epic" | "initiative" = barMode === "initiatives" ? "initiative" : "epic";
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  const pickerInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Pool: only items matching the current bar mode AND, when any status
+  // filter is active, only items whose status is in the filter set.
+  const pickerPool = useMemo(() => {
+    const base = items.filter((i) => i.kind === targetKind);
+    return filter.size === 0 ? base : base.filter((i) => filter.has(i.status));
+  }, [items, targetKind, filter]);
+
+  // Drop the picked id whenever the pool changes shape such that the
+  // current pick is no longer valid (e.g. user toggled the bar mode, or
+  // unchecked the status that the picked item belongs to).
+  useEffect(() => {
+    if (pickedId == null) return;
+    if (!pickerPool.some((i) => i.id === pickedId)) {
+      setPickedId(null);
+      setPickerQuery("");
+    }
+  }, [pickerPool, pickedId]);
+
+  // Re-anchor the input value to the picked item's title when one is
+  // chosen, so the field shows the selection at rest.
+  useEffect(() => {
+    if (pickedId == null) return;
+    const picked = pickerPool.find((i) => i.id === pickedId);
+    if (picked) setPickerQuery(picked.title);
+  }, [pickedId, pickerPool]);
+
+  // Close the suggestions list on outside click. Pointer-down (not click)
+  // so we don't fight the option's onClick.
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (e: PointerEvent) => {
+      if (!pickerRef.current?.contains(e.target as Node)) setPickerOpen(false);
+    };
+    window.addEventListener("pointerdown", handler);
+    return () => window.removeEventListener("pointerdown", handler);
+  }, [pickerOpen]);
+
+  const filteredSuggestions = useMemo(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    if (!q || (pickedId != null && pickerPool.find((i) => i.id === pickedId)?.title.toLowerCase() === q)) {
+      return pickerPool.slice(0, 50);
+    }
+    return pickerPool.filter((i) => i.title.toLowerCase().includes(q)).slice(0, 50);
+  }, [pickerPool, pickerQuery, pickedId]);
   /** Latest committed position (post-drag). React only renders on this. */
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   /** Once dragged, stop snapping back to the anchor on scroll/resize. */
@@ -182,7 +254,11 @@ export function RoadmapHealthPopover({
       role="dialog"
       aria-label="Roadmap health summary"
       style={{ left: pos.left, top: pos.top }}
-      className="fixed z-[9000] w-[600px] overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+      // `overflow-hidden` was clipping the autocomplete dropdown below the
+      // popover's bottom edge. Drop it and clip the gradient header on its
+      // own (`rounded-t-2xl`) so the rounded-corner look is preserved while
+      // descendants like the picker dropdown can extend past the popover.
+      className="fixed z-[9000] w-[600px] rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
     >
       {/* Gradient header — drag handle + title + close */}
       <div
@@ -190,7 +266,7 @@ export function RoadmapHealthPopover({
         onPointerMove={onHandlePointerMove}
         onPointerUp={onHandlePointerUp}
         onPointerCancel={onHandlePointerUp}
-        className="relative flex cursor-grab touch-none items-center justify-between gap-3 bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 px-6 py-2.5 text-white select-none active:cursor-grabbing"
+        className="relative flex cursor-grab touch-none items-center justify-between gap-3 rounded-t-2xl bg-gradient-to-r from-indigo-600 via-indigo-600 to-violet-600 px-6 py-2.5 text-white select-none active:cursor-grabbing"
         title="Drag to move"
       >
         {/* Subtle pattern overlay for depth */}
@@ -329,8 +405,82 @@ export function RoadmapHealthPopover({
           </div>
         </div>
 
+        {/* Scope picker — pick an initiative or epic to open in Insights.
+            Pool is filtered by the active bar mode + the status filter, so
+            the suggestions match exactly what's still highlighted on the
+            Gantt below. The View Insights button is disabled until the
+            user has actually picked something. */}
+        {onOpenInsights ? (
+          <div className="mt-5">
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-700">
+              Pick {targetKind === "initiative" ? "an initiative" : "an epic"} to inspect
+            </div>
+            <div ref={pickerRef} className="relative">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+                <input
+                  ref={pickerInputRef}
+                  type="text"
+                  value={pickerQuery}
+                  onFocus={() => setPickerOpen(true)}
+                  onChange={(e) => {
+                    setPickerQuery(e.target.value);
+                    setPickerOpen(true);
+                    if (pickedId != null) setPickedId(null);
+                  }}
+                  placeholder={
+                    pickerPool.length === 0
+                      ? `No ${targetKind === "initiative" ? "initiatives" : "epics"} match the current filter`
+                      : `Search ${pickerPool.length} ${targetKind === "initiative" ? "initiative" : "epic"}${pickerPool.length === 1 ? "" : "s"}…`
+                  }
+                  disabled={pickerPool.length === 0}
+                  className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-7 text-[12.5px] text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                />
+                {pickedId != null || pickerQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => { setPickedId(null); setPickerQuery(""); pickerInputRef.current?.focus(); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Clear selection"
+                  >
+                    <X className="size-3" />
+                  </button>
+                ) : (
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+                )}
+              </div>
+              {pickerOpen && filteredSuggestions.length > 0 ? (
+                <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-[9100] max-h-[220px] overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-xl">
+                  {filteredSuggestions.map((item) => {
+                    const meta = STATUS_META[item.status];
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setPickedId(item.id);
+                          setPickerQuery(item.title);
+                          setPickerOpen(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12.5px] text-slate-900 hover:bg-slate-50",
+                          item.id === pickedId && "bg-indigo-50",
+                        )}
+                      >
+                        <span className={cn("inline-flex size-3 shrink-0 items-center justify-center rounded-full ring-1 ring-white", meta.dotBg)} aria-hidden />
+                        <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                        <span className={cn("shrink-0 text-[10.5px] font-semibold uppercase tracking-wide", meta.countFg)}>{meta.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {/* Footer — meta + View Insights CTA */}
-        <div className="mt-5 flex items-center justify-between gap-4">
+        <div className="mt-4 flex items-center justify-between gap-4">
           <div className="text-[12px] text-slate-500">
             <span className="font-semibold text-slate-700">{totalBars}</span>{" "}
             {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
@@ -344,11 +494,14 @@ export function RoadmapHealthPopover({
           {onOpenInsights ? (
             <button
               type="button"
+              disabled={pickedId == null}
               onClick={() => {
-                onOpenInsights();
+                if (pickedId == null) return;
+                onOpenInsights(targetKind, pickedId);
                 onClose();
               }}
-              className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-indigo-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-indigo-700 transition-colors hover:bg-indigo-50"
+              className="group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-indigo-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-indigo-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:hover:bg-slate-50"
+              title={pickedId == null ? "Pick an item above to enable" : undefined}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

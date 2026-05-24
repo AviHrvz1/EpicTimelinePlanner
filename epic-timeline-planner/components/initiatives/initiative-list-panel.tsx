@@ -1288,6 +1288,9 @@ function InitiativeTreeCard({
     if (!newId) return;
     setNewestEpicId(newId);
     setHintEpicId(newId);
+    // Auto-open the new epic's accordion so the user can immediately add
+    // stories underneath without an extra click.
+    setOpenEpicIds((prev) => (prev[newId] ? prev : { ...prev, [newId]: true }));
     const t = setTimeout(() => setHintEpicId(null), 4200);
     return () => clearTimeout(t);
   }, [initiative.epics]);
@@ -1967,14 +1970,50 @@ export function InitiativeListPanel({
   const prevAllEpicIdsRef = useRef<Set<string>>(
     new Set(initiatives.flatMap((i) => (i.epics ?? []).map((e) => e.id))),
   );
+  // Watch for a newly-created epic AND the initiative it lives under, so we
+  // can auto-open both their accordions on the next render. Without this,
+  // the inline-add flow saves the row but leaves it collapsed, hiding the
+  // composer the user would use to add stories.
+  const newEpicAutoOpenRef = useRef<{ epicId: string; initiativeId: string } | null>(null);
   useEffect(() => {
     const currentIds = new Set(initiatives.flatMap((i) => (i.epics ?? []).map((e) => e.id)));
     const newId = [...currentIds].find((id) => !prevAllEpicIdsRef.current.has(id)) ?? null;
     prevAllEpicIdsRef.current = currentIds;
-    if (newId) setNewestEpicId(newId);
+    if (newId) {
+      setNewestEpicId(newId);
+      const parentInit = initiatives.find((i) => (i.epics ?? []).some((e) => e.id === newId));
+      if (parentInit) {
+        newEpicAutoOpenRef.current = { epicId: newId, initiativeId: parentInit.id };
+      }
+    }
   }, [initiatives]);
 
   const [openInitiativeIds, setOpenInitiativeIds] = useState<Record<string, boolean>>({});
+  // Auto-open the parent initiative card when a brand-new epic appears under
+  // it (top-level "+ Epic" can pick any initiative, so its card might be
+  // collapsed). The per-initiative card opens its own epic accordion via its
+  // local newEpicAutoOpenRef — wired via the same ref below.
+  useEffect(() => {
+    const pending = newEpicAutoOpenRef.current;
+    if (!pending) return;
+    setOpenInitiativeIds((prev) => (prev[pending.initiativeId] ? prev : { ...prev, [pending.initiativeId]: true }));
+  }, [initiatives]);
+  // Track new initiatives and auto-open their accordion on next render so
+  // the user can immediately add epics underneath without an extra click.
+  // We also remember the id so the list sort can bubble it to the top
+  // regardless of the default `(status, timelineRow, title)` order — the
+  // user just made it, they should see it at the top of the list.
+  const [newestInitiativeId, setNewestInitiativeId] = useState<string | null>(null);
+  const prevInitiativeIdsRef = useRef<Set<string>>(new Set(initiatives.map((i) => i.id)));
+  useEffect(() => {
+    const currentIds = new Set(initiatives.map((i) => i.id));
+    const newId = [...currentIds].find((id) => !prevInitiativeIdsRef.current.has(id)) ?? null;
+    prevInitiativeIdsRef.current = currentIds;
+    if (newId) {
+      setNewestInitiativeId(newId);
+      setOpenInitiativeIds((prev) => (prev[newId] ? prev : { ...prev, [newId]: true }));
+    }
+  }, [initiatives]);
   const [monthEpicOpenIds, setMonthEpicOpenIds] = useState<Record<string, boolean>>({});
   const [initiativeSearch, setInitiativeSearch] = useState("");
   const [initiativeSearchFocused, setInitiativeSearchFocused] = useState(false);
@@ -2325,10 +2364,17 @@ export function InitiativeListPanel({
       initiatives
         .slice()
         .sort((a, b) => {
+          // The just-created initiative always wins — keeps it visually
+          // pinned at the top until the next reload / new creation, so
+          // the user doesn't have to scroll for the row they just made.
+          if (newestInitiativeId != null) {
+            if (a.id === newestInitiativeId) return -1;
+            if (b.id === newestInitiativeId) return 1;
+          }
           if (a.status !== b.status) return a.status === "backlog" ? -1 : 1;
           return a.timelineRow - b.timelineRow || a.title.localeCompare(b.title);
         }),
-    [initiatives],
+    [initiatives, newestInitiativeId],
   );
   // Search-driven auto-expansion: when the user types a query that matches an
   // epic or a story (not just the initiative title), automatically force-open

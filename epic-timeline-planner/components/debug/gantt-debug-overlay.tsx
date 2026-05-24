@@ -34,7 +34,35 @@ type LogEntry = {
   at: Date;
 };
 
+/**
+ * Hidden by default — flip on via:
+ *   - `localStorage.setItem("ganttDebug", "1")` in DevTools, OR
+ *   - append `?debug=gantt` to the URL
+ * Disable by clearing the key (or `?debug=off`). When disabled, the hook
+ * never patches `console.log`, so there's zero runtime cost.
+ */
+function useGanttDebugEnabled(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const fromUrl = new URLSearchParams(window.location.search).get("debug");
+    if (fromUrl === "gantt") {
+      window.localStorage.setItem("ganttDebug", "1");
+      setEnabled(true);
+      return;
+    }
+    if (fromUrl === "off") {
+      window.localStorage.removeItem("ganttDebug");
+      setEnabled(false);
+      return;
+    }
+    setEnabled(window.localStorage.getItem("ganttDebug") === "1");
+  }, []);
+  return enabled;
+}
+
 export function GanttDebugOverlay() {
+  const enabled = useGanttDebugEnabled();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(true);
@@ -43,6 +71,7 @@ export function GanttDebugOverlay() {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     if (installed.current) return;
     installed.current = true;
     const originalLog = console.log;
@@ -65,7 +94,9 @@ export function GanttDebugOverlay() {
     return () => {
       console.log = originalLog;
     };
-  }, []);
+  }, [enabled]);
+
+  if (!enabled) return null;
 
   // Auto-scroll to bottom when new entries come in (unless user is reading
   // older entries — we approximate "is at bottom" by element scrollTop).
