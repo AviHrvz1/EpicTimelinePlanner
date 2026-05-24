@@ -221,6 +221,13 @@ model WorkspaceUser {
   permission String   @default("Viewer")
   /** Directory lifecycle; not editable in UI (currently all `active`). */
   status     String   @default("active")
+  /**
+   * Avatar URL — currently a local path like `/uploads/avatars/<uuid>.<ext>`
+   * served by Next.js from `public/`. The storage backend is hidden behind
+   * `lib/storage` so this can later point at S3 / R2 / etc. with no schema
+   * change; the column is just an opaque URL string.
+   */
+  image      String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

@@ -31,6 +31,11 @@ import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { PermissionFolderIcon } from "@/components/ui/permission-folder-icon";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
+import {
+  EditImageDialog,
+  readImageFileAsDataUrl,
+  useImageFilePicker,
+} from "@/components/users/edit-image-dialog";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
 import {
@@ -49,6 +54,8 @@ export type WorkspaceUserRow = {
   permission: string;
   /** Lowercase in DB; displayed capitalized in UI. Omitted on older API payloads until migrate. */
   status?: string;
+  /** Avatar URL (e.g. `/uploads/avatars/<uuid>.jpg`) or null when no upload. */
+  image?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -123,6 +130,114 @@ const USER_DIR_TD_BASE = "min-w-0 px-2 py-2 align-middle";
 /** Drawer field captions — larger than inputs (`cellInputCn` keeps control heights unchanged). */
 const USER_DRAWER_FIELD_LABEL_CLASS = "mb-1.5 block text-[15px] font-semibold text-slate-800";
 
+/**
+ * Avatar slot at the top of the Add User / Edit User drawer. Renders the
+ * current image (or initials placeholder) plus "Add / Change / Remove"
+ * actions. The actual file picking + crop dialog live one level up so both
+ * drawer modes share a single instance.
+ */
+function AvatarField({
+  name,
+  image,
+  onPick,
+  onClear,
+  disabled,
+}: {
+  name: string;
+  image: string | null;
+  onPick: () => void;
+  onClear: () => void;
+  disabled?: boolean;
+}) {
+  const hasImage = Boolean(image);
+  const initials = avatarInitialsFromName(name);
+  return (
+    <div className="flex items-center gap-4">
+      <button
+        type="button"
+        onClick={onPick}
+        disabled={disabled}
+        title={hasImage ? "Change photo" : "Add photo"}
+        className="group relative inline-flex size-20 items-center justify-center overflow-hidden rounded-full ring-1 ring-slate-200 transition hover:ring-violet-300 disabled:opacity-60"
+      >
+        {hasImage ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={image as string} alt="" className="size-full object-cover" />
+        ) : (
+          <span className="flex size-full items-center justify-center bg-gradient-to-br from-violet-100 to-indigo-100 text-[20px] font-bold text-violet-700">
+            {initials || <UserPlus className="size-7" />}
+          </span>
+        )}
+        <span className="absolute inset-x-0 bottom-0 hidden bg-slate-900/55 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-white group-hover:block">
+          {hasImage ? "Change" : "Add"}
+        </span>
+      </button>
+      <div className="flex flex-col gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-3 text-[12.5px]"
+          onClick={onPick}
+          disabled={disabled}
+        >
+          {hasImage ? "Change photo" : "Add photo"}
+        </Button>
+        {hasImage ? (
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={disabled}
+            className="text-left text-[11.5px] font-semibold text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline disabled:opacity-60"
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function avatarInitialsFromName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  const p = parts[0];
+  return (p.length >= 2 ? p.slice(0, 2) : p[0] + p[0]).toUpperCase();
+}
+
+/**
+ * Small row-avatar used in the directory's Name cell. Falls back to a Lucide
+ * User icon when the user has no uploaded image so old rows look unchanged
+ * until someone gives them a photo.
+ */
+function UserDirectoryAvatar({ image, name }: { image: string | null; name: string }) {
+  if (image) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={image}
+        alt=""
+        className="size-5 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+        draggable={false}
+      />
+    );
+  }
+  const initials = avatarInitialsFromName(name);
+  if (!initials) {
+    return <User className="size-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />;
+  }
+  return (
+    <span
+      className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700 ring-1 ring-violet-200/80"
+      aria-hidden
+    >
+      {initials}
+    </span>
+  );
+}
+
 function workspaceUserRequiredFieldsMessage(nameTrimmed: string, emailTrimmed: string): string | null {
   const needName = !nameTrimmed;
   const needEmail = !emailTrimmed;
@@ -175,7 +290,7 @@ const cellInputCn =
   "h-9 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2 text-[16px] outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200/80 disabled:opacity-60";
 
 function emptyForm() {
-  return { name: "", email: "", team: "" as string, permission: "" as string };
+  return { name: "", email: "", team: "" as string, permission: "" as string, image: null as string | null };
 }
 
 /** Drawer field stays empty for Viewer so the placeholder shows; other roles show their value. */
@@ -607,7 +722,7 @@ function UsersTableRow({
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-1">
-            <User className="size-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+            <UserDirectoryAvatar image={row.image ?? null} name={row.name} />
             <span className="min-w-0 flex-1 truncate py-1.5 pr-1 font-normal text-slate-900">{row.name}</span>
             {!saving && editField == null ? (
               <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -789,6 +904,22 @@ export function UsersWorkspacePanel() {
   const [userPanel, setUserPanel] = useState<UserPanelState | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  /**
+   * Avatar editor state lives at the panel level so it survives the user
+   * switching drawer modes (add ↔ view). `src` is the *unsaved* data URL of
+   * the freshly picked file — once Save runs in the dialog we get back a
+   * persisted URL that goes into `form.image`.
+   */
+  const [imageDialogSrc, setImageDialogSrc] = useState<string | null>(null);
+  const handleImageFilePicked = useCallback(async (file: File) => {
+    try {
+      const dataUrl = await readImageFileAsDataUrl(file);
+      setImageDialogSrc(dataUrl);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read image");
+    }
+  }, []);
+  const imagePicker = useImageFilePicker(handleImageFilePicked);
   const [savingRowIds, setSavingRowIds] = useState<Set<string>>(() => new Set());
   const [editCell, setEditCell] = useState<{ rowId: string; field: UserEditField } | null>(null);
   const [sort, setSort] = useState<SortState>({ key: "name", dir: "asc" });
@@ -1072,6 +1203,7 @@ export function UsersWorkspacePanel() {
               email: r.email,
               team: r.team,
               permission: permissionToFormValue(r.permission),
+              image: r.image ?? null,
             });
             setUserPanel({ kind: "view", user: r });
           }}
@@ -1297,6 +1429,7 @@ export function UsersWorkspacePanel() {
           email,
           team: nextTeam,
           permission,
+          image: form.image,
         }),
       });
       const err = await res.json().catch(() => ({}));
@@ -1330,7 +1463,7 @@ export function UsersWorkspacePanel() {
       return;
     }
     const permission = normalizeWorkspaceUserPermission(form.permission);
-    const body: { name?: string; email?: string; team?: string; permission?: string } = {};
+    const body: { name?: string; email?: string; team?: string; permission?: string; image?: string | null } = {};
     if (name !== viewUser.name) body.name = name;
     if (email !== viewUser.email) body.email = email;
     const nextTeam = normalizeWorkspaceUserTeam(form.team || "");
@@ -1339,6 +1472,12 @@ export function UsersWorkspacePanel() {
     if (teamChanged) body.team = nextTeam;
     if (permission !== normalizeWorkspaceUserPermission(viewUser.permission)) {
       body.permission = permission;
+    }
+    // Compare against viewUser.image (may be undefined on older payloads) —
+    // include when changed (covers both upload-new and clear-existing).
+    const priorImage = viewUser.image ?? null;
+    if ((form.image ?? null) !== priorImage) {
+      body.image = form.image;
     }
     const announceNewTeam =
       teamChanged && shouldAnnounceNewDirectoryTeam(nextTeam, directoryTeamIds);
@@ -1364,6 +1503,20 @@ export function UsersWorkspacePanel() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Hidden file picker shared by Add User + Edit User drawers — kept here
+       *  so both Avatar fields can trigger the same input regardless of which
+       *  drawer is open. */}
+      {imagePicker.input}
+      <EditImageDialog
+        open={imageDialogSrc != null}
+        src={imageDialogSrc}
+        onClose={() => setImageDialogSrc(null)}
+        onPickAnother={() => imagePicker.trigger()}
+        onSave={(url) => {
+          setForm((f) => ({ ...f, image: url }));
+          setImageDialogSrc(null);
+        }}
+      />
       <div className="min-h-0 min-w-0 flex-1 overflow-x-auto [scrollbar-gutter:stable]">
         <div
           className="box-border flex h-full min-h-0 w-full min-w-full flex-col gap-5 p-6 sm:p-8"
@@ -1655,6 +1808,13 @@ export function UsersWorkspacePanel() {
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <div className="flex-1 overflow-y-auto p-5">
                     <div className="w-full max-w-[400px] space-y-4">
+                      <AvatarField
+                        name={form.name}
+                        image={form.image}
+                        onPick={imagePicker.trigger}
+                        onClear={() => setForm((f) => ({ ...f, image: null }))}
+                        disabled={saving}
+                      />
                       <label className="block">
                         <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
                           Name{" "}
@@ -1779,6 +1939,13 @@ export function UsersWorkspacePanel() {
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <div className="flex-1 overflow-y-auto p-5">
                     <div className="w-full max-w-[400px] space-y-4">
+                      <AvatarField
+                        name={form.name}
+                        image={form.image}
+                        onPick={imagePicker.trigger}
+                        onClear={() => setForm((f) => ({ ...f, image: null }))}
+                        disabled={saving}
+                      />
                       <label className="block">
                         <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
                           Name{" "}

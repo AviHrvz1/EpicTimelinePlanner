@@ -43,3 +43,10 @@ next-env.d.ts
 /lib/generated/prisma
 prisma/*.db
 prisma/*.db-journal
+
+# Local user-uploaded files (avatars etc.) — environment-specific, not
+# committed. The empty directory stub at /public/uploads/.gitkeep keeps the
+# folder around so the LocalStorageAdapter can write into it on first run.
+/public/uploads/*
+!/public/uploads/.gitkeep
+

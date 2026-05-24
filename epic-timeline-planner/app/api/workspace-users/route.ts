@@ -60,10 +60,15 @@ export async function POST(request: NextRequest) {
   const permission = normalizeWorkspaceUserPermission(
     typeof rec.permission === "string" ? rec.permission : undefined,
   );
+  // Avatar URL is opaque to this route — it's the value `/api/uploads/avatar`
+  // returned. We only store strings that look like our own upload paths or
+  // null/empty (cleared). Anything else is rejected as a defensive check.
+  const imageRaw = typeof rec.image === "string" ? rec.image.trim() : "";
+  const image = imageRaw === "" ? null : imageRaw.startsWith("/uploads/") ? imageRaw : null;
 
   try {
     const created = await db.workspaceUser.create({
-      data: { name, email, team, permission, status: "active" },
+      data: { name, email, team, permission, status: "active", image },
     });
     return NextResponse.json(created, { status: 201 });
   } catch (e) {

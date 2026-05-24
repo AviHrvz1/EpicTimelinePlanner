@@ -25,6 +25,7 @@ import {
   Search,
   Thermometer,
   Trash2,
+  User,
   Users,
   X,
   Zap,
@@ -43,7 +44,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
-import { formatHealthTooltip } from "@/components/timeline/health-badge";
+import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { RoadmapHealthPopover, type ProgressBasis } from "@/components/timeline/roadmap-health-popover";
 import { computeInitiativeProgress, computeProgress, type HealthStatus } from "@/lib/progress";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
@@ -792,6 +793,78 @@ function estimatePanelTeamLabel(teamId: string | null | undefined): string {
 function estimatePanelAssigneeLabel(value: string | null | undefined): string {
   const t = (value ?? "").trim();
   return t || "—";
+}
+
+/**
+ * Compute health for a single epic. Returns null when the epic isn't
+ * scheduled or has no stories — caller should skip the badge in that case.
+ * Shared by the Gantt search dropdown so each suggestion shows its current
+ * health at a glance, same status the bar would have on the Gantt.
+ */
+function ganttSearchEpicHealth(
+  epic: EpicItem,
+  planYear: number,
+  basis: ProgressBasis,
+): { status: HealthStatus; tooltip: string } | null {
+  if (epic.planStartMonth == null || epic.planEndMonth == null) return null;
+  if ((epic.userStories ?? []).length === 0) return null;
+  const start = sprintStartDate(
+    planYear,
+    globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
+  );
+  const end = sprintEndDate(
+    planYear,
+    globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
+  );
+  const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis });
+  return { status: h.status, tooltip: formatHealthTooltip(h) };
+}
+
+/** Same as {@link ganttSearchEpicHealth} but for initiatives — rolls up
+ *  child epic statuses (matches `computeInitiativeProgress`). */
+function ganttSearchInitiativeHealth(
+  init: InitiativeItem,
+  planYear: number,
+  basis: ProgressBasis,
+): { status: HealthStatus; tooltip: string } | null {
+  const epics = init.epics ?? [];
+  if (epics.length === 0) return null;
+  const aggregateStories = epics.flatMap((e) => e.userStories ?? []);
+  if (aggregateStories.length === 0) return null;
+  const childStatuses: HealthStatus[] = [];
+  for (const epic of epics) {
+    if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+    const start = sprintStartDate(
+      planYear,
+      globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
+    );
+    const end = sprintEndDate(
+      planYear,
+      globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
+    );
+    childStatuses.push(
+      computeProgress({ stories: epic.userStories ?? [], start, end, basis }).status,
+    );
+  }
+  // Union bounds for the initiative; fall back to the planning year when no
+  // child has dates (rare but possible for newly-created initiatives).
+  const scheduled = epics.filter((e) => e.planStartMonth != null && e.planEndMonth != null);
+  const startMonth = scheduled.length > 0
+    ? Math.min(...scheduled.map((e) => e.planStartMonth as number))
+    : 1;
+  const endMonth = scheduled.length > 0
+    ? Math.max(...scheduled.map((e) => e.planEndMonth as number))
+    : 12;
+  const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(startMonth, 1));
+  const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(endMonth, 2));
+  const h = computeInitiativeProgress({
+    stories: aggregateStories,
+    childStatuses,
+    start: initStart,
+    end: initEnd,
+    basis,
+  });
+  return { status: h.status, tooltip: formatHealthTooltip(h) };
 }
 
 type TodayBadgePlacement = "above" | "inside";
@@ -3155,10 +3228,7 @@ export function TimelineGrid({
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          closeEstEpicsPanel();
-                          onOpenEpic(row.epic.id);
-                        }}
+                        onClick={() => onOpenEpic(row.epic.id)}
                         className="inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                       >
                         <span className="truncate">{row.epic.title}</span>
@@ -3168,10 +3238,7 @@ export function TimelineGrid({
                   <td className={cn(estimatePanelCellClass, "text-slate-600")}>
                     <button
                       type="button"
-                      onClick={() => {
-                        closeEstEpicsPanel();
-                        onOpenInitiative(row.initiative.id);
-                      }}
+                      onClick={() => onOpenInitiative(row.initiative.id)}
                       className="inline-flex max-w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                     >
                       <span className="truncate">{row.initiative.title}</span>
@@ -3231,11 +3298,7 @@ export function TimelineGrid({
                             storyIdx === 0 && "border-t border-slate-200",
                             isLast && "border-b-2 border-slate-200",
                           )}
-                          onClick={() => {
-                            if (!onOpenStory) return;
-                            closeEstEpicsPanel();
-                            onOpenStory(story.id);
-                          }}
+                          onClick={() => onOpenStory?.(story.id)}
                         >
                           <td className={cn(estimatePanelCellClass, "relative pl-14")}>
                             {/* vertical tree line — stops at midpoint for last story */}
@@ -3347,7 +3410,7 @@ export function TimelineGrid({
                         </button>
                         <button
                           type="button"
-                          onClick={() => { closeEstEpicsPanel(); onOpenEpic(row.epic.id); }}
+                          onClick={() => onOpenEpic(row.epic.id)}
                           className="inline-flex min-w-0 max-w-full rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                         >
                           <span className="truncate">{row.epic.title}</span>
@@ -3366,7 +3429,7 @@ export function TimelineGrid({
                     <td className={cn(estimatePanelCellClass, "text-slate-600")}>
                       <button
                         type="button"
-                        onClick={() => { closeEstEpicsPanel(); onOpenInitiative(row.initiative.id); }}
+                        onClick={() => onOpenInitiative(row.initiative.id)}
                         className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                       >
                         <span className="truncate">{row.initiative.title}</span>
@@ -3392,7 +3455,7 @@ export function TimelineGrid({
                               storyIdx === 0 && "border-t border-slate-200",
                               isLast && "border-b-2 border-slate-200",
                             )}
-                            onClick={() => { if (!onOpenStory) return; closeEstEpicsPanel(); onOpenStory(story.id); }}
+                            onClick={() => onOpenStory?.(story.id)}
                           >
                             <td className={cn(estimatePanelCellClass, "relative pl-14")}>
                               <span className="absolute left-8 top-0 w-px bg-indigo-300" style={{ height: isLast ? "50%" : "100%" }} />
@@ -3460,11 +3523,7 @@ export function TimelineGrid({
                 <td className={estimatePanelCellClass}>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!onOpenStory) return;
-                      closeEstEpicsPanel();
-                      onOpenStory(row.story.id);
-                    }}
+                    onClick={() => onOpenStory?.(row.story.id)}
                     disabled={!onOpenStory}
                     className={cn(
                       "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950",
@@ -3487,10 +3546,7 @@ export function TimelineGrid({
                 <td className={cn(estimatePanelCellClass, "text-slate-600")}>
                   <button
                     type="button"
-                    onClick={() => {
-                      closeEstEpicsPanel();
-                      onOpenEpic(row.epic.id);
-                    }}
+                    onClick={() => onOpenEpic(row.epic.id)}
                     className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                   >
                     <span className="truncate">{row.epic.title}</span>
@@ -5330,41 +5386,75 @@ export function TimelineGrid({
         </button>
       ) : null}
       {ganttSearchOpen && (ganttSearchResults.initiatives.length > 0 || ganttSearchResults.epics.length > 0) ? (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-[130] w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+        /* Anchored to the LEFT edge of the search field (parent's left=0)
+         * so the dropdown reads as a continuation of the input rather than
+         * a detached panel floating off the right. Wider too — we now render
+         * team + assignee + health chips per row. */
+        <div className="absolute left-0 top-[calc(100%+4px)] z-[130] w-[34rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           {ganttSearchResults.initiatives.length > 0 ? (
             <div>
               <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
                 {roadmapBarMode === "initiatives" ? "Initiatives" : "Show all epics from"}
               </p>
-              {ganttSearchResults.initiatives.map((init) => (
-                <button
-                  key={init.id}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => { setGanttSearchFilter({ type: "initiative", id: init.id, label: init.title }); setGanttSearchQuery(init.title); setGanttSearchOpen(false); }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
-                >
-                  <Zap className="size-3.5 shrink-0 text-violet-400" aria-hidden />
-                  <span className="truncate">{init.title}</span>
-                </button>
-              ))}
+              {ganttSearchResults.initiatives.map((init) => {
+                const health = ganttSearchInitiativeHealth(init, currentYear, progressBasis);
+                return (
+                  <button
+                    key={init.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { setGanttSearchFilter({ type: "initiative", id: init.id, label: init.title }); setGanttSearchQuery(init.title); setGanttSearchOpen(false); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
+                  >
+                    <Zap className="size-3.5 shrink-0 text-violet-400" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">{init.title}</span>
+                    {health ? (
+                      <span className="ml-auto inline-flex shrink-0">
+                        <HealthBadge status={health.status} tooltip={health.tooltip} />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           ) : null}
           {ganttSearchResults.epics.length > 0 ? (
             <div className={cn(ganttSearchResults.initiatives.length > 0 ? "border-t border-slate-100" : "")}>
               <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Epics</p>
-              {ganttSearchResults.epics.map((epic) => (
-                <button
-                  key={epic.id}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => { setGanttSearchFilter({ type: "epic", id: epic.id, label: epic.title }); setGanttSearchQuery(epic.title); setGanttSearchOpen(false); }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
-                >
-                  <Folder className="size-3.5 shrink-0 text-indigo-400" aria-hidden />
-                  <span className="truncate">{epic.title}</span>
-                </button>
-              ))}
+              {ganttSearchResults.epics.map((epic) => {
+                const teamLabel = estimatePanelTeamLabel(epic.team);
+                const assigneeLabel = estimatePanelAssigneeLabel(epic.assignee);
+                const health = ganttSearchEpicHealth(epic, currentYear, progressBasis);
+                return (
+                  <button
+                    key={epic.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { setGanttSearchFilter({ type: "epic", id: epic.id, label: epic.title }); setGanttSearchQuery(epic.title); setGanttSearchOpen(false); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
+                  >
+                    <Folder className="size-3.5 shrink-0 text-indigo-400" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">{epic.title}</span>
+                    <span className="ml-auto inline-flex shrink-0 items-center gap-1">
+                      {teamLabel && teamLabel !== "—" ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                          <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
+                          {teamLabel}
+                        </span>
+                      ) : null}
+                      {assigneeLabel && assigneeLabel !== "—" ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                          <User className="size-2.5 shrink-0 opacity-70" aria-hidden />
+                          {assigneeLabel}
+                        </span>
+                      ) : null}
+                      {health ? (
+                        <HealthBadge status={health.status} tooltip={health.tooltip} />
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>
