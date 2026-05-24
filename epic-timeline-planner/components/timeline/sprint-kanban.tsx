@@ -520,11 +520,13 @@ function SprintEpicCard({
   month,
   yearSprint,
   onOpenEpic,
+  workspaceDirectoryUsers,
 }: {
   row: BoardEpicRow;
   month: number;
   yearSprint: number;
   onOpenEpic?: (epicId: string) => void;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 }) {
   const { epic, initiative } = row;
   const sprintStories = (epic.userStories ?? []).filter(
@@ -592,12 +594,20 @@ function SprintEpicCard({
           <p className="mt-1.5 text-[10px] text-slate-400">No stories in this sprint</p>
         )}
         <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
-          {epic.assignee?.trim() ? (
-            <span className={cn("inline-flex items-center gap-1 border border-slate-200 bg-slate-50 text-slate-700", chipBase)}>
-              <UserRound className="size-2.5 shrink-0 opacity-70" aria-hidden />
-              <span className="max-w-[7rem] truncate">{epic.assignee.trim()}</span>
-            </span>
-          ) : null}
+          {epic.assignee?.trim() ? (() => {
+            const resolved = resolveAssigneeAvatar(epic.assignee, workspaceDirectoryUsers);
+            return (
+              <span className={cn("inline-flex items-center gap-1 border border-slate-200 bg-slate-50 text-slate-700", chipBase)}>
+                {resolved.image ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={resolved.image} alt="" className="size-3.5 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <UserRound className="size-2.5 shrink-0 opacity-70" aria-hidden />
+                )}
+                <span className="max-w-[7rem] truncate">{epic.assignee.trim()}</span>
+              </span>
+            );
+          })() : null}
           {teamChip ? (
             <span className={cn("inline-flex items-center gap-1", chipBase, teamChip.className)}>
               <Users className="size-2.5 shrink-0" aria-hidden />
@@ -624,11 +634,13 @@ function SprintEpicKanbanView({
   month,
   yearSprint,
   onOpenEpic,
+  workspaceDirectoryUsers,
 }: {
   epicRows: BoardEpicRow[];
   month: number;
   yearSprint: number;
   onOpenEpic?: (epicId: string) => void;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 }) {
   const byStatus = new Map<StoryStatus, BoardEpicRow[]>();
   for (const col of EPIC_STATUS_COLUMNS) byStatus.set(col.status, []);
@@ -666,6 +678,7 @@ function SprintEpicKanbanView({
                   month={month}
                   yearSprint={yearSprint}
                   onOpenEpic={onOpenEpic}
+                  workspaceDirectoryUsers={workspaceDirectoryUsers}
                 />
               ))}
               {colRows.length === 0 && (
@@ -994,6 +1007,7 @@ export function SprintKanbanBoard({
           month={month}
           yearSprint={yearSprint}
           onOpenEpic={onOpenEpic}
+          workspaceDirectoryUsers={workspaceDirectoryUsers}
         />
       ) : null}
       <div className={cn("grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-4", viewMode === "epics" && "hidden")}>

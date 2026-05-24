@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { AlertTriangle, Archive, FileText, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Users, X as XIcon } from "lucide-react";
+import { AlertTriangle, Archive, FileText, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Sparkles, Users, X as XIcon } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -13,6 +13,7 @@ import { UserChip } from "@/components/auth/user-chip";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
+import { DemoBuilderPanel } from "@/components/demo-builder/demo-builder-panel";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { EpicDeleteDialog } from "@/components/epics/epic-delete-dialog";
 import { InitiativeDeleteDialog } from "@/components/initiatives/initiative-delete-dialog";
@@ -1070,7 +1071,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       return {};
     }
   });
-  const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "dashboard" | "users">("roadmap");
+  const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "dashboard" | "users" | "demoBuilder">("roadmap");
   /**
    * Once the user opens the Dashboard mode at least once, keep <DashboardPage /> mounted (just visually hidden when not active).
    * That preserves unsaved drafts and in-progress chart layouts in memory across mode switches without writing them to the DB.
@@ -1496,6 +1497,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     const params = new URLSearchParams(window.location.search);
     const viewRaw = params.get("view");
     if (viewRaw === "users") setTopMode("users");
+    else if (viewRaw === "demo-builder") setTopMode("demoBuilder");
     else if (viewRaw === "backlog") setTopMode("backlog");
     else if (viewRaw === "dashboard") setTopMode("dashboard");
     const q = params.get("quarter");
@@ -1678,6 +1680,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     if (!isUrlHydrated) return;
     const params = new URLSearchParams();
     if (topMode === "users") params.set("view", "users");
+    else if (topMode === "demoBuilder") params.set("view", "demo-builder");
     else if (topMode === "backlog") params.set("view", "backlog");
     else if (topMode === "dashboard") params.set("view", "dashboard");
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
@@ -1753,6 +1756,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       const params = new URLSearchParams(window.location.search);
       const v = params.get("view");
       if (v === "users") setTopMode("users");
+      else if (v === "demo-builder") setTopMode("demoBuilder");
       else if (v === "backlog") setTopMode("backlog");
       else if (v === "dashboard") setTopMode("dashboard");
       else setTopMode("roadmap");
@@ -4611,6 +4615,42 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             </span>
           </button>
         </div>
+        <div className="group relative w-full overflow-visible">
+          <button
+            type="button"
+            onClick={() => setTopMode("demoBuilder")}
+            aria-label="Demo Builder"
+            title="Internal — reset & seed demo data"
+            className={cn(
+              "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
+              isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
+              topMode === "demoBuilder"
+                ? modeRailActiveClass
+                : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                topMode === "demoBuilder" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
+              )}
+              aria-hidden
+              onMouseEnter={() => setIsModeRailExpanded(true)}
+            >
+              <Sparkles className="size-4" aria-hidden />
+            </span>
+            <span
+              className={cn(
+                modeRailLabelClass,
+                "overflow-hidden transition-[max-width,opacity,margin] duration-200",
+                isModeRailExpanded ? "ml-0 max-w-[12rem] opacity-100" : "ml-0 max-w-0 opacity-0",
+              )}
+              aria-hidden={!isModeRailExpanded}
+            >
+              Demo Builder
+            </span>
+          </button>
+        </div>
       </nav>
     </aside>
   );
@@ -4653,6 +4693,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         className={cn(
           "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-5",
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
+          topMode === "demoBuilder" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "roadmap" &&
             "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "backlog" &&
@@ -5371,6 +5412,21 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             </div>
           ) : topMode === "dashboard" ? (
             null
+          ) : topMode === "demoBuilder" ? (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-row">
+              <div className="ml-1 mt-3 mb-4 min-h-0 min-w-0 flex-1">
+                <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
+                  <DemoBuilderPanel />
+                </div>
+              </div>
+              {/* Same slim gutter as the users panel for visual consistency. */}
+              <div
+                className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
+                aria-hidden
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
+              </div>
+            </div>
           ) : topMode === "users" ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-row">
               <div className="ml-1 mt-3 mb-4 min-h-0 min-w-0 flex-1">

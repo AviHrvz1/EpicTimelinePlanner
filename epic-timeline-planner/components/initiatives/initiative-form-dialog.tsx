@@ -586,6 +586,11 @@ export function InitiativeFormDialog({
   }, [initiative?.epics]);
   const infoTooltipClass =
     "pointer-events-none absolute left-1/2 top-0 z-[320] w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
+  // Same look as `infoTooltipClass` but anchored *below* the trigger — for
+  // header-row buttons (Insights / Delete) where the default above-anchored
+  // tooltip gets clipped by the dialog's top edge.
+  const belowTooltipClass =
+    "pointer-events-none absolute left-1/2 top-full z-[320] mt-2 w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
 
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
@@ -915,7 +920,7 @@ export function InitiativeFormDialog({
                     />
                     Insights
                   </button>
-                  <span role="tooltip" className={infoTooltipClass}>
+                  <span role="tooltip" className={belowTooltipClass}>
                     Open the insights view scoped to this initiative — see scope burnup, sprint progress, and team workload across all child epics.
                   </span>
                 </span>
@@ -930,7 +935,7 @@ export function InitiativeFormDialog({
                     <Trash2 className="size-4" />
                     Delete
                   </button>
-                  <span role="tooltip" className={infoTooltipClass}>
+                  <span role="tooltip" className={belowTooltipClass}>
                     Permanently delete this initiative and every child epic and user story under it. This cannot be undone.
                   </span>
                 </span>

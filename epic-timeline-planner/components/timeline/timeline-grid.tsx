@@ -6931,6 +6931,7 @@ export function TimelineGrid({
                     initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
                     initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
                     onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+                    workspaceDirectoryUsers={workspaceDirectoryUsers}
                   />
                 </div>
               </DeferredMount>
@@ -7363,6 +7364,7 @@ export function TimelineGrid({
               initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
               initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
               onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+              workspaceDirectoryUsers={workspaceDirectoryUsers}
             />
           </DeferredMount>
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
@@ -7382,6 +7384,7 @@ export function TimelineGrid({
               initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
               initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
               onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+              workspaceDirectoryUsers={workspaceDirectoryUsers}
             />
           </DeferredMount>
         ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (
