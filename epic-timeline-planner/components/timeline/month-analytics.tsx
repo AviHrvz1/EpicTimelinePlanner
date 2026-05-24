@@ -1782,6 +1782,33 @@ export function MonthAnalytics({
   const allBurnUpKeysSelected =
     burnUpEpicRows.length > 0 && burnUpEpicRows.every((r) => burnUpVisibleKeys.includes(r.id));
 
+  /**
+   * Title suffix for "Epic Scope Burndown" — `scopeTitleSuffix` (Epic/Initiative
+   * Scope filter) wins; otherwise, if the legend is narrowed to a single epic
+   * line, show that epic's title in brackets.
+   */
+  const burndownTitleSuffix = useMemo(() => {
+    if (scopeTitleSuffix) return scopeTitleSuffix;
+    if (burndownVisibleKeys.length === 1) {
+      const key = burndownVisibleKeys[0]!;
+      if (key !== "epicIdeal") {
+        const item = burndownLegendItems.find((i) => i.key === key);
+        if (item) return ` (${item.label})`;
+      }
+    }
+    return "";
+  }, [scopeTitleSuffix, burndownVisibleKeys, burndownLegendItems]);
+
+  /** Same shape as `burndownTitleSuffix`, against the Burnup legend. */
+  const burnUpTitleSuffix = useMemo(() => {
+    if (scopeTitleSuffix) return scopeTitleSuffix;
+    if (burnUpVisibleKeys.length === 1) {
+      const row = burnUpEpicRows.find((r) => r.id === burnUpVisibleKeys[0]);
+      if (row) return ` (${row.title})`;
+    }
+    return "";
+  }, [scopeTitleSuffix, burnUpVisibleKeys, burnUpEpicRows]);
+
   const workloadStoriesScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollWorkloadUp, setCanScrollWorkloadUp] = useState(false);
   const [canScrollWorkloadDown, setCanScrollWorkloadDown] = useState(false);
@@ -2307,7 +2334,7 @@ export function MonthAnalytics({
             )}
           >
             <Activity className="size-4 text-slate-600" />
-            Epic Scope Burndown{scopeTitleSuffix}
+            Epic Scope Burndown{burndownTitleSuffix}
           </h3>
           <div className="flex items-center gap-2">
             <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
@@ -2990,8 +3017,11 @@ export function MonthAnalytics({
       </article>
       </div>
 
-      {/* Row 3: Month Load (left) + Burn Up chart (right) */}
-      {burnUpData.length > 0 && (
+      {/* Row 3: Month Load (left) + Burn Up chart (right).
+       *  Render whenever there's burnup data OR a scope (epic/initiative) is
+       *  pinned — pinned scope must always show both charts even if the epic
+       *  has no scheduled stories to chart. */}
+      {(burnUpData.length > 0 || selectedEpicOption != null || selectedInitiativeId !== "all") && (
         <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
           {/* Month Load — left column, below Workload Balance */}
           {(() => {
@@ -3106,10 +3136,7 @@ export function MonthAnalytics({
                         key={row.key}
                         type="button"
                         onClick={row.onRowClick}
-                        className={cn(
-                          "w-full rounded-lg bg-white px-2 py-1.5 text-left ring-1 transition-colors hover:bg-slate-50/60",
-                          atRisk ? "ring-amber-200/70 hover:ring-amber-300" : "ring-slate-200/70 hover:ring-slate-300",
-                        )}
+                        className="w-full rounded-lg bg-white px-2 py-1.5 text-left transition-colors hover:bg-slate-50/60"
                       >
                         <div className="flex items-center gap-2">
                           <span
@@ -3199,7 +3226,7 @@ export function MonthAnalytics({
                 )}
               >
                 <TrendingUp className="size-4 text-slate-600" />
-                Epic Scope Burnup{scopeTitleSuffix}
+                Epic Scope Burnup{burnUpTitleSuffix}
               </h3>
               <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
                 <button
@@ -3227,6 +3254,11 @@ export function MonthAnalytics({
             >
               {/* Chart */}
               <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
+                {burnUpData.length === 0 ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-[12px] text-slate-500">
+                    No scheduled stories for the selected scope.
+                  </div>
+                ) : (
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={burnUpData} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
@@ -3293,6 +3325,7 @@ export function MonthAnalytics({
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+                )}
               </div>
 
               {/* Right-side legend — identical structure to burndown legend */}
