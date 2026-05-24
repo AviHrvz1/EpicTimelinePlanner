@@ -2920,19 +2920,7 @@ export function TimelineGrid({
   }, [yearRoadmapEpicRows, ganttTeamIds]);
 
   // ─── Gantt search filter (autocomplete by name + scope) ──────────────────────
-  const ganttSearchResults = useMemo(() => {
-    const q = ganttSearchQuery.trim().toLowerCase();
-    if (roadmapBarMode === "initiatives") {
-      return {
-        initiatives: yearRoadmapInitiatives.filter(i => !q || i.initiative.title.toLowerCase().includes(q)).slice(0, 8).map(i => i.initiative),
-        epics: [] as EpicItem[],
-      };
-    }
-    return {
-      initiatives: yearRoadmapInitiatives.filter(i => !q || i.initiative.title.toLowerCase().includes(q)).slice(0, 5).map(i => i.initiative),
-      epics: yearRoadmapEpics.filter(i => !q || i.epic.title.toLowerCase().includes(q)).slice(0, 8).map(i => i.epic),
-    };
-  }, [ganttSearchQuery, roadmapBarMode, yearRoadmapInitiatives, yearRoadmapEpics]);
+  // Defined later, after `activeMonth` is computed — see below.
 
   const ganttSearchEpicIds = useMemo((): Set<string> | null => {
     if (!ganttSearchFilter && !ganttSearchQuery.trim()) return null;
@@ -2996,6 +2984,93 @@ export function TimelineGrid({
     isFullYearGanttLayout ||
     isQuarterGanttLayout ||
     (activeMonth != null && monthPlanTab === "epic-gantt");
+
+  /**
+   * Gantt-search autocomplete — scoped to the user's current view AND the
+   * breadcrumb team filter, so we don't suggest epics the user can't see on
+   * the chart underneath. Year view → year rows; quarter view → epics whose
+   * plan window overlaps the focused quarter; month view → epics overlapping
+   * the active month. Initiative suggestions follow the same rule by
+   * checking whether *any* child epic is in scope. Each row also carries the
+   * list of quarter labels it spans, surfaced as a chip in the dropdown so
+   * you can tell at a glance where a match sits in the year.
+   */
+  const ganttSearchResults = useMemo(() => {
+    const q = ganttSearchQuery.trim().toLowerCase();
+    const monthOk = (epic: EpicItem): boolean => {
+      if (activeMonth == null) return true;
+      if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
+      return epic.planStartMonth <= activeMonth && epic.planEndMonth >= activeMonth;
+    };
+    const quarterOk = (epic: EpicItem): boolean => {
+      if (!focusedQuarter) return true;
+      if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
+      const qs = focusedQuarter.months[0]!;
+      const qe = focusedQuarter.months[focusedQuarter.months.length - 1]!;
+      return epic.planEndMonth >= qs && epic.planStartMonth <= qe;
+    };
+    const teamOk = (epic: EpicItem): boolean => {
+      if (ganttTeamIds.length === 0) return true;
+      return Boolean(epic.team) && ganttTeamIds.includes(epic.team as string);
+    };
+    const epicInScope = (epic: EpicItem): boolean => monthOk(epic) && quarterOk(epic) && teamOk(epic);
+
+    // Quarter labels an epic touches, in calendar order (e.g. ["Q2", "Q3"]).
+    // Used for the chip in the dropdown row — empty when the epic is
+    // unscheduled or its plan months don't map to any QUARTERS entry.
+    const quartersForEpic = (epic: EpicItem): string[] => {
+      if (epic.planStartMonth == null || epic.planEndMonth == null) return [];
+      const labels: string[] = [];
+      for (const q of QUARTERS) {
+        const qs = q.months[0]!;
+        const qe = q.months[q.months.length - 1]!;
+        if (epic.planEndMonth >= qs && epic.planStartMonth <= qe) labels.push(q.label);
+      }
+      return labels;
+    };
+    // Union of quarter labels across the initiative's in-scope epics.
+    const quartersForInit = (init: InitiativeItem): string[] => {
+      const set = new Set<string>();
+      for (const epic of init.epics ?? []) {
+        if (!epicInScope(epic)) continue;
+        for (const lbl of quartersForEpic(epic)) set.add(lbl);
+      }
+      return [...set].sort();
+    };
+
+    const scopedEpics = yearRoadmapEpics.filter((r) => epicInScope(r.epic));
+    const scopedInits = yearRoadmapInitiatives.filter((r) =>
+      (r.initiative.epics ?? []).some(epicInScope),
+    );
+
+    if (roadmapBarMode === "initiatives") {
+      return {
+        initiatives: scopedInits
+          .filter((i) => !q || i.initiative.title.toLowerCase().includes(q))
+          .slice(0, 8)
+          .map((i) => ({ initiative: i.initiative, quarterLabels: quartersForInit(i.initiative) })),
+        epics: [] as Array<{ epic: EpicItem; quarterLabels: string[] }>,
+      };
+    }
+    return {
+      initiatives: scopedInits
+        .filter((i) => !q || i.initiative.title.toLowerCase().includes(q))
+        .slice(0, 5)
+        .map((i) => ({ initiative: i.initiative, quarterLabels: quartersForInit(i.initiative) })),
+      epics: scopedEpics
+        .filter((i) => !q || i.epic.title.toLowerCase().includes(q))
+        .slice(0, 8)
+        .map((i) => ({ epic: i.epic, quarterLabels: quartersForEpic(i.epic) })),
+    };
+  }, [
+    ganttSearchQuery,
+    roadmapBarMode,
+    yearRoadmapInitiatives,
+    yearRoadmapEpics,
+    activeMonth,
+    focusedQuarter,
+    ganttTeamIds,
+  ]);
 
   /**
    * Auto-close the health popover when the user navigates away from any Gantt
@@ -5396,7 +5471,7 @@ export function TimelineGrid({
               <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
                 {roadmapBarMode === "initiatives" ? "Initiatives" : "Show all epics from"}
               </p>
-              {ganttSearchResults.initiatives.map((init) => {
+              {ganttSearchResults.initiatives.map(({ initiative: init, quarterLabels }) => {
                 const health = ganttSearchInitiativeHealth(init, currentYear, progressBasis);
                 return (
                   <button
@@ -5404,15 +5479,20 @@ export function TimelineGrid({
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => { setGanttSearchFilter({ type: "initiative", id: init.id, label: init.title }); setGanttSearchQuery(init.title); setGanttSearchOpen(false); }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-slate-950 hover:bg-slate-50"
                   >
                     <Zap className="size-3.5 shrink-0 text-violet-400" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{init.title}</span>
-                    {health ? (
-                      <span className="ml-auto inline-flex shrink-0">
+                    <span className="ml-auto inline-flex shrink-0 items-center gap-1">
+                      {quarterLabels.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-200/80">
+                          {quarterLabels.join(" · ")}
+                        </span>
+                      ) : null}
+                      {health ? (
                         <HealthBadge status={health.status} tooltip={health.tooltip} />
-                      </span>
-                    ) : null}
+                      ) : null}
+                    </span>
                   </button>
                 );
               })}
@@ -5421,7 +5501,7 @@ export function TimelineGrid({
           {ganttSearchResults.epics.length > 0 ? (
             <div className={cn(ganttSearchResults.initiatives.length > 0 ? "border-t border-slate-100" : "")}>
               <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Epics</p>
-              {ganttSearchResults.epics.map((epic) => {
+              {ganttSearchResults.epics.map(({ epic, quarterLabels }) => {
                 const teamLabel = estimatePanelTeamLabel(epic.team);
                 const assigneeLabel = estimatePanelAssigneeLabel(epic.assignee);
                 const health = ganttSearchEpicHealth(epic, currentYear, progressBasis);
@@ -5436,6 +5516,11 @@ export function TimelineGrid({
                     <Folder className="size-3.5 shrink-0 text-indigo-400" aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{epic.title}</span>
                     <span className="ml-auto inline-flex shrink-0 items-center gap-1">
+                      {quarterLabels.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-200/80">
+                          {quarterLabels.join(" · ")}
+                        </span>
+                      ) : null}
                       {teamLabel && teamLabel !== "—" ? (
                         <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
                           <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
