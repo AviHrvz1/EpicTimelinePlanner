@@ -5638,10 +5638,16 @@ export function TimelineGrid({
       >
       {activeMonth ? (
         <div className="relative z-30 h-0">
+          {/* Sprint mode renders 4 rail buttons (Board / Insights / Capacity
+              / Retro), the default mode renders 2 (Epic Plan / Insights),
+              so size the wrapper accordingly. */}
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex h-[108px] flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-0 top-0 inline-flex flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width,height] duration-200",
               isRailExpanded ? "w-56" : "w-[3.25rem]",
+              activeSprint != null && (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "sprint-capacity" || monthPlanTab === "sprint-retrospective")
+                ? "h-[180px]"
+                : "h-[108px]",
             )}
             onMouseLeave={() => {
               console.log("[rail-nav] month rail mouseleave", {
