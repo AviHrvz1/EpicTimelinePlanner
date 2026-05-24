@@ -16,6 +16,7 @@ export function TeamLoadSummary({
   loadBasis = "originalEstimate",
   onLoadBasisChange,
   sprintStoryCount,
+  headerRightSlot,
   className,
 }: {
   teamLabel: string;
@@ -29,6 +30,8 @@ export function TeamLoadSummary({
   onLoadBasisChange?: (basis: CapacityLoadBasis) => void;
   /** When provided, story count is shown inline with the capacity stats row. */
   sprintStoryCount?: number;
+  /** Floats to the right of the stats row — used for the sprint capacity search input. */
+  headerRightSlot?: ReactNode;
   className?: string;
 }) {
   const overCapacity = totalAssigned > totalCapacity;
@@ -147,7 +150,7 @@ export function TeamLoadSummary({
       </div>
 
       <div className="mt-3 border-t border-slate-200/80 pt-3">
-        <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold sm:text-[14px]">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-[13px] font-semibold sm:text-[14px]">
           {sprintStoryCount != null && (
             <>
               <span className="tabular-nums text-slate-800">
@@ -171,6 +174,11 @@ export function TeamLoadSummary({
             {statusLabel}
             {overCapacity ? <AlertTriangle className="size-3.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden /> : null}
           </span>
+          {headerRightSlot ? (
+            <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2">
+              {headerRightSlot}
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

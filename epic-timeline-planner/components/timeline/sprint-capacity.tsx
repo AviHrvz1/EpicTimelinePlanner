@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Check, GripVertical, Info, Maximize2, Minimize2, User, UserRound, Users, UserX, X } from "lucide-react";
+import { ArrowDown, Check, GripVertical, Info, Maximize2, Minimize2, Search, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
@@ -185,12 +185,15 @@ function CapacityStoryCard({
   onDaysLeftChange,
   onUnscheduleStory,
   onOpenStory,
+  highlight = false,
 }: {
   card: CapacityStoryCardModel;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
   onDaysLeftChange: (storyId: string, daysLeft: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
+  /** Glow the card to mark it as the search match. */
+  highlight?: boolean;
 }) {
   const isUnassigned = card.assigneeLabel === "Unassigned";
   const [showAssignHint, setShowAssignHint] = useState(isUnassigned);
@@ -240,6 +243,7 @@ function CapacityStoryCard({
       className={cn(
         "group/storycap relative min-h-[3.25rem] rounded-lg border border-slate-200/80 bg-white py-2 pl-2 pr-2 shadow-sm transition-colors hover:border-slate-300/70 hover:bg-slate-50/80",
         isDragging && "opacity-60",
+        highlight && "border-amber-400 bg-amber-50/60 shadow-md ring-2 ring-amber-300 ring-offset-1 ring-offset-amber-50/40",
       )}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
@@ -417,6 +421,7 @@ function CapacityBucket({
   reorderGrip = null,
   /** Shown as a small label above the bucket when a single delivery team is selected (hidden for all-teams view). */
   teamFilterLabel = null,
+  highlightStoryIds = null,
 }: {
   yearSprint: number;
   teamKey: string;
@@ -435,6 +440,9 @@ function CapacityBucket({
   /** Column reorder handle (same size / row as expand control). */
   reorderGrip?: ReactNode;
   teamFilterLabel?: string | null;
+  /** Story ids that match the active search query — cards in this set get a
+   *  highlighted ring. Null = no search active. */
+  highlightStoryIds?: ReadonlySet<string> | null;
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
@@ -694,6 +702,7 @@ function CapacityBucket({
                         onDaysLeftChange={onDaysLeftChange}
                         onUnscheduleStory={onUnscheduleStory}
                         onOpenStory={onOpenStory}
+                        highlight={highlightStoryIds?.has(card.id) ?? false}
                       />
                       <StoryDropSlot
                         yearSprint={yearSprint}
@@ -883,10 +892,47 @@ export function SprintCapacityBoard({
     });
   }, [assigneeFilterOptions]);
 
+  // Story search — live-filter by story title (or USXX ref). When the
+  // query matches one or more stories on the board, hide member columns
+  // that have none of them and highlight the matched cards.
+  const [storySearch, setStorySearch] = useState("");
+  useEffect(() => {
+    setStorySearch("");
+  }, [selectedTeamId, month, yearSprint]);
+  const storySearchQuery = storySearch.trim().toLowerCase();
+  const searchMatchIds = useMemo(() => {
+    if (!storySearchQuery) return null;
+    const matches = new Set<string>();
+    for (const [, card] of storyById) {
+      if (
+        card.title.toLowerCase().includes(storySearchQuery) ||
+        card.epicTitle.toLowerCase().includes(storySearchQuery)
+      ) {
+        matches.add(card.id);
+      }
+    }
+    return matches;
+  // storyById is rebuilt each render from `rows`; depend on its size + the
+  // query so the memo runs when either changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storySearchQuery, rows]);
+
   const visibleMembers = useMemo(() => {
-    if (selectedAssigneeFilter.length === 0) return members;
-    return members.filter((m) => selectedAssigneeFilter.includes(capacityBucketToFilterLabel(m)));
-  }, [members, selectedAssigneeFilter]);
+    let scoped = members;
+    if (selectedAssigneeFilter.length > 0) {
+      scoped = scoped.filter((m) => selectedAssigneeFilter.includes(capacityBucketToFilterLabel(m)));
+    }
+    if (searchMatchIds && searchMatchIds.size > 0) {
+      scoped = scoped.filter((m) =>
+        (capacityBoard.assignments[m] ?? []).some((id) => searchMatchIds.has(id)),
+      );
+    } else if (searchMatchIds && searchMatchIds.size === 0) {
+      // Query typed but nothing matched — keep everything visible so the
+      // user sees the "no matches" outcome instead of an empty grid.
+      // (visibleMembers stays the same)
+    }
+    return scoped;
+  }, [members, selectedAssigneeFilter, searchMatchIds, capacityBoard.assignments]);
 
   const [expandedMemberKey, setExpandedMemberKey] = useState<string | null>(null);
   useEffect(() => {
@@ -929,6 +975,39 @@ export function SprintCapacityBoard({
         totalAssigned={teamTotalAssigned}
         totalCapacity={teamTotalCapacity}
         sprintStoryCount={sprintStoryCount}
+        headerRightSlot={(
+          <div className="relative w-[18rem] max-w-full" title={
+            storySearchQuery
+              ? (searchMatchIds && searchMatchIds.size > 0
+                ? `${searchMatchIds.size} match${searchMatchIds.size === 1 ? "" : "es"} — only people with the story are shown`
+                : "No matching stories on this sprint")
+              : undefined
+          }>
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={storySearch}
+              onChange={(e) => setStorySearch(e.target.value)}
+              placeholder="Search a story on this sprint…"
+              aria-label="Search stories on capacity"
+              className="h-7 w-full rounded-md border border-slate-200 bg-white/90 pl-8 pr-8 text-[12.5px] font-medium text-slate-800 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/70"
+            />
+            {storySearchQuery ? (
+              <button
+                type="button"
+                onClick={() => setStorySearch("")}
+                aria-label="Clear search"
+                title="Clear search"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
+        )}
       />
       {assigneeFilterOptions.length > 0 && selectedTeamId != null ? (
         <div className="shrink-0 px-0.5 py-0.5">
@@ -1037,6 +1116,7 @@ export function SprintCapacityBoard({
                       onCollapsePanel={() => setExpandedMemberKey(null)}
                       reorderGrip={reorderGrip}
                       teamFilterLabel={selectedTeamId ? teamLabel : null}
+                      highlightStoryIds={searchMatchIds}
                     />
                   </div>
                 )}
