@@ -2451,7 +2451,18 @@ export function TimelineGrid({
   const [insightsTeamSearch, setInsightsTeamSearch] = useState("");
   const insightsTeamMenuRef = useRef<HTMLDivElement | null>(null);
   const insightsTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const [ganttTeamIds, setGanttTeamIds] = useState<string[]>([]);
+  const [ganttTeamIds, setGanttTeamIdsRaw] = useState<string[]>([]);
+  const setGanttTeamIds = useCallback<typeof setGanttTeamIdsRaw>((updater) => {
+    setGanttTeamIdsRaw((prev) => {
+      const next = typeof updater === "function" ? (updater as (p: string[]) => string[])(prev) : updater;
+      console.log("[team-filter] setGanttTeamIds", {
+        from: prev,
+        to: next,
+        caller: new Error().stack?.split("\n").slice(2, 5).join(" | "),
+      });
+      return next;
+    });
+  }, []);
   const [isGanttTeamMenuOpen, setIsGanttTeamMenuOpen] = useState(false);
   const [ganttTeamSearch, setGanttTeamSearch] = useState("");
   const ganttTeamMenuRef = useRef<HTMLDivElement | null>(null);
@@ -4787,6 +4798,11 @@ export function TimelineGrid({
   }, [showSprintTeamPicker]);
   useEffect(() => {
     const t = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
+    console.log("[team-filter] reset from sprintStoryBoardTeamId prop", {
+      sprintStoryBoardTeamId,
+      resolved: t,
+      becomes: t ? [t] : [],
+    });
     setSprintFilterTeamIds(t ? [t] : []);
   }, [sprintStoryBoardTeamId]);
   // Cross-surface team-filter sync. The Gantt views (all-quarters /
@@ -4802,6 +4818,7 @@ export function TimelineGrid({
       ) {
         return prev;
       }
+      console.log("[team-filter] sync gantt → sprint", { from: prev, to: ganttTeamIds });
       return [...ganttTeamIds];
     });
   }, [ganttTeamIds]);
@@ -4813,6 +4830,7 @@ export function TimelineGrid({
       ) {
         return prev;
       }
+      console.log("[team-filter] sync sprint → gantt", { from: prev, to: sprintFilterTeamIds });
       return [...sprintFilterTeamIds];
     });
   }, [sprintFilterTeamIds]);
@@ -5721,6 +5739,17 @@ export function TimelineGrid({
                               key={option.value}
                               type="button"
                               onClick={() => {
+                                console.log("[team-filter] gantt option clicked", {
+                                  optionValue: option.value,
+                                  optionLabel: option.label,
+                                  isAll,
+                                  wasChecked: checked,
+                                  ganttTeamIdsBefore: ganttTeamIds,
+                                  sprintFilterTeamIdsBefore: sprintFilterTeamIds,
+                                  sprintStoryBoardTeamId,
+                                  showGanttTeamPicker,
+                                  showInsightsTeamPicker,
+                                });
                                 if (isAll) {
                                   setGanttTeamIds([]);
                                 } else {

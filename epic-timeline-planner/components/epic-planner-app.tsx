@@ -15,6 +15,7 @@ import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-pane
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
 import { DemoBuilderPanel } from "@/components/demo-builder/demo-builder-panel";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
+import { GanttDebugOverlay } from "@/components/debug/gantt-debug-overlay";
 import { EpicDeleteDialog } from "@/components/epics/epic-delete-dialog";
 import { InitiativeDeleteDialog } from "@/components/initiatives/initiative-delete-dialog";
 import { InitiativeFormDialog } from "@/components/initiatives/initiative-form-dialog";
@@ -559,6 +560,25 @@ function computeEpicMonthLanePlacement(
     return { next: prev, rowsChanged: false, movedTimelineRow: null };
   }
 
+  console.log("[epic-placement] enter", {
+    epicId,
+    epicTitle: currentEpic.title,
+    initiativeId: currentInit.id,
+    initiativeTitle: currentInit.title,
+    month,
+    planSprint,
+    laneIndex,
+    hoveredLaneIndex,
+    hoveredTimelineRow,
+    isFirstSchedule,
+    currentRow: Number.isFinite(currentEpic.timelineRow) ? currentEpic.timelineRow : 0,
+    currentPlan: {
+      startMonth: currentEpic.planStartMonth,
+      endMonth: currentEpic.planEndMonth,
+      startSprint: currentEpic.planSprint,
+      endSprint: currentEpic.planEndSprint,
+    },
+  });
   const { startMonth: sm, endMonth: em } = monthRangeForEpicDrop(currentEpic, month, isFirstSchedule);
   /**
    * Preserve the original sprint-level span when moving an existing epic.
@@ -634,18 +654,30 @@ function computeEpicMonthLanePlacement(
       ...others.slice(insertAt),
     ];
     const rowByEpicId = new Map(newOrder.map((row, idx) => [row.epicId, idx]));
+    const sharedRowGroups = new Map<number, number>();
+    for (const r of others) sharedRowGroups.set(r.timelineRow, (sharedRowGroups.get(r.timelineRow) ?? 0) + 1);
+    const sharedRows = [...sharedRowGroups.entries()].filter(([, n]) => n > 1);
     console.log("[gantt-drop][epic] first-schedule placement", {
       epicId,
+      epicTitle: currentEpic.title,
       month,
       planSprint,
       insertAt,
       laneIndex,
+      hoveredLaneIndex,
+      hoveredTimelineRow,
       othersCount: others.length,
-      newOrder: newOrder.map((r) => ({ epicId: r.epicId, row: r.timelineRow, range: [r.startMonth, r.endMonth] })),
-      assignedRows: Object.fromEntries(rowByEpicId),
+      othersTimelineRowHistogram: Object.fromEntries(sharedRowGroups),
+      othersSharedRows: sharedRows,  // [row, epicCount] pairs where >1 epic share a row
+      othersOrderingNote: "sorted by (timelineRow asc, title asc) — see collectScheduledEpicRows()",
+      othersOrdered: others.map((r) => ({ epicId: r.epicId, row: r.timelineRow, title: r.title })).slice(0, 60),
+      newOrder: newOrder.map((r) => ({ epicId: r.epicId, row: r.timelineRow, range: [r.startMonth, r.endMonth] })).slice(0, 60),
+      assignedRows: Object.fromEntries([...rowByEpicId.entries()].slice(0, 60)),
       epicsChangingRow: newOrder
-        .map((r, idx) => ({ epicId: r.epicId, from: r.timelineRow, to: idx }))
-        .filter((r) => r.from !== r.to),
+        .map((r, idx) => ({ epicId: r.epicId, title: r.title, from: r.timelineRow, to: idx }))
+        .filter((r) => r.from !== r.to)
+        .slice(0, 60),
+      epicsChangingRowCount: newOrder.filter((r, idx) => r.timelineRow !== idx).length,
     });
     const next = prev.map((initiative) => ({
       ...initiative,
@@ -2752,14 +2784,18 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
 
   async function createEpicQuick(initiativeId: string, title: string) {
+    console.log("[create-epic] POST", { initiativeId, title, caller: new Error().stack?.split("\n").slice(1, 4).join(" | ") });
     const response = await fetch(`/api/initiatives/${initiativeId}/epics`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
     if (!response.ok) {
+      console.log("[create-epic] POST failed", { initiativeId, status: response.status });
       throw new Error("Failed to create epic");
     }
+    const created = (await response.clone().json().catch(() => null)) as { id?: string } | null;
+    console.log("[create-epic] POST ok", { initiativeId, createdId: created?.id });
     await refresh();
   }
 
@@ -2961,26 +2997,36 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
   async function persistEpicTimelineRowPatches(prev: InitiativeItem[], next: InitiativeItem[]) {
     const prevRows = new Map<string, number>();
+    const prevTitles = new Map<string, string>();
     for (const initiative of prev) {
       for (const epic of initiative.epics ?? []) {
         prevRows.set(epic.id, Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0);
+        prevTitles.set(epic.id, epic.title);
       }
     }
-    const changed: Array<{ epicId: string; timelineRow: number }> = [];
+    const changed: Array<{ epicId: string; from: number; to: number; title: string }> = [];
     for (const initiative of next) {
       for (const epic of initiative.epics ?? []) {
         const before = prevRows.get(epic.id);
         const row = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
-        if (before != null && before !== row) changed.push({ epicId: epic.id, timelineRow: row });
+        if (before != null && before !== row) {
+          changed.push({ epicId: epic.id, from: before, to: row, title: prevTitles.get(epic.id) ?? epic.title });
+        }
       }
     }
+    console.log("[epic-row-persist] called", {
+      epicsTotal: prevRows.size,
+      epicsChangingRow: changed.length,
+      changes: changed.slice(0, 60),  // cap so logs stay legible
+      caller: new Error().stack?.split("\n").slice(1, 4).join(" | "),
+    });
     if (changed.length === 0) return;
     await Promise.all(
-      changed.map(async ({ epicId, timelineRow }) => {
+      changed.map(async ({ epicId, to }) => {
         const response = await fetch(`/api/epics/${epicId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ timelineRow }),
+          body: JSON.stringify({ timelineRow: to }),
         });
         if (!response.ok) throw new Error(`Failed to persist epic row for ${epicId}`);
       }),
@@ -6019,6 +6065,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         />
       )}
       {/* <DebugLogPanel /> hidden in production look */}
+      <GanttDebugOverlay />
     </DragContext>
   );
 }

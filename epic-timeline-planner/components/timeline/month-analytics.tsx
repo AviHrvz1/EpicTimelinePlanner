@@ -839,14 +839,31 @@ export function MonthAnalytics({
       setEpicInput("");
     }
   }, [monthEpics, selectedEpicId]);
+  // Only call onScopeChange when the SCOPE itself actually changes — not when
+  // `epicComboOptions` / `scopeInitiativeOptions` re-derive (which happens
+  // whenever `filterEpicTeamIds` changes upstream). Without this guard,
+  // adjusting the breadcrumb team filter would trigger an `onScopeChange(null,
+  // null, null)` call, and TimelineGrid's `handleInsightsScopeChange`
+  // interprets that as "no scope selected" and resets `insightsTeamIds` back
+  // to `[]` — wiping the team filter the user just set.
+  const lastScopeRef = useRef<{ type: "epic" | "initiative" | null; id: string | null }>({
+    type: null,
+    id: null,
+  });
   useEffect(() => {
     if (!onScopeChange) return;
-    if (selectedEpicId !== "all") {
-      const selected = epicComboOptions.find((opt) => opt.id === selectedEpicId);
-      onScopeChange("epic", selectedEpicId, selected?.label ?? null);
-    } else if (selectedInitiativeId !== "all") {
-      const init = scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId);
-      onScopeChange("initiative", selectedInitiativeId, init?.title ?? null);
+    const nextType: "epic" | "initiative" | null =
+      selectedEpicId !== "all" ? "epic" : selectedInitiativeId !== "all" ? "initiative" : null;
+    const nextId: string | null =
+      nextType === "epic" ? selectedEpicId : nextType === "initiative" ? selectedInitiativeId : null;
+    if (lastScopeRef.current.type === nextType && lastScopeRef.current.id === nextId) return;
+    lastScopeRef.current = { type: nextType, id: nextId };
+    if (nextType === "epic") {
+      const selected = epicComboOptions.find((opt) => opt.id === nextId);
+      onScopeChange("epic", nextId, selected?.label ?? null);
+    } else if (nextType === "initiative") {
+      const init = scopeInitiativeOptions.find((i) => i.id === nextId);
+      onScopeChange("initiative", nextId, init?.title ?? null);
     } else {
       onScopeChange(null, null, null);
     }
