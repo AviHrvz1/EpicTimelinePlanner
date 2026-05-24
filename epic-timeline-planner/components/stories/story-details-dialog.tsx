@@ -841,14 +841,14 @@ export function StoryDetailsDialog({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 max-h-[580px] flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="min-h-0">
             <div
               ref={splitLayoutRef}
-              className="grid h-full min-h-0 items-stretch gap-0"
+              className="grid min-h-0 items-stretch gap-0"
               style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
             >
-          <section className="flex h-full min-h-0 flex-col gap-3 overflow-hidden rounded-xl border-0 bg-white pt-3 pb-0 pl-[5px] pr-[10px]">
+          <section className="flex min-h-0 flex-col gap-3 rounded-xl border-0 bg-white pt-3 pb-0 pl-[5px] pr-[10px]">
             <label className="block shrink-0 space-y-1">
               <p className="flex shrink-0 items-center gap-2 text-lg font-semibold text-slate-800 transition-colors hover:text-indigo-600">
                 <Type className="size-5 shrink-0 text-slate-500" aria-hidden />
@@ -1001,7 +1001,7 @@ export function StoryDetailsDialog({
             </div>
           </div>
 
-          <section className="relative z-20 h-full min-h-0 space-y-5 overflow-y-auto rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
+          <section className="relative z-20 min-h-0 space-y-5 rounded-xl bg-white p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
             <h3 className="flex items-center gap-2 text-lg font-semibold leading-snug tracking-tight text-slate-800">
               <ClipboardList className="size-5 shrink-0 text-slate-500" aria-hidden />
               Details
@@ -1279,13 +1279,12 @@ export function StoryDetailsDialog({
             </div>
             </div>
 
-        <div className="relative z-0 -mt-2 shrink-0">
+        <div className="relative z-0 mt-3 shrink-0">
           <section
             className={cn(
               "ml-[5px] mr-0 mb-0 flex min-h-0 flex-col rounded-xl bg-white ring-1 ring-slate-200 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_2px_4px_rgba(15,23,42,0.08)] transition-all hover:ring-indigo-300 hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_2px_8px_rgba(99,102,241,0.18)]",
               activityOpen ? "space-y-3 p-3" : "p-3",
             )}
-            style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
           >
             <div className="flex w-full items-center justify-between gap-2 rounded-lg">
               <button
