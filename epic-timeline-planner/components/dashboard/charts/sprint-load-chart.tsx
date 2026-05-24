@@ -2,7 +2,9 @@
 
 import { AlertTriangle } from "lucide-react";
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import type { InitiativeItem } from "@/lib/types";
+import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -11,11 +13,24 @@ type Props = {
   quarter: number;
   sprint: number;
   team?: string | null;
+  /** Directory for avatar lookup — when present, per-assignee rows render the
+   *  user's photo instead of initials. Falls back gracefully when null. */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
-export function SprintLoadChart({ initiatives, year, quarter, sprint, team }: Props) {
+export function SprintLoadChart({ initiatives, year, quarter, sprint, team, workspaceDirectoryUsers }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ? [team] : null);
+  const analytics = buildSprintAnalytics(
+    initiatives,
+    month,
+    sprint,
+    "daysLeft",
+    year,
+    team ? [team] : null,
+    "auto",
+    null,
+    workspaceDirectoryUsers,
+  );
 
   const teamMode = !team;
   const sprintDaysLeft = analytics.workloadSprintCalendarDaysLeft;
@@ -25,6 +40,7 @@ export function SprintLoadChart({ initiatives, year, quarter, sprint, team }: Pr
         key: t.teamLabel,
         label: t.teamLabel,
         initials: t.teamLabel.slice(0, 2).toUpperCase(),
+        image: null as string | null,
         daysLeft: t.daysLeftTotal,
         estTotal: t.estimatedTotal,
       }))
@@ -32,6 +48,7 @@ export function SprintLoadChart({ initiatives, year, quarter, sprint, team }: Pr
         key: r.assignee,
         label: r.assignee,
         initials: r.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join(""),
+        image: resolveAssigneeAvatar(r.assignee, workspaceDirectoryUsers).image,
         daysLeft: r.daysLeftTotal,
         estTotal: r.estimatedTotal,
       }));
@@ -49,9 +66,13 @@ export function SprintLoadChart({ initiatives, year, quarter, sprint, team }: Pr
         return (
           <div key={row.key} className="rounded-lg bg-slate-50 px-2 py-1.5">
             <div className="flex items-center gap-1.5 mb-1">
-              <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">
-                {row.initials}
-              </span>
+              {row.image ? (
+                <UserAvatar name={row.label} image={row.image} size={20} className="ring-1 ring-white" />
+              ) : (
+                <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">
+                  {row.initials}
+                </span>
+              )}
               <span className="flex-1 truncate text-[11px] font-semibold text-slate-800">{row.label}</span>
               <span className="flex items-center gap-1 shrink-0">
                 {atRisk && (

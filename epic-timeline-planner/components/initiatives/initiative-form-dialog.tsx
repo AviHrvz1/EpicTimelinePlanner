@@ -41,6 +41,7 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { AssigneeFieldDecoration } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
@@ -250,6 +251,9 @@ type InitiativeFormDialogProps = {
   selectedRoadmapId?: string;
   onChangeRoadmap?: (roadmapId: string) => void;
   onCreateRoadmap?: (name: string) => Promise<string | null>;
+  /** Workspace directory — used by AssigneeCombobox to render user photos
+   *  next to suggestions when the assignee matches a directory entry. */
+  workspaceDirectoryUsers?: readonly { name: string; image?: string | null }[];
 };
 
 export function InitiativeFormDialog({
@@ -271,6 +275,7 @@ export function InitiativeFormDialog({
   selectedRoadmapId,
   onChangeRoadmap,
   onCreateRoadmap,
+  workspaceDirectoryUsers,
 }: InitiativeFormDialogProps) {
   const [title, setTitle] = useState(initiative?.title ?? "");
   const [icon, setIcon] = useState(initiative?.icon === "🎯" ? "" : (initiative?.icon ?? ""));
@@ -1166,11 +1171,12 @@ export function InitiativeFormDialog({
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Assignee</p>
                   <div className="relative flex min-w-0 w-full items-center">
-                    <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+                    <AssigneeFieldDecoration value={assignee} directoryUsers={workspaceDirectoryUsers} />
                     <AssigneeCombobox
                       value={assignee}
                       onChange={setAssignee}
                       suggestions={assigneeNameSuggestions}
+                      directoryUsers={workspaceDirectoryUsers}
                       placeholder="Type or pick a name"
                       className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                     />
@@ -1548,6 +1554,7 @@ export function InitiativeFormDialog({
                                         value={childEditingValue}
                                         onChange={setChildEditingValue}
                                         suggestions={assigneeNameSuggestions}
+                                        directoryUsers={workspaceDirectoryUsers}
                                         placeholder="Assignee"
                                         className="min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
                                       />

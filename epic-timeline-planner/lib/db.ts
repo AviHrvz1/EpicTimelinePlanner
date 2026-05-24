@@ -4,8 +4,10 @@ import { PrismaClient } from "@/lib/generated/prisma";
  * Bump when the Prisma schema changes. In development, disconnects a stale client
  * so the next import gets a new `PrismaClient` after `prisma generate`.
  * (e.g. UserStory.backlogOrder / Epic.backlogOrder — old cached clients reject those fields.)
+ *
+ * Version 13: added WorkspaceUser.image (avatar URL).
  */
-const PRISMA_CLIENT_CACHE_VERSION = 12;
+const PRISMA_CLIENT_CACHE_VERSION = 13;
 
 type LegacyGlobal = typeof globalThis & { prisma?: PrismaClient };
 

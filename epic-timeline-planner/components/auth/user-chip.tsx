@@ -43,6 +43,12 @@ export function UserChip() {
     };
   }, [menuOpen]);
 
+  // Hook calls must come before any conditional early-returns below — the
+  // Rules of Hooks forbid changing hook order between renders, so this stays
+  // up here even though we don't need the value until we've confirmed there's
+  // a signed-in user. `useWorkspaceUserImage` handles the null-email case.
+  const workspaceImage = useWorkspaceUserImage(data?.user?.email ?? null);
+
   if (isPending) {
     return (
       <div
@@ -64,6 +70,10 @@ export function UserChip() {
   const displayName = user.name || user.email;
   const initials = getInitials(user.name, user.email);
   const avatarBg = stableColor(user.id);
+  // Prefer the WorkspaceUser's uploaded photo over the auth User's image
+  // (OAuth photo or null). Credentials-only users have no `user.image`, so
+  // this is the only path their uploaded avatar reaches the header chip.
+  const effectiveImage = workspaceImage ?? user.image ?? null;
 
   async function handleSignOut() {
     if (pendingSignOut) return;
@@ -96,10 +106,10 @@ export function UserChip() {
         title={displayName}
         className="group inline-flex h-[32px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border-0 bg-white px-1.5 pr-3 text-[12.5px] font-semibold leading-none tracking-wide text-slate-800 ring-1 ring-slate-200 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
       >
-        {user.image ? (
+        {effectiveImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={user.image}
+            src={effectiveImage}
             alt=""
             className="size-[26px] shrink-0 rounded-full object-cover"
           />
@@ -112,9 +122,13 @@ export function UserChip() {
             {initials}
           </span>
         )}
-        {/* Lucide User icon between the avatar and the display name — makes the
-            "this chip represents your account" affordance explicit. */}
-        <User className="size-4 shrink-0 text-indigo-500" strokeWidth={2.2} aria-hidden />
+        {/* Lucide User icon between the avatar and the display name — makes
+            the "this chip represents your account" affordance explicit when
+            we're falling back to initials. Skip it when we already have a
+            real photo: the photo + name combo is unambiguous on its own. */}
+        {effectiveImage ? null : (
+          <User className="size-4 shrink-0 text-indigo-500" strokeWidth={2.2} aria-hidden />
+        )}
         <span className="max-w-[160px] truncate">{displayName}</span>
       </button>
 
@@ -200,4 +214,41 @@ function stableColor(id: string): string {
   const HUE_RANGE = 80; // → 280° ≈ violet-500
   const hue = HUE_MIN + (Math.abs(hash) % HUE_RANGE);
   return `hsl(${hue} 62% 52%)`;
+}
+
+/**
+ * Look up the WorkspaceUser avatar URL matching the signed-in email. The
+ * auth User and WorkspaceUser are linked by email — workspace edits don't
+ * automatically push to the auth session, so we resolve client-side. Refreshes
+ * when the directory broadcasts a change event (same channel users-workspace-panel uses).
+ */
+function useWorkspaceUserImage(email: string | null | undefined): string | null {
+  const [image, setImage] = useState<string | null>(null);
+  useEffect(() => {
+    if (!email) {
+      setImage(null);
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/workspace-users");
+        if (!res.ok) return;
+        const data = (await res.json()) as Array<{ email: string; image?: string | null }>;
+        if (cancelled) return;
+        const match = data.find((u) => u.email?.trim().toLowerCase() === email!.trim().toLowerCase());
+        setImage(match?.image ?? null);
+      } catch {
+        // Best-effort; chip falls back to auth user.image / initials.
+      }
+    }
+    void load();
+    const onRefresh = () => void load();
+    window.addEventListener("epic-planner-workspace-users-changed", onRefresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("epic-planner-workspace-users-changed", onRefresh);
+    };
+  }, [email]);
+  return image;
 }

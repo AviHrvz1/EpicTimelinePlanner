@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
+import { resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import {
   formatBacklogPlanDate,
@@ -140,6 +141,10 @@ type BacklogPlanningPanelProps = {
   ) => Promise<void>;
   summaryBarPortalElement?: HTMLElement | null;
   suppressInlineChips?: boolean;
+  /** Workspace directory — surfaces directory-only members in the assignee
+   *  autocomplete (otherwise newly-added users with no assignment yet never
+   *  appear) and lets the picker show their photo when present. */
+  workspaceDirectoryUsers?: readonly { name: string; team?: string; image?: string | null }[];
 };
 
 type OptionItem = { id: string; label: string };
@@ -1456,10 +1461,27 @@ function workflowStatusLabel(status: WorkflowStatus): string {
 }
 
 /** Union of demo delivery rosters for the given team column ids (e.g. platform, experience, data). */
-function rosterNamesForDeliveryTeams(teamIds: string[]): Set<string> {
+function rosterNamesForDeliveryTeams(
+  teamIds: string[],
+  directoryUsers?: readonly { name: string; team?: string }[] | null,
+): Set<string> {
   const set = new Set<string>();
   for (const id of teamIds) {
     for (const n of defaultMembersForTeam(id)) set.add(n);
+  }
+  // Merge workspace directory members assigned to one of the filtered teams.
+  // Without this, brand-new users (or any user not in the seeded delivery
+  // roster) silently vanish from the assignee filter dropdown the moment a
+  // team filter is active — and get *stripped* from the active filter by the
+  // useEffect that prunes filters to allowed names.
+  if (directoryUsers && teamIds.length > 0) {
+    const filterLower = new Set(teamIds.map((t) => t.toLowerCase()));
+    for (const u of directoryUsers) {
+      const team = (u.team ?? "").trim().toLowerCase();
+      if (!team || !filterLower.has(team)) continue;
+      const name = u.name?.trim();
+      if (name) set.add(name);
+    }
   }
   return set;
 }
@@ -1901,6 +1923,33 @@ function MultiCheckboxFilter({
   );
 }
 
+/**
+ * Tiny avatar/icon used in backlog row "assignee" cells. Same fallback
+ * pattern as the rest of the app: photo when the directory has one for this
+ * name, else the generic `UserRound` icon at the historical 14px size.
+ */
+function BacklogRowAvatar({
+  name,
+  directoryUsers,
+}: {
+  name: string | null | undefined;
+  directoryUsers?: readonly { name: string; image?: string | null }[];
+}) {
+  const resolved = resolveAssigneeAvatar(name, directoryUsers);
+  if (resolved.image) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={resolved.image}
+        alt=""
+        draggable={false}
+        className="size-4 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+      />
+    );
+  }
+  return <UserRound className="size-3.5 text-slate-400" aria-hidden />;
+}
+
 export function BacklogPlanningPanel({
   initiatives,
   roadmaps,
@@ -1916,6 +1965,7 @@ export function BacklogPlanningPanel({
   onPatchEpicQuick,
   summaryBarPortalElement,
   suppressInlineChips,
+  workspaceDirectoryUsers,
 }: BacklogPlanningPanelProps) {
   const [query, setQuery] = useState("");
   const [openInitiatives, setOpenInitiatives] = useState<Record<string, boolean>>({});
@@ -2593,7 +2643,10 @@ export function BacklogPlanningPanel({
     return map;
   }, [roadmaps]);
 
-  const assigneeNameSuggestions = useMemo(() => collectAssigneeNameSuggestions(initiatives), [initiatives]);
+  const assigneeNameSuggestions = useMemo(
+    () => collectAssigneeNameSuggestions(initiatives, workspaceDirectoryUsers),
+    [initiatives, workspaceDirectoryUsers],
+  );
 
   const storyLabelSuggestions = useMemo(() => {
     const set = new Set<string>();
@@ -2610,7 +2663,7 @@ export function BacklogPlanningPanel({
   const assigneeAutocompleteSuggestions = useMemo(() => {
     const data = assigneeNameSuggestions.filter((n) => n !== "Unassigned");
     if (teamFilter.length === 0) return ["Unassigned", ...data];
-    const allowed = rosterNamesForDeliveryTeams(teamFilter);
+    const allowed = rosterNamesForDeliveryTeams(teamFilter, workspaceDirectoryUsers);
     const merged = new Set<string>();
     for (const n of data) {
       if (allowed.has(n)) merged.add(n);
@@ -2618,13 +2671,13 @@ export function BacklogPlanningPanel({
     for (const n of allowed) merged.add(n);
     const rest = [...merged].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     return ["Unassigned", ...rest];
-  }, [assigneeNameSuggestions, teamFilter]);
+  }, [assigneeNameSuggestions, teamFilter, workspaceDirectoryUsers]);
 
   useEffect(() => {
     if (teamFilter.length === 0) return;
-    const allowed = rosterNamesForDeliveryTeams(teamFilter);
+    const allowed = rosterNamesForDeliveryTeams(teamFilter, workspaceDirectoryUsers);
     setAssigneeFilter((prev) => prev.filter((n) => n === "Unassigned" || allowed.has(n)));
-  }, [teamFilter]);
+  }, [teamFilter, workspaceDirectoryUsers]);
 
   const statusOptions: OptionItem[] = [
     { id: "todo", label: "To do" },
@@ -3571,8 +3624,10 @@ export function BacklogPlanningPanel({
                       handleStoryCellKeyDown(event, row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
                     }
                     suggestions={assigneeNameSuggestions}
+                    directoryUsers={workspaceDirectoryUsers}
+                    showLeadingAvatar
                     placeholder="Unassigned"
-                    className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                    className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   />
                   <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                   <button
@@ -3592,7 +3647,7 @@ export function BacklogPlanningPanel({
                   }}
                   className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                 >
-                  <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                  <BacklogRowAvatar name={row.storyAssignee} directoryUsers={workspaceDirectoryUsers} />
                   {row.storyAssignee}
                 </button>
               )}
@@ -4001,8 +4056,10 @@ export function BacklogPlanningPanel({
                         value={editingParentAssignee.value}
                         onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
                         suggestions={assigneeNameSuggestions}
+                    directoryUsers={workspaceDirectoryUsers}
+                    showLeadingAvatar
                         placeholder="Unassigned"
-                        className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                        className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                         onKeyDown={(e) => {
                           if (e.key === "Escape") {
                             e.preventDefault();
@@ -4026,7 +4083,7 @@ export function BacklogPlanningPanel({
                       }}
                       className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                     >
-                      <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                      <BacklogRowAvatar name={epicAssignee} directoryUsers={workspaceDirectoryUsers} />
                       {epicAssignee}
                     </button>
                   )}
@@ -4255,8 +4312,10 @@ export function BacklogPlanningPanel({
                         value={editingParentAssignee.value}
                         onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
                         suggestions={assigneeNameSuggestions}
+                    directoryUsers={workspaceDirectoryUsers}
+                    showLeadingAvatar
                         placeholder="Unassigned"
-                        className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                        className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                         onKeyDown={(e) => {
                           if (e.key === "Escape") {
                             e.preventDefault();
@@ -4288,7 +4347,7 @@ export function BacklogPlanningPanel({
                       }}
                       className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                     >
-                      <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                      <BacklogRowAvatar name={initiativeAssignee} directoryUsers={workspaceDirectoryUsers} />
                       {initiativeAssignee}
                     </button>
                   )}
@@ -4642,7 +4701,7 @@ export function BacklogPlanningPanel({
                 sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                 assignee: (
                   <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
-                    <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                    <BacklogRowAvatar name={initiative.initiativeAssignee} directoryUsers={workspaceDirectoryUsers} />
                     {initiative.initiativeAssignee}
                   </span>
                 ),
@@ -4862,7 +4921,7 @@ export function BacklogPlanningPanel({
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: (
                           <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
-                            <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                            <BacklogRowAvatar name={epic.epicAssignee} directoryUsers={workspaceDirectoryUsers} />
                             {epic.epicAssignee}
                           </span>
                         ),
@@ -6118,8 +6177,10 @@ export function BacklogPlanningPanel({
                                 value={editingParentAssignee.value}
                                 onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
                                 suggestions={assigneeNameSuggestions}
+                    directoryUsers={workspaceDirectoryUsers}
+                    showLeadingAvatar
                                 placeholder="Unassigned"
-                                className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                 onKeyDown={(e) => {
                                   if (e.key === "Escape") {
                                     e.preventDefault();
@@ -6143,7 +6204,7 @@ export function BacklogPlanningPanel({
                               }}
                               className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                             >
-                              <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                              <BacklogRowAvatar name={initiative.assignee} directoryUsers={workspaceDirectoryUsers} />
                               {initiative.assignee ?? "Unassigned"}
                             </button>
                           )}
@@ -6517,8 +6578,10 @@ export function BacklogPlanningPanel({
                                           value={editingParentAssignee.value}
                                           onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
                                           suggestions={assigneeNameSuggestions}
+                    directoryUsers={workspaceDirectoryUsers}
+                    showLeadingAvatar
                                           placeholder="Unassigned"
-                                          className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                          className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           onKeyDown={(e) => {
                                             if (e.key === "Escape") {
                                               e.preventDefault();
@@ -6542,7 +6605,7 @@ export function BacklogPlanningPanel({
                                         }}
                                         className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                                       >
-                                        <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                                        <BacklogRowAvatar name={epic.assignee} directoryUsers={workspaceDirectoryUsers} />
                                         {epic.assignee ?? "Unassigned"}
                                       </button>
                                     )}
@@ -6879,8 +6942,10 @@ export function BacklogPlanningPanel({
                                               handleStoryCellKeyDown(event, story.id, "assignee", storyEditSnapshotFromFlat(story))
                                             }
                                             suggestions={assigneeNameSuggestions}
+                    directoryUsers={workspaceDirectoryUsers}
+                    showLeadingAvatar
                                             placeholder="Unassigned"
-                                            className="h-7 w-full min-w-[104px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                                            className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                           />
                                           <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
                                           <button
@@ -6900,7 +6965,7 @@ export function BacklogPlanningPanel({
                                           }}
                                           className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
                                         >
-                                          <UserRound className="size-3.5 text-slate-400" aria-hidden />
+                                          <BacklogRowAvatar name={story.assignee?.trim() || "Unassigned"} directoryUsers={workspaceDirectoryUsers} />
                                           {story.assignee?.trim() || "Unassigned"}
                                         </button>
                                       )}

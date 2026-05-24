@@ -7,6 +7,7 @@ import { Flag, GripVertical, SquarePen, StickyNote, Users, X } from "lucide-reac
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { currentCalendarYearSprint } from "@/lib/year-sprint";
 import { BurndownChart } from "./charts/burndown-chart";
@@ -40,6 +41,8 @@ type Props = {
   onRenameChart: (id: string, title: string) => void;
   /** Merges partial params into the chart's config JSON. Used by gadgets like Sticky Note. */
   onUpdateConfig?: (id: string, partialParams: Record<string, unknown>) => void;
+  /** Pass-through for charts that render per-user avatars (Sprint Load etc). */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
 function ResizePad({
@@ -275,6 +278,7 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: 
           quarter={(params.quarter as number) ?? 1}
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
+          workspaceDirectoryUsers={workspaceDirectoryUsers}
         />
       );
     case "sprint-burnup":
@@ -353,7 +357,7 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: 
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig }: Props) {
+export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
   const cardHeight = 300 + (rowSpan - 1) * 220;

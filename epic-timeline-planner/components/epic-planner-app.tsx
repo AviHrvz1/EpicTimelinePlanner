@@ -2012,9 +2012,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       try {
         const res = await fetch("/api/workspace-users");
         if (!res.ok) throw new Error(String(res.status));
-        const data = (await res.json()) as Array<{ name: string; team: string }>;
+        const data = (await res.json()) as Array<{ name: string; team: string; image?: string | null }>;
         if (!cancelled) {
-          setWorkspaceDirectoryUsers(data.map((u) => ({ name: u.name, team: u.team ?? "" })));
+          setWorkspaceDirectoryUsers(
+            data.map((u) => ({ name: u.name, team: u.team ?? "", image: u.image ?? null })),
+          );
         }
       } catch {
         if (!cancelled) setWorkspaceDirectoryUsers([]);
@@ -5398,6 +5400,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 initiatives={backlogInitiatives ?? initiatives}
                 roadmaps={roadmaps}
                 storyRefById={storyRefMaps.byId}
+                workspaceDirectoryUsers={workspaceDirectoryUsers}
                 onOpenInitiative={(initiativeId) => {
                   const initiative = initiatives.find((item) => item.id === initiativeId);
                   if (!initiative) return;
@@ -5630,6 +5633,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         open={initiativeDialogOpen}
         initiatives={initiatives}
         initiative={currentEditingInitiative}
+        workspaceDirectoryUsers={workspaceDirectoryUsers}
         onOpenEpic={(epicId) => {
           for (const initiative of initiatives) {
             const epic = (initiative.epics ?? []).find((e) => e.id === epicId);

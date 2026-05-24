@@ -16,6 +16,7 @@ import {
   rollupNeutralPill,
   rollupOverCapacityPill,
 } from "@/components/timeline/team-capacity-bucket";
+import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import {
   sprintCapacityBucketDropId,
   sprintCapacityColumnDragId,
@@ -422,6 +423,7 @@ function CapacityBucket({
   /** Shown as a small label above the bucket when a single delivery team is selected (hidden for all-teams view). */
   teamFilterLabel = null,
   highlightStoryIds = null,
+  workspaceDirectoryUsers = null,
 }: {
   yearSprint: number;
   teamKey: string;
@@ -443,6 +445,9 @@ function CapacityBucket({
   /** Story ids that match the active search query — cards in this set get a
    *  highlighted ring. Null = no search active. */
   highlightStoryIds?: ReadonlySet<string> | null;
+  /** Directory for avatar lookup — bucket header shows the person's photo
+   *  when present, initials otherwise. */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null;
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
@@ -508,9 +513,22 @@ function CapacityBucket({
             ) : null}
           </div>
           <p className="col-start-2 flex min-h-8 min-w-0 max-w-[min(16rem,85vw)] items-center justify-center gap-2 text-center text-[17px] font-bold text-slate-800">
-            <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
-              <Users className="size-3.5" aria-hidden />
-            </span>
+            {(() => {
+              // Bucket title can be a person's name, "Unassigned", or "Others" —
+              // only resolve an avatar for real people. The other two read as
+              // group labels and get the generic Users icon.
+              const isPerson =
+                memberTitle && memberTitle !== "Unassigned" && memberTitle !== "Others";
+              if (!isPerson) {
+                return (
+                  <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                    <Users className="size-3.5" aria-hidden />
+                  </span>
+                );
+              }
+              const resolved = resolveAssigneeAvatar(memberTitle, workspaceDirectoryUsers ?? null);
+              return <UserAvatar name={resolved.name} image={resolved.image} size={28} className="ring-1 ring-white shadow-sm" />;
+            })()}
             <span className="min-w-0 truncate">{memberTitle}</span>
           </p>
           <div className="relative min-h-8 min-w-0 justify-self-stretch self-center">
@@ -1037,6 +1055,10 @@ export function SprintCapacityBoard({
             {assigneeFilterOptions.map((name, idx) => {
               const on = selectedAssigneeFilter.includes(name);
               const Icon = assigneeFilterCircleIcon(name);
+              const isUnassigned = name === "Unassigned";
+              const resolved = isUnassigned
+                ? { name: "", image: null }
+                : resolveAssigneeAvatar(name, workspaceDirectoryUsers);
               return (
                 <button
                   key={name}
@@ -1056,12 +1078,19 @@ export function SprintCapacityBoard({
                     zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
                   }}
                 >
-                  {name === "Unassigned" ? (
+                  {/* Collapsed: show photo / initials inside the circle.
+                      Expanded: small avatar + the full name. */}
+                  {isUnassigned ? (
                     <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
-                  ) : null}
-                  {name !== "Unassigned" && !assigneeFilterExpanded ? (
-                    <span>{assigneeFilterBadgeLabel(name)}</span>
-                  ) : null}
+                  ) : !assigneeFilterExpanded ? (
+                    resolved.image ? (
+                      <UserAvatar name={resolved.name} image={resolved.image} size={32} className="ring-0" />
+                    ) : (
+                      <span>{assigneeFilterBadgeLabel(name)}</span>
+                    )
+                  ) : (
+                    <UserAvatar name={resolved.name} image={resolved.image} size={22} className="ring-0" />
+                  )}
                   {assigneeFilterExpanded ? (
                     <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
                   ) : null}
@@ -1117,6 +1146,7 @@ export function SprintCapacityBoard({
                       reorderGrip={reorderGrip}
                       teamFilterLabel={selectedTeamId ? teamLabel : null}
                       highlightStoryIds={searchMatchIds}
+                      workspaceDirectoryUsers={workspaceDirectoryUsers}
                     />
                   </div>
                 )}

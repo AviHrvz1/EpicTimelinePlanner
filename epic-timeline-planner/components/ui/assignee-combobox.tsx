@@ -14,6 +14,7 @@ import {
   useState,
 } from "react";
 
+import { AssigneeFieldDecoration, UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 
 type AssigneeComboboxProps = {
@@ -31,6 +32,21 @@ type AssigneeComboboxProps = {
   onInputBlur?: (value: string) => void;
   /** Fires when a list option is chosen (after `onChange`); use when blur may not run. */
   onSuggestionPick?: (value: string) => void;
+  /**
+   * Optional workspace directory — when provided, suggestion rows render the
+   * matching user's photo (or initials fallback) instead of the generic
+   * UserRound icon. Pass the same `workspaceDirectoryUsers` you already
+   * feed to sprint kanban / capacity. Anything not in the directory still
+   * renders cleanly with initials.
+   */
+  directoryUsers?: readonly { name: string; image?: string | null }[] | null;
+  /**
+   * When true, render the matching user's photo (or `UserRound` fallback) as
+   * a leading icon inside the input. Caller is responsible for `pl-7` (or
+   * similar) padding in `className` so the text doesn't overlap the icon.
+   * Off by default to keep small inline-edit comboboxes flush.
+   */
+  showLeadingAvatar?: boolean;
 };
 
 const MENU_Z = 8000;
@@ -54,6 +70,8 @@ export function AssigneeCombobox({
   onKeyDown,
   onInputBlur,
   onSuggestionPick,
+  directoryUsers,
+  showLeadingAvatar = false,
 }: AssigneeComboboxProps) {
   const uid = useId().replace(/:/g, "");
   const inputId = idProp ?? `assignee-input-${uid}`;
@@ -166,6 +184,7 @@ export function AssigneeCombobox({
             >
               {filtered.map((s) => {
                 const isCurrent = s.toLowerCase() === trimmed.toLowerCase() && trimmed.length > 0;
+                const resolved = resolveAssigneeAvatar(s, directoryUsers);
                 return (
                   <li key={s} role="option" aria-selected={isCurrent}>
                     <button
@@ -181,13 +200,17 @@ export function AssigneeCombobox({
                         pick(s);
                       }}
                     >
-                      <UserRound
-                        className={cn(
-                          "size-3.5 shrink-0",
-                          isCurrent ? "text-indigo-500" : "text-slate-400",
-                        )}
-                        aria-hidden
-                      />
+                      {resolved.image ? (
+                        <UserAvatar name={resolved.name} image={resolved.image} size={20} />
+                      ) : (
+                        <UserRound
+                          className={cn(
+                            "size-3.5 shrink-0",
+                            isCurrent ? "text-indigo-500" : "text-slate-400",
+                          )}
+                          aria-hidden
+                        />
+                      )}
                       <span className="min-w-0 flex-1 truncate font-medium leading-tight">{s}</span>
                       {isCurrent ? (
                         <Check className="size-3.5 shrink-0 text-indigo-600" aria-hidden />
@@ -221,6 +244,9 @@ export function AssigneeCombobox({
 
   return (
     <div ref={wrapRef} className={cn("relative min-w-0 w-full")}>
+      {showLeadingAvatar ? (
+        <AssigneeFieldDecoration value={value} directoryUsers={directoryUsers} />
+      ) : null}
       <input
         ref={inputRef}
         id={inputId}

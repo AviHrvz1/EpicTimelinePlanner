@@ -40,6 +40,7 @@ import { StoryStatus } from "@/lib/generated/prisma";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { AssigneeFieldDecoration } from "@/components/ui/user-avatar";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
@@ -1039,7 +1040,7 @@ export function StoryDetailsDialog({
             <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Assignee</p>
               <div className="group/assignee relative flex min-w-0 w-full items-center">
-                <UserRound className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+                <AssigneeFieldDecoration value={assignee} directoryUsers={workspaceDirectoryUsers} />
                 <AssigneeCombobox
                   value={assignee}
                   onChange={(name) => {
@@ -1054,6 +1055,7 @@ export function StoryDetailsDialog({
                     }
                   }}
                   suggestions={assigneeNameSuggestions}
+                  directoryUsers={workspaceDirectoryUsers}
                   placeholder="Type or pick a name"
                   className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                 />

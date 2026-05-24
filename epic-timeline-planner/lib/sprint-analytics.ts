@@ -101,17 +101,58 @@ function collectWorkloadStories(
   initiatives: InitiativeItem[],
   month: number,
   filterEpicTeamIds?: string[] | null,
+  directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): UserStoryItem[] {
+  // Team filter is OR-style: a story counts if EITHER its parent epic's team
+  // is in the filter OR the story's assignee is a directory member of one
+  // of the filtered teams. That way, when a platform-team person is assigned
+  // to a story under an experience epic, the story still shows up under the
+  // platform filter — "what my team is working on this sprint" rather than
+  // strictly "what my team's epics contain".
+  //
+  // Scope by EPIC plan range (via the same helper the kanban uses) rather
+  // than the parent initiative's month bounds — initiatives are coarse
+  // containers whose dates can lag their child epics' plans, and the
+  // previous initiative-bounds check silently dropped epics that planned
+  // beyond the initiative's end.
+  const teamMemberNames = buildTeamMemberNameSet(directoryUsers, filterEpicTeamIds ?? null);
+  const scopeEpics = collectMonthScopeEpicsForSprintPanel(initiatives, month, null);
   const rows: UserStoryItem[] = [];
-  for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
-    for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
+  for (const { epic } of scopeEpics) {
+    const epicTeamInFilter =
+      !filterEpicTeamIds?.length || filterEpicTeamIds.includes(epic.team ?? "");
+    if (epicTeamInFilter) {
       rows.push(...(epic.userStories ?? []));
+      continue;
+    }
+    // Cross-team fallback: include stories whose assignee belongs to the
+    // filtered team. Skip when there's no directory or no matches at all.
+    if (teamMemberNames.size === 0) continue;
+    for (const story of epic.userStories ?? []) {
+      const a = (story.assignee ?? "").trim().toLowerCase();
+      if (a && teamMemberNames.has(a)) rows.push(story);
     }
   }
   return rows;
+}
+
+/** Build a Set of lowercase assignee names belonging to the filtered teams.
+ *  Returns an empty Set when there's no team filter, no directory, or no
+ *  matches — callers should skip the cross-team fallback in that case. */
+function buildTeamMemberNameSet(
+  directoryUsers: readonly SprintWorkspaceDirectoryUser[] | null | undefined,
+  filterTeamIds: readonly string[] | null,
+): Set<string> {
+  const set = new Set<string>();
+  if (!filterTeamIds?.length || !directoryUsers || directoryUsers.length === 0) return set;
+  const filterLower = new Set(filterTeamIds.map((t) => t.toLowerCase()));
+  for (const u of directoryUsers) {
+    const team = (u.team ?? "").trim().toLowerCase();
+    const name = (u.name ?? "").trim().toLowerCase();
+    if (!team || !name) continue;
+    if (filterLower.has(team)) set.add(name);
+  }
+  return set;
 }
 
 function collectMonthStories(
@@ -379,32 +420,63 @@ function buildWorkloadByTeam(
   month: number,
   yearSprint: number,
   filterTeamIds?: string[] | null,
+  directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): WorkloadTeamRow[] {
   const emptyStatus = (): WorkloadStoriesByStatus => ({ todo: 0, inProgress: 0, done: 0, approved: 0 });
   const byTeam = new Map<string, WorkloadTeamRow>();
-  for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-    if (initiative.endMonth < month || initiative.startMonth > month) continue;
-    for (const epic of initiative.epics ?? []) {
-      const teamId = epic.team ?? null;
-      if (filterTeamIds?.length && !filterTeamIds.includes(teamId ?? "")) continue;
-      const teamKey = teamId ?? "__unassigned__";
-      const teamLabel = teamId ? teamLabelForWorkspaceUser(teamId) : "Unassigned";
-      for (const story of epic.userStories ?? []) {
-        if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
-        const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: emptyStatus(), daysByStatus: emptyStatus(), daysLeftTotal: 0, estimatedTotal: 0, openCount: 0 };
-        const estDays = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
-        if (story.status === "todo") { row.storiesByStatus.todo += 1; row.daysByStatus.todo += estDays; }
-        else if (story.status === "inProgress") { row.storiesByStatus.inProgress += 1; row.daysByStatus.inProgress += estDays; }
-        else if (story.status === "done") { row.storiesByStatus.done += 1; row.daysByStatus.done += estDays; }
-        else if (story.status === "approved") { row.storiesByStatus.approved += 1; row.daysByStatus.approved += estDays; }
-        row.estimatedTotal += estDays;
-        if (story.status === "todo" || story.status === "inProgress") {
-          row.openCount += 1;
-          row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
+  // Map<lowercased-name, normalized team id> for assignee-team lookup. Used
+  // to bucket cross-team stories under the ASSIGNEE'S team when the epic's
+  // team isn't in the filter (mirrors the OR-style logic in
+  // `collectWorkloadStories`). Only built when there's a filter + directory.
+  const memberToTeam = new Map<string, string>();
+  if (filterTeamIds?.length && directoryUsers) {
+    for (const u of directoryUsers) {
+      const team = (u.team ?? "").trim();
+      const name = (u.name ?? "").trim().toLowerCase();
+      if (!team || !name) continue;
+      memberToTeam.set(name, team);
+    }
+  }
+  // Same epic-plan scoping as `collectWorkloadStories` — using the kanban's
+  // scope helper rather than initiative.startMonth/endMonth so epics that
+  // extend beyond their initiative's window still contribute.
+  const scopeEpics = collectMonthScopeEpicsForSprintPanel(initiatives, month, null);
+  for (const { epic } of scopeEpics) {
+    const epicTeamId = epic.team ?? null;
+    const epicTeamInFilter =
+      !filterTeamIds?.length || filterTeamIds.includes(epicTeamId ?? "");
+    for (const story of epic.userStories ?? []) {
+      if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
+      // Resolve which team's bar this story should land on.
+      //  - Epic team in filter (or no filter at all) → bucket by epic team.
+      //  - Otherwise, if the assignee is on a filter team → bucket there.
+      //  - Otherwise → skip (excluded by filter).
+      let bucketTeamId: string | null;
+      if (epicTeamInFilter) {
+        bucketTeamId = epicTeamId;
+      } else {
+        const a = (story.assignee ?? "").trim().toLowerCase();
+        const assigneeTeam = a ? memberToTeam.get(a) : undefined;
+        if (assigneeTeam && filterTeamIds?.includes(assigneeTeam)) {
+          bucketTeamId = assigneeTeam;
+        } else {
+          continue;
         }
-        byTeam.set(teamKey, row);
       }
+      const teamKey = bucketTeamId ?? "__unassigned__";
+      const teamLabel = bucketTeamId ? teamLabelForWorkspaceUser(bucketTeamId) : "Unassigned";
+      const row = byTeam.get(teamKey) ?? { teamId: bucketTeamId, teamLabel, storiesByStatus: emptyStatus(), daysByStatus: emptyStatus(), daysLeftTotal: 0, estimatedTotal: 0, openCount: 0 };
+      const estDays = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+      if (story.status === "todo") { row.storiesByStatus.todo += 1; row.daysByStatus.todo += estDays; }
+      else if (story.status === "inProgress") { row.storiesByStatus.inProgress += 1; row.daysByStatus.inProgress += estDays; }
+      else if (story.status === "done") { row.storiesByStatus.done += 1; row.daysByStatus.done += estDays; }
+      else if (story.status === "approved") { row.storiesByStatus.approved += 1; row.daysByStatus.approved += estDays; }
+      row.estimatedTotal += estDays;
+      if (story.status === "todo" || story.status === "inProgress") {
+        row.openCount += 1;
+        row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
+      }
+      byTeam.set(teamKey, row);
     }
   }
   return [...byTeam.values()].sort((a, b) => a.teamLabel.localeCompare(b.teamLabel));
@@ -869,11 +941,11 @@ export function buildSprintAnalytics(
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): SprintAnalyticsData {
   const stories = collectMonthStories(initiatives, month, filterEpicTeamIds, estimateSource);
-  const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamIds);
+  const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamIds, workspaceDirectoryUsers);
   const workload = buildWorkloadByAssignee(workloadStories, month, yearSprint);
   const isTeamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
   const workloadByTeam = isTeamMode
-    ? buildWorkloadByTeam(initiatives, month, yearSprint, filterEpicTeamIds?.length ? filterEpicTeamIds : null)
+    ? buildWorkloadByTeam(initiatives, month, yearSprint, filterEpicTeamIds?.length ? filterEpicTeamIds : null, workspaceDirectoryUsers)
     : [];
   const capacity = buildWorkloadCapacityByAssignee(
     stories,

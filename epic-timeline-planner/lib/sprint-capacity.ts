@@ -228,8 +228,14 @@ export function fullDeliveryCapacityRoster(): string[] {
   return defaultMembersForTeam(null);
 }
 
-/** Minimal shape from workspace directory rows merged into sprint rosters. */
-export type SprintWorkspaceDirectoryUser = { name: string; team: string };
+/** Minimal shape from workspace directory rows merged into sprint rosters.
+ *  `image` is the avatar URL when the user has one — used by `<UserAvatar>`
+ *  to render the photo instead of the initials/icon fallback. */
+export type SprintWorkspaceDirectoryUser = {
+  name: string;
+  team: string;
+  image?: string | null;
+};
 
 /**
  * First names used to map story assignees → capacity columns; matches sprint Kanban team filter.

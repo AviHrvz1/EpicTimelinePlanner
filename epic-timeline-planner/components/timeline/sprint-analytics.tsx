@@ -24,8 +24,9 @@ import {
 
 import { buildSprintAnalytics, BurndownMetric } from "@/lib/sprint-analytics";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
+import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { type EstimateSource } from "@/lib/epic-estimates";
-import { storyMatchesYearSprint } from "@/lib/sprint-plan";
+import { collectMonthScopeEpicsForSprintPanel, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -71,19 +72,62 @@ const PIE_LEGEND_CAP = "max-h-[clamp(14.75rem,30vh,19rem)] overflow-y-auto pr-1"
 const WORKLOAD_LIST_MAX =
   "max-h-[clamp(11.5rem,21vh,15.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain";
 
-function WorkloadXAxisTick({ x, y, payload, teamMode }: { x?: number; y?: number; payload?: { value: string }; teamMode: boolean }) {
+function WorkloadXAxisTick({
+  x,
+  y,
+  payload,
+  teamMode,
+  avatarByFirstName,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+  teamMode: boolean;
+  /** Map keyed by the X-axis label (first name) → uploaded image URL.
+   *  When present, the tick swaps the generic UserRound for the photo. */
+  avatarByFirstName?: Map<string, string | null>;
+}) {
   if (x == null || y == null) return null;
   const label = payload?.value ?? "";
-  const rowY = y + 10;
-  const iconSize = 12;
+  const rowY = y + 11;
+  // Bigger icon so uploaded photos read as actual avatars rather than dots;
+  // text width math + horizontal centering follow.
+  const iconSize = 16;
   const estTextWidth = Math.min(label.length * 5.5, 70);
-  const totalWidth = iconSize + 3 + estTextWidth;
+  const totalWidth = iconSize + 4 + estTextWidth;
   const iconX = x - totalWidth / 2;
-  const textStartX = iconX + iconSize + 3;
-  const Icon = teamMode ? Users : UserRound;
+  const textStartX = iconX + iconSize + 4;
+  // Person rows: use the user's photo when available; fall back to UserRound.
+  // Team rows: stick with the existing Users icon (no per-team avatar).
+  const photoUrl = !teamMode ? avatarByFirstName?.get(label) ?? null : null;
   return (
     <g>
-      <Icon x={iconX} y={rowY - iconSize / 2} width={iconSize} height={iconSize} color="#94a3b8" strokeWidth={2} />
+      {photoUrl ? (
+        <>
+          {/* Recharts SVG context — circular clip-path so the photo reads as
+           *  an avatar instead of a square. Unique clipId per tick so several
+           *  ticks in the same chart don't share clipping. */}
+          <defs>
+            <clipPath id={`workload-avatar-clip-${label}`}>
+              <circle cx={iconX + iconSize / 2} cy={rowY} r={iconSize / 2} />
+            </clipPath>
+          </defs>
+          <image
+            href={photoUrl}
+            x={iconX}
+            y={rowY - iconSize / 2}
+            width={iconSize}
+            height={iconSize}
+            preserveAspectRatio="xMidYMid slice"
+            clipPath={`url(#workload-avatar-clip-${label})`}
+          />
+        </>
+      ) : (
+        (() => {
+          const Icon = teamMode ? Users : UserRound;
+          return <Icon x={iconX} y={rowY - iconSize / 2} width={iconSize} height={iconSize} color="#94a3b8" strokeWidth={2} />;
+        })()
+      )}
       <text x={textStartX} y={rowY + 1} textAnchor="start" fill="#64748b" fontSize={11} dominantBaseline="middle">
         {label}
       </text>
@@ -318,6 +362,23 @@ export function SprintAnalytics({
   };
 
   const sprintStories = useMemo(() => {
+    // Drilldown sources for the Workload Balance / Sprint Load row tables —
+    // must mirror the chart's own scoping rules:
+    //  - Epic plan range scoping (kanban helper), not coarse initiative bounds.
+    //  - OR-style team filter (epic in filter OR assignee's directory team in
+    //    filter), matching `collectWorkloadStories` in lib/sprint-analytics.
+    // Without this, clicking a person who appears in the chart only because
+    // their assignee-team matched would resolve to an empty drilldown.
+    const teamMemberNames = new Set<string>();
+    if (filterEpicTeamIds?.length && workspaceDirectoryUsers) {
+      const filterLower = new Set(filterEpicTeamIds.map((t) => t.toLowerCase()));
+      for (const u of workspaceDirectoryUsers) {
+        const team = (u.team ?? "").trim().toLowerCase();
+        const name = (u.name ?? "").trim().toLowerCase();
+        if (team && name && filterLower.has(team)) teamMemberNames.add(name);
+      }
+    }
+    const scopeEpics = collectMonthScopeEpicsForSprintPanel(initiatives, month, null);
     const rows: Array<{
       id: string;
       title: string;
@@ -326,37 +387,39 @@ export function SprintAnalytics({
       sprint: number | null;
       status: "Unscheduled" | "To do" | "In progress" | "Done" | "Approved";
     }> = [];
-    for (const initiative of initiatives) {
-      if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-      if (initiative.endMonth < month || initiative.startMonth > month) continue;
-      for (const epic of initiative.epics ?? []) {
-        if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
-        for (const story of epic.userStories ?? []) {
-          const isInSprint = story.sprint != null && storyMatchesYearSprint(story, month, yearSprint);
-          const isUnscheduled = story.sprint == null;
-          if (!isInSprint && !isUnscheduled) continue;
-          rows.push({
-            id: story.id,
-            title: story.title,
-            assignee: story.assignee?.trim() || "Unassigned",
-            team: epic.team ?? "",
-            sprint: story.sprint ?? null,
-            status:
-              story.sprint == null
-                ? "Unscheduled"
-                : story.status === "todo"
-                  ? "To do"
-                  : story.status === "inProgress"
-                    ? "In progress"
-                    : story.status === "done"
-                      ? "Done"
-                      : "Approved",
-          });
+    for (const { epic } of scopeEpics) {
+      const epicTeamInFilter =
+        !filterEpicTeamIds?.length || filterEpicTeamIds.includes(epic.team ?? "");
+      for (const story of epic.userStories ?? []) {
+        const isInSprint = story.sprint != null && storyMatchesYearSprint(story, month, yearSprint);
+        const isUnscheduled = story.sprint == null;
+        if (!isInSprint && !isUnscheduled) continue;
+        if (!epicTeamInFilter) {
+          if (teamMemberNames.size === 0) continue;
+          const a = (story.assignee ?? "").trim().toLowerCase();
+          if (!a || !teamMemberNames.has(a)) continue;
         }
+        rows.push({
+          id: story.id,
+          title: story.title,
+          assignee: story.assignee?.trim() || "Unassigned",
+          team: epic.team ?? "",
+          sprint: story.sprint ?? null,
+          status:
+            story.sprint == null
+              ? "Unscheduled"
+              : story.status === "todo"
+                ? "To do"
+                : story.status === "inProgress"
+                  ? "In progress"
+                  : story.status === "done"
+                    ? "Done"
+                    : "Approved",
+        });
       }
     }
     return rows;
-  }, [initiatives, month, yearSprint, filterEpicTeamIds]);
+  }, [initiatives, month, yearSprint, filterEpicTeamIds, workspaceDirectoryUsers]);
 
   const statusDrilldownStories = useMemo(() => {
     if (!statusDrilldownFilter) return [];
@@ -854,6 +917,20 @@ export function SprintAnalytics({
                     "Done": item.storiesByStatus.done,
                     "Approved": item.storiesByStatus.approved,
                   }));
+              // Pre-resolve avatar URLs keyed by the X-axis label (first name)
+              // so the custom tick can paint a photo per bar without each tick
+              // re-walking the directory. Team mode → empty map (no avatars).
+              const avatarByFirstName = new Map<string, string | null>();
+              if (!teamMode) {
+                for (const item of analytics.workloadByAssignee) {
+                  const first = item.assignee.split(/\s+/)[0];
+                  if (!first || avatarByFirstName.has(first)) continue;
+                  avatarByFirstName.set(
+                    first,
+                    resolveAssigneeAvatar(item.assignee, workspaceDirectoryUsers).image,
+                  );
+                }
+              }
               return (
                 <div className="h-[clamp(14.75rem,30vh,19rem)] w-full">
                   {barData.length > 0 ? (
@@ -878,7 +955,7 @@ export function SprintAnalytics({
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={26} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} avatarByFirstName={avatarByFirstName} />} height={26} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={44} label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }} />
                         <Tooltip
                           contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
@@ -1093,6 +1170,7 @@ export function SprintAnalytics({
                     key: t.teamLabel,
                     label: t.teamLabel,
                     initials: t.teamLabel.slice(0, 2).toUpperCase(),
+                    image: null as string | null,
                     daysLeft: metric === "storyCount" ? t.openCount : t.daysLeftTotal,
                     estTotal: metric === "storyCount" ? totalStories : t.estimatedTotal,
                     onRowClick: () => { setSprintLoadDrilldownIsTeam(true); setSprintLoadDrilldownAssignee(t.teamId ?? ""); },
@@ -1100,10 +1178,15 @@ export function SprintAnalytics({
                 })
               : analytics.workloadByAssignee.map((row) => {
                   const totalStories = row.storiesByStatus.todo + row.storiesByStatus.inProgress + row.storiesByStatus.done + row.storiesByStatus.approved;
+                  // Resolve the photo from the workspace directory so the row
+                  // circle shows the user's avatar instead of initials when
+                  // available — falls back gracefully when there's no match.
+                  const resolved = resolveAssigneeAvatar(row.assignee, workspaceDirectoryUsers);
                   return {
                     key: row.assignee,
                     label: row.assignee,
                     initials: row.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join(""),
+                    image: resolved.image,
                     daysLeft: metric === "storyCount" ? row.openCount : row.daysLeftTotal,
                     estTotal: metric === "storyCount" ? totalStories : row.estimatedTotal,
                     onRowClick: () => { setSprintLoadDrilldownIsTeam(false); setSprintLoadDrilldownAssignee(row.assignee); },
@@ -1247,18 +1330,34 @@ export function SprintAnalytics({
                             )}
                           >
                             <div className="flex items-center gap-2">
-                              <span
-                                className={cn(
-                                  "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1",
-                                  atRisk
-                                    ? "bg-amber-100 text-amber-800 ring-amber-200/80"
-                                    : allDone
-                                      ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
-                                      : "bg-violet-100 text-violet-700 ring-violet-200/80",
-                                )}
-                              >
-                                {row.initials || <User className="size-3" />}
-                              </span>
+                              {row.image ? (
+                                <UserAvatar
+                                  name={row.label}
+                                  image={row.image}
+                                  size={24}
+                                  className={cn(
+                                    "ring-1",
+                                    atRisk
+                                      ? "ring-amber-200/80"
+                                      : allDone
+                                        ? "ring-emerald-200/80"
+                                        : "ring-violet-200/80",
+                                  )}
+                                />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1",
+                                    atRisk
+                                      ? "bg-amber-100 text-amber-800 ring-amber-200/80"
+                                      : allDone
+                                        ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
+                                        : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                                  )}
+                                >
+                                  {row.initials || <User className="size-3" />}
+                                </span>
+                              )}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>

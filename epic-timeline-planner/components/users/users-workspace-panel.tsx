@@ -15,6 +15,7 @@ import {
   Plus,
   Search,
   Tag,
+  UploadCloud,
   User,
   UserPen,
   UserPlus,
@@ -132,67 +133,126 @@ const USER_DRAWER_FIELD_LABEL_CLASS = "mb-1.5 block text-[15px] font-semibold te
 
 /**
  * Avatar slot at the top of the Add User / Edit User drawer. Renders the
- * current image (or initials placeholder) plus "Add / Change / Remove"
- * actions. The actual file picking + crop dialog live one level up so both
- * drawer modes share a single instance.
+ * current image (or initials placeholder) and acts as a drag-and-drop target
+ * for new uploads. Click also opens the file picker for keyboard/mobile
+ * users. Actual file processing + crop dialog live one level up.
+ *
+ * Drop behavior: only accepts the first file when multiple are dropped, and
+ * only image/* MIME types — anything else is silently ignored so the drop
+ * zone never crashes on a stray document.
  */
 function AvatarField({
   name,
   image,
   onPick,
   onClear,
+  onDropFile,
   disabled,
 }: {
   name: string;
   image: string | null;
   onPick: () => void;
   onClear: () => void;
+  onDropFile?: (file: File) => void;
   disabled?: boolean;
 }) {
   const hasImage = Boolean(image);
   const initials = avatarInitialsFromName(name);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) setDragOver(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only clear when leaving the drop zone entirely (not a child element).
+    if (e.currentTarget === e.target) setDragOver(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    if (file && onDropFile) onDropFile(file);
+  };
+
   return (
-    <div className="flex items-center gap-4">
+    <div
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        "flex items-center gap-4 rounded-xl border border-dashed p-3 transition-colors",
+        dragOver
+          ? "border-violet-400 bg-violet-50/70"
+          : "border-slate-200 bg-slate-50/40 hover:border-violet-200 hover:bg-violet-50/30",
+      )}
+    >
       <button
         type="button"
         onClick={onPick}
         disabled={disabled}
         title={hasImage ? "Change photo" : "Add photo"}
-        className="group relative inline-flex size-20 items-center justify-center overflow-hidden rounded-full ring-1 ring-slate-200 transition hover:ring-violet-300 disabled:opacity-60"
+        className="group relative inline-flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-2 ring-white shadow-md transition hover:shadow-lg disabled:opacity-60"
       >
         {hasImage ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={image as string} alt="" className="size-full object-cover" />
         ) : (
-          <span className="flex size-full items-center justify-center bg-gradient-to-br from-violet-100 to-indigo-100 text-[20px] font-bold text-violet-700">
-            {initials || <UserPlus className="size-7" />}
+          <span className="flex size-full items-center justify-center bg-gradient-to-br from-violet-100 via-indigo-100 to-sky-100 text-[22px] font-bold text-violet-700">
+            {initials || <UserPlus className="size-8" />}
           </span>
         )}
-        <span className="absolute inset-x-0 bottom-0 hidden bg-slate-900/55 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-white group-hover:block">
-          {hasImage ? "Change" : "Add"}
+        <span className="absolute inset-x-0 bottom-0 hidden bg-slate-900/55 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-white group-hover:block">
+          {hasImage ? "Change" : "Upload"}
         </span>
       </button>
-      <div className="flex flex-col gap-1.5">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 px-3 text-[12.5px]"
-          onClick={onPick}
-          disabled={disabled}
-        >
-          {hasImage ? "Change photo" : "Add photo"}
-        </Button>
-        {hasImage ? (
-          <button
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="text-[13px] font-semibold text-slate-800">
+          {hasImage ? "Profile photo" : "Add a profile photo"}
+        </p>
+        <p className="text-[11.5px] leading-snug text-slate-500">
+          {dragOver
+            ? "Drop your image to upload"
+            : hasImage
+              ? "Drag a new image here or click to replace."
+              : "Drag an image here, or click the circle to choose a file."}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <Button
             type="button"
-            onClick={onClear}
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-2.5 text-[12px]"
+            onClick={onPick}
             disabled={disabled}
-            className="text-left text-[11.5px] font-semibold text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline disabled:opacity-60"
           >
-            Remove
-          </button>
-        ) : null}
+            <UploadCloud className="size-3.5" aria-hidden />
+            {hasImage ? "Change" : "Choose file"}
+          </Button>
+          {hasImage ? (
+            <button
+              type="button"
+              onClick={onClear}
+              disabled={disabled}
+              className="text-left text-[11.5px] font-semibold text-slate-500 underline-offset-2 hover:text-rose-600 hover:underline disabled:opacity-60"
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -1577,7 +1637,11 @@ export function UsersWorkspacePanel() {
             aria-autocomplete="list"
             aria-haspopup="listbox"
             role="combobox"
-            autoComplete="off"
+            // `autoComplete="off"` is ignored by Chrome for inputs it
+            // detects as part of a profile form. A non-standard token
+            // defeats the heuristic — Chrome leaves the field alone.
+            autoComplete="new-search"
+            name="users-directory-search"
           />
           {searchSuggestOpen && nameSuggestions.length > 0 ? (
             <div
@@ -1778,19 +1842,25 @@ export function UsersWorkspacePanel() {
           >
             {userPanel.kind === "add" ? (
               <>
-                <div className="flex shrink-0 flex-col border-b border-slate-200 bg-slate-50">
-                  <div className="flex items-start justify-between gap-3 px-5 py-4">
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                {/* Header — soft gradient + larger badge + subtitle for a more
+                    polished, "directory product" feel. The bottom shadow line
+                    replaces the hard border for a softer edge. */}
+                <div className="relative flex shrink-0 flex-col border-b border-slate-200/80 bg-gradient-to-br from-violet-50 via-indigo-50 to-sky-50">
+                  <div className="flex items-start justify-between gap-3 px-6 py-5">
+                    <div className="flex min-w-0 flex-1 items-start gap-3.5">
                       <span
-                        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 ring-1 ring-violet-200/80"
+                        className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-300/60 ring-1 ring-white"
                         aria-hidden
                       >
-                        <UserPlus className="size-5" strokeWidth={2} />
+                        <UserPlus className="size-5" strokeWidth={2.2} />
                       </span>
                       <div className="min-w-0">
-                        <h2 id="users-drawer-title" className="text-xl font-semibold tracking-tight text-slate-900">
+                        <h2 id="users-drawer-title" className="text-[20px] font-bold tracking-tight text-slate-900">
                           Add User
                         </h2>
+                        <p className="mt-0.5 text-[12.5px] leading-snug text-slate-600">
+                          Create a new directory entry. They&rsquo;ll be linked automatically when they sign up with the same email.
+                        </p>
                       </div>
                     </div>
                     <Button
@@ -1805,99 +1875,129 @@ export function UsersWorkspacePanel() {
                     </Button>
                   </div>
                 </div>
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <div className="flex-1 overflow-y-auto p-5">
-                    <div className="w-full max-w-[400px] space-y-4">
+                {/* `<form>` wrapper scopes Chrome's autofill to *this* drawer
+                 *  so picking a saved Name suggestion no longer spills the
+                 *  paired email into the directory search field behind. The
+                 *  submit handler also gives Enter-to-save in the form. */}
+                <form
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                  autoComplete="off"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!saving) void saveNewUser();
+                  }}
+                >
+                  <div className="flex-1 overflow-y-auto px-6 py-5">
+                    <div className="w-full max-w-[440px] space-y-5">
                       <AvatarField
                         name={form.name}
                         image={form.image}
                         onPick={imagePicker.trigger}
                         onClear={() => setForm((f) => ({ ...f, image: null }))}
+                        onDropFile={handleImageFilePicked}
                         disabled={saving}
                       />
-                      <label className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
-                          Name{" "}
-                          <span className="font-semibold text-red-600" title="Required">
-                            *
-                          </span>
-                        </span>
-                        <input
-                          value={form.name}
-                          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                          autoComplete="name"
-                          required
-                          aria-required="true"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
-                          Email{" "}
-                          <span className="font-semibold text-red-600" title="Required">
-                            *
-                          </span>
-                        </span>
-                        <input
-                          type="email"
-                          value={form.email}
-                          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                          autoComplete="email"
-                          required
-                          aria-required="true"
-                        />
-                      </label>
-                      <div className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team (optional)</span>
-                        <TeamIdCombobox
-                          teamId={form.team}
-                          onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
-                          disabled={saving}
-                          placeholder="Pick a team or create new (optional)"
-                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                          allowCustomTeam
-                          extraTeamIds={directoryTeamIds}
-                        />
+                      {/* Profile section */}
+                      <div className="space-y-1">
+                        <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-500">Profile</p>
+                        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                          <label className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
+                              Name{" "}
+                              <span className="font-semibold text-red-600" title="Required">
+                                *
+                              </span>
+                            </span>
+                            <input
+                              value={form.name}
+                              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                              autoComplete="name"
+                              placeholder="e.g. Alice Cohen"
+                              required
+                              aria-required="true"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
+                              Email{" "}
+                              <span className="font-semibold text-red-600" title="Required">
+                                *
+                              </span>
+                            </span>
+                            <input
+                              type="email"
+                              value={form.email}
+                              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                              autoComplete="email"
+                              placeholder="alice@company.com"
+                              required
+                              aria-required="true"
+                            />
+                          </label>
+                        </div>
                       </div>
-                      <div className="block">
-                        <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission (optional)</span>
-                        <AssigneeCombobox
-                          value={form.permission}
-                          onChange={(permission) =>
-                            setForm((f) => ({ ...f, permission: permissionFromPickerInput(permission) }))
-                          }
-                          suggestions={WORKSPACE_USER_PERMISSIONS}
-                          disabled={saving}
-                          placeholder="Viewer"
-                          aria-label="Permission"
-                          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                        />
+                      {/* Access section */}
+                      <div className="space-y-1">
+                        <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-500">Access</p>
+                        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                          <div className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team (optional)</span>
+                            <TeamIdCombobox
+                              teamId={form.team}
+                              onTeamIdChange={(id) => setForm((f) => ({ ...f, team: id }))}
+                              disabled={saving}
+                              placeholder="Pick a team or create new (optional)"
+                              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                              allowCustomTeam
+                              extraTeamIds={directoryTeamIds}
+                            />
+                          </div>
+                          <div className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Permission (optional)</span>
+                            <AssigneeCombobox
+                              value={form.permission}
+                              onChange={(permission) =>
+                                setForm((f) => ({ ...f, permission: permissionFromPickerInput(permission) }))
+                              }
+                              suggestions={WORKSPACE_USER_PERMISSIONS}
+                              disabled={saving}
+                              placeholder="Viewer"
+                              aria-label="Permission"
+                              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
+                            />
+                            <p className="mt-1 text-[11px] leading-snug text-slate-500">
+                              Defaults to Viewer. Change later anytime from the directory row.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-white px-5 py-4">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-white px-6 py-4">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 min-w-[100px] px-4 text-sm font-medium"
+                      className="h-9 min-w-[100px] gap-1.5 px-4 text-sm font-medium"
                       onClick={closePanel}
                       disabled={saving}
                     >
+                      <X className="size-3.5" aria-hidden />
                       Cancel
                     </Button>
                     <Button
-                      type="button"
+                      type="submit"
                       size="sm"
-                      className="h-8 min-w-[100px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
-                      onClick={() => void saveNewUser()}
+                      className="h-9 min-w-[120px] gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50"
                       disabled={saving}
                     >
+                      <UserPlus className="size-3.5" aria-hidden />
                       {saving ? "Saving…" : "Add User"}
                     </Button>
                   </div>
-                </div>
+                </form>
               </>
             ) : viewUser ? (
               <>
@@ -1944,6 +2044,7 @@ export function UsersWorkspacePanel() {
                         image={form.image}
                         onPick={imagePicker.trigger}
                         onClear={() => setForm((f) => ({ ...f, image: null }))}
+                        onDropFile={handleImageFilePicked}
                         disabled={saving}
                       />
                       <label className="block">

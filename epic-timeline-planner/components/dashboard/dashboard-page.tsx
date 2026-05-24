@@ -606,6 +606,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                 onEdit={handleEdit}
                 onToggleSpan={handleToggleSpan}
                 onDecreaseSpan={handleDecreaseSpan}
+                workspaceDirectoryUsers={workspaceDirectoryUsers}
                 onChangeHeight={handleChangeHeight}
                 onRenameChart={renameChart}
                 onUpdateConfig={updateChartConfig}

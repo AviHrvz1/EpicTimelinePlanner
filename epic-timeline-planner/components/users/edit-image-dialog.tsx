@@ -165,12 +165,25 @@ export function EditImageDialog({ open, src, onSave, onClose, onPickAnother }: E
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-image-title"
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-[1px] p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px] p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !saving) onClose();
       }}
     >
-      <div className="flex max-h-[90vh] w-full max-w-[1100px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+      <div
+        className={cn(
+          // Soft indigo halo so the dialog reads as elevated even when the
+          // backdrop is lighter — matches the delete-confirmation pattern
+          // (`ring-4 ring-rose-100/70`) but uses the project's neutral
+          // editor palette instead of rose.
+          "flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-indigo-200/80 bg-white shadow-2xl ring-4 ring-indigo-100/60 animate-in fade-in zoom-in-95 duration-150",
+          // Once the image is loaded the cropper preview drives the visual
+          // weight; the right-rail controls fit comfortably in ~800px. While
+          // the picker is still empty we keep the wider 1100px so the
+          // "no image selected" state doesn't feel cramped.
+          src ? "max-w-[860px]" : "max-w-[1100px]",
+        )}
+      >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
           <h2 id="edit-image-title" className="text-[16px] font-semibold text-slate-900">

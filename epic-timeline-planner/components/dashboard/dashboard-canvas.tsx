@@ -5,6 +5,7 @@ import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortab
 import { LayoutDashboard } from "lucide-react";
 
 import { InitiativeItem } from "@/lib/types";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { DashboardChartCard } from "./dashboard-chart-card";
 import { DashboardChartItem } from "./types";
 
@@ -20,9 +21,10 @@ type Props = {
   onChangeHeight: (id: string, delta: 1 | -1) => void;
   onRenameChart: (id: string, title: string) => void;
   onUpdateConfig?: (id: string, partialParams: Record<string, unknown>) => void;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
-export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig }: Props) {
+export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function handleDragEnd(event: DragEndEvent) {
@@ -60,6 +62,7 @@ export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, on
           onChangeHeight={onChangeHeight}
           onRenameChart={onRenameChart}
           onUpdateConfig={onUpdateConfig}
+          workspaceDirectoryUsers={workspaceDirectoryUsers}
         />
       ))}
     </div>

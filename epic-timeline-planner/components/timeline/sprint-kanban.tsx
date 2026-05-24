@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
+import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
 function storyAssigneeLabel(story: UserStoryItem): string {
@@ -170,6 +171,7 @@ function KanbanColumn({
 function KanbanStoryCard({
   row,
   boardStoryAssigneeNames,
+  workspaceDirectoryUsers,
   dragDisabled = false,
   onOpenStory,
   onUnscheduleStory,
@@ -180,6 +182,7 @@ function KanbanStoryCard({
 }: {
   row: BoardStoryRow;
   boardStoryAssigneeNames: ReadonlySet<string>;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   dragDisabled?: boolean;
   onOpenStory: (storyId: string) => void;
   onUnscheduleStory?: (storyId: string) => void;
@@ -400,12 +403,17 @@ function KanbanStoryCard({
               title={editable ? "Edit assignee" : undefined}
               onClick={() => editable && setEditing("assignee")}
               className={cn(
-                "inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-left text-[12px] font-medium text-slate-700",
+                "inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-1.5 py-0.5 text-left text-[12px] font-medium text-slate-700",
                 editable && "cursor-pointer hover:bg-slate-200/90",
                 !editable && "cursor-default",
               )}
             >
-              <UserRound className="size-3 shrink-0 opacity-70" aria-hidden />
+              {(() => {
+                const resolved = resolveAssigneeAvatar(story.assignee, workspaceDirectoryUsers);
+                return (
+                  <UserAvatar name={resolved.name} image={resolved.image} size={18} />
+                );
+              })()}
               {storyAssigneeLabel(story)}
             </button>
           )}
@@ -931,6 +939,10 @@ export function SprintKanbanBoard({
                   {assigneeOptions.map((name, idx) => {
                     const on = selectedAssignees.includes(name);
                     const Icon = assigneeFilterIcon(name);
+                    const isUnassigned = name === "Unassigned";
+                    const resolved = isUnassigned
+                      ? { name: "", image: null }
+                      : resolveAssigneeAvatar(name, workspaceDirectoryUsers);
                     return (
                       <button
                         key={name}
@@ -950,8 +962,19 @@ export function SprintKanbanBoard({
                           zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
                         }}
                       >
-                        {name === "Unassigned" ? <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden /> : null}
-                        {name !== "Unassigned" && !assigneeFilterExpanded ? <span>{assigneeBadgeLabel(name)}</span> : null}
+                        {/* Collapsed: show photo / initials inside the circle.
+                            Expanded: small avatar + the full name. */}
+                        {isUnassigned ? (
+                          <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+                        ) : !assigneeFilterExpanded ? (
+                          resolved.image ? (
+                            <UserAvatar name={resolved.name} image={resolved.image} size={32} className="ring-0" />
+                          ) : (
+                            <span>{assigneeBadgeLabel(name)}</span>
+                          )
+                        ) : (
+                          <UserAvatar name={resolved.name} image={resolved.image} size={22} className="ring-0" />
+                        )}
                         {assigneeFilterExpanded ? (
                           <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
                         ) : null}
@@ -1014,6 +1037,7 @@ export function SprintKanbanBoard({
                   key={row.story.id}
                   row={row}
                   boardStoryAssigneeNames={boardStoryAssigneeNames}
+                  workspaceDirectoryUsers={workspaceDirectoryUsers}
                   dragDisabled={sprintClosed}
                   onOpenStory={onOpenStory}
                   onUnscheduleStory={onUnscheduleStory}
