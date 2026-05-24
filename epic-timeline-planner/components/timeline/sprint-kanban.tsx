@@ -260,6 +260,17 @@ function KanbanStoryCard({
 
   const editable = !dragDisabled && onPatchStory != null;
 
+  // Days-burned-down progress: (estimated − left) / estimated. Stories in
+  // done/approved have daysLeft=0 by API invariant, so they read 100%.
+  // Stories with no estimate get no bar at all (nothing meaningful to show).
+  const storyEstimatedDays = story.estimatedDays ?? 0;
+  const storyDaysLeft = story.daysLeft ?? storyEstimatedDays;
+  const storyDaysBurned = Math.max(0, storyEstimatedDays - storyDaysLeft);
+  const storyProgressPercent =
+    storyEstimatedDays > 0
+      ? Math.min(100, Math.round((storyDaysBurned / storyEstimatedDays) * 100))
+      : 0;
+
   return (
     <div
       ref={setNodeRef}
@@ -328,9 +339,36 @@ function KanbanStoryCard({
             </button>
           ) : null}
         </div>
-        <div className="flex w-full flex-wrap items-center justify-end gap-1.5 pr-0">
+        {storyEstimatedDays > 0 ? (
+          <div className="space-y-1">
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
+              role="progressbar"
+              aria-valuenow={storyProgressPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${storyDaysBurned} of ${storyEstimatedDays} estimated days burned`}
+            >
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500 transition-[width] duration-300 ease-out"
+                style={{ width: `${storyProgressPercent}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] font-medium text-slate-500 tabular-nums">
+              <span>
+                <span className="font-semibold text-slate-700">{storyDaysBurned}d</span>
+                <span className="mx-0.5 text-slate-300">/</span>
+                <span>{storyEstimatedDays}d</span>
+                <span className="ml-1 text-slate-400">burned</span>
+              </span>
+              <span className="font-semibold text-slate-700">{storyProgressPercent}%</span>
+            </div>
+          </div>
+        ) : null}
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 pr-0">
           {epic.team ? (
-            <span className="rounded-md bg-violet-50 px-2 py-1 text-[12px] font-medium text-violet-700">
+            <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-[12px] font-medium text-violet-700">
+              <Users className="size-3 shrink-0 opacity-70" aria-hidden />
               {monthTeamLabelForId(epic.team) ?? epic.team}
             </span>
           ) : null}
@@ -362,11 +400,12 @@ function KanbanStoryCard({
               title={editable ? "Edit assignee" : undefined}
               onClick={() => editable && setEditing("assignee")}
               className={cn(
-                "rounded-md bg-slate-100 px-2 py-1 text-left text-[12px] font-medium text-slate-700",
+                "inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-left text-[12px] font-medium text-slate-700",
                 editable && "cursor-pointer hover:bg-slate-200/90",
                 !editable && "cursor-default",
               )}
             >
+              <UserRound className="size-3 shrink-0 opacity-70" aria-hidden />
               {storyAssigneeLabel(story)}
             </button>
           )}
@@ -544,9 +583,15 @@ function SprintEpicCard({
         ) : (
           <p className="mt-1.5 text-[10px] text-slate-400">No stories in this sprint</p>
         )}
-        <div className="mt-2 flex flex-wrap items-center justify-end gap-1">
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
+          {epic.assignee?.trim() ? (
+            <span className={cn("inline-flex items-center gap-1 border border-slate-200 bg-slate-50 text-slate-700", chipBase)}>
+              <UserRound className="size-2.5 shrink-0 opacity-70" aria-hidden />
+              <span className="max-w-[7rem] truncate">{epic.assignee.trim()}</span>
+            </span>
+          ) : null}
           {teamChip ? (
-            <span className={cn("inline-flex items-center gap-0.5", chipBase, teamChip.className)}>
+            <span className={cn("inline-flex items-center gap-1", chipBase, teamChip.className)}>
               <Users className="size-2.5 shrink-0" aria-hidden />
               {teamChip.label}
             </span>
