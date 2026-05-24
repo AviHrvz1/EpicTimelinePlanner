@@ -32,6 +32,12 @@ export function DemoBuilderPanel() {
       const res = await fetch("/api/demo-builder/reset-seed", { method: "POST" });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `HTTP ${res.status}`);
       const body = (await res.json()) as { initiatives: number; epics: number; stories: number; users: number; snapshots: number };
+      // Sprint retrospective docs live in localStorage (not the DB), so the
+      // server-side seed can't populate them. Write sample docs for every
+      // already-completed sprint of the current plan year so the
+      // retrospective tab reads as "team has been holding retros" instead
+      // of blank when you navigate back to past sprints.
+      seedDemoRetrospectives();
       toast.success(
         `Demo ready — ${body.initiatives} initiatives · ${body.epics} epics · ${body.stories} stories · ${body.users} users · ${body.snapshots} snapshots`,
         { id: t },
@@ -133,3 +139,85 @@ export function DemoBuilderPanel() {
     </div>
   );
 }
+
+/**
+ * localStorage key shape mirrors `epic-planner-app.tsx`:
+ *   - `epicPlanner.sprintRetrospective.v1` → record keyed by
+ *     `"<year>:<yearSprint>"` (all-teams) or `"<year>:<yearSprint>:<teamId>"`.
+ *   - Each value: `{ wentWellHtml, improveHtml, actionItems[], updatedAt }`.
+ *
+ * We populate only the all-teams entry for every sprint that has ended
+ * before today. The retro tab will read these on first open; team-scoped
+ * variants stay empty so they don't crowd the demo.
+ */
+function seedDemoRetrospectives() {
+  if (typeof window === "undefined") return;
+  const STORAGE_KEY = "epicPlanner.sprintRetrospective.v1";
+  const now = new Date();
+  const year = now.getFullYear();
+  // Walk year-sprints 1..24 and pick the ones whose calendar window has
+  // already ended (last day of the 2-sprint-per-month split).
+  type RetroDoc = {
+    wentWellHtml: string;
+    improveHtml: string;
+    actionItems: Array<{ id: string; text: string; owner?: string; done?: boolean }>;
+    updatedAt: string;
+  };
+  const docs: Record<string, RetroDoc> = {};
+  for (let s = 1; s <= 24; s++) {
+    const month = Math.ceil(s / 2);
+    const lane = s % 2 === 0 ? 2 : 1;
+    const lastDay = lane === 1
+      ? new Date(year, month - 1, 15, 23, 59, 59, 999)
+      : new Date(year, month, 0, 23, 59, 59, 999);
+    if (lastDay >= now) break; // future sprint or current — skip
+    const idx = s - 1;
+    const went = DEMO_RETRO_WENT_WELL[idx % DEMO_RETRO_WENT_WELL.length]!;
+    const improve = DEMO_RETRO_IMPROVE[idx % DEMO_RETRO_IMPROVE.length]!;
+    const action = DEMO_RETRO_ACTIONS[idx % DEMO_RETRO_ACTIONS.length]!;
+    docs[`${year}:${s}`] = {
+      wentWellHtml: bulletsToHtml(went),
+      improveHtml: bulletsToHtml(improve),
+      actionItems: action.map((t, i) => ({ id: `demo-${s}-${i}`, text: t, done: i === 0 })),
+      updatedAt: lastDay.toISOString(),
+    };
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+  } catch {
+    /* localStorage may be unavailable (private mode) — best-effort. */
+  }
+}
+
+function bulletsToHtml(bullets: readonly string[]): string {
+  return `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>`;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const DEMO_RETRO_WENT_WELL: readonly (readonly string[])[] = [
+  ["Strong cross-team alignment on the launch", "Daily standups stayed under 15 min", "QA caught two critical regressions before release"],
+  ["Velocity matched the plan within ±10%", "PR review turnaround improved", "Pairing sessions resolved blockers same-day"],
+  ["No production incidents this sprint", "Sprint goals shipped on the planned date", "Customer-research findings made it into the next-sprint plan"],
+  ["Refactor unblocked three downstream stories", "On-call load was light", "Design + eng collaboration on the new spec went smoothly"],
+];
+
+const DEMO_RETRO_IMPROVE: readonly (readonly string[])[] = [
+  ["Estimates were optimistic on the data-warehouse stories", "Tickets started without clear acceptance criteria", "Staging environment was flaky on Wednesday"],
+  ["Code review wait time spiked mid-sprint", "Last-minute scope add forced a re-plan", "Test coverage on the new module is still light"],
+  ["Mobile build broke twice from un-merged migrations", "Sprint retro started 10 min late", "Documentation for the new auth flow is missing"],
+  ["Capacity didn't account for the team offsite", "API contract changed midway and forced rework", "Several stories rolled to the next sprint"],
+];
+
+const DEMO_RETRO_ACTIONS: readonly (readonly string[])[] = [
+  ["Lock acceptance criteria before sprint starts", "Add staging healthcheck alert", "Pair on data-warehouse estimates next time"],
+  ["Set 4-hour PR review SLA", "Hold scope changes for next sprint", "Owner: Carmen — increase unit test coverage to 80%"],
+  ["Add migration-status check to mobile CI", "Move retro to a calendar block", "Owner: Diego — write auth-flow runbook"],
+  ["Reserve offsite weeks in capacity board", "Lock API contracts at sprint kickoff", "Triage rollover stories on Monday morning"],
+];

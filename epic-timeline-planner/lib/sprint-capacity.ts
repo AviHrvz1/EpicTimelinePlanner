@@ -59,8 +59,15 @@ export function sprintStoryBoardEpicTeamFilter(teamId: string | null | undefined
 }
 
 export function defaultMembersForTeam(teamId: string | null): string[] {
-  const key = teamId && MONTH_TEAM_IDS.includes(teamId) ? teamId : "all";
-  return [...(DEFAULT_TEAM_MEMBERS[key] ?? DEFAULT_TEAM_MEMBERS.all)];
+  // `null` → the full union of delivery-trio rosters (used when the sprint
+  // board is filtered to "all teams"). Otherwise return the team's hardcoded
+  // default roster, or [] for any team that doesn't have one (e.g. Mobile /
+  // Growth, or custom directory-only teams). Non-trio teams previously fell
+  // through to `.all`, which made the sprint capacity / kanban surface every
+  // delivery-trio person on those team lanes — confusing and wrong.
+  if (teamId == null) return [...DEFAULT_TEAM_MEMBERS.all];
+  const defaults = DEFAULT_TEAM_MEMBERS[teamId];
+  return defaults ? [...defaults] : [];
 }
 
 export function sanitizeSprintCapacityBoard(board: SprintCapacityBoard): SprintCapacityBoard {
@@ -255,24 +262,44 @@ export function assigneeMatchRosterForSprintTeam(
 
   if (!directoryUsers?.length) return base;
 
-  const seenLower = new Set(base.map((b) => b.toLowerCase()));
-  const extras: string[] = [];
+  // Two-pass merge:
+  //  1. If a directory user's FIRST NAME matches a base roster entry (e.g.
+  //     base "Paige", directory "Paige Cohen"), REPLACE the base entry with
+  //     the directory user's full name. This unifies the chip on sprint
+  //     kanban / capacity so the user's uploaded photo shows up — otherwise
+  //     "Paige" and "Paige Cohen" both render as separate chips and the
+  //     unmatched first-name chip ends up with no avatar.
+  //  2. Directory users whose first name doesn't appear in the base roster
+  //     are appended as extras (sorted).
+  const baseByFirstName = new Map<string, string>();
+  for (const b of base) baseByFirstName.set(b.toLowerCase(), b);
 
+  const dedupedFull = new Set<string>();
+  const extras: string[] = [];
   for (const u of directoryUsers) {
     const n = (u.name ?? "").trim();
     if (!n) continue;
     const nt = normalizeWorkspaceUserTeam(u.team);
-    if (fid != null) {
-      if (nt !== fid) continue;
-    }
+    if (fid != null && nt !== fid) continue;
 
     const nl = n.toLowerCase();
-    if (seenLower.has(nl)) continue;
-    seenLower.add(nl);
+    const firstWordLower = nl.split(/\s+/)[0] ?? "";
+    if (firstWordLower && baseByFirstName.has(firstWordLower)) {
+      // Replace the base entry with the directory user's full name; the
+      // chip will pick up the matching photo from the directory.
+      baseByFirstName.set(firstWordLower, n);
+      dedupedFull.add(nl);
+      continue;
+    }
+    if (dedupedFull.has(nl)) continue;
+    dedupedFull.add(nl);
     extras.push(n);
   }
   extras.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  return [...base, ...extras];
+  // Preserve original base ordering (don't re-sort) — call sites may depend
+  // on it for capacity-column display order.
+  const baseResult = base.map((b) => baseByFirstName.get(b.toLowerCase()) ?? b);
+  return [...baseResult, ...extras];
 }
 
 /**

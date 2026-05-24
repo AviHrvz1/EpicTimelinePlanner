@@ -40,29 +40,35 @@ export interface DemoInitiativeSeed {
   monthSpan: number;
 }
 
-// Staircase layout: start months cascade across the year so the 10 initiative
-// rows form a top-left → bottom-right diagonal on the all-quarters Gantt.
-// Spans vary 5-8 months so the epic-chaining math (5 slots = monthSpan/5)
-// naturally produces mixed widths — some 1-month epics (= 2 sprints, the
-// minimum needed for the title to render) and some 2-month epics, instead
-// of every epic being identical. Each row's epics still chain
-// non-overlappingly.
+// Staircase layout: start months cascade Jan → Aug so the 10 initiative rows
+// form a top-left → bottom-right diagonal on the all-quarters Gantt.
 //
-//   span 5 → widths [1,1,1,1,1]
-//   span 6 → widths [1,1,1,1,2]
-//   span 7 → widths [1,1,2,1,2]
-//   span 8 → widths [1,2,1,2,2]
+// Spans 5-6 months keep most initiatives within 1-2 quarters — wider spans
+// were producing 3-quarter chips on the middle-panel summary, which reads
+// as "too long" for one initiative. Two land on quarter boundaries and may
+// touch 3 quarters; everything else is 2.
+//
+// Icons left blank intentionally: the Gantt's `InitiativeTimelineBar`
+// hardcodes the initiative bar icon to the lightning-bolt fallback
+// (passing `icon={null}` to `InitiativePlanBarIcon`). Seeding empty
+// strings here makes the dialog breadcrumb render the same lightning
+// bolt — consistent with everywhere else in the app — instead of a
+// per-initiative emoji the rest of the UI doesn't surface.
+//
+// Epic widths produced by the 5-slot chaining math:
+//   span 5 → [1,1,1,1,1]
+//   span 6 → [1,1,1,1,2]
 export const DEMO_INITIATIVES: DemoInitiativeSeed[] = [
-  { title: "Onboarding revamp", icon: "🚀", startMonth: 1, monthSpan: 5 },
-  { title: "Payments platform v2", icon: "💳", startMonth: 1, monthSpan: 8 },
-  { title: "Mobile app redesign", icon: "📱", startMonth: 2, monthSpan: 6 },
-  { title: "Analytics data warehouse", icon: "📊", startMonth: 3, monthSpan: 7 },
-  { title: "Growth experiments Q2", icon: "🌱", startMonth: 4, monthSpan: 6 },
-  { title: "Search & discovery", icon: "🔎", startMonth: 4, monthSpan: 7 },
-  { title: "Reliability & SLOs", icon: "🛡️", startMonth: 5, monthSpan: 6 },
-  { title: "Customer self-serve", icon: "🤝", startMonth: 6, monthSpan: 6 },
-  { title: "AI-assisted workflows", icon: "🤖", startMonth: 7, monthSpan: 6 },
-  { title: "Year-end performance push", icon: "🏁", startMonth: 8, monthSpan: 5 },
+  { title: "Onboarding revamp", icon: "", startMonth: 1, monthSpan: 5 },
+  { title: "Payments platform v2", icon: "", startMonth: 1, monthSpan: 6 },
+  { title: "Mobile app redesign", icon: "", startMonth: 2, monthSpan: 5 },
+  { title: "Analytics data warehouse", icon: "", startMonth: 3, monthSpan: 6 },
+  { title: "Growth experiments Q2", icon: "", startMonth: 4, monthSpan: 5 },
+  { title: "Search & discovery", icon: "", startMonth: 4, monthSpan: 6 },
+  { title: "Reliability & SLOs", icon: "", startMonth: 5, monthSpan: 5 },
+  { title: "Customer self-serve", icon: "", startMonth: 6, monthSpan: 5 },
+  { title: "AI-assisted workflows", icon: "", startMonth: 7, monthSpan: 6 },
+  { title: "Year-end performance push", icon: "", startMonth: 8, monthSpan: 5 },
 ];
 
 /**
@@ -212,22 +218,81 @@ export const DEMO_STORY_TEMPLATES_BY_TEAM: Record<DemoTeamSlug, string[]> = {
 };
 
 /**
- * 60-name pool — we draw the first N (one per uploaded avatar) and pair them
- * positionally with the avatar URLs. Mix of common first / last names so the
- * directory feels populated without obvious duplicates. Order matters only
- * for determinism (the same number of avatars always gets the same names).
+ * Per-team demo user names. The FIRST FIVE names of each delivery-trio team
+ * (platform / experience / data) intentionally start with the same first
+ * names as `defaultMembersForTeam` in `lib/sprint-capacity.ts` (Paige,
+ * Perry, Poppy, Petra, Pascal etc.) so the sprint-kanban / capacity chip
+ * dedup picks up the directory user's photo — otherwise the default
+ * roster's bare first-name chip ("Paige") appears alongside the directory
+ * chip ("Paige Cohen") and the user sees an avatarless chip.
+ * Mobile + Growth teams aren't in the default roster, so any names work.
+ */
+export const DEMO_USER_NAMES_BY_TEAM: Record<DemoTeamSlug, readonly string[]> = {
+  platform: [
+    "Paige Cohen", "Perry Brown", "Poppy Chen", "Petra Davis", "Pascal Evans",
+    "Priya Sharma", "Quentin Hart", "Sara Cohen",
+  ],
+  mobile: [
+    "Maya Patel", "Liam Foster", "Noah Chen", "Olivia Garcia", "Bryce Patel",
+    "Carmen Liu", "Diego Reyes", "Felix Brown",
+  ],
+  experience: [
+    "Elena Wang", "Erin Lindqvist", "Evan Hall", "Edith Janssen", "Emma Johnson",
+    "Gianna Singh", "Hugo Bernard", "Inga Larsson",
+  ],
+  data: [
+    "Alice Khan", "Aaron Mendel", "Aria Mendez", "Asher Holt", "Aiden O'Brien",
+    "Beatrice Caron", "Camille Roy",
+  ],
+  growth: [
+    "Rafael Souza", "Wesley Tan", "Yara Haddad", "Zach Mendoza", "Lior Shapira",
+    "Nico Russo", "Omar Khalil",
+  ],
+};
+
+/** Short, demo-friendly description templates. Keyed nothing in particular —
+ *  we just pick from the list with a hash so most items have one. */
+export const DEMO_INITIATIVE_DESCRIPTIONS: string[] = [
+  "Cross-team initiative to ship the next major version. Outcome metrics tracked in the launch dashboard.",
+  "Multi-quarter program to modernize core systems and reduce on-call load.",
+  "Strategic bet aligned with the OKR for the half. Quarterly checkpoints with the steering committee.",
+  "Customer-driven workstream — top of the qualitative research list from last quarter.",
+  "Foundational work that unblocks several downstream product initiatives.",
+];
+
+export const DEMO_EPIC_DESCRIPTIONS: string[] = [
+  "Implementation slice for this initiative. Ships behind a feature flag, dialed up gradually.",
+  "Targeted improvements to address pain points surfaced in the last user research round.",
+  "Tech foundation milestone — no user-facing change, but unblocks the next set of stories.",
+  "Cleanup + refactor pass. No new features, but pays down debt that was slowing the team.",
+  "Bug-bash + polish epic to clear the top regressions before the release.",
+];
+
+export const DEMO_STORY_DESCRIPTIONS: string[] = [
+  "Standard implementation task — see the design doc linked in the epic description for details.",
+  "Refactor + tests. Should not change behavior; verify with the existing snapshot suite.",
+  "Wire up the new endpoint and add the JSON-schema validation.",
+  "UI polish — match the Figma spec and update the Storybook story.",
+  "Investigate and root-cause the regression reported in last week's support tickets.",
+];
+
+/** Label pools — initiatives / epics / stories pull a few at random. */
+export const DEMO_LABELS_POOL: string[] = [
+  "tech-debt", "high-priority", "customer-request", "infra", "ux",
+  "research", "experiment", "compliance", "accessibility", "performance",
+  "security", "Q2-goal", "needs-design", "blocked", "spike",
+];
+
+/**
+ * Flat fallback name pool — used only if a team's specific list runs out
+ * (shouldn't happen at 38 users, but defensive). Mix of common first / last
+ * names. Order is stable for deterministic seeding.
  */
 export const DEMO_NAME_POOL: string[] = [
-  "Alice Cohen", "Bryce Patel", "Carmen Liu", "Diego Reyes", "Elena Wang",
-  "Felix Brown", "Gianna Singh", "Hassan Park", "Iris Murphy", "Javier Lee",
-  "Kira Nakamura", "Liam Foster", "Maya Patel", "Noah Chen", "Olivia Garcia",
-  "Priya Sharma", "Quinn O'Neil", "Rafael Souza", "Sara Cohen", "Tomás Vidal",
-  "Uma Khan", "Vivian Adler", "Wesley Tan", "Xiulan Zhao", "Yara Haddad",
-  "Zach Mendoza", "Aaron Mendel", "Beatrice Caron", "Camille Roy", "Dante Fontana",
-  "Eitan Levi", "Farah Ahmed", "Greta Lindqvist", "Hugo Bernard", "Inga Larsson",
-  "Jonas Weber", "Kasia Wójcik", "Lior Shapira", "Mira Patel", "Nico Russo",
-  "Omar Khalil", "Petra Novak", "Quentin Hart", "Rosa Estevez", "Soren Holt",
-  "Talia Schmidt", "Ulises Vega", "Vera Ivanova", "Wendell Brooks", "Xavi Puig",
-  "Yossi Avraham", "Zara Hussain", "Anya Petrov", "Bram Janssen", "Cleo Fontaine",
-  "Devon Hughes", "Esme Costa", "Finn Doherty", "Gisela Mora", "Hank Carter",
+  "Quinn O'Neil", "Tomás Vidal", "Uma Khan", "Vivian Adler", "Xiulan Zhao",
+  "Iris Murphy", "Javier Lee", "Kira Nakamura", "Dante Fontana", "Eitan Levi",
+  "Farah Ahmed", "Greta Reyes", "Jonas Weber", "Kasia Wójcik", "Mira Patel",
+  "Rosa Estevez", "Soren Holt", "Talia Schmidt", "Ulises Vega", "Vera Ivanova",
+  "Wendell Brooks", "Xavi Puig", "Yossi Avraham", "Zara Hussain", "Anya Petrov",
+  "Bram Janssen", "Cleo Fontaine", "Devon Hughes", "Esme Costa", "Finn Doherty",
 ];

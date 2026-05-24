@@ -321,7 +321,6 @@ function KanbanStoryCard({
               {story.title}
             </p>
             <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
-            {story.labels && <LabelChips labels={parseLabels(story.labels)} />}
           </button>
           {onUnscheduleStory ? (
             <button
