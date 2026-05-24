@@ -544,6 +544,100 @@ function collectScheduledEpicRows(initiatives: InitiativeItem[]): ScheduledEpicP
   return rows.sort((a, b) => a.timelineRow - b.timelineRow || a.title.localeCompare(b.title));
 }
 
+/**
+ * Iterative conflict resolver shared by all three epic-placement paths
+ * (first-schedule drop, drag-an-already-scheduled epic, resize/stretch).
+ *
+ * Anchors `anchorId` at `anchorRow` with `anchorRange`, then for any pair
+ * of epics that share a row AND overlap in month range, picks one to keep
+ * and bumps the other to `row + 1`. Repeats until no conflicts remain.
+ *
+ * Keeper priority (so the chain bumps one row at a time, not all the way
+ * to the bottom):
+ *   1. The anchor (the epic the user just placed / resized)
+ *   2. The "intruder" — the epic whose ORIGINAL row is NOT the current
+ *      row. It arrived here by cascade, so it stays and the row's actual
+ *      resident gets bumped one more step.
+ *   3. Larger original-row id as a stable tiebreak (bump the one whose
+ *      home row is lower so chains move monotonically downward)
+ *
+ * Returns a Map of `epicId → newRow` containing the anchor itself plus
+ * every other epic whose row had to change. Existing epics not in the map
+ * keep their current row.
+ *
+ * Monotonic: each step strictly increases at least one assignment, so the
+ * loop terminates within `O(n^2)` bumps.
+ */
+function resolveOverlapByCascadingDisplacement(args: {
+  anchorId: string;
+  anchorRow: number;
+  anchorRange: { startMonth: number; endMonth: number };
+  others: ReadonlyArray<{ epicId: string; timelineRow: number; startMonth: number; endMonth: number }>;
+}): Map<string, number> {
+  const { anchorId, anchorRow, anchorRange, others } = args;
+  const originalRows = new Map<string, number>();
+  const rangeMap = new Map<string, { startMonth: number; endMonth: number }>();
+  for (const o of others) {
+    originalRows.set(o.epicId, o.timelineRow);
+    rangeMap.set(o.epicId, { startMonth: o.startMonth, endMonth: o.endMonth });
+  }
+  rangeMap.set(anchorId, anchorRange);
+  const assignedRows = new Map<string, number>();
+  assignedRows.set(anchorId, anchorRow);
+  const rowOf = (id: string): number => assignedRows.get(id) ?? originalRows.get(id) ?? 0;
+  const overlapsRange = (a: string, b: string): boolean => {
+    const ra = rangeMap.get(a)!;
+    const rb = rangeMap.get(b)!;
+    return !(ra.endMonth < rb.startMonth || ra.startMonth > rb.endMonth);
+  };
+  const allIds = [anchorId, ...others.map((o) => o.epicId)];
+  const safetyCap = allIds.length * (allIds.length + 2);
+  let iter = 0;
+  while (iter++ < safetyCap) {
+    const byRow = new Map<number, string[]>();
+    for (const id of allIds) {
+      const r = rowOf(id);
+      const bucket = byRow.get(r);
+      if (bucket) bucket.push(id);
+      else byRow.set(r, [id]);
+    }
+    let bumpedOne = false;
+    const sortedRowKeys = [...byRow.keys()].sort((a, b) => a - b);
+    outer: for (const row of sortedRowKeys) {
+      const items = byRow.get(row)!;
+      if (items.length < 2) continue;
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          if (!overlapsRange(items[i]!, items[j]!)) continue;
+          const a = items[i]!;
+          const b = items[j]!;
+          let drop: string;
+          if (a === anchorId) { drop = b; }
+          else if (b === anchorId) { drop = a; }
+          else {
+            const aOrig = originalRows.get(a) ?? 0;
+            const bOrig = originalRows.get(b) ?? 0;
+            // The "resident" of this row (its original row matches the
+            // current row) gets bumped one step further down. The
+            // "intruder" (arrived by cascade) stays put. This way each
+            // displaced epic moves exactly one row from its home,
+            // instead of bouncing all the way down to the bottom.
+            if (aOrig === row && bOrig !== row) drop = a;
+            else if (bOrig === row && aOrig !== row) drop = b;
+            else if (aOrig <= bOrig) drop = a;
+            else drop = b;
+          }
+          assignedRows.set(drop, row + 1);
+          bumpedOne = true;
+          break outer;
+        }
+      }
+    }
+    if (!bumpedOne) break;
+  }
+  return assignedRows;
+}
+
 function computeEpicMonthLanePlacement(
   prev: InitiativeItem[],
   epicId: string,
@@ -635,68 +729,91 @@ function computeEpicMonthLanePlacement(
 
   if (isFirstSchedule) {
     /**
-     * Prefer the precise insert slot from pointer Y. If that inference returns nothing, fall back
-     * to the hovered lane index (also pointer-derived) so the new epic lands on the row the user
-     * dropped onto instead of jumping to the bottom of the stack.
+     * Anchor the NEW epic at the user's preferred row, then push down any
+     * existing epic whose plan window overlaps the placed range —
+     * cascading row-by-row so that each displaced epic ends up on the
+     * first row below where it doesn't collide with anyone.
+     *
+     * Earlier iterations either renumbered every epic on the roadmap
+     * (catastrophic for grouped layouts) or quietly relocated the new
+     * epic itself to a free row at the bottom (matching neither user
+     * intent nor what they saw drop). This version honors "drop where I
+     * pointed, move the bumped one out of the way."
+     *
+     * Preferred-row preference order for the new epic:
+     *   1. `hoveredTimelineRow` (pointer Y → existing row id)
+     *   2. The row at `laneIndex` / `hoveredLaneIndex` in the
+     *      sorted-distinct-rows list (lane idx → row id translation)
+     *   3. `maxRow + 1` — drop landed past the last row, append below
      */
-    let resolvedInsertIndex = laneIndex;
-    if (resolvedInsertIndex === undefined && hoveredLaneIndex !== undefined) {
-      resolvedInsertIndex = hoveredLaneIndex;
+    const distinctRows = [...new Set(scheduledAll.map((r) => r.timelineRow))].sort((a, b) => a - b);
+    const maxRow = scheduledAll.length > 0 ? Math.max(...scheduledAll.map((r) => r.timelineRow)) : -1;
+    let preferredRow: number;
+    if (hoveredTimelineRow != null && Number.isFinite(hoveredTimelineRow)) {
+      preferredRow = hoveredTimelineRow;
+    } else if (laneIndex != null && laneIndex >= 0 && laneIndex < distinctRows.length) {
+      preferredRow = distinctRows[laneIndex]!;
+    } else if (hoveredLaneIndex != null && hoveredLaneIndex >= 0 && hoveredLaneIndex < distinctRows.length) {
+      preferredRow = distinctRows[hoveredLaneIndex]!;
+    } else {
+      preferredRow = maxRow + 1;
     }
-    if (resolvedInsertIndex === undefined && hoveredTimelineRow != null) {
-      const idx = others.findIndex((row) => row.timelineRow === hoveredTimelineRow);
-      if (idx >= 0) resolvedInsertIndex = idx;
-    }
-    const insertAt = resolvedInsertIndex !== undefined ? Math.max(0, Math.min(resolvedInsertIndex, others.length)) : others.length;
-    const newOrder = [
-      ...others.slice(0, insertAt),
-      { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: 0, startMonth: placementStartMonth, endMonth: placementEndMonth },
-      ...others.slice(insertAt),
-    ];
-    const rowByEpicId = new Map(newOrder.map((row, idx) => [row.epicId, idx]));
-    const sharedRowGroups = new Map<number, number>();
-    for (const r of others) sharedRowGroups.set(r.timelineRow, (sharedRowGroups.get(r.timelineRow) ?? 0) + 1);
-    const sharedRows = [...sharedRowGroups.entries()].filter(([, n]) => n > 1);
+
+    const assignedRows = resolveOverlapByCascadingDisplacement({
+      anchorId: epicId,
+      anchorRow: preferredRow,
+      anchorRange: { startMonth: placementStartMonth, endMonth: placementEndMonth },
+      others,
+    });
+    const originalRowOf = (id: string) => others.find((o) => o.epicId === id)?.timelineRow ?? 0;
+    const displacements = [...assignedRows.entries()]
+      .filter(([id, row]) => id !== epicId && originalRowOf(id) !== row)
+      .map(([id, row]) => ({
+        epicId: id,
+        title: others.find((o) => o.epicId === id)?.title ?? id,
+        from: originalRowOf(id),
+        to: row,
+      }));
     console.log("[gantt-drop][epic] first-schedule placement", {
       epicId,
       epicTitle: currentEpic.title,
       month,
       planSprint,
-      insertAt,
       laneIndex,
       hoveredLaneIndex,
       hoveredTimelineRow,
+      distinctRows,
+      maxRow,
+      preferredRow,
+      newEpicAssignedRow: assignedRows.get(epicId),
+      placedRange: [placementStartMonth, placementEndMonth],
       othersCount: others.length,
-      othersTimelineRowHistogram: Object.fromEntries(sharedRowGroups),
-      othersSharedRows: sharedRows,  // [row, epicCount] pairs where >1 epic share a row
-      othersOrderingNote: "sorted by (timelineRow asc, title asc) — see collectScheduledEpicRows()",
-      othersOrdered: others.map((r) => ({ epicId: r.epicId, row: r.timelineRow, title: r.title })).slice(0, 60),
-      newOrder: newOrder.map((r) => ({ epicId: r.epicId, row: r.timelineRow, range: [r.startMonth, r.endMonth] })).slice(0, 60),
-      assignedRows: Object.fromEntries([...rowByEpicId.entries()].slice(0, 60)),
-      epicsChangingRow: newOrder
-        .map((r, idx) => ({ epicId: r.epicId, title: r.title, from: r.timelineRow, to: idx }))
-        .filter((r) => r.from !== r.to)
-        .slice(0, 60),
-      epicsChangingRowCount: newOrder.filter((r, idx) => r.timelineRow !== idx).length,
+      displacedCount: displacements.length,
+      displacements: displacements.slice(0, 30),
+      note: displacements.length === 0
+        ? "preferred row was free at the placed range — new epic placed, no other epics moved"
+        : `pushed ${displacements.length} overlapping epic(s) down; new epic kept at preferredRow`,
     });
     const next = prev.map((initiative) => ({
       ...initiative,
-      epics: (initiative.epics ?? []).map((epic) =>
-        epic.id === epicId
-          ? {
-              ...epic,
-              planSprint: placementStartSprint,
-              planStartMonth: placementStartMonth,
-              planEndMonth: placementEndMonth,
-              planEndSprint: placementEndSprint,
-              timelineRow: rowByEpicId.get(epic.id) ?? 0,
-            }
-          : rowByEpicId.has(epic.id)
-            ? { ...epic, timelineRow: rowByEpicId.get(epic.id)! }
-            : epic,
-      ),
+      epics: (initiative.epics ?? []).map((epic) => {
+        if (epic.id === epicId) {
+          return {
+            ...epic,
+            planSprint: placementStartSprint,
+            planStartMonth: placementStartMonth,
+            planEndMonth: placementEndMonth,
+            planEndSprint: placementEndSprint,
+            timelineRow: assignedRows.get(epicId) ?? preferredRow,
+          };
+        }
+        if (assignedRows.has(epic.id)) {
+          return { ...epic, timelineRow: assignedRows.get(epic.id)! };
+        }
+        return epic;
+      }),
     }));
-    return { next, rowsChanged: true, movedTimelineRow: rowByEpicId.get(epicId) ?? null };
+    return { next, rowsChanged: true, movedTimelineRow: assignedRows.get(epicId) ?? preferredRow };
   }
 
   const clampedLaneForTarget = laneIndex == null ? undefined : Math.max(0, laneIndex);
@@ -785,52 +902,66 @@ function computeEpicMonthLanePlacement(
     return { next, rowsChanged, movedTimelineRow };
   }
 
-  const overlappingIds = new Set(overlappingOthers.map((row) => row.epicId));
-  const overlapRows = [...new Set([currentRow, ...overlappingOthers.map((row) => row.timelineRow)])].sort((a, b) => a - b);
-  let insertAtOverlap = overlappingOthers.length;
-  if (laneIndex !== undefined) {
-    const overlapsBeforeLane = others.reduce((count, row, idx) => {
-      if (idx >= laneIndex) return count;
-      return overlappingIds.has(row.epicId) ? count + 1 : count;
-    }, 0);
-    insertAtOverlap = Math.max(0, Math.min(overlapsBeforeLane, overlappingOthers.length));
-  }
-  const overlapOrder = [
-    ...overlappingOthers.slice(0, insertAtOverlap),
-    { epicId, initiativeId: currentInit.id, title: currentEpic.title, timelineRow: currentRow, startMonth: placementStartMonth, endMonth: placementEndMonth },
-    ...overlappingOthers.slice(insertAtOverlap),
-  ];
-  const rowByEpicId = new Map<string, number>();
-  overlapOrder.forEach((row, idx) => rowByEpicId.set(row.epicId, overlapRows[Math.min(idx, overlapRows.length - 1)]!));
+  // The user dropped an already-scheduled epic onto a target row that has
+  // overlapping epics. Anchor the dragged epic at the row the user dropped
+  // on (`desiredTargetRow` — derived from pointer Y / lane index just
+  // above) and cascade-displace any conflicting peer down. Earlier this
+  // anchored at `currentRow`, so the epic refused to leave its previous
+  // row whenever the new target row had any overlap at the placed range
+  // — visually "snapping back" no matter where you dropped it.
+  const anchorRowForMove = desiredTargetRow ?? currentRow;
+  const assignedRows = resolveOverlapByCascadingDisplacement({
+    anchorId: epicId,
+    anchorRow: anchorRowForMove,
+    anchorRange: { startMonth: placementStartMonth, endMonth: placementEndMonth },
+    others,
+  });
+  const originalRowOf = (id: string) => others.find((o) => o.epicId === id)?.timelineRow ?? 0;
+  const overlapDisplacements = [...assignedRows.entries()]
+    .filter(([id, row]) => id !== epicId && originalRowOf(id) !== row)
+    .map(([id, row]) => ({
+      epicId: id,
+      title: others.find((o) => o.epicId === id)?.title ?? id,
+      from: originalRowOf(id),
+      to: row,
+    }));
   console.log("[gantt-drop][epic] overlap lane resolution", {
     epicId,
+    epicTitle: currentEpic.title,
     month,
     laneIndex,
     hoveredLaneIndex,
     hoveredTimelineRow,
     currentRow,
-    overlapRows,
-    overlappingIds: overlappingOthers.map((x) => ({ epicId: x.epicId, row: x.timelineRow })),
-    overlapOrder: overlapOrder.map((x) => x.epicId),
-    nextRow: rowByEpicId.get(epicId) ?? currentRow,
+    desiredTargetRow,
+    anchorRowForMove,
+    placedRange: [placementStartMonth, placementEndMonth],
+    anchorAssignedRow: assignedRows.get(epicId) ?? anchorRowForMove,
+    displacedCount: overlapDisplacements.length,
+    displacements: overlapDisplacements.slice(0, 30),
+    note: overlapDisplacements.length === 0
+      ? "dropped row was free at the placed range — moved without displacing anyone"
+      : `dropped row was occupied; pushed ${overlapDisplacements.length} overlapping epic(s) down by one and placed at the dropped row`,
   });
 
   const next = prev.map((initiative) => ({
     ...initiative,
-    epics: (initiative.epics ?? []).map((epic) =>
-      epic.id === epicId
-        ? {
-            ...epic,
-            planSprint: placementStartSprint,
-            planStartMonth: placementStartMonth,
-            planEndMonth: placementEndMonth,
-            planEndSprint: placementEndSprint,
-            timelineRow: rowByEpicId.get(epic.id) ?? epic.timelineRow,
-          }
-        : rowByEpicId.has(epic.id)
-          ? { ...epic, timelineRow: rowByEpicId.get(epic.id)! }
-          : epic,
-    ),
+    epics: (initiative.epics ?? []).map((epic) => {
+      if (epic.id === epicId) {
+        return {
+          ...epic,
+          planSprint: placementStartSprint,
+          planStartMonth: placementStartMonth,
+          planEndMonth: placementEndMonth,
+          planEndSprint: placementEndSprint,
+          timelineRow: assignedRows.get(epic.id) ?? epic.timelineRow,
+        };
+      }
+      if (assignedRows.has(epic.id)) {
+        return { ...epic, timelineRow: assignedRows.get(epic.id)! };
+      }
+      return epic;
+    }),
   }));
   const rowsChanged = next.some((initiative) => {
     const beforeInit = prev.find((item) => item.id === initiative.id);
@@ -840,7 +971,7 @@ function computeEpicMonthLanePlacement(
       return beforeEpic != null && beforeEpic.timelineRow !== epic.timelineRow;
     });
   });
-  return { next, rowsChanged, movedTimelineRow: rowByEpicId.get(epicId) ?? currentRow };
+  return { next, rowsChanged, movedTimelineRow: assignedRows.get(epicId) ?? currentRow };
 }
 
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
@@ -5333,52 +5464,66 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   const before = initiatives;
                   const target = before.flatMap((initiative) => initiative.epics ?? []).find((epic) => epic.id === epicId);
                   if (!target) { console.warn("[onResizeEpicPlanRange] epic not found", { epicId }); return; }
-                  const overlaps = (aS: number, aE: number, bS: number, bE: number) => !(aE < bS || bE < aS);
-                  let nextTimelineRow = Number.isFinite(target.timelineRow) ? target.timelineRow : 0;
+                  const anchorRow = Number.isFinite(target.timelineRow) ? target.timelineRow : 0;
+                  // Anchor the resized epic at its current row and let the
+                  // cascade resolver bump any peer that the new range now
+                  // overlaps. Earlier behavior moved the resized epic to a
+                  // free row instead — inconsistent with the first-schedule
+                  // drop (which now pushes the conflicting one down) and
+                  // surprising for the user mid-drag.
                   const scheduledOthers = before
                     .flatMap((initiative) => initiative.epics ?? [])
-                    .filter((epic) => epic.id !== epicId && epic.planStartMonth != null && epic.planEndMonth != null);
-                  const sameRowOverlaps = scheduledOthers.filter((epic) => {
-                    const row = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
-                    if (row !== nextTimelineRow) return false;
-                    const bS = globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1);
-                    const bE = globalSprintFromMonthLane(epic.planEndMonth!, epic.planEndSprint === 1 ? 1 : 2);
-                    return overlaps(range.startYearSprint, range.endYearSprint, bS, bE);
+                    .filter((epic) => epic.id !== epicId && epic.planStartMonth != null && epic.planEndMonth != null)
+                    .map((epic) => ({
+                      epicId: epic.id,
+                      timelineRow: Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0,
+                      startMonth: epic.planStartMonth!,
+                      endMonth: epic.planEndMonth!,
+                    }));
+                  const assignedRows = resolveOverlapByCascadingDisplacement({
+                    anchorId: epicId,
+                    anchorRow,
+                    anchorRange: { startMonth: range.startMonth, endMonth: range.endMonth },
+                    others: scheduledOthers,
                   });
-                  if (sameRowOverlaps.length > 0) {
-                    const maxRow = Math.max(nextTimelineRow, ...scheduledOthers.map((epic) => Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0));
-                    for (let row = 0; row <= maxRow + 1; row += 1) {
-                      const blocked = scheduledOthers.some((epic) => {
-                        const rowValue = Number.isFinite(epic.timelineRow) ? epic.timelineRow : 0;
-                        if (rowValue !== row) return false;
-                        const bS = globalSprintFromMonthLane(epic.planStartMonth!, epic.planSprint === 2 ? 2 : 1);
-                        const bE = globalSprintFromMonthLane(epic.planEndMonth!, epic.planEndSprint === 1 ? 1 : 2);
-                        return overlaps(range.startYearSprint, range.endYearSprint, bS, bE);
-                      });
-                      if (!blocked) {
-                        nextTimelineRow = row;
-                        break;
-                      }
-                    }
-                  }
+                  const nextTimelineRow = assignedRows.get(epicId) ?? anchorRow;
+                  const resizeDisplacements = [...assignedRows.entries()]
+                    .filter(([id, row]) => id !== epicId && (scheduledOthers.find((o) => o.epicId === id)?.timelineRow ?? 0) !== row)
+                    .map(([id, row]) => ({
+                      epicId: id,
+                      from: scheduledOthers.find((o) => o.epicId === id)?.timelineRow ?? 0,
+                      to: row,
+                    }));
+                  console.log("[onResizeEpicPlanRange] cascade", {
+                    epicId,
+                    anchorRow,
+                    range,
+                    nextTimelineRow,
+                    displacedCount: resizeDisplacements.length,
+                    displacements: resizeDisplacements.slice(0, 30),
+                  });
                   const after = before.map((initiative) => ({
                     ...initiative,
-                    epics: (initiative.epics ?? []).map((epic) =>
-                      epic.id === epicId
-                        ? {
-                            ...epic,
-                            planSprint: laneFromYearSprint(range.startYearSprint),
-                            planEndSprint: laneFromYearSprint(range.endYearSprint),
-                            planStartMonth: range.startMonth,
-                            planEndMonth: range.endMonth,
-                            timelineRow: nextTimelineRow,
-                            planStartDay: null,
-                            planEndDay: null,
-                          }
-                        : epic,
-                    ),
+                    epics: (initiative.epics ?? []).map((epic) => {
+                      if (epic.id === epicId) {
+                        return {
+                          ...epic,
+                          planSprint: laneFromYearSprint(range.startYearSprint),
+                          planEndSprint: laneFromYearSprint(range.endYearSprint),
+                          planStartMonth: range.startMonth,
+                          planEndMonth: range.endMonth,
+                          timelineRow: nextTimelineRow,
+                          planStartDay: null,
+                          planEndDay: null,
+                        };
+                      }
+                      if (assignedRows.has(epic.id)) {
+                        return { ...epic, timelineRow: assignedRows.get(epic.id)! };
+                      }
+                      return epic;
+                    }),
                   }));
-                  console.log("[onResizeEpicPlanRange] applying", { epicId, range, nextTimelineRow, rowMoved: nextTimelineRow !== (Number.isFinite(target.timelineRow) ? target.timelineRow : 0) });
+                  console.log("[onResizeEpicPlanRange] applying", { epicId, range, nextTimelineRow, rowMoved: nextTimelineRow !== anchorRow });
                   setInitiatives(after);
                   try {
                     const patch = {
