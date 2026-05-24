@@ -120,6 +120,7 @@ export function TeamEpicCard({
   onOpenEpic,
   onRemoveEpicFromCapacity,
   onOriginalEstimateChange,
+  highlight = false,
 }: {
   epicId: string;
   icon: string;
@@ -133,6 +134,8 @@ export function TeamEpicCard({
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
   onOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
+  /** Glow the card to mark it as the search match. */
+  highlight?: boolean;
 }) {
   const { setNodeRef, attributes, listeners, transform, isDragging } = useDraggable({
     id: epicTimelineDraggableId(epicId),
@@ -151,6 +154,7 @@ export function TeamEpicCard({
       className={cn(
         "group/card relative min-h-[3.25rem] rounded-lg border border-slate-200/80 bg-white py-2 pl-2 pr-2 shadow-sm transition-colors hover:border-slate-300/70 hover:bg-slate-50/80",
         isDragging && "opacity-60",
+        highlight && "border-amber-400 bg-amber-50/60 shadow-md ring-2 ring-amber-300 ring-offset-1 ring-offset-amber-50/40",
       )}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
@@ -275,6 +279,7 @@ export function TeamCapacityBucket({
   reorderGrip = null,
   /** Drives gauge fill, load %, and “X / capacity” under the thermometer (Est days vs Σ Child). */
   loadBasis = "originalEstimate",
+  highlightEpicIds = null,
 }: {
   team: (typeof MONTH_TEAM_COLUMNS)[number];
   /** e.g. "Team:" — shown before `team.label` (quarter capacity). */
@@ -308,6 +313,8 @@ export function TeamCapacityBucket({
   /** Column reorder handle (month / quarter capacity boards). */
   reorderGrip?: ReactNode;
   loadBasis?: CapacityLoadBasis;
+  /** Epic ids that match the active capacity search — cards in this set glow. */
+  highlightEpicIds?: ReadonlySet<string> | null;
 }) {
   const sumChildStoryEstimates = cards.reduce((sum, c) => sum + c.childStoryEstimateDays, 0);
   const sumOriginalEstimates = cards.reduce((sum, c) => sum + c.originalEstimateDays, 0);
@@ -477,6 +484,7 @@ export function TeamCapacityBucket({
                     onOpenEpic={onOpenEpic}
                     onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
                     onOriginalEstimateChange={onEpicOriginalEstimateChange}
+                    highlight={highlightEpicIds?.has(card.epicId) ?? false}
                   />
                 ))
               )}

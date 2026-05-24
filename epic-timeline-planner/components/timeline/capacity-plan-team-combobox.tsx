@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, type Dispatch, type RefObject, type SetStateAction } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Users, X } from "lucide-react";
 
 import {
   capacityPlanTeamCatalogFromDirectory,
@@ -71,6 +71,7 @@ export function CapacityPlanTeamCombobox({
               onSelectedIdsChange((prev) => prev.filter((teamId) => teamId !== id));
             }}
           >
+            <Users className="size-3 shrink-0 opacity-70" aria-hidden />
             {labelForId(id)}
             <X className="size-3" aria-hidden />
           </button>
@@ -109,7 +110,10 @@ export function CapacityPlanTeamCombobox({
               onMenuOpenChange(false);
             }}
           >
-            <span>All teams</span>
+            <span className="inline-flex items-center gap-1.5">
+              <Users className="size-3.5 shrink-0 opacity-70" aria-hidden />
+              All teams
+            </span>
             {selectedIds.length === 0 ? <Check className="size-3.5" aria-hidden /> : null}
           </button>
           {filteredOptions.map((team) => {
@@ -128,7 +132,10 @@ export function CapacityPlanTeamCombobox({
                   onSearchChange("");
                 }}
               >
-                <span>{team.label}</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="size-3.5 shrink-0 opacity-70" aria-hidden />
+                  {team.label}
+                </span>
                 {selected ? <Check className="size-3.5 text-sky-700" aria-hidden /> : null}
               </button>
             );

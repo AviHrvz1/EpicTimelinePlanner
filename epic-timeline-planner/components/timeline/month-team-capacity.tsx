@@ -1,7 +1,7 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
-import { GripVertical } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { GripVertical, Search, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
@@ -187,9 +187,41 @@ export function MonthTeamCapacityBoard({
     setExpandedTeamId(null);
   }, [year, month, teamFilterIds.join(",")]);
 
+  // Epic search — live-filter by epic title or parent initiative title.
+  // Matching teams stay; teams with no matched epic hide; matched cards glow.
+  const [epicSearch, setEpicSearch] = useState("");
+  useEffect(() => {
+    setEpicSearch("");
+  }, [year, month, teamFilterIds.join(",")]);
+  const epicSearchQuery = epicSearch.trim().toLowerCase();
+  const searchMatchIds = useMemo(() => {
+    if (!epicSearchQuery) return null;
+    const matches = new Set<string>();
+    for (const row of rows) {
+      if (
+        row.epic.title.toLowerCase().includes(epicSearchQuery) ||
+        row.initiative.title.toLowerCase().includes(epicSearchQuery)
+      ) {
+        matches.add(row.epic.id);
+      }
+    }
+    return matches;
+  }, [epicSearchQuery, rows]);
+
+  const filteredVisibleTeams = useMemo(() => {
+    if (!searchMatchIds || searchMatchIds.size === 0) return visibleTeams;
+    return visibleTeams.filter((team) => {
+      const teamCards =
+        mergedColumns != null
+          ? (mergedColumns.find((c) => c.team.id === team.id)?.cards ?? [])
+          : rows.filter((row) => row.epic.team === team.id);
+      return teamCards.some((row) => searchMatchIds.has(row.epic.id));
+    });
+  }, [visibleTeams, searchMatchIds, mergedColumns, rows]);
+
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
-  for (const team of visibleTeams) {
+  for (const team of filteredVisibleTeams) {
     const cap = Number(capacityBoard.capacities[team.id] ?? 20);
     teamTotalCapacity += Number.isFinite(cap) ? cap : 0;
     const cardRows =
@@ -224,9 +256,42 @@ export function MonthTeamCapacityBoard({
         totalCapacity={teamTotalCapacity}
         loadBasis={loadBasis}
         onLoadBasisChange={onLoadBasisChange}
+        headerRightSlot={(
+          <div className="relative w-[18rem] max-w-full" title={
+            epicSearchQuery
+              ? (searchMatchIds && searchMatchIds.size > 0
+                ? `${searchMatchIds.size} match${searchMatchIds.size === 1 ? "" : "es"} — only teams with the epic are shown`
+                : "No matching epics this month")
+              : undefined
+          }>
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={epicSearch}
+              onChange={(e) => setEpicSearch(e.target.value)}
+              placeholder="Search an epic this month…"
+              aria-label="Search epics on capacity"
+              className="h-7 w-full rounded-md border border-slate-200 bg-white/90 pl-8 pr-8 text-[12.5px] font-medium text-slate-800 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/70"
+            />
+            {epicSearchQuery ? (
+              <button
+                type="button"
+                onClick={() => setEpicSearch("")}
+                aria-label="Clear search"
+                title="Clear search"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
+        )}
       />
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {visibleTeams.map((team) => {
+        {filteredVisibleTeams.map((team) => {
           if (expandedTeamId != null && expandedTeamId !== team.id) {
             return null;
           }
@@ -249,7 +314,7 @@ export function MonthTeamCapacityBoard({
                 executionStatusClassName: execution.className,
               };
           });
-          const reorderAllowed = expandedTeamId == null && visibleTeams.length >= 2;
+          const reorderAllowed = expandedTeamId == null && filteredVisibleTeams.length >= 2;
           return (
             <div
               key={team.id}
@@ -277,12 +342,13 @@ export function MonthTeamCapacityBoard({
                     dropId={monthTeamCapacityBucketDropId(year, month, team.id)}
                     gaugeScaleMax={60}
                     capacityInputMax={200}
-                    panelExpandable={visibleTeams.length > 1}
+                    panelExpandable={filteredVisibleTeams.length > 1}
                     isPanelExpanded={expandedTeamId === team.id}
                     onExpandPanel={() => setExpandedTeamId(team.id)}
                     onCollapsePanel={() => setExpandedTeamId(null)}
                     reorderGrip={reorderGrip}
                     loadBasis={loadBasis}
+                    highlightEpicIds={searchMatchIds}
                   />
                 )}
               </MonthTeamCapacityColumnChrome>

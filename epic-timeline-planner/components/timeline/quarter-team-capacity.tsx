@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Search, X } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { TeamLoadSummary } from "@/components/timeline/team-load-summary";
@@ -197,8 +197,36 @@ export function QuarterTeamCapacityBoard({
     setExpandedTeamId(null);
   }, [year, quarterLabel, teamFilterIds.join(",")]);
 
+  // Epic search — live-filter by epic title or parent initiative title.
+  // Same pattern as the month + sprint capacity boards.
+  const [epicSearch, setEpicSearch] = useState("");
+  useEffect(() => {
+    setEpicSearch("");
+  }, [year, quarterLabel, teamFilterIds.join(",")]);
+  const epicSearchQuery = epicSearch.trim().toLowerCase();
+  const searchMatchIds = useMemo(() => {
+    if (!epicSearchQuery) return null;
+    const matches = new Set<string>();
+    for (const row of rows) {
+      if (
+        row.epic.title.toLowerCase().includes(epicSearchQuery) ||
+        row.initiative.title.toLowerCase().includes(epicSearchQuery)
+      ) {
+        matches.add(row.epic.id);
+      }
+    }
+    return matches;
+  }, [epicSearchQuery, rows]);
+
+  const filteredVisibleTeams = useMemo(() => {
+    if (!searchMatchIds || searchMatchIds.size === 0) return visibleTeams;
+    return visibleTeams.filter((team) =>
+      rows.some((row) => row.epic.team === team.id && searchMatchIds.has(row.epic.id)),
+    );
+  }, [visibleTeams, searchMatchIds, rows]);
+
   const teamQuarterCapacity = new Map<string, number>();
-  for (const team of visibleTeams) {
+  for (const team of filteredVisibleTeams) {
     let total = 0;
     for (const month of quarterMonths) {
       const key = monthTeamCapacityBoardKey(year, month);
@@ -209,7 +237,7 @@ export function QuarterTeamCapacityBoard({
 
   let teamTotalCapacity = 0;
   let teamTotalAssigned = 0;
-  for (const team of visibleTeams) {
+  for (const team of filteredVisibleTeams) {
     teamTotalCapacity += Number(teamQuarterCapacity.get(team.id) ?? 0);
     const cards = rows.filter((row) => row.epic.team === team.id);
     teamTotalAssigned += cards.reduce((sum, row) => {
@@ -240,9 +268,42 @@ export function QuarterTeamCapacityBoard({
         totalCapacity={teamTotalCapacity}
         loadBasis={loadBasis}
         onLoadBasisChange={onLoadBasisChange}
+        headerRightSlot={(
+          <div className="relative w-[18rem] max-w-full" title={
+            epicSearchQuery
+              ? (searchMatchIds && searchMatchIds.size > 0
+                ? `${searchMatchIds.size} match${searchMatchIds.size === 1 ? "" : "es"} — only teams with the epic are shown`
+                : "No matching epics this quarter")
+              : undefined
+          }>
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={epicSearch}
+              onChange={(e) => setEpicSearch(e.target.value)}
+              placeholder="Search an epic this quarter…"
+              aria-label="Search epics on capacity"
+              className="h-7 w-full rounded-md border border-slate-200 bg-white/90 pl-8 pr-8 text-[12.5px] font-medium text-slate-800 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/70"
+            />
+            {epicSearchQuery ? (
+              <button
+                type="button"
+                onClick={() => setEpicSearch("")}
+                aria-label="Clear search"
+                title="Clear search"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
+        )}
       />
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {visibleTeams.map((team) => {
+        {filteredVisibleTeams.map((team) => {
           if (expandedTeamId != null && expandedTeamId !== team.id) {
             return null;
           }
@@ -271,7 +332,7 @@ export function QuarterTeamCapacityBoard({
               };
           });
           const capacity = Number(teamQuarterCapacity.get(team.id) ?? 0);
-          const reorderAllowed = expandedTeamId == null && visibleTeams.length >= 2;
+          const reorderAllowed = expandedTeamId == null && filteredVisibleTeams.length >= 2;
           return (
             <div
               key={team.id}
@@ -299,12 +360,13 @@ export function QuarterTeamCapacityBoard({
                     dropId={quarterTeamCapacityBucketDropId(year, quarterLabel, team.id)}
                     gaugeScaleMax={gaugeScaleMax}
                     capacityInputMax={capacityInputMax}
-                    panelExpandable={visibleTeams.length > 1}
+                    panelExpandable={filteredVisibleTeams.length > 1}
                     isPanelExpanded={expandedTeamId === team.id}
                     onExpandPanel={() => setExpandedTeamId(team.id)}
                     onCollapsePanel={() => setExpandedTeamId(null)}
                     reorderGrip={reorderGrip}
                     loadBasis={loadBasis}
+                    highlightEpicIds={searchMatchIds}
                   />
                 )}
               </QuarterTeamCapacityColumnChrome>
