@@ -4885,24 +4885,46 @@ export function TimelineGrid({
         <Activity className="size-3 shrink-0 sm:size-3.5" aria-hidden />
         Health
       </button>
-      <button
-        type="button"
-        onClick={() => { setRoadmapBarMode("initiatives"); onSummaryStatusQuickFilterChange?.(null); }}
-        className={cn(summaryChipBaseClass, roadmapBarMode === "initiatives" ? summaryChipInitiativesOnClass : summaryChipInitiativesIdleClass)}
+      {/* Initiatives ↔ Epics: segmented toggle pill — keeps the chip pill
+          shape and palette, with the active half flipped to the amber "on"
+          treatment used elsewhere in the toolbar. */}
+      <div
+        role="group"
+        aria-label="Roadmap bar mode"
+        data-roadmap-health-keepopen
+        className="inline-flex h-[28px] shrink-0 items-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 p-[2px] ring-1 ring-indigo-200/80"
       >
-        <Zap className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
-        <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
-        <span className="hidden xl:inline">Initiatives</span>
-        <span className="xl:hidden">Inits</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => { setRoadmapBarMode("epics"); onSummaryStatusQuickFilterChange?.(null); }}
-        className={cn(summaryChipBaseClass, roadmapBarMode === "epics" && summaryStatusQuickFilter == null ? summaryChipEpicsOnClass : summaryChipEpicsIdleClass)}
-      >
-        <Folder className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
-        {("totalEpics" in summaryBadgesForScope ? summaryBadgesForScope.totalEpics : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}Epics
-      </button>
+        <button
+          type="button"
+          aria-pressed={roadmapBarMode === "initiatives"}
+          onClick={() => { setRoadmapBarMode("initiatives"); onSummaryStatusQuickFilterChange?.(null); }}
+          className={cn(
+            "inline-flex h-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold leading-none tracking-tight transition focus:outline-none focus:ring-2 focus:ring-amber-300",
+            roadmapBarMode === "initiatives"
+              ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200 shadow-[inset_0_2px_4px_rgba(15,23,42,0.10)]"
+              : "text-indigo-900 hover:bg-white/40",
+          )}
+        >
+          <Zap className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
+          <span className="truncate">{summaryBadgesForScope.totalInitiatives}</span>
+          <span className="hidden xl:inline">Initiatives</span>
+          <span className="xl:hidden">Inits</span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={roadmapBarMode === "epics" && summaryStatusQuickFilter == null}
+          onClick={() => { setRoadmapBarMode("epics"); onSummaryStatusQuickFilterChange?.(null); }}
+          className={cn(
+            "inline-flex h-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold leading-none tracking-tight transition focus:outline-none focus:ring-2 focus:ring-amber-300",
+            roadmapBarMode === "epics" && summaryStatusQuickFilter == null
+              ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200 shadow-[inset_0_2px_4px_rgba(15,23,42,0.10)]"
+              : "text-indigo-900 hover:bg-white/40",
+          )}
+        >
+          <Folder className="size-3 shrink-0 sm:size-3.5" strokeWidth={1.5} aria-hidden />
+          {("totalEpics" in summaryBadgesForScope ? summaryBadgesForScope.totalEpics : summaryBadgesForScope.scheduledEpics + summaryBadgesForScope.unscheduledEpics)}{" "}Epics
+        </button>
+      </div>
       <div className={summaryChipStoriesStaticClass}>
         {/* Stroke-based FileText icon — strokeWidth 1.25 + opacity-70 keeps
             it noticeably lighter than the neighbouring chip icons. */}
@@ -4913,6 +4935,7 @@ export function TimelineGrid({
       {showGanttTeamPicker ? (
         <button
           type="button"
+          data-roadmap-health-keepopen
           aria-pressed={showGanttTeamChips}
           onClick={() => setShowGanttTeamChips((prev) => !prev)}
           className={cn(showGanttTeamChips ? summaryChipTeamsOnClass : summaryChipTeamsIdleClass)}
@@ -4972,6 +4995,7 @@ export function TimelineGrid({
       {!activeMonth && !focusedQuarter && quarterViewTab === "gantt" ? (
         <button
           type="button"
+          data-roadmap-health-keepopen
           onClick={() => setShowYearSprintChips((prev) => !prev)}
           className={cn(summaryChipBaseClass, showYearSprintChips ? summaryChipSprintsOnClass : summaryChipSprintsIdleClass)}
         >

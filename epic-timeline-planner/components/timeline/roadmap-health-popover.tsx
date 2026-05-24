@@ -91,7 +91,10 @@ export function RoadmapHealthPopover({
     };
   }, [open, anchorRef]);
 
-  // Click-outside + Escape to close.
+  // Click-outside + Escape to close. Elements marked
+  // `data-roadmap-health-keepopen` (e.g. the toolbar's Initiatives/Epics
+  // toggle, Teams chip, Sprints chip) are whitelisted so the user can
+  // interact with them without dismissing the popover.
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
@@ -99,6 +102,8 @@ export function RoadmapHealthPopover({
       if (!target) return;
       const inside = (target as HTMLElement).closest?.("[data-roadmap-health-popover]");
       if (inside) return;
+      const keepOpen = (target as HTMLElement).closest?.("[data-roadmap-health-keepopen]");
+      if (keepOpen) return;
       if (anchorRef.current && anchorRef.current.contains(target)) return;
       onClose();
     };
