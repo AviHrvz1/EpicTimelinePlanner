@@ -4515,6 +4515,33 @@ export function TimelineGrid({
     const t = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
     setSprintFilterTeamIds(t ? [t] : []);
   }, [sprintStoryBoardTeamId]);
+  // Cross-surface team-filter sync. The Gantt views (all-quarters /
+  // single-quarter / month) and the Sprint surfaces (kanban, capacity,
+  // retro, insights) each maintain their own team-filter state. Mirror
+  // them so picking a team on any surface immediately applies to every
+  // other surface. Equality check on both effects prevents a render loop.
+  useEffect(() => {
+    setSprintFilterTeamIds((prev) => {
+      if (
+        prev.length === ganttTeamIds.length &&
+        prev.every((id, i) => id === ganttTeamIds[i])
+      ) {
+        return prev;
+      }
+      return [...ganttTeamIds];
+    });
+  }, [ganttTeamIds]);
+  useEffect(() => {
+    setGanttTeamIds((prev) => {
+      if (
+        prev.length === sprintFilterTeamIds.length &&
+        prev.every((id, i) => id === sprintFilterTeamIds[i])
+      ) {
+        return prev;
+      }
+      return [...sprintFilterTeamIds];
+    });
+  }, [sprintFilterTeamIds]);
   useEffect(() => {
     if (isSprintTeamMenuOpen) {
       setSprintTeamSearch("");
@@ -5257,7 +5284,7 @@ export function TimelineGrid({
                     <button
                       type="button"
                       onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[16px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter sprint views by team"
                       aria-expanded={isSprintTeamMenuOpen}
                     >
@@ -5337,7 +5364,7 @@ export function TimelineGrid({
                     <button
                       type="button"
                       onClick={() => setIsGanttTeamMenuOpen((prev) => !prev)}
-                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[13px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                      className="inline-flex h-7 min-w-[8.75rem] items-center justify-between gap-1.5 rounded-md border border-slate-200 bg-white/70 px-1.5 text-[15px] font-medium leading-snug tracking-[0.01em] text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                       aria-label="Filter Gantt by team"
                       aria-expanded={isGanttTeamMenuOpen}
                     >
