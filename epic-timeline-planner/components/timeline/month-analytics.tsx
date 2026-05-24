@@ -63,7 +63,6 @@ import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint } from "@/lib/year-sprint";
 
 type BurndownMetric = "daysLeft" | "storyCount";
-type WorkloadViewMode = "stories" | "monthLoad";
 type WorkloadStatusKey = "todo" | "inProgress" | "done" | "approved";
 type WorkloadFilterKey = "all" | WorkloadStatusKey | "unassigned";
 
@@ -601,7 +600,6 @@ export function MonthAnalytics({
 }: MonthAnalyticsProps) {
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
-  const [workloadView, setWorkloadView] = useState<WorkloadViewMode>("stories");
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
   const [selectedEpicId, setSelectedEpicId] = useState<string>(initialSelectedEpicId ?? "all");
   const [epicInput, setEpicInput] = useState("");
@@ -1874,21 +1872,11 @@ export function MonthAnalytics({
     monthLoadScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   };
   useEffect(() => {
-    if (workloadView !== "stories") {
-      setCanScrollWorkloadUp(false);
-      setCanScrollWorkloadDown(false);
-      return;
-    }
     updateWorkloadArrowState();
-  }, [workloadView, analytics.workloadByAssignee.length, workloadStatusFilters]);
+  }, [analytics.workloadByAssignee.length, workloadStatusFilters]);
   useEffect(() => {
-    if (workloadView !== "monthLoad") {
-      setCanScrollMonthLoadUp(false);
-      setCanScrollMonthLoadDown(false);
-      return;
-    }
     updateMonthLoadArrowState();
-  }, [workloadView, analytics.workloadCapacityByAssignee.length, analytics.monthDaysLeft]);
+  }, [analytics.workloadCapacityByAssignee.length, analytics.monthDaysLeft]);
   useEffect(() => {
     if (!workloadDrilldownAssignee) {
       setCanScrollWorkloadDrilldownUp(false);
@@ -2225,6 +2213,10 @@ export function MonthAnalytics({
               "grid flex-1 lg:grid-cols-[minmax(0,1fr)_12.5rem] lg:items-stretch",
               INSIGHTS_CHART_GRID_GAP,
               INSIGHTS_CONTENT_HEIGHT,
+              // Pie panel needs a touch more vertical room than the shared
+              // `INSIGHTS_CONTENT_HEIGHT` provides, or the top "% / label"
+              // pair (e.g. "29% / To do") clips at the panel's upper edge.
+              "min-h-[14rem] lg:h-[clamp(14rem,30vh,22rem)]",
             )}
           >
             <div
@@ -2243,7 +2235,7 @@ export function MonthAnalytics({
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
-                    cy="43%"
+                    cy="50%"
                     innerRadius="38%"
                     outerRadius="68%"
                     paddingAngle={3}
@@ -2273,7 +2265,7 @@ export function MonthAnalytics({
                 </ResponsiveContainer>
               </div>
               <div className="pointer-events-none absolute inset-0 z-[1]">
-                <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 text-center">
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                     {statusChartShowsEpics ? "Σ Epics" : "Σ Stories"}
                   </p>
@@ -2583,30 +2575,7 @@ export function MonthAnalytics({
             >
               <ArrowLeft className="size-3.5" aria-hidden />
             </button>
-          ) : (
-            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
-              <button
-                type="button"
-                onClick={() => setWorkloadView("stories")}
-                className={cn(
-                  "rounded-md px-3 py-1 text-[13px] font-medium",
-                  workloadView === "stories" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-                )}
-              >
-                Stories
-              </button>
-              <button
-                type="button"
-                onClick={() => setWorkloadView("monthLoad")}
-                className={cn(
-                  "rounded-md px-3 py-1 text-[13px] font-medium",
-                  workloadView === "monthLoad" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600",
-                )}
-              >
-                Month Load
-              </button>
-            </div>
-          )}
+          ) : null}
         </div>
         {workloadDrilldownAssignee ? (
           <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
@@ -2715,157 +2684,86 @@ export function MonthAnalytics({
         ) : null}
         {!workloadDrilldownAssignee ? (() => {
           const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
-          if (workloadView === "stories") {
-            const barData = teamMode
-              ? analytics.workloadByTeam.map((t) => ({
-                  name: t.teamLabel,
-                  fullName: t.teamLabel,
-                  "To do": t.storiesByStatus.todo,
-                  "In progress": t.storiesByStatus.inProgress,
-                  "Done": t.storiesByStatus.done,
-                  "Approved": t.storiesByStatus.approved,
-                }))
-              : analytics.workloadByAssignee.map((item) => ({
-                  name: item.assignee.split(/\s+/)[0],
-                  fullName: item.assignee,
-                  "To do": item.storiesByStatus.todo,
-                  "In progress": item.storiesByStatus.inProgress,
-                  "Done": item.storiesByStatus.done,
-                  "Approved": item.storiesByStatus.approved,
-                }));
-            return (
-              <div className={cn("min-h-0", INSIGHTS_CHART_BAND)}>
-                {barData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={barData}
-                      barCategoryGap="15%"
-                      barGap={2}
-                      margin={{ top: 4, right: 4, bottom: 0, left: 8 }}
-                      style={{ cursor: "pointer" }}
-                      onClick={(data) => {
-                        const label = data?.activeLabel as string | undefined;
-                        if (!label) return;
-                        if (teamMode) {
-                          const match = analytics.workloadByTeam.find((t) => t.teamLabel === label);
-                          if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); }
-                        } else {
-                          const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
-                          if (match) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(match.assignee); }
-                        }
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={26} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={44} label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }} />
-                      <Tooltip
-                        contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        formatter={((value: number, name: string) => [value, name]) as any}
-                        labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
-                      />
-                      <Legend
-                        wrapperStyle={{ paddingTop: 6 }}
-                        // We render our own legend from WORKLOAD_BAR_SEGMENTS so the order is fixed
-                        // (To do → In progress → Done → Approved) and the items get proper gaps.
-                        content={() => (
-                          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 pt-1.5 text-[13px]">
-                            {WORKLOAD_BAR_SEGMENTS.map((s) => (
-                              <span key={s.key} className="inline-flex items-center gap-1.5">
-                                <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                                <span className="font-medium text-slate-700">{s.label}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      />
-                      {WORKLOAD_BAR_SEGMENTS.map((s) => (
-                        <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
-                          minPointSize={2}
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
-                          style={{ cursor: "pointer" }}
-                          onClick={teamMode
-                            ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
-                            : ((data: { fullName?: string }) => { if (data?.fullName) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(data.fullName); } }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
-                        />
-                      ))}
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
-                )}
-              </div>
-            );
-          }
-          // Month Load tab
-          const monthDaysLeft = analytics.monthDaysLeft;
-          const loadRows = teamMode
+          const barData = teamMode
             ? analytics.workloadByTeam.map((t) => ({
-                key: t.teamLabel,
-                label: t.teamLabel,
-                initials: t.teamLabel.slice(0, 2).toUpperCase(),
-                daysLeft: t.daysLeftTotal,
-                estTotal: t.estimatedTotal,
-                onRowClick: () => { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(t.teamId ?? ""); },
+                name: t.teamLabel,
+                fullName: t.teamLabel,
+                "To do": t.storiesByStatus.todo,
+                "In progress": t.storiesByStatus.inProgress,
+                "Done": t.storiesByStatus.done,
+                "Approved": t.storiesByStatus.approved,
               }))
-            : analytics.workloadByAssignee.map((row) => ({
-                key: row.assignee,
-                label: row.assignee,
-                initials: row.assignee.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join(""),
-                daysLeft: row.daysLeftTotal,
-                estTotal: row.estimatedTotal,
-                onRowClick: () => { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(row.assignee); },
+            : analytics.workloadByAssignee.map((item) => ({
+                name: item.assignee.split(/\s+/)[0],
+                fullName: item.assignee,
+                "To do": item.storiesByStatus.todo,
+                "In progress": item.storiesByStatus.inProgress,
+                "Done": item.storiesByStatus.done,
+                "Approved": item.storiesByStatus.approved,
               }));
-          if (loadRows.length === 0) return <p className="text-[12px] text-slate-500">No workload found for this month.</p>;
           return (
-            <div className={cn("overflow-y-auto overflow-x-hidden space-y-1 [&::-webkit-scrollbar]:hidden", INSIGHTS_CHART_BAND)} style={{ scrollbarWidth: "none" }}>
-              {loadRows.map((row) => {
-                const doneDays = Math.max(0, row.estTotal - row.daysLeft);
-                const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
-                const atRisk = monthDaysLeft > 0 && row.daysLeft > monthDaysLeft;
-                return (
-                  <button
-                    key={row.key}
-                    type="button"
-                    onClick={row.onRowClick}
-                    className="w-full rounded-lg bg-white px-2 py-1 text-left transition hover:bg-slate-50"
+            <div className={cn("min-h-0", INSIGHTS_CHART_BAND)}>
+              {barData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={barData}
+                    barCategoryGap="15%"
+                    barGap={2}
+                    margin={{ top: 4, right: 4, bottom: 0, left: 8 }}
+                    style={{ cursor: "pointer" }}
+                    onClick={(data) => {
+                      const label = data?.activeLabel as string | undefined;
+                      if (!label) return;
+                      if (teamMode) {
+                        const match = analytics.workloadByTeam.find((t) => t.teamLabel === label);
+                        if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); }
+                      } else {
+                        const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
+                        if (match) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(match.assignee); }
+                      }
+                    }}
                   >
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
-                        {row.initials || <User className="size-3" />}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <span className="truncate text-[11px] font-semibold text-slate-800">{row.label}</span>
-                          <div className="flex shrink-0 items-center gap-1">
-                            {atRisk && (
-                              <span
-                                className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200/80"
-                                title={`${row.daysLeft}d of work left but only ${monthDaysLeft}d remain in the month`}
-                              >
-                                <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
-                                {row.daysLeft - monthDaysLeft}d over
-                              </span>
-                            )}
-                            <span className="text-[12px] tabular-nums text-slate-500">{row.daysLeft}d left · {row.estTotal}d est</span>
-                          </div>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} />} height={26} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={44} label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      formatter={((value: number, name: string) => [value, name]) as any}
+                      labelFormatter={(label, payload) => (payload?.[0] as { payload?: { fullName?: string } } | undefined)?.payload?.fullName ?? label}
+                    />
+                    <Legend
+                      wrapperStyle={{ paddingTop: 6 }}
+                      // We render our own legend from WORKLOAD_BAR_SEGMENTS so the order is fixed
+                      // (To do → In progress → Done → Approved) and the items get proper gaps.
+                      content={() => (
+                        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 pt-1.5 text-[13px]">
+                          {WORKLOAD_BAR_SEGMENTS.map((s) => (
+                            <span key={s.key} className="inline-flex items-center gap-1.5">
+                              <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                              <span className="font-medium text-slate-700">{s.label}</span>
+                            </span>
+                          ))}
                         </div>
-                        <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
-                          <div
-                            className={cn(
-                              "absolute inset-y-0 left-0 rounded-full transition-all",
-                              atRisk ? "bg-amber-400" : row.daysLeft === 0 ? "bg-emerald-400" : "bg-indigo-400",
-                            )}
-                            style={{ width: `${donePct}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                      )}
+                    />
+                    {WORKLOAD_BAR_SEGMENTS.map((s) => (
+                      <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
+                        minPointSize={2}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
+                        style={{ cursor: "pointer" }}
+                        onClick={teamMode
+                          ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
+                          : ((data: { fullName?: string }) => { if (data?.fullName) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(data.fullName); } }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-[12px] text-slate-500">No open workload found for this month.</p>
+              )}
             </div>
           );
         })() : null}
