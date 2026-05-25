@@ -71,7 +71,7 @@ import { defaultMembersForTeam } from "@/lib/sprint-capacity";
 import { EpicItem, InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { teamLabelForWorkspaceUser } from "@/lib/workspace-users";
-import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
+import { monthLaneFromGlobalSprint, sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 
 /** Softer than shared table zebra -- long wide rows read cleaner with lower-contrast bands. */
 const BACKLOG_TABLE_STRIPE_BG = "#f4f7fc";
@@ -665,7 +665,14 @@ function SortableBacklogColumnHeader({
     </div>
   );
 }
-const GROUP_LEVEL_ORDER: GroupLevel[] = ["roadmap", "year", "quarter", "month", "sprint"];
+// Month and Sprint were removed as group options because backlog grouping is
+// about planning horizon, not execution granularity — sprint-scoped views
+// belong in the Sprint Kanban. Quarter is the deepest meaningful bucket here.
+// The `month`/`sprint` enum values stay in the `GroupLevel` type so any
+// renderLeafRows branches that switched on them keep compiling, but no UI
+// surface offers them anymore and `isGroupLevelValue` filters them out on
+// state restore.
+const GROUP_LEVEL_ORDER: GroupLevel[] = ["roadmap", "year", "quarter"];
 const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
   roadmap: "Roadmap",
   year: "Year",
@@ -1169,7 +1176,9 @@ function isWorkItemKindFilterValue(v: unknown): v is WorkItemKindFilter {
 }
 
 function isGroupLevelValue(v: unknown): v is GroupLevel {
-  return v === "roadmap" || v === "year" || v === "quarter" || v === "month" || v === "sprint";
+  // Filters restored localStorage state against the currently-allowed
+  // levels. Month/Sprint values from older saves get dropped silently.
+  return v === "roadmap" || v === "year" || v === "quarter";
 }
 
 function isBacklogSortByValue(v: unknown): v is BacklogSortBy {
@@ -3442,6 +3451,14 @@ export function BacklogPlanningPanel({
             storyEstimatedDays: story.estimatedDays ?? 0,
             storyDaysLeft: story.daysLeft ?? 0,
             storyLabels: story.labels ?? null,
+            // Quarter the story actually lives in — derived from its sprint
+            // number (sprint → month → quarter). Stories without a sprint
+            // land in an "Unscheduled" bucket. Used by quarter grouping so a
+            // story shows under the quarter where its work happens, not under
+            // its initiative's start quarter. Null → Unscheduled.
+            storyQuarterLabelValue: story.sprint != null
+              ? quarterFromMonth(monthLaneFromGlobalSprint(story.sprint).month)
+              : null,
             initiativeId: initiative.id,
             initiativeTitle: initiative.title,
             initiativeYear: String(initiative.year),
@@ -3872,7 +3889,12 @@ export function BacklogPlanningPanel({
     }
     if (level === "year") return { key: row.initiativeYear, label: row.initiativeYear, sort: row.initiativeYear.padStart(4, "0") };
     if (level === "quarter") {
-      const q = quarterLabelOrUnscheduled(row.initiativeQuarterLabelValue);
+      // Bucket each STORY by its sprint's quarter (where the work actually
+      // happens), not by the parent initiative's start quarter. Stories
+      // without a sprint go to "Unscheduled". A spanning initiative/epic
+      // naturally reappears in multiple quarter buckets because each of its
+      // stories lands in whichever quarter its sprint belongs to.
+      const q = quarterLabelOrUnscheduled(row.storyQuarterLabelValue);
       return { key: q, label: q, sort: quarterSortValue(q) };
     }
     if (level === "month") {
