@@ -4759,7 +4759,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
-            onClick={() => setTopMode("roadmap")}
+            onClick={() => { setTopMode("roadmap"); setIsModeRailExpanded(false); }}
             aria-label="Roadmap Planning"
             className={cn(
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
@@ -4794,7 +4794,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
-            onClick={() => setTopMode("backlog")}
+            onClick={() => { setTopMode("backlog"); setIsModeRailExpanded(false); }}
             aria-label="Backlog Workspace"
             className={cn(
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
@@ -4829,7 +4829,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
-            onClick={() => setTopMode("dashboard")}
+            onClick={() => { setTopMode("dashboard"); setIsModeRailExpanded(false); }}
             aria-label="Dashboard"
             className={cn(
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
@@ -4864,7 +4864,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
-            onClick={() => setTopMode("users")}
+            onClick={() => { setTopMode("users"); setIsModeRailExpanded(false); }}
             aria-label="Users"
             className={cn(
               "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
@@ -4899,7 +4899,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         <div className="group relative w-full overflow-visible">
           <button
             type="button"
-            onClick={() => setTopMode("demoBuilder")}
+            onClick={() => { setTopMode("demoBuilder"); setIsModeRailExpanded(false); }}
             aria-label="Demo Builder"
             title="Internal — reset & seed demo data"
             className={cn(

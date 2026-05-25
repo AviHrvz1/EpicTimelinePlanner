@@ -1999,27 +1999,29 @@ export function EpicFormDialog({
               )}
               style={activityOpen ? { height: `${activityPanelHeightPx}px` } : undefined}
             >
-              <button
-                type="button"
-                onClick={() => setActivityOpen((v) => !v)}
-                aria-expanded={activityOpen}
-                className="group flex w-full items-center justify-between gap-2 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-              >
-                <span className="flex items-center gap-2 text-lg font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
-                  <ChevronDown
-                    className={cn("size-5 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
-                    aria-hidden
-                  />
-                  <ActivityIcon className="size-5 shrink-0 text-slate-500" aria-hidden />
-                  Activity
-                </span>
+              {/* Toggle + tabs as SIBLINGS — wrapping them in a single
+                  outer <button> nested the Comments/History buttons inside
+                  it, which is invalid HTML and threw a hydration error.
+                  The collapsed state shows just the toggle; expanded shows
+                  the toggle + the segmented tabs on the right. */}
+              <div className="flex w-full items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivityOpen((v) => !v)}
+                  aria-expanded={activityOpen}
+                  className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                >
+                  <span className="flex items-center gap-2 text-lg font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
+                    <ChevronDown
+                      className={cn("size-5 shrink-0 text-slate-500 transition-transform", !activityOpen && "-rotate-90")}
+                      aria-hidden
+                    />
+                    <ActivityIcon className="size-5 shrink-0 text-slate-500" aria-hidden />
+                    Activity
+                  </span>
+                </button>
                 {activityOpen ? (
-                  <div
-                    className="inline-flex shrink-0 rounded-lg bg-white p-1 ring-1 ring-slate-200"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    role="presentation"
-                  >
+                  <div className="inline-flex shrink-0 rounded-lg bg-white p-1 ring-1 ring-slate-200">
                     <button
                       type="button"
                       className={cn(
@@ -2048,7 +2050,7 @@ export function EpicFormDialog({
                     </button>
                   </div>
                 ) : null}
-              </button>
+              </div>
 
               {activityOpen ? (
                 <div className="flex min-h-0 flex-1 flex-col gap-2">

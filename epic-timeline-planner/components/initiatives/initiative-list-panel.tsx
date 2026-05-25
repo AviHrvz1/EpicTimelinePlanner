@@ -581,9 +581,16 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
   };
 }
 
-/** Shared base for all status/tag chips in the middle panel — consistent height, size, and spacing. */
+/** Shared base for INITIATIVE-row status/tag chips in the middle panel. */
 const statusBadgeBase =
   "inline-flex items-center rounded px-2.5 py-1 text-[13px] font-semibold leading-none tracking-[0.01em]";
+
+/** Slightly shorter variant used on EPIC-row chips so the visual weight
+ *  reads as subordinate to the parent initiative's chip row. Smaller
+ *  vertical padding + 1pt smaller font; same color treatment is layered
+ *  on top by the caller via `cn(epicBadgeBase, chipColorClasses)`. */
+const epicBadgeBase =
+  "inline-flex items-center rounded px-2 py-[3px] text-[12px] font-semibold leading-none tracking-[0.01em]";
 
 /** Left-panel initiative/epic cards: track grows to fill the row; summary stays on the same line (nowrap). */
 const leftPanelProgressTrackClass =
@@ -1022,23 +1029,30 @@ function InitiativeTreeEpicRow({
               </span>
               <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
                 {epicTeamChip ? (
-                  <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
+                  // Apply `epicBadgeBase` AFTER the team chip's own className
+                  // so tailwind-merge overrides its smaller padding / font
+                  // with the shared epic-badge size (matches the Quarter and
+                  // Status chips alongside it on this epic row). Also widen
+                  // `max-w` so longer team names like "Data & analytics"
+                  // aren't truncated — the chip auto-shrinks if the row is
+                  // tight, but no longer caps at 7rem.
+                  <span className={cn(epicTeamChip.className, epicBadgeBase, "max-w-[10rem] gap-1")}>
                     <Users className="size-2.5 shrink-0" aria-hidden />
                     {epicTeamChip.label}
                   </span>
                 ) : null}
                 {epicPlanStatus.label === "Unscheduled" ? (
-                  <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                  <span className={cn(epicBadgeBase, epicPlanStatus.className)}>
                     {epicPlanStatus.label}
                   </span>
                 ) : (
                   quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth).map((q) => (
-                    <span key={q} className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                    <span key={q} className={cn(epicBadgeBase, epicPlanStatus.className)}>
                       {q}
                     </span>
                   ))
                 )}
-                <span className={cn(statusBadgeBase, epicExecutionStatus.className)}>
+                <span className={cn(epicBadgeBase, epicExecutionStatus.className)}>
                   {epicExecutionStatus.label}
                 </span>
               </div>
@@ -1729,23 +1743,23 @@ function SprintEpicCard({
                   </span>
                   <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
                     {epicTeamChip ? (
-                      <span className={cn("inline-flex items-center gap-0.5", epicTeamChip.className)}>
+                      <span className={cn(epicTeamChip.className, epicBadgeBase, "max-w-[10rem] gap-1")}>
                         <Users className="size-2.5 shrink-0" aria-hidden />
                         {epicTeamChip.label}
                       </span>
                     ) : null}
                     {epicPlanStatus.label === "Unscheduled" ? (
-                      <span className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                      <span className={cn(epicBadgeBase, epicPlanStatus.className)}>
                         {epicPlanStatus.label}
                       </span>
                     ) : (
                       quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth).map((q) => (
-                        <span key={q} className={cn(statusBadgeBase, epicPlanStatus.className)}>
+                        <span key={q} className={cn(epicBadgeBase, epicPlanStatus.className)}>
                           {q}
                         </span>
                       ))
                     )}
-                    <span className={cn(statusBadgeBase, epicExecutionStatus.className)}>
+                    <span className={cn(epicBadgeBase, epicExecutionStatus.className)}>
                       {epicExecutionStatus.label}
                     </span>
                   </div>

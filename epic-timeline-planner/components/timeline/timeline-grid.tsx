@@ -5875,7 +5875,14 @@ export function TimelineGrid({
                 className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3 sm:gap-4 md:gap-5"
                 style={{ gridColumn: "1 / -1" }}
               >
-                {summaryYearChipsJsx}
+                {/* Skip the inline chips when the parent has provided a
+                    portal target — `summaryYearChipsJsx` is already being
+                    rendered into `summaryBarPortalElement` below
+                    (createPortal at the bottom of the component). Without
+                    this guard the chips show twice: once here on the
+                    Roadmap chip-track row and once up in the global top
+                    bar. */}
+                {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
                 {showGanttSearch ? ganttSearchJsx : null}
                 {periodCountdownScope ? (
                   <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />

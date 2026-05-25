@@ -1944,6 +1944,331 @@ function BacklogRowAvatar({
   return <UserRound className="size-3.5 text-slate-400" aria-hidden />;
 }
 
+/**
+ * Self-contained text input used by every inline editor in the backlog
+ * table that takes typed text (titles, labels, estimates, create forms).
+ * Owns its own `value` in LOCAL state so each keystroke only re-renders
+ * this ~30-line component — not the 7k-line BacklogPlanningPanel and its
+ * ~600 grid rows (each render is 300-900ms on demo data, which is why
+ * typing in panel-state-bound inputs felt laggy).
+ *
+ * Renders: input + X (cancel) + ✓ (save). Esc cancels, Enter saves.
+ * `onMouseDown={e.preventDefault()}` on the buttons prevents the input's
+ * blur from racing the click handler.
+ */
+function IsolatedTextInput({
+  initial,
+  placeholder,
+  onSave,
+  onCancel,
+  inputClassName,
+  inputType = "text",
+  minLength = 2,
+  saveOnBlur = false,
+  ariaLabel,
+}: {
+  initial: string;
+  placeholder?: string;
+  onSave: (value: string) => void;
+  onCancel: () => void;
+  inputClassName?: string;
+  inputType?: "text" | "number";
+  /** Minimum trimmed length required to enable save. Default 2. Set to 0
+   *  to allow empty (used by labels editor where empty = clear). */
+  minLength?: number;
+  /** When true, blur auto-commits the current value (after 120ms so the
+   *  Cancel/Save buttons can take precedence). Used by editors that
+   *  previously had this behavior. */
+  saveOnBlur?: boolean;
+  ariaLabel?: string;
+}) {
+  const [value, setValue] = useState(initial);
+  const trimmed = value.trim();
+  const canSave = trimmed.length >= minLength;
+  return (
+    <span className="inline-flex items-center gap-1" onMouseDown={(event) => event.stopPropagation()}>
+      <input
+        type={inputType}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={placeholder}
+        autoFocus
+        aria-label={ariaLabel}
+        className={inputClassName ?? "h-7 min-w-0 flex-1 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"}
+        onBlur={
+          saveOnBlur
+            ? () => {
+                window.setTimeout(() => {
+                  if (canSave) onSave(value);
+                }, 120);
+              }
+            : undefined
+        }
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          } else if (event.key === "Enter") {
+            event.preventDefault();
+            if (canSave) onSave(value);
+          }
+        }}
+      />
+      <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onCancel}
+        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+        aria-label="Cancel"
+      >
+        <X className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => { if (canSave) onSave(value); }}
+        disabled={!canSave}
+        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 disabled:opacity-40"
+        aria-label="Save"
+      >
+        <Check className="size-3.5" />
+      </button>
+    </span>
+  );
+}
+
+/**
+ * Isolated textarea/number editor for story cell edits (labels,
+ * estimated days, days left). Same isolation rationale — typing only
+ * re-renders this small component, never the 7k-line panel.
+ */
+function IsolatedStoryCellTextEditor({
+  initial,
+  multiline,
+  inputType = "text",
+  placeholder,
+  className,
+  onSave,
+  onCancel,
+}: {
+  initial: string;
+  multiline?: boolean;
+  inputType?: "text" | "number";
+  placeholder?: string;
+  className?: string;
+  onSave: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const commonProps = {
+    value,
+    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setValue(event.target.value),
+    autoFocus: true,
+    placeholder,
+    className,
+    onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      // Single-line: Enter saves. Multiline: Cmd/Ctrl+Enter saves (Enter
+      // alone inserts a newline as expected for textareas).
+      const isEnter = event.key === "Enter";
+      const shouldSave = isEnter && (!multiline || event.metaKey || event.ctrlKey);
+      if (shouldSave) {
+        event.preventDefault();
+        onSave(value);
+      }
+    },
+  };
+  return (
+    <span className="inline-flex w-full items-stretch gap-1" onMouseDown={(event) => event.stopPropagation()}>
+      {multiline ? (
+        <textarea {...commonProps} rows={2} />
+      ) : (
+        <input {...commonProps} type={inputType} />
+      )}
+      <span className="flex flex-col items-center justify-center gap-0.5">
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onSave(value)}
+          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+          aria-label="Save"
+        >
+          <Check className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onCancel}
+          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+          aria-label="Cancel"
+        >
+          <X className="size-3.5" />
+        </button>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Generic isolated inline-create form used by every "+ row" create site
+ * (story under epic, epic under initiative, initiative under quarter,
+ * etc). Same isolation rationale as `IsolatedTextInput` — keystrokes
+ * stay local. Accepts an optional `extras` slot for sibling controls
+ * (e.g. the story-target-epic <select> in the initiative-row form).
+ */
+function IsolatedCreateRowForm({
+  placeholder,
+  inputClassName,
+  inputWrapperStyle,
+  rightSlotStyle,
+  extras,
+  onSubmit,
+  onCancel,
+  formClassName,
+  formStyle,
+  submitting,
+  saveDisabledExtra,
+}: {
+  placeholder: string;
+  inputClassName?: string;
+  inputWrapperStyle?: CSSProperties;
+  rightSlotStyle?: CSSProperties;
+  extras?: ReactNode;
+  onSubmit: (title: string) => void;
+  onCancel: () => void;
+  formClassName?: string;
+  formStyle?: CSSProperties;
+  submitting?: boolean;
+  /** Extra disable condition (e.g. story form requires a target epic to
+   *  be picked before save is allowed). */
+  saveDisabledExtra?: boolean;
+}) {
+  const [title, setTitle] = useState("");
+  const trimmed = title.trim();
+  const canSubmit = trimmed.length >= 2 && !submitting && !saveDisabledExtra;
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (canSubmit) onSubmit(trimmed);
+      }}
+      className={formClassName ?? "grid min-w-full w-max items-center gap-3 bg-slate-50 py-2"}
+      style={formStyle}
+    >
+      <div className="flex min-w-0 items-center gap-2" style={inputWrapperStyle}>
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder={placeholder}
+          className={inputClassName ?? "h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"}
+          autoFocus
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onCancel();
+            }
+          }}
+        />
+      </div>
+      <div className="flex items-center gap-2" style={rightSlotStyle}>
+        {extras}
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"
+          aria-label="Save"
+        >
+          <Plus className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+          aria-label="Cancel"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Self-contained inline form for creating an initiative scoped to a
+ * specific quarter (rendered when the user clicks the `+` on a quarter
+ * folder header). Holds the typed title in LOCAL state so each keystroke
+ * only re-renders this component — not the whole BacklogPlanningPanel
+ * (which is 7k lines and ~600 rows on demo data, easily 300-900ms per
+ * render). The previous version bound the input to the panel's
+ * `createDraftTitle` state, which made typing in this field unusably
+ * laggy.
+ */
+function QuarterInitiativeCreateForm({
+  placeholder,
+  indentPx,
+  submitting,
+  onSubmit,
+  onCancel,
+}: {
+  placeholder: string;
+  indentPx: number;
+  submitting: boolean;
+  onSubmit: (title: string) => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const trimmed = title.trim();
+  const canSubmit = trimmed.length >= 2 && !submitting;
+  return (
+    <div className="border-b border-slate-200/80 bg-slate-50 px-3 py-2">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!canSubmit) return;
+          onSubmit(trimmed);
+        }}
+        className="flex items-center gap-2"
+        style={{ paddingLeft: indentPx }}
+      >
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder={placeholder}
+          className="h-8 flex-1 rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+          autoFocus
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onCancel();
+            }
+          }}
+        />
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"
+          aria-label="Save"
+        >
+          <Plus className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+          aria-label="Cancel"
+        >
+          <X className="size-3.5" />
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function BacklogPlanningPanel({
   initiatives,
   roadmaps,
@@ -2118,6 +2443,17 @@ export function BacklogPlanningPanel({
     prevAllEpicIdsRef.current = currentIds;
     if (newId) setNewestEpicId(newId);
   }, [initiatives]);
+  // …and for initiatives — pins a newly-created initiative at the top of
+  // its containing group (e.g. the quarter bucket it landed in when the
+  // user created it via the quarter folder's + button).
+  const [newestInitiativeId, setNewestInitiativeId] = useState<string | null>(null);
+  const prevInitiativeIdsRef = useRef<Set<string>>(new Set(initiatives.map((i) => i.id)));
+  useEffect(() => {
+    const currentIds = new Set(initiatives.map((i) => i.id));
+    const newId = [...currentIds].find((id) => !prevInitiativeIdsRef.current.has(id)) ?? null;
+    prevInitiativeIdsRef.current = currentIds;
+    if (newId) setNewestInitiativeId(newId);
+  }, [initiatives]);
   const [backlogReadonlyNotice, setBacklogReadonlyNotice] = useState<{ title: string; body: string } | null>(null);
 
   async function patchStoryInline(
@@ -2259,6 +2595,35 @@ export function BacklogPlanningPanel({
       toast.success("User story title updated");
     }
     setEditingStoryTitle(null);
+  }
+
+  /**
+   * Helper: render an isolated text editor for an epic / initiative title.
+   * Used by every parent-title edit site; keeps the input's typing local
+   * to a tiny component instead of triggering full panel re-renders.
+   */
+  function renderParentTitleEditor(kind: "epic" | "initiative", id: string, currentTitle: string): ReactNode {
+    const initial = editingParentTitle?.value ?? currentTitle;
+    return (
+      <IsolatedTextInput
+        initial={initial}
+        inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+        onCancel={() => setEditingParentTitle(null)}
+        onSave={async (value) => {
+          const next = value.trim();
+          if (next.length >= 2 && next !== currentTitle) {
+            try {
+              if (kind === "initiative") await onPatchInitiativeQuick(id, { title: next });
+              else await onPatchEpicQuick(id, { title: next });
+              toast.success(`${kind === "initiative" ? "Initiative" : "Epic"} title updated`);
+            } catch {
+              toast.error(`Failed to update ${kind === "initiative" ? "initiative" : "epic"} title`);
+            }
+          }
+          setEditingParentTitle(null);
+        }}
+      />
+    );
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -2523,37 +2888,33 @@ export function BacklogPlanningPanel({
   }
   function renderEpicEstimateEditor(): ReactNode {
     if (!editingEpicEstimate) return null;
+    const epicId = editingEpicEstimate.id;
+    const initial = editingEpicEstimate.value;
     return (
-      <span
-        className="inline-flex items-center gap-1"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <input
-          type="number"
-          min={0}
-          step={1}
-          inputMode="numeric"
-          value={editingEpicEstimate.value}
-          onChange={(event) =>
-            setEditingEpicEstimate((prev) => (prev ? { ...prev, value: event.target.value } : prev))
-          }
-          onBlur={() => {
-            window.setTimeout(() => {
-              if (editingEpicEstimate) void commitEpicEstimateEdit();
-            }, 120);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
+      <span className="inline-flex items-center gap-1" onMouseDown={(event) => event.stopPropagation()}>
+        <IsolatedTextInput
+          initial={initial}
+          inputType="number"
+          ariaLabel="Epic estimate in days"
+          minLength={0}
+          saveOnBlur
+          inputClassName="h-7 w-16 rounded-md bg-white px-2 text-center text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
+          onCancel={() => setEditingEpicEstimate(null)}
+          onSave={async (value) => {
+            const raw = value.trim();
+            const parsed = raw === "" ? 0 : Number(raw);
+            if (!Number.isFinite(parsed) || parsed < 0) {
+              toast.error("Estimate must be a non-negative number");
+              return;
+            }
+            try {
+              await onPatchEpicQuick(epicId, { originalEstimateDays: Math.round(parsed) });
+              toast.success("Epic estimate updated");
               setEditingEpicEstimate(null);
-            } else if (event.key === "Enter") {
-              event.preventDefault();
-              void commitEpicEstimateEdit();
+            } catch {
+              toast.error("Failed to update epic estimate");
             }
           }}
-          autoFocus
-          className="h-7 w-16 rounded-md bg-white px-2 text-center text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
-          aria-label="Epic estimate in days"
         />
         <span className="text-[12px] text-slate-500">d</span>
       </span>
@@ -2567,60 +2928,27 @@ export function BacklogPlanningPanel({
     );
   }
   function renderParentLabelsEditor(args: { kind: "epic" | "initiative"; id: string }): ReactNode {
-    const isEpic = args.kind === "epic";
-    const commit = isEpic ? commitEpicLabelsEdit : commitInitiativeLabelsEdit;
-    const value = editingParentLabels?.value ?? "";
+    const initial = editingParentLabels?.value ?? "";
+    const patchFn = args.kind === "epic" ? onPatchEpicQuick : onPatchInitiativeQuick;
+    const toastLabel = args.kind === "epic" ? "Epic labels" : "Initiative labels";
     return (
-      <span
-        className="inline-flex w-full items-center gap-1"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <input
-          type="text"
-          value={value}
-          onChange={(event) =>
-            setEditingParentLabels((prev) => (prev ? { ...prev, value: event.target.value } : prev))
+      <IsolatedTextInput
+        initial={initial}
+        placeholder="Comma-separated labels"
+        minLength={0}
+        saveOnBlur
+        onCancel={() => setEditingParentLabels(null)}
+        onSave={async (value) => {
+          const next = value.trim() === "" ? null : value.trim();
+          try {
+            await patchFn(args.id, { labels: next });
+            toast.success(`${toastLabel} updated`);
+            setEditingParentLabels(null);
+          } catch {
+            toast.error(`Failed to update ${toastLabel.toLowerCase()}`);
           }
-          onBlur={() => {
-            // Defer so click on Check/X buttons can fire first.
-            window.setTimeout(() => {
-              if (
-                editingParentLabels &&
-                editingParentLabels.kind === args.kind &&
-                editingParentLabels.id === args.id
-              ) {
-                void commit();
-              }
-            }, 120);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              setEditingParentLabels(null);
-            } else if (event.key === "Enter") {
-              event.preventDefault();
-              void commit();
-            }
-          }}
-          autoFocus
-          placeholder="Comma-separated labels"
-          className="h-7 min-w-0 flex-1 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
-        />
-        <button
-          type="button"
-          onClick={() => setEditingParentLabels(null)}
-          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-        >
-          <X className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void commit()}
-          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-        >
-          <Check className="size-3.5" />
-        </button>
-      </span>
+        }}
+      />
     );
   }
 
@@ -3620,16 +3948,19 @@ export function BacklogPlanningPanel({
                       <UserStoryIcon />
                     </span>
                     {editingStoryTitle?.id === row.storyId ? (
-                      <span className="flex min-w-0 items-center gap-1">
-                        <input
-                          value={editingStoryTitle.value}
-                          onChange={(event) => setEditingStoryTitle({ id: row.storyId, value: event.target.value })}
-                          className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                          autoFocus
-                        />
-                        <button type="button" onClick={() => setEditingStoryTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                        <button type="button" onClick={() => void confirmStoryTitleEdit(row.storyId, row.storyTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                      </span>
+                      <IsolatedTextInput
+                        initial={editingStoryTitle.value}
+                        inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                        onCancel={() => setEditingStoryTitle(null)}
+                        onSave={async (value) => {
+                          const next = value.trim();
+                          if (next.length >= 2 && next !== row.storyTitle) {
+                            await patchStoryInline(row.storyId, { title: next });
+                            toast.success("User story title updated");
+                          }
+                          setEditingStoryTitle(null);
+                        }}
+                      />
                     ) : (
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
                         <button
@@ -3772,26 +4103,16 @@ export function BacklogPlanningPanel({
             <div className="w-full min-w-0 overflow-hidden">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "labels" ? (
                 <div className="mx-auto flex w-full min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-indigo-200/55 bg-gradient-to-b from-white to-slate-50/95 p-2 shadow-sm ring-1 ring-slate-200/45">
-                  <textarea
-                    value={editingStoryCell.value}
-                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                    onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "labels", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    rows={2}
-                    className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
+                  <IsolatedStoryCellTextEditor
+                    initial={editingStoryCell.value}
+                    multiline
                     placeholder="Comma-separated labels"
+                    className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
+                    onCancel={cancelStoryCellEdit}
+                    onSave={(value) =>
+                      confirmStoryCellEdit(row.storyId, "labels", storyEditSnapshotFromGroupedRow(row), value)
+                    }
                   />
-                  <span className="flex items-center justify-center gap-0.5">
-                    <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        confirmStoryCellEdit(row.storyId, "labels", storyEditSnapshotFromGroupedRow(row))
-                      }
-                      className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-                    ><Check className="size-3.5" /></button>
-                  </span>
                 </div>
               ) : (
                 <BacklogLabelsChipPanel
@@ -3807,26 +4128,15 @@ export function BacklogPlanningPanel({
               estDays: (
             <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "estimatedDays" ? (
-                <span className="inline-flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={0}
-                    value={editingStoryCell.value}
-                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                    onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  />
-                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-                  ><Check className="size-3.5" /></button>
-                </span>
+                <IsolatedStoryCellTextEditor
+                  initial={editingStoryCell.value}
+                  inputType="number"
+                  className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                  onCancel={cancelStoryCellEdit}
+                  onSave={(value) =>
+                    confirmStoryCellEdit(row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row), value)
+                  }
+                />
               ) : (
                 <button
                   type="button"
@@ -3845,26 +4155,15 @@ export function BacklogPlanningPanel({
               daysLeft: (
             <span className="text-center text-[16px] text-slate-700">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "daysLeft" ? (
-                <span className="inline-flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={0}
-                    value={editingStoryCell.value}
-                    onChange={(event) => setEditingStoryCell((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
-                    onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  />
-                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-                  ><Check className="size-3.5" /></button>
-                </span>
+                <IsolatedStoryCellTextEditor
+                  initial={editingStoryCell.value}
+                  inputType="number"
+                  className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                  onCancel={cancelStoryCellEdit}
+                  onSave={(value) =>
+                    confirmStoryCellEdit(row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row), value)
+                  }
+                />
               ) : (
                 <button
                   type="button"
@@ -3921,13 +4220,16 @@ export function BacklogPlanningPanel({
     indentPx: number,
     renderChildren: () => React.ReactNode,
     leadingIcon?: React.ReactNode,
+    /** Trailing UI shown to the right of the folder title (used by the
+     *  quarter folder's `+ Add initiative` button). */
+    trailingAction?: React.ReactNode,
   ) {
     const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
     const renderedChildren = isOpen ? renderChildren() : null;
     return (
       <div key={folderId}>
         <div
-          className={cn("grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+          className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
           style={{ gridTemplateColumns: tableGridTemplate }}
           data-backlog-zebra-row="true"
           data-backlog-zebra-kind="folder"
@@ -3935,12 +4237,12 @@ export function BacklogPlanningPanel({
         >
           {renderBacklogCells({
             workItem: (
-              <div className="relative min-w-0">
+              <div className="relative flex min-w-0 items-center gap-1.5">
                 <BacklogTreeConnector indentPx={indentPx} />
                 <button
                   type="button"
                   onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
-                  className="flex w-full min-w-0 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
                   style={{ paddingLeft: indentPx }}
                 >
                   {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
@@ -3948,6 +4250,7 @@ export function BacklogPlanningPanel({
                   <span className="truncate">{label}</span>
                   <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
                 </button>
+                {trailingAction}
               </div>
             ),
             team: renderBacklogTeamCell(null),
@@ -4075,16 +4378,7 @@ export function BacklogPlanningPanel({
                   >
                     <EpicPlanBarIcon icon={epicModelForRow?.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
                     {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
-                      <span className="flex min-w-0 items-center gap-1">
-                        <input
-                          value={editingParentTitle.value}
-                          onChange={(event) => setEditingParentTitle({ kind: "epic", id: epicId, value: event.target.value })}
-                          className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                          autoFocus
-                        />
-                        <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                        <button type="button" onClick={() => void confirmParentTitleEdit("epic", epicId, epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                      </span>
+                      renderParentTitleEditor("epic", epicId, epicTitle)
                     ) : (
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                         <span className="truncate">{epicTitle}</span>
@@ -4285,21 +4579,15 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-epic:${epicId}` ? (
-            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
-              <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx + 18 }}>
-                <input
-                  value={createDraftTitle}
-                  onChange={(event) => setCreateDraftTitle(event.target.value)}
-                  placeholder="Type user story title and press Enter..."
-                  className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                  autoFocus
-                />
-              </div>
-              <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
-                <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
-              </div>
-            </form>
+            <IsolatedCreateRowForm
+              placeholder="Type user story title and press Enter..."
+              formStyle={{ gridTemplateColumns: tableGridTemplate }}
+              inputWrapperStyle={{ paddingLeft: epicIndentPx + 18 }}
+              rightSlotStyle={createFormRestGridStyle}
+              submitting={submittingKey === "create"}
+              onCancel={closeInlineCreator}
+              onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+            />
           ) : null}
           {isOpen ? (
             <div>
@@ -4350,16 +4638,7 @@ export function BacklogPlanningPanel({
                   >
                     <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
                     {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
-                      <span className="flex min-w-0 items-center gap-1">
-                        <input
-                          value={editingParentTitle.value}
-                          onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiativeId, value: event.target.value })}
-                          className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                          autoFocus
-                        />
-                        <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                        <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiativeId, initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                      </span>
+                      renderParentTitleEditor("initiative", initiativeId, initiativeTitle)
                     ) : (
                       <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                         <span className="truncate">{initiativeTitle}</span>
@@ -4548,32 +4827,27 @@ export function BacklogPlanningPanel({
             })}
           </div>
           {createSelection?.anchorKey === `group-initiative:${initiativeId}` ? (
-            <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
-              <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx + 18 }}>
-                <input
-                  value={createDraftTitle}
-                  onChange={(event) => setCreateDraftTitle(event.target.value)}
-                  placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
-                  className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                  autoFocus
-                />
-              </div>
-              <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                {createSelection.kind === "story" ? (
-                  <select
-                    value={storyTargetEpicId}
-                    onChange={(event) => setStoryTargetEpicId(event.target.value)}
-                    className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  >
-                    {Array.from(new Map(initiativeRows.map((r) => [r.epicId, r.epicTitle])).entries()).map(([epicId, title]) => (
-                      <option key={epicId} value={epicId}>{title}</option>
-                    ))}
-                  </select>
-                ) : null}
-                <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create" || (createSelection.kind === "story" && !storyTargetEpicId)} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
-                <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
-              </div>
-            </form>
+            <IsolatedCreateRowForm
+              placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
+              formStyle={{ gridTemplateColumns: tableGridTemplate }}
+              inputWrapperStyle={{ paddingLeft: initIndentPx + 18 }}
+              rightSlotStyle={createFormRestGridStyle}
+              submitting={submittingKey === "create"}
+              saveDisabledExtra={createSelection.kind === "story" && !storyTargetEpicId}
+              extras={createSelection.kind === "story" ? (
+                <select
+                  value={storyTargetEpicId}
+                  onChange={(event) => setStoryTargetEpicId(event.target.value)}
+                  className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                >
+                  {Array.from(new Map(initiativeRows.map((r) => [r.epicId, r.epicTitle])).entries()).map(([epicId, title]) => (
+                    <option key={epicId} value={epicId}>{title}</option>
+                  ))}
+                </select>
+              ) : undefined}
+              onCancel={closeInlineCreator}
+              onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+            />
           ) : null}
           {isOpen ? (
             <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
@@ -4683,6 +4957,17 @@ export function BacklogPlanningPanel({
       standaloneRows: typeof groupedStandaloneInitiatives;
     };
     const groups = new Map<string, Bucket>();
+    // When grouping by roadmap, seed the map with EVERY known roadmap so
+    // roadmaps with zero initiatives still get a (empty) header row. This
+    // lets a brand-new "Roadmap2" be visible in the backlog even before
+    // anyone has added an initiative to it.
+    if (level === "roadmap" && roadmaps && roadmaps.length > 0) {
+      for (const r of roadmaps) {
+        const key = r.id;
+        const label = r.name;
+        groups.set(key, { label, sort: label.toLowerCase(), rows: [], standaloneRows: [] });
+      }
+    }
     for (const row of rows) {
       const { key, label, sort } = keyForLevel(row, level);
       if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
@@ -4695,24 +4980,85 @@ export function BacklogPlanningPanel({
     }
     return Array.from(groups.entries())
       .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
-      .map(([key, group]) =>
-        renderFolderRow(
-          `${path}${level}:${key}`,
+      .map(([key, group]) => {
+        const folderId = `${path}${level}:${key}`;
+        // Trailing "+" on quarter folders → opens a composer that creates
+        // a new initiative scoped to that quarter. Uses the same inline
+        // form rendered FIRST inside the children (below) — keeps the
+        // create flow consistent with the row-level + buttons.
+        const trailingAction = level === "quarter" ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              // Ensure the folder is expanded so the inline form below
+              // becomes visible.
+              setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
+              openCreateComposer({
+                anchorKey: `group-quarter:${folderId}`,
+                scope: "initiative",
+                kind: "initiative",
+              });
+            }}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+            title="Add initiative in this quarter"
+            aria-label="Add initiative in this quarter"
+          >
+            <Plus className="size-3.5 text-slate-600" />
+          </button>
+        ) : undefined;
+        const showQuarterForm =
+          level === "quarter" && createSelection?.anchorKey === `group-quarter:${folderId}`;
+        return renderFolderRow(
+          folderId,
           group.label,
           group.rows.length + group.standaloneRows.length,
           levelIndex * 14,
-          () => <>{renderGroupedTree(group.rows, group.standaloneRows, levelIndex + 1, `${path}${level}:${key}/`)}</>,
+          () => (
+            <>
+              {/* Self-contained form — its own local state, so typing
+                  doesn't re-render this 7k-line panel. */}
+              {showQuarterForm ? (
+                <QuarterInitiativeCreateForm
+                  placeholder={`New initiative in ${group.label}…`}
+                  indentPx={levelIndex * 14 + 18}
+                  submitting={submittingKey === "create"}
+                  onSubmit={async (title) => {
+                    setSubmittingKey("create");
+                    try {
+                      await onCreateInitiativeQuick(title);
+                      setCreateSelection(null);
+                    } finally {
+                      setSubmittingKey(null);
+                    }
+                  }}
+                  onCancel={closeInlineCreator}
+                />
+              ) : null}
+              {renderGroupedTree(group.rows, group.standaloneRows, levelIndex + 1, `${path}${level}:${key}/`)}
+            </>
+          ),
           level === "roadmap"
             ? <MapIcon className="size-4 shrink-0 text-indigo-500" aria-hidden />
             : undefined,
-        ),
-      );
+          trailingAction,
+        );
+      });
   }
 
   function renderStandaloneInitiativeRows(rows: typeof groupedStandaloneInitiatives, indentPx: number): React.ReactNode {
     return rows
       .slice()
-      .sort((a, b) => a.initiativeTitle.localeCompare(b.initiativeTitle))
+      .sort((a, b) => {
+        // Pin the just-created initiative to the top of its group so the
+        // user sees it immediately under the inline form they just used,
+        // not buried in the alphabetical list.
+        if (newestInitiativeId != null) {
+          if (a.initiativeId === newestInitiativeId) return -1;
+          if (b.initiativeId === newestInitiativeId) return 1;
+        }
+        return a.initiativeTitle.localeCompare(b.initiativeTitle);
+      })
       .map((initiative) => {
         const initFolderId = `standalone-init:${initiative.initiativeId}`;
         const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
@@ -4756,16 +5102,7 @@ export function BacklogPlanningPanel({
                     >
                       <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
                       {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
-                        <span className="flex min-w-0 items-center gap-1">
-                          <input
-                            value={editingParentTitle.value}
-                            onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.initiativeId, value: event.target.value })}
-                            className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                            autoFocus
-                          />
-                          <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                          <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.initiativeId, initiative.initiativeTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                        </span>
+                        renderParentTitleEditor("initiative", initiative.initiativeId, initiative.initiativeTitle)
                       ) : (
                         <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                           <span className="truncate">{initiative.initiativeTitle}</span>
@@ -4929,21 +5266,15 @@ export function BacklogPlanningPanel({
               } as Partial<Record<BacklogColumnKey, CellIconHint>>)}
             </div>
             {createSelection?.anchorKey === `group-standalone-initiative:${initiative.initiativeId}` ? (
-              <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
-                <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 18 }}>
-                  <input
-                    value={createDraftTitle}
-                    onChange={(event) => setCreateDraftTitle(event.target.value)}
-                    placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
-                    className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                    autoFocus
-                  />
-                </div>
-                <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                  <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
-                  <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
-                </div>
-              </form>
+              <IsolatedCreateRowForm
+                placeholder={createSelection.kind === "epic" ? "Type epic title and press Enter..." : "Type user story title and press Enter..."}
+                formStyle={{ gridTemplateColumns: tableGridTemplate }}
+                inputWrapperStyle={{ paddingLeft: indentPx + 18 }}
+                rightSlotStyle={createFormRestGridStyle}
+                submitting={submittingKey === "create"}
+                onCancel={closeInlineCreator}
+                onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+              />
             ) : null}
             {isInitOpen ? (
               <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
@@ -4985,16 +5316,7 @@ export function BacklogPlanningPanel({
                             >
                               <EpicPlanBarIcon icon={standEpicModel?.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
                               {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
-                                <span className="flex min-w-0 items-center gap-1">
-                                  <input
-                                    value={editingParentTitle.value}
-                                    onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.epicId, value: event.target.value })}
-                                    className="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                                    autoFocus
-                                  />
-                                  <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                                  <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.epicId, epic.epicTitle)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                                </span>
+                                renderParentTitleEditor("epic", epic.epicId, epic.epicTitle)
                               ) : (
                                 <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                                   <span className="truncate">{epic.epicTitle}</span>
@@ -5164,21 +5486,15 @@ export function BacklogPlanningPanel({
                       })}
                     </div>
                     {createSelection?.anchorKey === `group-standalone-epic:${epic.epicId}` ? (
-                      <form onSubmit={handleCreateSubmit} className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")} style={{ gridTemplateColumns: tableGridTemplate }}>
-                        <div className="flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 52 }}>
-                          <input
-                            value={createDraftTitle}
-                            onChange={(event) => setCreateDraftTitle(event.target.value)}
-                            placeholder="Type user story title and press Enter..."
-                            className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                          <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
-                          <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
-                        </div>
-                      </form>
+                      <IsolatedCreateRowForm
+                        placeholder="Type user story title and press Enter..."
+                        formStyle={{ gridTemplateColumns: tableGridTemplate }}
+                        inputWrapperStyle={{ paddingLeft: indentPx + 52 }}
+                        rightSlotStyle={createFormRestGridStyle}
+                        submitting={submittingKey === "create"}
+                        onCancel={closeInlineCreator}
+                        onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                      />
                     ) : null}
                   </div>
                   );
@@ -5233,10 +5549,18 @@ export function BacklogPlanningPanel({
     }
   }
 
-  async function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  /**
+   * Inline-form submit handler. Accepts an optional explicit title arg so
+   * isolated-state inputs (where the typed value lives in a child
+   * component's local state, not `createDraftTitle`) can call this from
+   * their own submit handler without first pushing the value into panel
+   * state. Falls back to `createDraftTitle` for the few sites that still
+   * use the old form layout.
+   */
+  async function handleCreateSubmit(event: FormEvent<HTMLFormElement> | null, explicitTitle?: string) {
+    event?.preventDefault();
     if (!createSelection) return;
-    const title = createDraftTitle.trim();
+    const title = (explicitTitle ?? createDraftTitle).trim();
     if (title.length < 2) return;
     setSubmittingKey("create");
     try {
@@ -6023,25 +6347,16 @@ export function BacklogPlanningPanel({
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
         <div className="mb-3 w-full min-w-0 max-w-full shrink-0 overflow-x-auto">
-        <form
-          onSubmit={handleCreateSubmit}
-          className={cn("grid w-max min-w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3")}
-          style={{ gridTemplateColumns: tableGridTemplate }}
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <input
-              value={createDraftTitle}
-              onChange={(event) => setCreateDraftTitle(event.target.value)}
-              placeholder="Type initiative title and press Enter..."
-              className="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-              autoFocus
-            />
-          </div>
-          <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-            <button type="submit" disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"><Plus className="size-3.5" /></button>
-            <button type="button" onClick={closeInlineCreator} className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"><X className="size-3.5" /></button>
-          </div>
-        </form>
+          <IsolatedCreateRowForm
+            placeholder="Type initiative title and press Enter..."
+            formClassName={cn("grid w-max min-w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3")}
+            formStyle={{ gridTemplateColumns: tableGridTemplate }}
+            inputClassName="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
+            rightSlotStyle={createFormRestGridStyle}
+            submitting={submittingKey === "create"}
+            onCancel={closeInlineCreator}
+            onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+          />
         </div>
       ) : null}
 
@@ -6206,16 +6521,7 @@ export function BacklogPlanningPanel({
                           >
                             <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
                             {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id ? (
-                              <span className="flex min-w-0 items-center gap-1">
-                                <input
-                                  value={editingParentTitle.value}
-                                  onChange={(event) => setEditingParentTitle({ kind: "initiative", id: initiative.id, value: event.target.value })}
-                                  className="h-7 min-w-[220px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                                  autoFocus
-                                />
-                                <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                                <button type="button" onClick={() => void confirmParentTitleEdit("initiative", initiative.id, initiative.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                              </span>
+                              renderParentTitleEditor("initiative", initiative.id, initiative.title)
                             ) : (
                               <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
                                 <span className="truncate">{initiative.title}</span>
@@ -6245,7 +6551,8 @@ export function BacklogPlanningPanel({
                             <Plus className="size-3.5 text-slate-600" />
                           </button>
                           {openCreateMenuKey === `initiative:${initiative.id}` ? (
-                            <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
+                            <div className="absolute left-full top-1/2 z-30 ml-2 w-60 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1.5 shadow-xl backdrop-blur-sm">
+                              <p className="px-2 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">Create</p>
                               <button
                                 type="button"
                                 onClick={() =>
@@ -6256,10 +6563,15 @@ export function BacklogPlanningPanel({
                                     initiativeId: initiative.id,
                                   })
                                 }
-                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
+                                className="group/menu-item flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-blue-50"
                               >
-                                <Zap className="size-3.5 text-blue-600" strokeWidth={1.9} />
-                                Add initiative
+                                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 ring-1 ring-blue-200/80 group-hover/menu-item:bg-blue-200">
+                                  <Zap className="size-4" strokeWidth={2} aria-hidden />
+                                </span>
+                                <span className="flex min-w-0 flex-col">
+                                  <span className="text-[14.5px] font-semibold text-slate-900">Initiative</span>
+                                  <span className="text-[11.5px] text-slate-500">New sibling initiative</span>
+                                </span>
                               </button>
                               <button
                                 type="button"
@@ -6271,10 +6583,15 @@ export function BacklogPlanningPanel({
                                     initiativeId: initiative.id,
                                   })
                                 }
-                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
+                                className="group/menu-item flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-amber-50"
                               >
-                                <Folder className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-                                Add epic
+                                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 ring-1 ring-amber-200/80 group-hover/menu-item:bg-amber-200">
+                                  <Folder className="size-4" strokeWidth={2} aria-hidden />
+                                </span>
+                                <span className="flex min-w-0 flex-col">
+                                  <span className="text-[14.5px] font-semibold text-slate-900">Epic</span>
+                                  <span className="text-[11.5px] text-slate-500">Under this initiative</span>
+                                </span>
                               </button>
                             </div>
                           ) : null}
@@ -6446,113 +6763,48 @@ export function BacklogPlanningPanel({
                     })}
                   </div>
                   {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind === "initiative" ? (
-                    <form
-                      onSubmit={handleCreateSubmit}
-                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")}
-                      style={{ gridTemplateColumns: tableGridTemplate }}
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <input
-                          value={createDraftTitle}
-                          onChange={(event) => setCreateDraftTitle(event.target.value)}
-                          placeholder="Type initiative title and press Enter..."
-                          autoComplete="off"
-                          autoCorrect="off"
-                          autoCapitalize="none"
-                          spellCheck={false}
-                          data-1p-ignore="true"
-                          data-lpignore="true"
-                          data-bwignore="true"
-                          data-form-type="other"
-                          data-protonpass-ignore="true"
-                          className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                        <button
-                          type="submit"
-                          disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                          <Plus className="size-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={closeInlineCreator}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-                    </form>
+                    <IsolatedCreateRowForm
+                      placeholder="Type initiative title and press Enter..."
+                      formStyle={{ gridTemplateColumns: tableGridTemplate }}
+                      rightSlotStyle={createFormRestGridStyle}
+                      submitting={submittingKey === "create"}
+                      onCancel={closeInlineCreator}
+                      onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                    />
                   ) : null}
 
                   {isInitOpen ? (
                     <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
                       {createSelection?.anchorKey === `initiative:${initiative.id}` && createSelection.kind !== "initiative" ? (
-                        <form
-                          onSubmit={handleCreateSubmit}
-                          className={cn("grid min-w-full w-max items-center gap-3 py-2")}
-                          style={{ gridTemplateColumns: tableGridTemplate }}
-                        >
-                          <div className="flex min-w-0 items-center gap-2 pl-6">
-                            <input
-                              value={createDraftTitle}
-                              onChange={(event) => setCreateDraftTitle(event.target.value)}
-                              placeholder={
-                                createSelection.kind === "epic"
-                                  ? "Type epic title and press Enter..."
-                                  : "Type user story title and press Enter..."
-                              }
-                              autoComplete="off"
-                              autoCorrect="off"
-                              autoCapitalize="none"
-                              spellCheck={false}
-                              data-1p-ignore="true"
-                              data-lpignore="true"
-                              data-bwignore="true"
-                              data-form-type="other"
-                              data-protonpass-ignore="true"
-                              className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                              autoFocus
-                            />
-                          </div>
-                          <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                            {createSelection.kind === "story" ? (
-                              <select
-                                value={storyTargetEpicId}
-                                onChange={(event) => setStoryTargetEpicId(event.target.value)}
-                                className="h-9 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                              >
-                                <option value="">Select epic</option>
-                                {(initiative.epics ?? []).map((epic) => (
-                                  <option key={epic.id} value={epic.id}>
-                                    {epic.icon} {epic.title}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : null}
-                            <button
-                              type="submit"
-                              disabled={
-                                createDraftTitle.trim().length < 2 ||
-                                submittingKey === "create" ||
-                                (createSelection.kind === "story" && !storyTargetEpicId)
-                              }
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
+                        <IsolatedCreateRowForm
+                          placeholder={
+                            createSelection.kind === "epic"
+                              ? "Type epic title and press Enter..."
+                              : "Type user story title and press Enter..."
+                          }
+                          formClassName={cn("grid min-w-full w-max items-center gap-3 py-2")}
+                          formStyle={{ gridTemplateColumns: tableGridTemplate }}
+                          inputWrapperStyle={{ paddingLeft: 24 }}
+                          rightSlotStyle={createFormRestGridStyle}
+                          submitting={submittingKey === "create"}
+                          saveDisabledExtra={createSelection.kind === "story" && !storyTargetEpicId}
+                          extras={createSelection.kind === "story" ? (
+                            <select
+                              value={storyTargetEpicId}
+                              onChange={(event) => setStoryTargetEpicId(event.target.value)}
+                              className="h-9 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                             >
-                              <Plus className="size-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={closeInlineCreator}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
-                            >
-                              <X className="size-3.5" />
-                            </button>
-                          </div>
-                        </form>
+                              <option value="">Select epic</option>
+                              {(initiative.epics ?? []).map((epic) => (
+                                <option key={epic.id} value={epic.id}>
+                                  {epic.icon} {epic.title}
+                                </option>
+                              ))}
+                            </select>
+                          ) : undefined}
+                          onCancel={closeInlineCreator}
+                          onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                        />
                       ) : null}
                       {(initiative.epics ?? [])
                         .slice()
@@ -6612,16 +6864,7 @@ export function BacklogPlanningPanel({
                                     >
                                       <span className="inline-block size-4 shrink-0" aria-hidden />
                                       {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.id ? (
-                                        <span className="flex min-w-0 items-center gap-1">
-                                          <input
-                                            value={editingParentTitle.value}
-                                            onChange={(event) => setEditingParentTitle({ kind: "epic", id: epic.id, value: event.target.value })}
-                                            className="h-7 min-w-[200px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                                            autoFocus
-                                          />
-                                          <button type="button" onClick={() => setEditingParentTitle(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                                          <button type="button" onClick={() => void confirmParentTitleEdit("epic", epic.id, epic.title)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
-                                        </span>
+                                        renderParentTitleEditor("epic", epic.id, epic.title)
                                       ) : (
                                         <span className="inline-flex w-full min-w-0 items-center gap-1.5 text-[16px] font-medium text-slate-800">
                                           <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
@@ -6877,50 +7120,20 @@ export function BacklogPlanningPanel({
                               })}
                             </div>
                             {createSelection?.anchorKey === `epic:${epic.id}` ? (
-                              <form
-                                onSubmit={handleCreateSubmit}
-                                className={cn("grid min-w-full w-max items-center gap-3 py-2")}
-                                style={{ gridTemplateColumns: tableGridTemplate }}
-                              >
-                                <div className="flex min-w-0 items-center gap-2 pl-12">
-                                  <input
-                                    value={createDraftTitle}
-                                    onChange={(event) => setCreateDraftTitle(event.target.value)}
-                                    placeholder={
-                                      createSelection.kind === "epic"
-                                        ? "Type epic title and press Enter..."
-                                        : "Type user story title and press Enter..."
-                                    }
-                                    autoComplete="off"
-                                    autoCorrect="off"
-                                    autoCapitalize="none"
-                                    spellCheck={false}
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                    data-bwignore="true"
-                                    data-form-type="other"
-                                    data-protonpass-ignore="true"
-                                    className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                                    autoFocus
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                                  <button
-                                    type="submit"
-                                    disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
-                                  >
-                                    <Plus className="size-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={closeInlineCreator}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
-                                  >
-                                    <X className="size-3.5" />
-                                  </button>
-                                </div>
-                              </form>
+                              <IsolatedCreateRowForm
+                                placeholder={
+                                  createSelection.kind === "epic"
+                                    ? "Type epic title and press Enter..."
+                                    : "Type user story title and press Enter..."
+                                }
+                                formClassName={cn("grid min-w-full w-max items-center gap-3 py-2")}
+                                formStyle={{ gridTemplateColumns: tableGridTemplate }}
+                                inputWrapperStyle={{ paddingLeft: 48 }}
+                                rightSlotStyle={createFormRestGridStyle}
+                                submitting={submittingKey === "create"}
+                                onCancel={closeInlineCreator}
+                                onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                              />
                             ) : null}
 
                             {isEpicOpen ? (
@@ -7300,46 +7513,15 @@ export function BacklogPlanningPanel({
                                       );
                                     })()}
                                   {createSelection?.anchorKey === `story:${story.id}` ? (
-                                    <form
-                                      onSubmit={handleCreateSubmit}
-                                      className={cn("grid min-w-full w-max items-center gap-3 bg-slate-50 py-2")}
-                                      style={{ gridTemplateColumns: tableGridTemplate }}
-                                    >
-                                      <div className="flex min-w-0 items-center gap-2 pl-16">
-                                        <input
-                                          value={createDraftTitle}
-                                          onChange={(event) => setCreateDraftTitle(event.target.value)}
-                                          placeholder="Type user story title and press Enter..."
-                                          autoComplete="off"
-                                          autoCorrect="off"
-                                          autoCapitalize="none"
-                                          spellCheck={false}
-                                          data-1p-ignore="true"
-                                          data-lpignore="true"
-                                          data-bwignore="true"
-                                          data-form-type="other"
-                                          data-protonpass-ignore="true"
-                                          className="h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-                                          autoFocus
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-2" style={createFormRestGridStyle}>
-                                        <button
-                                          type="submit"
-                                          disabled={createDraftTitle.trim().length < 2 || submittingKey === "create"}
-                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
-                                        >
-                                          <Plus className="size-3.5" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={closeInlineCreator}
-                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
-                                        >
-                                          <X className="size-3.5" />
-                                        </button>
-                                      </div>
-                                    </form>
+                                    <IsolatedCreateRowForm
+                                      placeholder="Type user story title and press Enter..."
+                                      formStyle={{ gridTemplateColumns: tableGridTemplate }}
+                                      inputWrapperStyle={{ paddingLeft: 64 }}
+                                      rightSlotStyle={createFormRestGridStyle}
+                                      submitting={submittingKey === "create"}
+                                      onCancel={closeInlineCreator}
+                                      onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                                    />
                                   ) : null}
                                   </div>
                                 ))}
