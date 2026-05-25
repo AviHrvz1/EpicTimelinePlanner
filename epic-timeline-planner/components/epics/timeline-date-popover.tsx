@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -79,7 +79,10 @@ export function TimelineDatePopover({
     setView({ year: base.getFullYear(), month0: base.getMonth() });
   }, [open, selected, fallbackYear, fallbackMonth1]);
 
-  // Anchor positioning.
+  // Anchor positioning — opens UPWARD from the anchor's top edge. Falls
+  // back to a fixed 300px height estimate on the first paint (the popover
+  // is fixed-size: 6-week grid + headers + Q chip), then re-measures and
+  // snaps to the actual height once mounted.
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   useEffect(() => {
@@ -90,7 +93,10 @@ export function TimelineDatePopover({
       const r = a.getBoundingClientRect();
       const popoverWidth = 264;
       const desiredLeft = Math.min(window.innerWidth - popoverWidth - 8, Math.max(8, r.left));
-      setPosition({ top: r.bottom + 6, left: desiredLeft });
+      const measuredHeight = popoverRef.current?.offsetHeight ?? 0;
+      const popoverHeight = measuredHeight > 0 ? measuredHeight : 300;
+      const desiredTop = Math.max(8, r.top - popoverHeight - 6);
+      setPosition({ top: desiredTop, left: desiredLeft });
     }
     updatePos();
     window.addEventListener("resize", updatePos);
@@ -99,6 +105,20 @@ export function TimelineDatePopover({
       window.removeEventListener("resize", updatePos);
       window.removeEventListener("scroll", updatePos, true);
     };
+  }, [open, anchorRef]);
+  // Re-measure once mounted so the popover snaps to its true height
+  // (rather than the initial 300px estimate).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const a = anchorRef.current;
+    const popover = popoverRef.current;
+    if (!a || !popover) return;
+    const r = a.getBoundingClientRect();
+    const measured = popover.offsetHeight;
+    if (measured <= 0) return;
+    const popoverWidth = 264;
+    const desiredLeft = Math.min(window.innerWidth - popoverWidth - 8, Math.max(8, r.left));
+    setPosition({ top: Math.max(8, r.top - measured - 6), left: desiredLeft });
   }, [open, anchorRef]);
 
   // Click-outside / Escape close.

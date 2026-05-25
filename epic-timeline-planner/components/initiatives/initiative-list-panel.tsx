@@ -797,6 +797,12 @@ type InitiativeListPanelProps = {
   onEpicAccordionChange?: (epicId: string, isOpen: boolean) => void;
   /** Optional top-chip quick filter sync (Scheduled / Unscheduled epics). */
   panelStatusQuickFilter?: "Scheduled" | "Unscheduled" | null;
+  /** Seed the initiative search box from outside (e.g. when the user jumps
+   *  from the Backlog's "Schedule" link with a specific epic title). The
+   *  panel writes this value into its internal `initiativeSearch` state
+   *  whenever the prop CHANGES. Pass empty string to clear search; pass
+   *  `null`/`undefined` to leave whatever the user typed alone. */
+  prefillSearchQuery?: string | null;
   /** Optional action to hide this entire left panel. */
   onHidePanel?: () => void;
   /**
@@ -1957,6 +1963,7 @@ export function InitiativeListPanel({
   onInitiativeAccordionChange,
   onEpicAccordionChange,
   panelStatusQuickFilter = null,
+  prefillSearchQuery = null,
   onHidePanel,
   workspaceDirectoryUsers = [],
   isOnEpicGanttTab = false,
@@ -2214,6 +2221,14 @@ export function InitiativeListPanel({
     }
     setPanelStatusFilters([panelStatusQuickFilter]);
   }, [panelStatusQuickFilter]);
+
+  /** Pre-fill the search box from a parent-supplied seed. Fires only on
+   *  changes (null/undefined → no-op) so the user's manually-typed query
+   *  isn't overwritten when the parent re-renders with the same seed. */
+  useEffect(() => {
+    if (prefillSearchQuery == null) return;
+    setInitiativeSearch(prefillSearchQuery);
+  }, [prefillSearchQuery]);
 
   /**
    * Keep left-panel team chips aligned with sprint board team (Kanban / capacity / insights).

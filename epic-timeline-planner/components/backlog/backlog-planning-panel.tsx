@@ -18,6 +18,7 @@ import {
   ChevronsUp,
   ChevronUp,
   Eraser,
+  ExternalLink,
   Filter,
   Flag,
   Folder,
@@ -111,6 +112,11 @@ type BacklogPlanningPanelProps = {
    *  default to the current calendar year when omitted. */
   onCreateRoadmapQuick?: (name: string, years?: number[]) => Promise<string | null>;
   onRenameRoadmap?: (id: string, name: string) => Promise<void>;
+  /** Jump the user to the Roadmap Planning view with the middle panel
+   *  filtered to "Unscheduled" epics. When an `epicTitle` is supplied, the
+   *  panel's initiative search box is also pre-filled so the user lands
+   *  right at the epic they wanted to schedule. */
+  onJumpToRoadmapPlanning?: (epicTitle?: string) => void;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   onPatchStoryQuick: (
@@ -1093,7 +1099,7 @@ function quarterFromMonth(month: number | null | undefined): string {
 }
 
 function quarterLabelOrUnscheduled(value: string | null | undefined): string {
-  return !value || value === "-" ? "Unscheduled" : value;
+  return !value || value === "-" ? "Unscheduled work" : value;
 }
 
 function quarterSortValue(value: string | null | undefined): string {
@@ -2536,6 +2542,7 @@ export function BacklogPlanningPanel({
   onCreateInitiativeQuick,
   onCreateRoadmapQuick,
   onRenameRoadmap,
+  onJumpToRoadmapPlanning,
   onCreateEpicQuick,
   onCreateStoryQuick,
   onPatchStoryQuick,
@@ -3352,17 +3359,16 @@ export function BacklogPlanningPanel({
   }, [initiatives]);
 
   const roadmapOptions = useMemo(() => {
-    // Only surface roadmaps that have at least one initiative loaded — the parent
-    // pre-filters by the active roadmap, so other roadmaps would appear empty.
-    const ids = new Set<string>();
-    for (const i of initiatives) if (i.roadmapId) ids.add(i.roadmapId);
-    if (ids.size === 0) return [];
-    const byId = new Map<string, string>();
-    for (const r of roadmaps ?? []) byId.set(r.id, r.name);
-    return [...ids]
-      .map((id) => ({ id, label: byId.get(id) ?? id }))
+    // Surface EVERY known roadmap, even ones that don't have an initiative
+    // yet — the user just created an empty roadmap and should still be able
+    // to filter to it (e.g. to confirm it's empty, or before adding the
+    // first initiative). The backlog already loads year=all/roadmapId=all
+    // so a previously-hidden roadmap won't appear empty just because of
+    // parent pre-filtering.
+    return (roadmaps ?? [])
+      .map((r) => ({ id: r.id, label: r.name }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [roadmaps, initiatives]);
+  }, [roadmaps]);
 
   /** Parent picker tree — built from the unfiltered initiatives so users can
    *  always re-select a parent they previously filtered out. Sorted by title. */
@@ -3903,29 +3909,41 @@ export function BacklogPlanningPanel({
   const groupedStandaloneInitiatives = useMemo(() => {
     return fullyFiltered
       .filter((initiative) => (initiative.epics ?? []).every((epic) => (epic.userStories ?? []).length === 0))
-      .map((initiative) => ({
-        initiativeId: initiative.id,
-        initiativeTitle: initiative.title,
-        initiativeYear: String(initiative.year),
-        initiativeRoadmapId: initiative.roadmapId ?? "",
-        initiativeRoadmapLabel: initiative.roadmapId ? (roadmapNameById.get(initiative.roadmapId) ?? initiative.roadmapId) : "No roadmap",
-        initiativeStatus: rollupWorkflowStatus([]),
-        initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
-        initiativeMonthNum: initiative.startMonth ?? null,
-        initiativeMonthLabelValue: monthLabel(initiative.startMonth),
-        initiativeQuarterLabelValue: quarterFromMonth(initiative.startMonth),
-        initiativeTeamId: aggregateInitiativeTeamId(initiative),
-        epics: (initiative.epics ?? []).map((epic) => ({
-          epicId: epic.id,
-          epicTitle: epic.title,
-          epicAssignee: epic.assignee?.trim() || "Unassigned",
-          epicOriginalEstimateDays: epic.originalEstimateDays ?? 0,
-          epicTeamId: (epic.team ?? null) as string | null,
-          epicMonthNum: epic.planStartMonth ?? initiative.startMonth ?? null,
-          epicMonthLabelValue: monthLabel(epic.planStartMonth ?? initiative.startMonth),
-          epicQuarterLabelValue: quarterFromMonth(epic.planStartMonth ?? initiative.startMonth),
-        })),
-      }));
+      .map((initiative) => {
+        // Initiative-level month/quarter is now derived as the min of its
+        // child epics' planStartMonth — `initiative.startMonth` itself is
+        // legacy/ignored, and never falls back into the epic-level fields.
+        const scheduledEpicMonths = (initiative.epics ?? [])
+          .map((epic) => epic.planStartMonth)
+          .filter((m): m is number => m != null);
+        const derivedInitiativeMonth = scheduledEpicMonths.length > 0 ? Math.min(...scheduledEpicMonths) : null;
+        return {
+          initiativeId: initiative.id,
+          initiativeTitle: initiative.title,
+          initiativeYear: String(initiative.year),
+          initiativeRoadmapId: initiative.roadmapId ?? "",
+          initiativeRoadmapLabel: initiative.roadmapId ? (roadmapNameById.get(initiative.roadmapId) ?? initiative.roadmapId) : "No roadmap",
+          initiativeStatus: rollupWorkflowStatus([]),
+          initiativeAssignee: initiative.assignee?.trim() || "Unassigned",
+          initiativeMonthNum: derivedInitiativeMonth,
+          initiativeMonthLabelValue: monthLabel(derivedInitiativeMonth),
+          initiativeQuarterLabelValue: quarterFromMonth(derivedInitiativeMonth),
+          initiativeTeamId: aggregateInitiativeTeamId(initiative),
+          epics: (initiative.epics ?? []).map((epic) => ({
+            epicId: epic.id,
+            epicTitle: epic.title,
+            epicAssignee: epic.assignee?.trim() || "Unassigned",
+            epicOriginalEstimateDays: epic.originalEstimateDays ?? 0,
+            epicTeamId: (epic.team ?? null) as string | null,
+            // Unscheduled epics keep `null` here — no longer borrow from the
+            // initiative's legacy month. That borrowing was the source of
+            // "ghost" Q-bucketing for empty initiatives.
+            epicMonthNum: epic.planStartMonth ?? null,
+            epicMonthLabelValue: monthLabel(epic.planStartMonth),
+            epicQuarterLabelValue: quarterFromMonth(epic.planStartMonth),
+          })),
+        };
+      });
   }, [fullyFiltered]);
 
   /**
@@ -5043,7 +5061,7 @@ export function BacklogPlanningPanel({
                     onClick={() => { if (editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId) return; onOpenInitiative(initiativeId); }}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
+                    <Zap className="size-4 shrink-0 text-sky-500" strokeWidth={1.9} />
                     {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
                       renderParentTitleEditor("initiative", initiativeId, initiativeTitle)
                     ) : (
@@ -5205,26 +5223,11 @@ export function BacklogPlanningPanel({
               year: { kind: "lock" },
               quarter: { kind: "lock" },
               month: { kind: "lock" },
-              startDate: {
-                kind: "edit",
-                onEdit: () =>
-                  beginInitiativeDateEdit(
-                    initiativeId,
-                    "start",
-                    Number(initiativeYear),
-                    initModelForRow?.startMonth ?? null,
-                  ),
-              },
-              endDate: {
-                kind: "edit",
-                onEdit: () =>
-                  beginInitiativeDateEdit(
-                    initiativeId,
-                    "end",
-                    Number(initiativeYear),
-                    initModelForRow?.endMonth ?? null,
-                  ),
-              },
+              // Initiative dates are derived from child epics — no inline edit.
+              // The lock icon on hover signals "read-only by design" so users
+              // know to plan via epics rather than typing here.
+              startDate: { kind: "lock" },
+              endDate: { kind: "lock" },
               status: { kind: "lock" },
               sprint: { kind: "lock" },
               labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiativeId, labels: initModelForRow?.labels ?? null }) },
@@ -5366,27 +5369,31 @@ export function BacklogPlanningPanel({
       standaloneRows: typeof groupedStandaloneInitiatives;
     };
     const groups = new Map<string, Bucket>();
-    // When grouping by roadmap, seed the map with EVERY known roadmap so
+    // When grouping by roadmap, seed the map with every known roadmap so
     // roadmaps with zero initiatives still get a (empty) header row. This
     // lets a brand-new "Roadmap2" be visible in the backlog even before
-    // anyone has added an initiative to it.
+    // anyone has added an initiative to it. Honors the active roadmap
+    // filter so the seeded buckets don't bypass it (the row data goes
+    // through `backlogFilteredBeforeWorkItem` which DOES filter, but the
+    // seed is independent — must replicate the filter here).
     if (level === "roadmap" && roadmaps && roadmaps.length > 0) {
       for (const r of roadmaps) {
+        if (roadmapFilter.length > 0 && !roadmapFilter.includes(r.id)) continue;
         const key = r.id;
         const label = r.name;
         groups.set(key, { label, sort: label.toLowerCase(), rows: [], standaloneRows: [] });
       }
     }
-    // Quarter level: always seed Q1-Q4 PLUS an "Unscheduled" bucket so the
-    // user has a predictable parking spot for any initiative/epic/story that
-    // doesn't have a start month yet. New initiatives without a planned
-    // quarter land here automatically instead of getting buried under a
+    // Quarter level: always seed Q1-Q4 PLUS an "Unscheduled work" bucket so
+    // the user has a predictable parking spot for any initiative/epic/story
+    // whose epics aren't scheduled yet. New initiatives without scheduled
+    // epics land here automatically instead of getting buried under a
     // dynamically-created folder users can miss.
     if (level === "quarter") {
       for (const q of ["Q1", "Q2", "Q3", "Q4"] as const) {
         groups.set(q, { label: q, sort: quarterSortValue(q), rows: [], standaloneRows: [] });
       }
-      const unscheduledKey = "Unscheduled";
+      const unscheduledKey = "Unscheduled work";
       groups.set(unscheduledKey, {
         label: unscheduledKey,
         sort: quarterSortValue(unscheduledKey),
@@ -5399,10 +5406,40 @@ export function BacklogPlanningPanel({
       if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
       groups.get(key)!.rows.push(row);
     }
-    for (const row of standaloneRows) {
-      const { key, label, sort } = keyForStandaloneLevel(row, level);
-      if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
-      groups.get(key)!.standaloneRows.push(row);
+    // Quarter level: fan out each standalone initiative by its epics' own
+    // quarters. An initiative with epics in Q1 AND Q2 appears in BOTH
+    // quarter folders, each containing only the relevant epics. Unscheduled
+    // epics (or initiatives with no epics) collect under "Unscheduled work".
+    // This matches how story rows already cascade by sprint's quarter, so
+    // the multi-instance behavior is consistent across the tree.
+    if (level === "quarter") {
+      for (const row of standaloneRows) {
+        if (row.epics.length === 0) {
+          groups.get("Unscheduled work")!.standaloneRows.push(row);
+          continue;
+        }
+        const byQuarter = new Map<string, typeof row.epics>();
+        for (const epic of row.epics) {
+          const q = quarterLabelOrUnscheduled(epic.epicQuarterLabelValue);
+          if (!byQuarter.has(q)) byQuarter.set(q, []);
+          byQuarter.get(q)!.push(epic);
+        }
+        for (const [q, epics] of byQuarter.entries()) {
+          if (!groups.has(q)) {
+            groups.set(q, { label: q, sort: quarterSortValue(q), rows: [], standaloneRows: [] });
+          }
+          // Push a row variant containing only the epics for this quarter.
+          // The renderer maps over row.epics directly, so this naturally
+          // limits which epics appear under each quarter folder.
+          groups.get(q)!.standaloneRows.push({ ...row, epics });
+        }
+      }
+    } else {
+      for (const row of standaloneRows) {
+        const { key, label, sort } = keyForStandaloneLevel(row, level);
+        if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
+        groups.get(key)!.standaloneRows.push(row);
+      }
     }
     // Year level with no real data: seed the current calendar year so the
     // recursion can still descend into a quarter level for empty roadmaps.
@@ -5415,9 +5452,24 @@ export function BacklogPlanningPanel({
       .map(([key, group]) => {
         const folderId = `${path}${level}:${key}`;
         // Trailing actions vary by level:
-        //  - Quarter: "+ Add initiative" composer trigger
+        //  - Quarter (Q1-Q4): "+ Add initiative" composer trigger
+        //  - Quarter (Unscheduled work): "Schedule in Roadmap Planning" link
         //  - Roadmap: inline-edit pencil (hover-revealed) when rename is wired
-        const trailingAction = level === "quarter" ? (
+        const trailingAction = level === "quarter" && key === "Unscheduled work" && onJumpToRoadmapPlanning ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onJumpToRoadmapPlanning();
+            }}
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-semibold text-sky-700 opacity-60 ring-1 ring-sky-200 transition hover:bg-sky-50 hover:opacity-100 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+            title="Open Roadmap Planning with Unscheduled epics filter"
+            aria-label="Open Roadmap Planning to schedule these epics"
+          >
+            <ExternalLink className="size-3 text-sky-600" />
+            Schedule
+          </button>
+        ) : level === "quarter" ? (
           <button
             type="button"
             onClick={(event) => {
@@ -5512,13 +5564,13 @@ export function BacklogPlanningPanel({
           // =the 4-bars progress icon (same icon used on the year-Gantt quarter
           // chips, so users see a consistent "this is a quarter" identity).
           level === "roadmap"
-            ? <MapIcon className="size-4 shrink-0 text-indigo-500" aria-hidden />
+            ? <MapIcon className="size-4 shrink-0 text-sky-500" aria-hidden />
             : level === "year"
-              ? <CalendarDays className="size-4 shrink-0 text-sky-600" aria-hidden />
+              ? <CalendarDays className="size-4 shrink-0 text-sky-500" aria-hidden />
               : level === "quarter"
-                ? key === "Unscheduled"
+                ? key === "Unscheduled work"
                   ? <CalendarOff className="size-4 shrink-0 text-slate-400" aria-hidden />
-                  : <QuarterYearProgressIcon quarterLabel={key} className="text-violet-600" />
+                  : <QuarterYearProgressIcon quarterLabel={key} className="text-sky-500" />
                 : undefined,
           trailingAction,
           // Empty quarter folders default to collapsed so the always-rendered
@@ -5586,7 +5638,7 @@ export function BacklogPlanningPanel({
                       }}
                       className="flex min-w-0 flex-1 items-center gap-2 text-left"
                     >
-                      <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
+                      <Zap className="size-4 shrink-0 text-sky-500" strokeWidth={1.9} />
                       {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
                         renderParentTitleEditor("initiative", initiative.initiativeId, initiative.initiativeTitle)
                       ) : (
@@ -5722,26 +5774,9 @@ export function BacklogPlanningPanel({
                 year: { kind: "lock" },
                 quarter: { kind: "lock" },
                 month: { kind: "lock" },
-                startDate: {
-                  kind: "edit",
-                  onEdit: () =>
-                    beginInitiativeDateEdit(
-                      initiative.initiativeId,
-                      "start",
-                      Number(initiative.initiativeYear),
-                      standInitModel?.startMonth ?? null,
-                    ),
-                },
-                endDate: {
-                  kind: "edit",
-                  onEdit: () =>
-                    beginInitiativeDateEdit(
-                      initiative.initiativeId,
-                      "end",
-                      Number(initiative.initiativeYear),
-                      standInitModel?.endMonth ?? null,
-                    ),
-                },
+                // Initiative dates are derived from child epics — no inline edit.
+                startDate: { kind: "lock" },
+                endDate: { kind: "lock" },
                 status: { kind: "lock" },
                 sprint: { kind: "lock" },
                 assignee: { kind: "lock" },
@@ -5838,6 +5873,21 @@ export function BacklogPlanningPanel({
                             >
                               <Plus className="size-3.5 text-slate-600" />
                             </button>
+                            {epic.epicMonthNum == null && onJumpToRoadmapPlanning ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onJumpToRoadmapPlanning(epic.epicTitle);
+                                }}
+                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-semibold text-sky-700 opacity-60 ring-1 ring-sky-200 transition hover:bg-sky-50 hover:opacity-100 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                                title={`Open Roadmap Planning and search "${epic.epicTitle}" to schedule`}
+                                aria-label={`Schedule epic "${epic.epicTitle}" in Roadmap Planning`}
+                              >
+                                <ExternalLink className="size-3 text-sky-600" />
+                                Schedule
+                              </button>
+                            ) : null}
                           </div>
                         ),
                         team: isEditingParentTeam("epic", epic.epicId) ? (
@@ -7212,7 +7262,7 @@ export function BacklogPlanningPanel({
                             }}
                             className="flex min-w-0 flex-1 items-center gap-2 text-left"
                           >
-                            <Zap className="size-4 shrink-0 text-blue-600" strokeWidth={1.9} />
+                            <Zap className="size-4 shrink-0 text-sky-500" strokeWidth={1.9} />
                             {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.id ? (
                               renderParentTitleEditor("initiative", initiative.id, initiative.title)
                             ) : (
@@ -7426,26 +7476,9 @@ export function BacklogPlanningPanel({
                       year: { kind: "lock" },
                       quarter: { kind: "lock" },
                       month: { kind: "lock" },
-                      startDate: {
-                        kind: "edit",
-                        onEdit: () =>
-                          beginInitiativeDateEdit(
-                            initiative.id,
-                            "start",
-                            initiative.year,
-                            initiative.startMonth ?? null,
-                          ),
-                      },
-                      endDate: {
-                        kind: "edit",
-                        onEdit: () =>
-                          beginInitiativeDateEdit(
-                            initiative.id,
-                            "end",
-                            initiative.year,
-                            initiative.endMonth ?? null,
-                          ),
-                      },
+                      // Initiative dates are derived from child epics — no inline edit.
+                      startDate: { kind: "lock" },
+                      endDate: { kind: "lock" },
                       status: { kind: "lock" },
                       sprint: { kind: "lock" },
                       assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "initiative", id: initiative.id, value: initiative.assignee?.trim() || "" }) },

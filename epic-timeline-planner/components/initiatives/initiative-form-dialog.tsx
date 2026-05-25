@@ -1023,7 +1023,20 @@ export function InitiativeFormDialog({
                 </div>
                 <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-500 shadow-sm" /></label>
                 <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Timeline</p>
+                  <div className="inline-flex items-center gap-1">
+                    <p className="text-[15px] font-normal text-slate-700">Timeline</p>
+                    <span className="group relative inline-flex items-center">
+                      <Info
+                        className="size-3.5 text-slate-400"
+                        aria-label="Timeline is derived from child epic dates"
+                      />
+                      <span role="tooltip" className={infoTooltipClass}>
+                        Derived from child epic dates: start = earliest epic
+                        start, end = latest epic end. Set epic dates on the
+                        Gantt to update this range.
+                      </span>
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div
                       className="inline-flex h-8 w-full cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 pl-2.5 pr-2 text-[13px] text-slate-600 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.55)]"

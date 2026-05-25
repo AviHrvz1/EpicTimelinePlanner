@@ -1141,6 +1141,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("epic-gantt");
   const [activeQuarterViewTab, setActiveQuarterViewTab] = useState<QuarterSurfaceTab>("gantt");
   const [panelStatusQuickFilter, setPanelStatusQuickFilter] = useState<"Scheduled" | "Unscheduled" | null>(null);
+  /** Seed for the middle panel's initiative search box — used when the
+   *  user clicks "Schedule" on an unscheduled epic in the backlog so we can
+   *  pre-filter the roadmap planning view to that epic's title. We mutate
+   *  the value (`"" → "epic name" → ""`) so the same name can be jumped to
+   *  twice in a row (the dep change is what fires the panel's effect). */
+  const [middlePanelPrefillSearch, setMiddlePanelPrefillSearch] = useState<string | null>(null);
   /** When sprint Kanban is opened from a team lane: team id for breadcrumb and left epic list. */
   const [sprintStoryBoardTeamId, setSprintStoryBoardTeamId] = useState<string | null>(null);
   /** Users directory (name + team) for sprint Kanban / capacity assignee rosters. */
@@ -3255,6 +3261,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       }
       throw new Error(message);
     }
+    // Sync the backlog's separate state cache so the Start/End columns
+    // (and the parent initiative's derived range) reflect the move when
+    // the user switches to the Backlog tab. The Gantt's `initiatives`
+    // state is already updated optimistically by the caller.
+    void refreshBacklogInitiatives();
   }
 
   async function persistEpicTimelineRowPatches(prev: InitiativeItem[], next: InitiativeItem[]) {
@@ -5220,6 +5231,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                         flashSprintEpicAccordionEmphasis(epicId);
                       }}
                       panelStatusQuickFilter={panelStatusQuickFilter}
+                      prefillSearchQuery={middlePanelPrefillSearch}
                       onHidePanel={
                         leftRailLockedClosed ? undefined : () => setIsLeftPanelHidden(true)
                       }
@@ -5670,8 +5682,25 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     await patchEpicQuarterPlan(epicId, patch);
                     await persistEpicTimelineRowPatches(before, after);
                     console.log("[onResizeEpicPlanRange] success");
-                    toast.success("Approved", {
-                      description: "The epic timeline was adjusted and saved.",
+                    // Informative toast: tell the user EXACTLY where the
+                    // epic ended up so they can re-find it in the backlog
+                    // (Roadmap → Year → Quarter). Builds the location
+                    // from the parent initiative + new start month.
+                    const parentInit = before.find((init) =>
+                      (init.epics ?? []).some((e) => e.id === epicId),
+                    );
+                    const roadmapName =
+                      (parentInit?.roadmapId && roadmaps.find((r) => r.id === parentInit.roadmapId)?.name) ||
+                      "Default roadmap";
+                    const newQuarter = `Q${Math.ceil(range.startMonth / 3)}`;
+                    const monthNames = [
+                      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+                    ];
+                    const startLabel = `${monthNames[range.startMonth - 1]} ${parentInit?.year ?? ""}`.trim();
+                    const epicTitle = target.title;
+                    toast.success(`"${epicTitle}" moved to ${startLabel} (${newQuarter})`, {
+                      description: `Find it in the Backlog under ${roadmapName} → ${parentInit?.year ?? ""} → ${newQuarter}.`,
                     });
                   } catch (err) {
                     console.error("[onResizeEpicPlanRange]", err);
@@ -5823,6 +5852,18 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 }}
                 onCreateRoadmapQuick={createRoadmapQuick}
                 onRenameRoadmap={handleRenameRoadmap}
+                onJumpToRoadmapPlanning={(epicTitle) => {
+                  // Switch to roadmap planning view with the middle panel's
+                  // status quick filter pinned to "Unscheduled" so the user
+                  // immediately sees what they came to schedule. When an
+                  // epic title is provided, also seed the search box.
+                  setTopMode("roadmap");
+                  setPanelStatusQuickFilter("Unscheduled");
+                  setMiddlePanelPrefillSearch(epicTitle ?? "");
+                  // Reset the seed shortly after so a subsequent jump with
+                  // the same title still triggers the panel's effect.
+                  window.setTimeout(() => setMiddlePanelPrefillSearch(null), 200);
+                }}
                 onCreateEpicQuick={async (initiativeId, title) => {
                   try {
                     await createEpicQuick(initiativeId, title);

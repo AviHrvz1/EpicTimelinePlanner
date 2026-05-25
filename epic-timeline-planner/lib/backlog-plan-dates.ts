@@ -4,7 +4,6 @@ import {
   firstGlobalSprintForMonth,
   globalSprintFromMonthLane,
   resolveEpicPlanYearSprint,
-  resolvedInitiativeYearSprintBounds,
   sprintEndDate,
   sprintStartDate,
 } from "@/lib/year-sprint";
@@ -14,14 +13,36 @@ export function formatBacklogPlanDate(value: Date | null): string {
   return value.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-/** Initiative bar on the full-year Gantt: sprint-accurate bounds when set, else full months. */
+/**
+ * Initiative date range — derived from `[min(epic.planStart), max(epic.planEnd)]`
+ * across its child epics, mirroring how the year-Gantt's `yearRoadmapInitiatives`
+ * positions the initiative bar. Returns `null` start/end when the initiative
+ * has no scheduled epics so callers can render an "Unscheduled" state.
+ *
+ * The `initiative.startMonth/endMonth` fields are NOT consulted — they are
+ * legacy storage that no UI path writes to anymore (UI edit was disabled in
+ * favor of the derived model). Keeping a single source of truth (the epics)
+ * means the backlog and Gantt can never disagree about an initiative's range.
+ */
 export function ganttDateRangeForInitiative(initiative: InitiativeItem): { start: Date | null; end: Date | null } {
-  const b = resolvedInitiativeYearSprintBounds(initiative);
-  if (!b) return { start: null, end: null };
-  const y = initiative.year;
+  const scheduledEpics = (initiative.epics ?? []).filter(
+    (epic) => epic.planStartMonth != null && epic.planEndMonth != null,
+  );
+  if (scheduledEpics.length === 0) return { start: null, end: null };
+  const bounds = scheduledEpics.map((epic) => {
+    const startYS = resolveEpicPlanYearSprint(epic) ?? firstGlobalSprintForMonth(epic.planStartMonth!);
+    const endLane: 1 | 2 = epic.planEndSprint === 1 ? 1 : 2;
+    const endYS = globalSprintFromMonthLane(epic.planEndMonth!, endLane);
+    return {
+      start: clampYearSprint(Math.min(startYS, endYS)),
+      end: clampYearSprint(Math.max(startYS, endYS)),
+    };
+  });
+  const startYS = Math.min(...bounds.map((b) => b.start));
+  const endYS = Math.max(...bounds.map((b) => b.end));
   return {
-    start: sprintStartDate(y, b.startYearSprint),
-    end: sprintEndDate(y, b.endYearSprint),
+    start: sprintStartDate(initiative.year, startYS),
+    end: sprintEndDate(initiative.year, endYS),
   };
 }
 
