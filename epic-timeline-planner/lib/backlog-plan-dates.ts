@@ -10,7 +10,9 @@ import {
 
 export function formatBacklogPlanDate(value: Date | null): string {
   if (!value) return "—";
-  return value.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  // `day: "2-digit"` ensures consistent alignment in tabular date columns —
+  // "Mar 01, 2026" instead of "Mar 1, 2026" so digits line up visually.
+  return value.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" });
 }
 
 /**

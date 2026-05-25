@@ -1102,8 +1102,25 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const router = useRouter();
   const pathname = usePathname();
   const [initiatives, setInitiatives] = useState(initialInitiatives);
+  /** Live ref to `initiatives` so memoized callbacks (passed to the heavy
+   *  BacklogPlanningPanel) can read the latest value without depending on
+   *  it. This keeps the callback identity stable across re-renders so
+   *  opening a dialog doesn't force the backlog to do its 1.5s re-render. */
+  const initiativesRef = useRef(initiatives);
+  useEffect(() => {
+    initiativesRef.current = initiatives;
+  }, [initiatives]);
+  /** Mirror of `backlogInitiatives` (loads year=all & roadmapId=all) so the
+   *  backlog-row click callbacks can find an initiative/epic even when it
+   *  belongs to a roadmap OTHER than the currently-selected one. Without
+   *  this fallback, clicking an off-roadmap row silently does nothing
+   *  because `initiatives` is scoped to `selectedRoadmapId`. */
+  const backlogInitiativesRef = useRef<InitiativeItem[] | null>(null);
   /** Workspace-wide (all roadmaps) initiatives — loaded only when the Backlog Workspace is active. */
   const [backlogInitiatives, setBacklogInitiatives] = useState<InitiativeItem[] | null>(null);
+  useEffect(() => {
+    backlogInitiativesRef.current = backlogInitiatives;
+  }, [backlogInitiatives]);
   const [roadmaps, setRoadmaps] = useState<RoadmapItem[]>(initialRoadmaps);
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -2068,6 +2085,44 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       setBacklogInitiatives([]);
     }
   }, [selectedYear]);
+
+  /** Stable open-dialog callbacks for the backlog panel. By reading the
+   *  latest `initiatives` from a ref (instead of capturing it via deps),
+   *  these keep referential identity across parent re-renders — opening a
+   *  dialog no longer forces the heavy backlog panel to re-render. */
+  const backlogOpenInitiative = useCallback((initiativeId: string) => {
+    // Search the roadmap-scoped state first, then the backlog's
+    // cross-roadmap cache — otherwise clicking an initiative from a
+    // different roadmap (visible in backlog because it loads year=all
+    // & roadmapId=all) silently does nothing.
+    const initiative =
+      initiativesRef.current.find((item) => item.id === initiativeId) ??
+      backlogInitiativesRef.current?.find((item) => item.id === initiativeId);
+    if (!initiative) return;
+    setEditingInitiative(initiative);
+    setInitiativeDialogOpen(true);
+  }, []);
+  const backlogOpenEpic = useCallback((epicId: string) => {
+    const search = (pool: InitiativeItem[] | null | undefined): boolean => {
+      if (!pool) return false;
+      for (const initiative of pool) {
+        const epic = (initiative.epics ?? []).find((item) => item.id === epicId);
+        if (!epic) continue;
+        setEditingEpic(epic);
+        setEditingEpicInitiativeId(initiative.id);
+        setEpicDialogOpen(true);
+        return true;
+      }
+      return false;
+    };
+    // Try the roadmap-scoped state first; fall back to the backlog's
+    // cross-roadmap cache so off-roadmap epics open too.
+    if (search(initiativesRef.current)) return;
+    search(backlogInitiativesRef.current);
+  }, []);
+  const backlogOpenStory = useCallback((storyId: string) => {
+    setSelectedStoryId(storyId);
+  }, []);
   // Cache: skip the auto-refetch when entering Backlog if we fetched within
   // the last 30 seconds AND the year hasn't changed. The previously-loaded
   // data already lives in `backlogInitiatives` state and gets shown
@@ -5822,25 +5877,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 roadmaps={roadmaps}
                 storyRefById={storyRefMaps.byId}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
-                onOpenInitiative={(initiativeId) => {
-                  const initiative = initiatives.find((item) => item.id === initiativeId);
-                  if (!initiative) return;
-                  setEditingInitiative(initiative);
-                  setInitiativeDialogOpen(true);
-                }}
-                onOpenEpic={(epicId) => {
-                  for (const initiative of initiatives) {
-                    const epic = (initiative.epics ?? []).find((item) => item.id === epicId);
-                    if (!epic) continue;
-                    setEditingEpic(epic);
-                    setEditingEpicInitiativeId(initiative.id);
-                    setEpicDialogOpen(true);
-                    return;
-                  }
-                }}
-                onOpenStory={(storyId) => {
-                  setSelectedStoryId(storyId);
-                }}
+                onOpenInitiative={backlogOpenInitiative}
+                onOpenEpic={backlogOpenEpic}
+                onOpenStory={backlogOpenStory}
                 onCreateInitiativeQuick={async (title, roadmapId) => {
                   try {
                     const id = await createInitiativeQuick(title, roadmapId);

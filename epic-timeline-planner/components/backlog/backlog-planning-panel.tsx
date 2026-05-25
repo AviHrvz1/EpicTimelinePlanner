@@ -44,6 +44,7 @@ import {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -129,6 +130,8 @@ type BacklogPlanningPanelProps = {
       estimatedDays: number | null;
       daysLeft: number | null;
       labels: string | null;
+      /** Re-parent the story to a different epic. */
+      epicId: string;
     }>,
   ) => Promise<void>;
   onPatchInitiativeQuick: (
@@ -154,6 +157,8 @@ type BacklogPlanningPanelProps = {
       team?: string | null;
       labels?: string | null;
       originalEstimateDays?: number | null;
+      /** Re-parent the epic to a different initiative. */
+      initiativeId?: string;
     },
   ) => Promise<void>;
   summaryBarPortalElement?: HTMLElement | null;
@@ -473,6 +478,15 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "month",
   "labels",
 ];
+
+/** Custom hover tooltip — same visual treatment as `infoTooltipClass` in
+ *  the initiative dialog but anchored BELOW the trigger (the + buttons sit
+ *  in row headers, so above would clip against the toolbar/scroll edge).
+ *  Use with a `group/tip relative inline-flex` wrapper around the trigger
+ *  and the tooltip span. Native `title` is removed so the browser's slow,
+ *  hard-to-trigger default tooltip doesn't compete with this one. */
+const HOVER_TOOLTIP_CLASS =
+  "pointer-events-none absolute left-1/2 top-full z-[320] mt-1.5 w-max max-w-[18rem] -translate-x-1/2 whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover/tip:opacity-100";
 
 const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   workItem: "Work item",
@@ -1102,6 +1116,42 @@ function quarterLabelOrUnscheduled(value: string | null | undefined): string {
   return !value || value === "-" ? "Unscheduled work" : value;
 }
 
+/** Returns the list of quarter labels (Q1..Q4) that a [startMonth, endMonth]
+ *  range covers — e.g. (2, 7) → ["Q1","Q2","Q3"]. When only one bound is
+ *  set (e.g. start filled but end empty — common for half-scheduled epics)
+ *  we use the present bound for both, so the cell shows that single
+ *  quarter instead of "Unscheduled" — matches the bucket placement, which
+ *  also keys on `planStartMonth` alone. Returns empty only when BOTH
+ *  bounds are missing. */
+function quartersForMonthRange(
+  startMonth: number | null | undefined,
+  endMonth: number | null | undefined,
+): string[] {
+  const lo = startMonth ?? endMonth;
+  const hi = endMonth ?? startMonth;
+  if (lo == null || hi == null) return [];
+  const loQ = Math.ceil(Math.min(lo, hi) / 3);
+  const hiQ = Math.ceil(Math.max(lo, hi) / 3);
+  const clampedLo = Math.max(1, Math.min(4, loQ));
+  const clampedHi = Math.max(1, Math.min(4, hiQ));
+  return Array.from({ length: clampedHi - clampedLo + 1 }, (_, i) => `Q${clampedLo + i}`);
+}
+
+/** Aggregates quarters across all scheduled epics under an initiative —
+ *  used by initiative rows so the Quarter cell shows every quarter the
+ *  initiative's work spans (matches the derived-range model where the
+ *  initiative inherits its timeline from its epics). */
+function quartersForInitiative(initiative: InitiativeItem | undefined | null): string[] {
+  if (!initiative) return [];
+  const set = new Set<string>();
+  for (const epic of initiative.epics ?? []) {
+    for (const q of quartersForMonthRange(epic.planStartMonth ?? null, epic.planEndMonth ?? null)) {
+      set.add(q);
+    }
+  }
+  return Array.from(set).sort();
+}
+
 function quarterSortValue(value: string | null | undefined): string {
   const normalized = quarterLabelOrUnscheduled(value);
   const order = ["Q1", "Q2", "Q3", "Q4"].indexOf(normalized);
@@ -1516,13 +1566,39 @@ function BacklogTeamFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
+          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          // Active (has selection) → tinted indigo so user sees at a glance
+          // which filters are narrowing the table. Inactive stays neutral.
+          !allSelected
+            ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-100 hover:border-indigo-400 hover:bg-indigo-100/80"
+            : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50",
+          !allSelected && "pr-7",
           buttonClassName,
         )}
       >
         <span className="shrink-0 font-medium text-slate-500">Team: </span>
         <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
+      {!allSelected ? (
+        <button
+          type="button"
+          aria-label="Clear Team filter"
+          title="Clear Team"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            // Deferred so the X click feels instant — the heavy table
+            // re-render (1.5s with 500 rows) happens as a background
+            // priority. Without this, the user clicks X, sees no
+            // immediate change, and tries again — but the filter is
+            // already cleared, so subsequent clicks land on a no-op.
+            startTransition(() => onChange([]));
+          }}
+          className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
           <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
@@ -1579,11 +1655,16 @@ function BacklogAssigneeFilterControl({
   selected,
   onChange,
   suggestions,
+  directoryUsers,
   buttonClassName,
 }: {
   selected: string[];
   onChange: (next: string[]) => void;
   suggestions: readonly string[];
+  /** Workspace directory — passed to AssigneeCombobox so dropdown options
+   *  render with each user's photo (or initials) instead of the generic
+   *  user icon. Same shape as elsewhere in this panel. */
+  directoryUsers?: readonly { name: string; image?: string | null }[];
   buttonClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -1625,13 +1706,39 @@ function BacklogAssigneeFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
+          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          // Active (has selection) → tinted indigo so user sees at a glance
+          // which filters are narrowing the table. Inactive stays neutral.
+          !allSelected
+            ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-100 hover:border-indigo-400 hover:bg-indigo-100/80"
+            : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50",
+          !allSelected && "pr-7",
           buttonClassName,
         )}
       >
         <span className="shrink-0 font-medium text-slate-500">Assignee: </span>
         <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
+      {!allSelected ? (
+        <button
+          type="button"
+          aria-label="Clear Assignee filter"
+          title="Clear Assignee"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            // Deferred so the X click feels instant — the heavy table
+            // re-render (1.5s with 500 rows) happens as a background
+            // priority. Without this, the user clicks X, sees no
+            // immediate change, and tries again — but the filter is
+            // already cleared, so subsequent clicks land on a no-op.
+            startTransition(() => onChange([]));
+          }}
+          className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
           <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
@@ -1650,6 +1757,7 @@ function BacklogAssigneeFilterControl({
             value={draft}
             onChange={setDraft}
             suggestions={suggestions}
+            directoryUsers={directoryUsers}
             placeholder="Type to search…"
             className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
             aria-label="Add assignee to filter"
@@ -1662,7 +1770,10 @@ function BacklogAssigneeFilterControl({
                   key={name}
                   className="flex items-center justify-between gap-2 rounded-md bg-white/85 px-2 py-1 text-[13px] text-slate-800 ring-1 ring-indigo-200/60"
                 >
-                  <span className="min-w-0 truncate font-medium">{name}</span>
+                  <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
+                    <BacklogRowAvatar name={name} directoryUsers={directoryUsers} />
+                    <span className="min-w-0 truncate font-medium">{name}</span>
+                  </span>
                   <button
                     type="button"
                     className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
@@ -1731,13 +1842,39 @@ function BacklogLabelsFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
+          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          // Active (has selection) → tinted indigo so user sees at a glance
+          // which filters are narrowing the table. Inactive stays neutral.
+          !allSelected
+            ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-100 hover:border-indigo-400 hover:bg-indigo-100/80"
+            : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50",
+          !allSelected && "pr-7",
           buttonClassName,
         )}
       >
         <span className="shrink-0 font-medium text-slate-500">Labels: </span>
         <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
+      {!allSelected ? (
+        <button
+          type="button"
+          aria-label="Clear Labels filter"
+          title="Clear Labels"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            // Deferred so the X click feels instant — the heavy table
+            // re-render (1.5s with 500 rows) happens as a background
+            // priority. Without this, the user clicks X, sees no
+            // immediate change, and tries again — but the filter is
+            // already cleared, so subsequent clicks land on a no-op.
+            startTransition(() => onChange([]));
+          }}
+          className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
           <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
@@ -1833,20 +1970,52 @@ function MultiCheckboxFilter({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
+          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          // Active (has selection) → tinted indigo so user sees at a glance
+          // which filters are narrowing the table. Inactive stays neutral.
+          !allSelected
+            ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-100 hover:border-indigo-400 hover:bg-indigo-100/80"
+            : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50",
+          // Reserve trailing space for the absolute-positioned clear button
+          // so it never overlaps the selected label.
+          !allSelected && "pr-7",
           buttonClassName,
         )}
       >
         <span className="shrink-0 font-medium text-slate-500">{label}: </span>
         <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
+      {!allSelected ? (
+        /* Clear-X — only when something is selected. Hover-revealed so it
+         * doesn't clutter the resting state. Rendered as an absolute
+         * sibling (NOT nested inside the trigger button) to keep the DOM
+         * valid — nested-interactive HTML breaks keyboard focus. */
+        <button
+          type="button"
+          aria-label={`Clear ${label} filter`}
+          title={`Clear ${label}`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            // Deferred so the X click feels instant — the heavy table
+            // re-render (1.5s with 500 rows) happens as a background
+            // priority. Without this, the user clicks X, sees no
+            // immediate change, and tries again — but the filter is
+            // already cleared, so subsequent clicks land on a no-op.
+            startTransition(() => onChange([]));
+          }}
+          className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-56 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
         <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
           <input
             type="checkbox"
             checked={allSelected}
-            onChange={() => onChange([])}
+            onChange={() => startTransition(() => onChange([]))}
             className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
           />
           All
@@ -1863,7 +2032,12 @@ function MultiCheckboxFilter({
                     : selected.includes(option.id)
                       ? selected.filter((x) => x !== option.id)
                       : [...selected, option.id];
-                  onChange(next);
+                  // Deferred so the checkbox visual flips instantly and the
+                  // heavy backlog re-render (500+ rows ≈ 1.5s) happens as a
+                  // background priority update. Without this the toggle feels
+                  // unresponsive — exactly the "status filter not working"
+                  // user-perceived symptom.
+                  startTransition(() => onChange(next));
                 }}
                 className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
               />
@@ -1889,6 +2063,100 @@ type BacklogParentFilterTree = ReadonlyArray<{
   initiativeTitle: string;
   epics: ReadonlyArray<{ epicId: string; epicTitle: string }>;
 }>;
+
+/** Inline autocomplete used in the Parent column to re-parent an epic (to
+ *  a different initiative) or a user story (to a different epic). Owns its
+ *  own input state so typing doesn't re-render the whole panel. Picking a
+ *  row fires `onSelect(id)`; click-outside / Escape fires `onCancel`. */
+function ParentLinkAutocompleteEditor({
+  options,
+  isEpicTarget,
+  onSelect,
+  onCancel,
+}: {
+  options: { id: string; title: string; subtitle?: string }[];
+  /** When true, options represent initiatives (`Zap` icon); else epics (`Folder`). */
+  isEpicTarget: boolean;
+  onSelect: (id: string) => void;
+  onCancel: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Outside click + Escape → cancel.
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) onCancel();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onCancel]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options.slice(0, 100);
+    return options
+      .filter(
+        (o) =>
+          o.title.toLowerCase().includes(q) ||
+          (o.subtitle ? o.subtitle.toLowerCase().includes(q) : false),
+      )
+      .slice(0, 100);
+  }, [options, query]);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="relative w-full"
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      <input
+        type="text"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={isEpicTarget ? "Search initiative…" : "Search epic…"}
+        autoFocus
+        className="h-7 w-full rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-ring/40"
+      />
+      <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        {filtered.length === 0 ? (
+          <div className="px-2 py-2 text-[12px] text-slate-400">No matches</div>
+        ) : (
+          filtered.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onSelect(opt.id);
+              }}
+              className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[13px] hover:bg-indigo-50"
+            >
+              {isEpicTarget ? (
+                <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+              ) : (
+                <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+              )}
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium text-slate-800">{opt.title}</span>
+                {opt.subtitle ? (
+                  <span className="truncate text-[11px] text-slate-500">{opt.subtitle}</span>
+                ) : null}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 function BacklogParentFilterControl({
   tree,
@@ -1963,15 +2231,45 @@ function BacklogParentFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
+          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          // Active (has selection) → tinted indigo so user sees at a glance
+          // which filters are narrowing the table. Inactive stays neutral.
+          !allSelected
+            ? "border-indigo-300 bg-indigo-50 ring-1 ring-indigo-100 hover:border-indigo-400 hover:bg-indigo-100/80"
+            : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50",
+          !allSelected && "pr-7",
           buttonClassName,
         )}
       >
         <span className="shrink-0 font-medium text-slate-500">Parent: </span>
         <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
       </button>
+      {!allSelected ? (
+        <button
+          type="button"
+          aria-label="Clear Parent filter"
+          title="Clear Parent"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            // Deferred so the X click feels instant — the heavy table
+            // re-render (1.5s with 500 rows) happens as a background
+            // priority. Without this, the user clicks X, sees no
+            // immediate change, and tries again — but the filter is
+            // already cleared, so subsequent clicks land on a no-op.
+            startTransition(() => onChange([]));
+          }}
+          className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
       {isOpen ? (
-        <div className="absolute z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
+        /* Parent picker is wider than the other dropdowns because each row
+         * contains BOTH an initiative title and (nested) epic titles —
+         * truncation at w-72 hid most of the labels. w-96 keeps both
+         * levels readable. */
+        <div className="absolute z-30 mt-1 w-96 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
           <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
             <input
               type="checkbox"
@@ -2004,6 +2302,7 @@ function BacklogParentFilterControl({
                       onChange={() => toggleInitiative(init.initiativeId, epicIds)}
                       className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
                     />
+                    <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
                     <span className="truncate" title={init.initiativeTitle}>{init.initiativeTitle}</span>
                   </label>
                   {init.epics.length > 0 ? (
@@ -2016,6 +2315,7 @@ function BacklogParentFilterControl({
                             onChange={() => toggleEpic(e.epicId)}
                             className="h-3 w-3 rounded border-indigo-200 accent-indigo-600"
                           />
+                          <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
                           <span className="truncate" title={e.epicTitle}>{e.epicTitle}</span>
                         </label>
                       ))}
@@ -2674,6 +2974,13 @@ export function BacklogPlanningPanel({
     id: string;
     value: string;
   } | null>(null);
+  /** Active inline edit on a Parent CELL — kind tells us which dropdown to
+   *  show: "epic" rows pick a new initiative parent; "story" rows pick a
+   *  new epic parent. */
+  const [editingParentLink, setEditingParentLink] = useState<{
+    kind: "epic" | "story";
+    id: string;
+  } | null>(null);
   const [editingStoryTitle, setEditingStoryTitle] = useState<{ id: string; value: string } | null>(null);
   type ParentDateEditTarget = {
     kind: "epic" | "initiative";
@@ -3289,7 +3596,19 @@ export function BacklogPlanningPanel({
             const originalHadStories = (epic.userStories ?? []).length > 0;
             const stories = [...(epic.userStories ?? [])]
               .filter((story) => {
-                if (statusFilter.length > 0 && !statusFilter.includes(story.status)) return false;
+                if (statusFilter.length > 0) {
+                  // Match against workflow status OR scheduling state.
+                  // "scheduled" = story.sprint != null; "unscheduled" = null.
+                  // Combined as OR so a story can satisfy the filter via
+                  // either workflow OR scheduling.
+                  const workflowMatch = statusFilter.includes(story.status);
+                  const wantScheduled = statusFilter.includes("scheduled");
+                  const wantUnscheduled = statusFilter.includes("unscheduled");
+                  const schedMatch =
+                    (wantScheduled && story.sprint != null) ||
+                    (wantUnscheduled && story.sprint == null);
+                  if (!workflowMatch && !schedMatch) return false;
+                }
                 const sprintKey = story.sprint == null ? "unscheduled" : String(story.sprint);
                 if (sprintFilter.length > 0 && !sprintFilter.includes(sprintKey)) return false;
                 if (labelFilter.length > 0) {
@@ -3310,7 +3629,9 @@ export function BacklogPlanningPanel({
           })
           // Keep epics whose stories survived a story-level filter, OR
           // brand-new epics that never had stories (so users see things
-          // they just created even with filters active).
+          // they just created even with filters active). The misleading
+          // "To Do" rollup on empty epics is handled at the display layer
+          // by rendering a neutral "—" badge instead.
           .filter(({ originalHadStories, stories }) => {
             if (!storyFilterActive) return true;
             if (!originalHadStories) return true;
@@ -3319,9 +3640,10 @@ export function BacklogPlanningPanel({
           .map(({ epic, stories }) => ({ ...epic, userStories: stories }));
         return { initiative, originalHadEpics, epics };
       })
-      // Keep initiatives whose epics survived, OR brand-new initiatives that
-      // never had epics (the just-created standalone case — without this, a
-      // story-level filter would silently hide newly added initiatives).
+      // Keep initiatives whose epics survived, OR brand-new initiatives
+      // that never had epics (so just-created ones stay visible even when
+      // a status/sprint/label filter is active). The fake "To Do" rollup
+      // on empty entities is handled at the display layer ("—" badge).
       .filter(({ originalHadEpics, epics }) => {
         if (!storyFilterActive) return true;
         if (!originalHadEpics) return true;
@@ -3330,26 +3652,31 @@ export function BacklogPlanningPanel({
       .map(({ initiative, epics }) => ({ ...initiative, epics }));
   }, [filtered, statusFilter, sprintFilter, labelFilter, sortBy]);
 
-  const suggestions = useMemo(() => {
-    const list: string[] = [];
+  type SearchSuggestionKind = "initiative" | "epic" | "story" | "assignee";
+  const suggestions = useMemo<Array<{ label: string; kind: SearchSuggestionKind }>>(() => {
+    const seen = new Map<string, SearchSuggestionKind>();
+    const push = (label: string, kind: SearchSuggestionKind) => {
+      if (!label || seen.has(label)) return;
+      seen.set(label, kind);
+    };
     for (const initiative of initiatives) {
-      list.push(initiative.title);
+      push(initiative.title, "initiative");
       for (const epic of initiative.epics ?? []) {
-        list.push(epic.title);
+        push(epic.title, "epic");
         for (const story of epic.userStories ?? []) {
           const ref = storyRefById[story.id];
-          if (ref) list.push(ref);
-          list.push(story.title);
-          if (story.assignee) list.push(story.assignee);
+          if (ref) push(ref, "story");
+          push(story.title, "story");
+          if (story.assignee) push(story.assignee, "assignee");
         }
       }
     }
-    return [...new Set(list)].slice(0, 250);
+    return Array.from(seen.entries(), ([label, kind]) => ({ label, kind })).slice(0, 250);
   }, [initiatives, storyRefById]);
   const searchSuggestions = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return [];
-    return suggestions.filter((item) => item.toLowerCase().includes(needle)).slice(0, 8);
+    return suggestions.filter((s) => s.label.toLowerCase().includes(needle)).slice(0, 8);
   }, [query, suggestions]);
 
   const yearOptions = useMemo(() => {
@@ -3431,6 +3758,13 @@ export function BacklogPlanningPanel({
     { id: "inProgress", label: "In progress" },
     { id: "done", label: "Done" },
     { id: "approved", label: "Approved" },
+    // Scheduling state — orthogonal to workflow status. "Scheduled" = the
+    // story has a sprint assigned; "Unscheduled" = no sprint yet. Combined
+    // with the workflow values via OR so a filter like
+    // ["inProgress", "Unscheduled"] surfaces both rows in progress AND
+    // rows that still need to be placed.
+    { id: "scheduled", label: "Scheduled" },
+    { id: "unscheduled", label: "Unscheduled" },
   ];
   const sprintOptions: OptionItem[] = [
     { id: "unscheduled", label: "Unscheduled" },
@@ -3706,12 +4040,100 @@ export function BacklogPlanningPanel({
     return <UserStoryIcon className="size-4" />;
   }
 
+  /** Renders multiple Q1-Q4 chips for a row that spans several quarters.
+   *  Stories live in one sprint so they pass a single label; epics and
+   *  initiatives can span multiple quarters and pass the list. Empty list
+   *  falls back to "Unscheduled work" so the cell never looks blank. */
+  function renderQuarterChipsCell(quarters: string[]): ReactNode {
+    if (quarters.length === 0) {
+      return <span className="text-center text-[13px] text-slate-400">Unscheduled work</span>;
+    }
+    return (
+      <span className="flex flex-wrap items-center justify-center gap-1">
+        {quarters.map((q) => (
+          <span
+            key={q}
+            className="inline-flex items-center rounded-md bg-sky-50 px-2 py-[1px] text-[12px] font-semibold text-sky-700 ring-1 ring-sky-200/70"
+          >
+            {q}
+          </span>
+        ))}
+      </span>
+    );
+  }
+
+  /** Inline editor for re-parenting an epic or story. Renders an
+   *  autocomplete-style dropdown — typing filters by title, clicking a row
+   *  commits the change via the appropriate `onPatchXQuick` handler. */
+  function renderParentLinkEditor(args: {
+    kind: "epic" | "story";
+    id: string;
+    currentParentId: string | null;
+  }): ReactNode {
+    const isEpic = args.kind === "epic";
+    const options: { id: string; title: string; subtitle?: string }[] = isEpic
+      ? // Epic re-parent: pick a new initiative
+        initiatives.map((init) => ({ id: init.id, title: init.title }))
+      : // Story re-parent: pick a new epic (with its initiative for context)
+        initiatives.flatMap((init) =>
+          (init.epics ?? []).map((epic) => ({
+            id: epic.id,
+            title: epic.title,
+            subtitle: init.title,
+          })),
+        );
+    return (
+      <ParentLinkAutocompleteEditor
+        options={options}
+        isEpicTarget={isEpic}
+        onCancel={() => setEditingParentLink(null)}
+        onSelect={async (newParentId) => {
+          if (newParentId === args.currentParentId) {
+            setEditingParentLink(null);
+            return;
+          }
+          try {
+            if (isEpic) {
+              await onPatchEpicQuick(args.id, { initiativeId: newParentId });
+              toast.success("Epic re-parented");
+            } else {
+              await onPatchStoryQuick(args.id, { epicId: newParentId });
+              toast.success("Story re-parented");
+            }
+          } catch {
+            toast.error("Failed to update parent");
+          }
+          setEditingParentLink(null);
+        }}
+      />
+    );
+  }
+
   function renderParentCell(args: {
     initiativeId?: string | null;
     initiativeTitle?: string | null;
     epicId?: string | null;
     epicTitle?: string | null;
+    /** When provided, the cell shows an edit-pencil on hover; clicking it
+     *  swaps to an autocomplete that re-parents this row. */
+    editTarget?: { kind: "epic" | "story"; id: string; currentParentId: string | null };
   }): ReactNode {
+    // Active inline edit on THIS cell: swap the buttons for the autocomplete.
+    if (
+      args.editTarget &&
+      editingParentLink?.kind === args.editTarget.kind &&
+      editingParentLink.id === args.editTarget.id
+    ) {
+      return (
+        <span className="flex w-full min-w-0 items-center" onMouseDown={(e) => e.stopPropagation()}>
+          {renderParentLinkEditor({
+            kind: args.editTarget.kind,
+            id: args.editTarget.id,
+            currentParentId: args.editTarget.currentParentId,
+          })}
+        </span>
+      );
+    }
     const parts: ReactNode[] = [];
     if (args.initiativeId && args.initiativeTitle) {
       parts.push(
@@ -3719,10 +4141,11 @@ export function BacklogPlanningPanel({
           key="init"
           type="button"
           onClick={(e) => { e.stopPropagation(); onOpenInitiative(args.initiativeId!); }}
-          className="min-w-0 max-w-[14rem] truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+          className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
           title={args.initiativeTitle ?? undefined}
         >
-          {args.initiativeTitle}
+          <Zap className="size-3 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+          <span className="truncate">{args.initiativeTitle}</span>
         </button>,
       );
     }
@@ -3735,17 +4158,39 @@ export function BacklogPlanningPanel({
           key="epic"
           type="button"
           onClick={(e) => { e.stopPropagation(); onOpenEpic(args.epicId!); }}
-          className="min-w-0 max-w-[14rem] truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+          className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
           title={args.epicTitle ?? undefined}
         >
-          {args.epicTitle}
+          <Folder className="size-3 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+          <span className="truncate">{args.epicTitle}</span>
         </button>,
       );
     }
     if (parts.length === 0) {
       return <span className="text-[16px] text-slate-400">-</span>;
     }
-    return <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden">{parts}</span>;
+    // Hover-revealed pencil to re-parent this row. Only shows when an
+    // editTarget is provided (initiative rows omit it — re-parenting an
+    // initiative has no meaning under the current model).
+    return (
+      <span className="group/parent flex w-full min-w-0 items-center gap-1 overflow-hidden">
+        {parts}
+        {args.editTarget ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setEditingParentLink({ kind: args.editTarget!.kind, id: args.editTarget!.id });
+            }}
+            aria-label="Change parent"
+            title="Change parent"
+            className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover/parent:opacity-100 focus-visible:opacity-100"
+          >
+            <SquarePen className="size-3" />
+          </button>
+        ) : null}
+      </span>
+    );
   }
 
   function renderBacklogCells(
@@ -3779,16 +4224,13 @@ export function BacklogPlanningPanel({
             {cells[key]}
           </div>
           {hint.kind === "edit" ? (
-            <span
-              // Hidden while the cell is in edit mode — each `group-has-[…]/cell:hidden` rule applies when
-              // the cell contains one of: native form element (inline editors) or an explicit
-              // `data-cell-editing` marker (portal-anchored status / team / date editors).
-              // Multiple rules used (instead of `:is(...)`) so Tailwind v4 generates each simple selector reliably.
-              className="pointer-events-auto absolute right-1 top-1/2 z-20 shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <EditRowIconButton label="Edit" onClick={hint.onEdit} />
-            </span>
+            // Edit-able cells no longer show a hover pencil — the user
+            // requested removing the per-column edit affordance because it
+            // added visual noise on every editable cell. Click-to-edit on
+            // the cell content still works (each cell still wires its
+            // onMouseDown to begin edit), this just hides the pencil
+            // indicator.
+            null
           ) : (
             <span
               title="Read only"
@@ -4070,12 +4512,19 @@ export function BacklogPlanningPanel({
     presetSearch.trim().length > 0;
 
   function toggleGroupLevel(level: GroupLevel) {
-    setGroupLevels((prev) => {
-      const idx = GROUP_LEVEL_ORDER.indexOf(level);
-      if (prev.includes(level)) {
-        return GROUP_LEVEL_ORDER.slice(0, idx).filter((item) => prev.includes(item));
-      }
-      return GROUP_LEVEL_ORDER.slice(0, idx + 1);
+    // Mark the group-level change as a non-urgent transition so the
+    // checkbox check appears instantly in the dropdown while React
+    // schedules the expensive re-render (renderGroupedTree across 500+
+    // story rows took ~1.6s in profiling). The user perceives the dropdown
+    // as responsive even when the table needs a moment to settle.
+    startTransition(() => {
+      setGroupLevels((prev) => {
+        const idx = GROUP_LEVEL_ORDER.indexOf(level);
+        if (prev.includes(level)) {
+          return GROUP_LEVEL_ORDER.slice(0, idx).filter((item) => prev.includes(item));
+        }
+        return GROUP_LEVEL_ORDER.slice(0, idx + 1);
+      });
     });
   }
 
@@ -4336,7 +4785,7 @@ export function BacklogPlanningPanel({
         return (
           <div
             key={`${keyPrefix}-story-${row.storyId}`}
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
             data-backlog-zebra-row="true"
             data-backlog-zebra-kind="story"
             data-backlog-zebra-label={row.storyTitle}
@@ -4392,7 +4841,15 @@ export function BacklogPlanningPanel({
                 renderBacklogTeamCell(row.teamId)
               ),
               year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
-              quarter: <span className="text-center text-[16px] text-slate-700">{row.quarterLabelValue}</span>,
+              quarter: row.storyQuarterLabelValue ? (
+                renderQuarterChipsCell([row.storyQuarterLabelValue])
+              ) : (
+                // A story without a sprint has no quarter — render the same
+                // neutral dash other "no value" cells use, rather than the
+                // "Unscheduled work" pill (which is more meaningful for
+                // epics/initiatives that span multiple quarters).
+                <span className="text-center text-[16px] text-slate-400">—</span>
+              ),
               month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
               startDate: (
                 <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
@@ -4507,6 +4964,7 @@ export function BacklogPlanningPanel({
               parent: renderParentCell({
                 epicId: row.epicId,
                 epicTitle: row.epicTitle,
+                editTarget: { kind: "story", id: row.storyId, currentParentId: row.epicId },
               }),
               labels: (
             <div className="w-full min-w-0 overflow-hidden">
@@ -4664,7 +5122,17 @@ export function BacklogPlanningPanel({
                   className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
                   style={{ paddingLeft: indentPx }}
                 >
-                  {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
+                  {/* Chevron always rendered so the folder is visibly
+                   *  expandable even when empty (empty quarter / Unscheduled
+                   *  work). Sits in its own fixed-size span so missing
+                   *  leadingIcon doesn't shift the layout. */}
+                  <span className="inline-flex size-4 shrink-0 items-center justify-center">
+                    {isOpen ? (
+                      <ChevronDown className="size-4 text-slate-600" strokeWidth={2.2} />
+                    ) : (
+                      <ChevronRight className="size-4 text-slate-600" strokeWidth={2.2} />
+                    )}
+                  </span>
                   {leadingIcon}
                   {labelOverride ?? <span className="truncate">{label}</span>}
                   <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
@@ -4767,7 +5235,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -4814,22 +5282,48 @@ export function BacklogPlanningPanel({
                       </span>
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openCreateComposer({
-                        anchorKey: `group-epic:${epicId}`,
-                        scope: "epic",
-                        kind: "story",
-                        epicId,
-                      });
-                    }}
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
-                    title="Add user story"
-                  >
-                    <Plus className="size-3.5 text-slate-600" />
-                  </button>
+                  <span className="group/tip relative inline-flex">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        // Auto-expand the epic so the new create form sits
+                        // among the existing user stories (matches the
+                        // non-grouped behavior).
+                        setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
+                        openCreateComposer({
+                          anchorKey: `group-epic:${epicId}`,
+                          scope: "epic",
+                          kind: "story",
+                          epicId,
+                        });
+                      }}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                      aria-label="Add a user story to this epic"
+                    >
+                      <Plus className="size-3.5 text-slate-600" />
+                    </button>
+                    <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a user story to this epic</span>
+                  </span>
+                  {epicModelForRow?.planStartMonth == null && onJumpToRoadmapPlanning ? (
+                    /* Epic has stories but isn't scheduled yet — surface
+                     *  the same Schedule jump-link the standalone-epic path
+                     *  shows, so the user can dispatch this epic to the
+                     *  Roadmap Planning view regardless of whether it has
+                     *  child stories or not. */
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onJumpToRoadmapPlanning(epicTitle);
+                      }}
+                      className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                      aria-label={`Schedule epic "${epicTitle}" in Roadmap Planning`}
+                    >
+                      <ExternalLink className="size-3 text-sky-600" />
+                      Schedule
+                    </button>
+                  ) : null}
                 </div>
               ),
               team: isEditingParentTeam("epic", epicId) ? (
@@ -4838,10 +5332,11 @@ export function BacklogPlanningPanel({
                 renderBacklogTeamCell(epicModelForRow?.team ?? epicRows[0]?.teamId ?? null)
               ),
               year: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>,
-              quarter: (
-                <span className="text-center text-[16px] text-slate-700">
-                  {quarterLabelOrUnscheduled(quarterFromMonth(epicRows[0]?.monthNum ?? null))}
-                </span>
+              quarter: renderQuarterChipsCell(
+                quartersForMonthRange(
+                  epicModelForRow?.planStartMonth ?? null,
+                  epicModelForRow?.planEndMonth ?? null,
+                ),
               ),
               month: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
               startDate: (
@@ -4868,7 +5363,11 @@ export function BacklogPlanningPanel({
                   )}
                 </span>
               ),
-              status: (
+              status: epicRows.length === 0 ? (
+                // Epic with no surviving stories — show a neutral dash
+                // instead of the misleading default "To Do" rollup.
+                <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+              ) : (
                 <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
                   {statusIcon(rollupWorkflowStatusFromGroupedRows(epicRows))}
                   {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
@@ -4919,6 +5418,11 @@ export function BacklogPlanningPanel({
               parent: renderParentCell({
                 initiativeId: epicRows[0]?.initiativeId,
                 initiativeTitle: epicRows[0]?.initiativeTitle,
+                editTarget: {
+                  kind: "epic",
+                  id: epicId,
+                  currentParentId: epicRows[0]?.initiativeId ?? null,
+                },
               }),
               labels: isEditingParentLabels("epic", epicId) ? (
                 renderParentLabelsEditor({ kind: "epic", id: epicId })
@@ -5032,7 +5536,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -5079,22 +5583,30 @@ export function BacklogPlanningPanel({
                       </span>
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openCreateComposer({
-                        anchorKey: `group-initiative:${initiativeId}`,
-                        scope: "initiative",
-                        kind: "epic",
-                        initiativeId,
-                      });
-                    }}
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                    title="Add epic"
-                  >
-                    <Plus className="size-3.5 text-slate-600" />
-                  </button>
+                  <span className="group/tip relative inline-flex">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        // Auto-expand the initiative's folder so the new
+                        // create form is visible alongside any existing
+                        // epics — matches the behavior in non-grouped mode
+                        // where the initiative is always expanded.
+                        setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
+                        openCreateComposer({
+                          anchorKey: `group-initiative:${initiativeId}`,
+                          scope: "initiative",
+                          kind: "epic",
+                          initiativeId,
+                        });
+                      }}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                      aria-label="Add an epic to this initiative"
+                    >
+                      <Plus className="size-3.5 text-slate-600" />
+                    </button>
+                    <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add an epic to this initiative</span>
+                  </span>
                 </div>
               ),
               team: isEditingParentTeam("initiative", initiativeId) ? (
@@ -5103,7 +5615,7 @@ export function BacklogPlanningPanel({
                 renderBacklogTeamCell(initModelForRow?.team ?? (initModelForRow ? aggregateInitiativeTeamId(initModelForRow) : null))
               ),
               year: <span className="text-center text-[16px] text-slate-700">{initiativeYear}</span>,
-              quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiativeQuarterLabel)}</span>,
+              quarter: renderQuarterChipsCell(quartersForInitiative(initModelForRow)),
               month: <span className="text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>,
               startDate: isEditingParentDate("initiative", initiativeId, "start") ? (
                 renderParentDateEditor({ kind: "initiative", id: initiativeId, field: "start" })
@@ -5129,7 +5641,9 @@ export function BacklogPlanningPanel({
                   {formatBacklogPlanDate(initGanttRange.end)}
                 </button>
               ),
-              status: (
+              status: initiativeRows.length === 0 ? (
+                <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+              ) : (
                 <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeStatus))}>
                   {statusIcon(initiativeStatus)}
                   {workflowStatusLabel(initiativeStatus)}
@@ -5388,21 +5902,32 @@ export function BacklogPlanningPanel({
     // the user has a predictable parking spot for any initiative/epic/story
     // whose epics aren't scheduled yet. New initiatives without scheduled
     // epics land here automatically instead of getting buried under a
-    // dynamically-created folder users can miss.
+    // dynamically-created folder users can miss. Respects the active
+    // quarter filter so the seeded buckets don't bypass it (data rows are
+    // filtered separately in `backlogFilteredBeforeWorkItem`).
     if (level === "quarter") {
       for (const q of ["Q1", "Q2", "Q3", "Q4"] as const) {
+        if (quarterFilter.length > 0 && !quarterFilter.includes(q)) continue;
         groups.set(q, { label: q, sort: quarterSortValue(q), rows: [], standaloneRows: [] });
       }
-      const unscheduledKey = "Unscheduled work";
-      groups.set(unscheduledKey, {
-        label: unscheduledKey,
-        sort: quarterSortValue(unscheduledKey),
-        rows: [],
-        standaloneRows: [],
-      });
+      // Only seed "Unscheduled work" when the user hasn't narrowed to a
+      // specific quarter — otherwise the bucket is irrelevant to the view.
+      if (quarterFilter.length === 0) {
+        const unscheduledKey = "Unscheduled work";
+        groups.set(unscheduledKey, {
+          label: unscheduledKey,
+          sort: quarterSortValue(unscheduledKey),
+          rows: [],
+          standaloneRows: [],
+        });
+      }
     }
     for (const row of rows) {
       const { key, label, sort } = keyForLevel(row, level);
+      // At quarter level, honor the active quarter filter so story rows
+      // whose sprint quarter isn't in the filter don't materialize a
+      // bucket (would otherwise add Q2/Q3/Q4 alongside the selected Q1).
+      if (level === "quarter" && quarterFilter.length > 0 && !quarterFilter.includes(key)) continue;
       if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
       groups.get(key)!.rows.push(row);
     }
@@ -5415,12 +5940,17 @@ export function BacklogPlanningPanel({
     if (level === "quarter") {
       for (const row of standaloneRows) {
         if (row.epics.length === 0) {
-          groups.get("Unscheduled work")!.standaloneRows.push(row);
+          // Empty initiative — only land in Unscheduled work when no
+          // quarter filter is active (otherwise it's irrelevant).
+          if (quarterFilter.length === 0) {
+            groups.get("Unscheduled work")!.standaloneRows.push(row);
+          }
           continue;
         }
         const byQuarter = new Map<string, typeof row.epics>();
         for (const epic of row.epics) {
           const q = quarterLabelOrUnscheduled(epic.epicQuarterLabelValue);
+          if (quarterFilter.length > 0 && !quarterFilter.includes(q)) continue;
           if (!byQuarter.has(q)) byQuarter.set(q, []);
           byQuarter.get(q)!.push(epic);
         }
@@ -5462,7 +5992,7 @@ export function BacklogPlanningPanel({
               event.stopPropagation();
               onJumpToRoadmapPlanning();
             }}
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-semibold text-sky-700 opacity-60 ring-1 ring-sky-200 transition hover:bg-sky-50 hover:opacity-100 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
             title="Open Roadmap Planning with Unscheduled epics filter"
             aria-label="Open Roadmap Planning to schedule these epics"
           >
@@ -5470,25 +6000,27 @@ export function BacklogPlanningPanel({
             Schedule
           </button>
         ) : level === "quarter" ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              // Ensure the folder is expanded so the inline form below
-              // becomes visible.
-              setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
-              openCreateComposer({
-                anchorKey: `group-quarter:${folderId}`,
-                scope: "initiative",
-                kind: "initiative",
-              });
-            }}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
-            title="Add initiative in this quarter"
-            aria-label="Add initiative in this quarter"
-          >
-            <Plus className="size-3.5 text-slate-600" />
-          </button>
+          <span className="group/tip relative inline-flex">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                // Ensure the folder is expanded so the inline form below
+                // becomes visible.
+                setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
+                openCreateComposer({
+                  anchorKey: `group-quarter:${folderId}`,
+                  scope: "initiative",
+                  kind: "initiative",
+                });
+              }}
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+              aria-label="Add a new initiative starting in this quarter"
+            >
+              <Plus className="size-3.5 text-slate-600" />
+            </button>
+            <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a new initiative starting in this quarter</span>
+          </span>
         ) : level === "roadmap" && onRenameRoadmap && key !== "__no_roadmap__" && editingRoadmapId !== key ? (
           <button
             type="button"
@@ -5498,7 +6030,7 @@ export function BacklogPlanningPanel({
               // Ensure folder stays expanded so the edit input is visible.
               setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
             }}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
             title="Rename roadmap"
             aria-label="Rename roadmap"
           >
@@ -5605,7 +6137,7 @@ export function BacklogPlanningPanel({
         return (
               <div key={initFolderId}>
                 <div
-                  className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                  className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                   style={{
                     gridTemplateColumns: tableGridTemplate,
                   }}
@@ -5662,22 +6194,25 @@ export function BacklogPlanningPanel({
                         </span>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openCreateComposer({
-                          anchorKey: `group-standalone-initiative:${initiative.initiativeId}`,
-                          scope: "initiative",
-                          kind: "epic",
-                          initiativeId: initiative.initiativeId,
-                        });
-                      }}
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
-                      title="Add epic"
-                    >
-                      <Plus className="size-3.5 text-slate-600" />
-                    </button>
+                    <span className="group/tip relative inline-flex">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openCreateComposer({
+                            anchorKey: `group-standalone-initiative:${initiative.initiativeId}`,
+                            scope: "initiative",
+                            kind: "epic",
+                            initiativeId: initiative.initiativeId,
+                          });
+                        }}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
+                        aria-label="Add an epic to this initiative"
+                      >
+                        <Plus className="size-3.5 text-slate-600" />
+                      </button>
+                      <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add an epic to this initiative</span>
+                    </span>
                   </div>
                 ),
                 team: isEditingParentTeam("initiative", initiative.initiativeId) ? (
@@ -5686,7 +6221,7 @@ export function BacklogPlanningPanel({
                   renderBacklogTeamCell(standInitModel?.team ?? initiative.initiativeTeamId)
                 ),
                 year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
-                quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(initiative.initiativeQuarterLabelValue)}</span>,
+                quarter: renderQuarterChipsCell(quartersForInitiative(standInitModel)),
                 month: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
                 startDate: isEditingParentDate("initiative", initiative.initiativeId, "start") ? (
                   renderParentDateEditor({ kind: "initiative", id: initiative.initiativeId, field: "start" })
@@ -5713,10 +6248,11 @@ export function BacklogPlanningPanel({
                   </button>
                 ),
                 status: (
-                  <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiative.initiativeStatus))}>
-                    {statusIcon(initiative.initiativeStatus)}
-                    {workflowStatusLabel(initiative.initiativeStatus)}
-                  </span>
+                  // Standalone-initiative rows by definition have no
+                  // stories under them, so the rollup is always the
+                  // misleading default "todo". Render a neutral dash
+                  // instead — no stories = no status to report.
+                  <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
                 ),
                 sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                 assignee: (
@@ -5811,7 +6347,7 @@ export function BacklogPlanningPanel({
                   return (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div
-                      className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                      className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                       style={{
                         gridTemplateColumns: tableGridTemplate,
                       }}
@@ -5857,22 +6393,25 @@ export function BacklogPlanningPanel({
                                 </span>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openCreateComposer({
-                                  anchorKey: `group-standalone-epic:${epic.epicId}`,
-                                  scope: "epic",
-                                  kind: "story",
-                                  epicId: epic.epicId,
-                                });
-                              }}
-                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
-                              title="Add user story"
-                            >
-                              <Plus className="size-3.5 text-slate-600" />
-                            </button>
+                            <span className="group/tip relative inline-flex">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openCreateComposer({
+                                    anchorKey: `group-standalone-epic:${epic.epicId}`,
+                                    scope: "epic",
+                                    kind: "story",
+                                    epicId: epic.epicId,
+                                  });
+                                }}
+                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                                aria-label="Add a user story to this epic"
+                              >
+                                <Plus className="size-3.5 text-slate-600" />
+                              </button>
+                              <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a user story to this epic</span>
+                            </span>
                             {epic.epicMonthNum == null && onJumpToRoadmapPlanning ? (
                               <button
                                 type="button"
@@ -5880,7 +6419,7 @@ export function BacklogPlanningPanel({
                                   event.stopPropagation();
                                   onJumpToRoadmapPlanning(epic.epicTitle);
                                 }}
-                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-semibold text-sky-700 opacity-60 ring-1 ring-sky-200 transition hover:bg-sky-50 hover:opacity-100 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                                 title={`Open Roadmap Planning and search "${epic.epicTitle}" to schedule`}
                                 aria-label={`Schedule epic "${epic.epicTitle}" in Roadmap Planning`}
                               >
@@ -5896,7 +6435,12 @@ export function BacklogPlanningPanel({
                           renderBacklogTeamCell(standEpicModel?.team ?? epic.epicTeamId)
                         ),
                         year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
-                        quarter: <span className="text-center text-[16px] text-slate-700">{quarterLabelOrUnscheduled(epic.epicQuarterLabelValue)}</span>,
+                        quarter: renderQuarterChipsCell(
+                          quartersForMonthRange(
+                            standEpicModel?.planStartMonth ?? null,
+                            standEpicModel?.planEndMonth ?? null,
+                          ),
+                        ),
                         month: <span className="text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>,
                         startDate: (
                           <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
@@ -5938,6 +6482,11 @@ export function BacklogPlanningPanel({
                         parent: renderParentCell({
                           initiativeId: initiative.initiativeId,
                           initiativeTitle: initiative.initiativeTitle,
+                          editTarget: {
+                            kind: "epic",
+                            id: epic.epicId,
+                            currentParentId: initiative.initiativeId,
+                          },
                         }),
                         labels: isEditingParentLabels("epic", epic.epicId) ? (
                           renderParentLabelsEditor({ kind: "epic", id: epic.epicId })
@@ -6559,8 +7108,8 @@ export function BacklogPlanningPanel({
               aria-label="Add roadmap"
               title="Add roadmap"
             >
+              <Plus className="size-3.5 shrink-0" strokeWidth={2.4} aria-hidden />
               <MapIcon className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
-              <Plus className="size-3 shrink-0" strokeWidth={2.4} aria-hidden />
               <span>Roadmap</span>
             </button>
           ) : null}
@@ -6570,7 +7119,7 @@ export function BacklogPlanningPanel({
             /* Same visual shape as the "+ Roadmap" button — soft tinted
              * emerald background with the `--ring`-tinted outline, icon on
              * the left, label on the right. */
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-50/80 px-3 text-[13px] font-semibold text-emerald-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-50/80 pl-3 pr-4 text-[13px] font-semibold text-emerald-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
             aria-label="Export backlog to Excel"
             title="Export to Excel (preview, then download .xls)"
           >
@@ -6611,22 +7160,51 @@ export function BacklogPlanningPanel({
               onBlur={() => {
                 window.setTimeout(() => setShowSearchSuggestions(false), 120);
               }}
-              className="h-9 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className={cn(
+                "h-9 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
+                query ? "pr-9" : "pr-3",
+              )}
             />
+            {query ? (
+              /* Clear-X — only shown when there's text. Same pattern as
+               * filter clear buttons (instant + deferred state update). */
+              <button
+                type="button"
+                aria-label="Clear search"
+                title="Clear search"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  startTransition(() => setQuery(""));
+                }}
+                className="absolute right-2 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
             {showSearchSuggestions && searchSuggestions.length > 0 ? (
               <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
-                {searchSuggestions.map((item) => (
+                {searchSuggestions.map(({ label, kind }) => (
                   <button
-                    key={item}
+                    key={`${kind}:${label}`}
                     type="button"
                     onMouseDown={(event) => {
                       event.preventDefault();
-                      setQuery(item);
+                      setQuery(label);
                       setShowSearchSuggestions(false);
                     }}
-                    className="block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
                   >
-                    {item}
+                    {kind === "initiative" ? (
+                      <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+                    ) : kind === "epic" ? (
+                      <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+                    ) : kind === "story" ? (
+                      <UserStoryIcon className="size-3.5" />
+                    ) : (
+                      <UserRound className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
                   </button>
                 ))}
               </div>
@@ -6783,11 +7361,19 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div className="relative col-start-1 row-start-2 min-w-0" ref={groupMenuRef}>
+          <div className="group relative col-start-1 row-start-2 min-w-0" ref={groupMenuRef}>
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
-              className="flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg border border-slate-300 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80"
+              className={cn(
+                "flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg border bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80",
+                // Active grouping → stronger border + ring so the user
+                // sees the table is grouped at a glance.
+                groupLevels.length > 0
+                  ? "border-indigo-400 ring-1 ring-indigo-200"
+                  : "border-slate-300",
+                groupLevels.length > 0 && "pr-7",
+              )}
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-indigo-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2} aria-hidden />
@@ -6795,6 +7381,24 @@ export function BacklogPlanningPanel({
               </span>
               <span className="ml-1 min-w-0 truncate font-medium text-indigo-600/80">{groupSummaryLabel}</span>
             </button>
+            {groupLevels.length > 0 ? (
+              <button
+                type="button"
+                aria-label="Clear all groupings"
+                title="Clear groupings"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  // Same deferred pattern as the filter X buttons — instant
+                  // visual feedback while the heavy backlog re-render runs
+                  // as a transition.
+                  startTransition(() => setGroupLevels([]));
+                }}
+                className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-indigo-500/70 opacity-0 transition hover:bg-indigo-100 hover:text-indigo-700 group-hover:opacity-100 focus-visible:opacity-100"
+              >
+                <X className="size-3" />
+              </button>
+            ) : null}
             {groupMenuOpen ? (
               <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg bg-white p-2 shadow-lg">
                 {GROUP_LEVEL_ORDER.map((level, idx) => {
@@ -6893,6 +7497,7 @@ export function BacklogPlanningPanel({
               selected={assigneeFilter}
               onChange={setAssigneeFilter}
               suggestions={assigneeAutocompleteSuggestions}
+              directoryUsers={workspaceDirectoryUsers}
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
@@ -6904,7 +7509,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-15 row-start-2 flex min-w-0 justify-start">
+          <div className="col-start-15 row-start-2 flex min-w-0 justify-end">
             <span className="group relative inline-flex h-[34px] w-[34px] shrink-0">
             <button
               type="button"
@@ -6968,7 +7573,7 @@ export function BacklogPlanningPanel({
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[14px] font-semibold tracking-[0.03em] text-white uppercase"
+                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[14px] font-semibold tracking-[0.01em] text-white"
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {
@@ -7005,22 +7610,24 @@ export function BacklogPlanningPanel({
                                *  empty (or just the fastest path generally).
                                *  Opens a small popover with both options so
                                *  the header button covers both creation paths. */}
-                              <div className="relative mr-1">
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setOpenCreateMenuKey((prev) => (prev === "header" ? null : "header"));
-                                  }}
-                                  title="Add"
-                                  aria-label="Add initiative or roadmap"
-                                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/15 text-white transition hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                                >
-                                  <Plus className="size-3.5" strokeWidth={2.2} />
-                                </button>
+                              <div className="relative mr-1 mt-[5px]">
+                                <span className="group/tip relative inline-flex">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setOpenCreateMenuKey((prev) => (prev === "header" ? null : "header"));
+                                    }}
+                                    aria-label="Add initiative or roadmap"
+                                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/15 text-white transition hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                                  >
+                                    <Plus className="size-3.5" strokeWidth={2.2} />
+                                  </button>
+                                  <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a new initiative or roadmap</span>
+                                </span>
                                 {openCreateMenuKey === "header" ? (
                                   <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1.5 text-slate-900 shadow-xl backdrop-blur-sm">
-                                    <p className="px-2 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">Create</p>
+                                    <p className="px-2 py-1 text-[11px] font-semibold tracking-normal text-slate-500">Create</p>
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -7222,7 +7829,7 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div
-                    className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                    className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                     style={{
                       gridTemplateColumns: tableGridTemplate,
                     }}
@@ -7282,20 +7889,23 @@ export function BacklogPlanningPanel({
                               </span>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
-                            }}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
-                            title="Add from this row"
-                          >
-                            <Plus className="size-3.5 text-slate-600" />
-                          </button>
+                          <span className="group/tip relative inline-flex">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenCreateMenuKey((prev) => (prev === `initiative:${initiative.id}` ? null : `initiative:${initiative.id}`));
+                              }}
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                              aria-label="Add initiative, epic, or user story under this initiative"
+                            >
+                              <Plus className="size-3.5 text-slate-600" />
+                            </button>
+                            <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add initiative, epic, or user story under this initiative</span>
+                          </span>
                           {openCreateMenuKey === `initiative:${initiative.id}` ? (
                             <div className="absolute left-full top-1/2 z-30 ml-2 w-60 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1.5 shadow-xl backdrop-blur-sm">
-                              <p className="px-2 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">Create</p>
+                              <p className="px-2 py-1 text-[11px] font-semibold tracking-normal text-slate-500">Create</p>
                               <button
                                 type="button"
                                 onClick={() =>
@@ -7346,7 +7956,7 @@ export function BacklogPlanningPanel({
                         renderBacklogTeamCell(initiative.team ?? aggregateInitiativeTeamId(initiative))
                       ),
                       year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
-                      quarter: <span className="text-center text-[16px] text-slate-700">{quarterFromMonth(initiative.startMonth)}</span>,
+                      quarter: renderQuarterChipsCell(quartersForInitiative(initiative)),
                       month: <span className="text-center text-[16px] text-slate-700">{monthLabel(initiative.startMonth)}</span>,
                       startDate: isEditingParentDate("initiative", initiative.id, "start") ? (
                         renderParentDateEditor({ kind: "initiative", id: initiative.id, field: "start" })
@@ -7372,7 +7982,9 @@ export function BacklogPlanningPanel({
                           {formatBacklogPlanDate(flatInitGantt.end)}
                         </button>
                       ),
-                      status: (
+                      status: initiativeStories.length === 0 ? (
+                        <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+                      ) : (
                         <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
                           {statusIcon(initiativeWorkflowStatus)}
                           {workflowStatusLabel(initiativeWorkflowStatus)}
@@ -7553,7 +8165,7 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div
-                            className={cn("group grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             data-backlog-zebra-row="true"
                             data-backlog-zebra-kind="epic"
@@ -7612,17 +8224,20 @@ export function BacklogPlanningPanel({
                                         </span>
                                       )}
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        setOpenCreateMenuKey((prev) => (prev === `epic:${epic.id}` ? null : `epic:${epic.id}`));
-                                      }}
-                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
-                                      title="Add from this row"
-                                    >
-                                      <Plus className="size-3.5 text-slate-600" />
-                                    </button>
+                                    <span className="group/tip relative inline-flex">
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setOpenCreateMenuKey((prev) => (prev === `epic:${epic.id}` ? null : `epic:${epic.id}`));
+                                        }}
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                                        aria-label="Add epic or user story under this epic"
+                                      >
+                                        <Plus className="size-3.5 text-slate-600" />
+                                      </button>
+                                      <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add epic or user story under this epic</span>
+                                    </span>
                                     {openCreateMenuKey === `epic:${epic.id}` ? (
                                       <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
                                         <button
@@ -7665,10 +8280,11 @@ export function BacklogPlanningPanel({
                                   renderBacklogTeamCell(epic.team ?? null)
                                 ),
                                 year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
-                                quarter: (
-                                  <span className="text-center text-[16px] text-slate-700">
-                                    {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
-                                  </span>
+                                quarter: renderQuarterChipsCell(
+                                  quartersForMonthRange(
+                                    epic.planStartMonth ?? null,
+                                    epic.planEndMonth ?? null,
+                                  ),
                                 ),
                                 month: (
                                   <span className="text-center text-[16px] text-slate-700">
@@ -7699,7 +8315,9 @@ export function BacklogPlanningPanel({
                                     )}
                                   </span>
                                 ),
-                                status: (
+                                status: (epic.userStories ?? []).length === 0 ? (
+                                  <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+                                ) : (
                                   <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
                                     {statusIcon(epicWorkflowStatus)}
                                     {workflowStatusLabel(epicWorkflowStatus)}
@@ -7750,6 +8368,11 @@ export function BacklogPlanningPanel({
                                 parent: renderParentCell({
                                   initiativeId: initiative.id,
                                   initiativeTitle: initiative.title,
+                                  editTarget: {
+                                    kind: "epic",
+                                    id: epic.id,
+                                    currentParentId: initiative.id,
+                                  },
                                 }),
                                 labels: isEditingParentLabels("epic", epic.id) ? (
                                   renderParentLabelsEditor({ kind: "epic", id: epic.id })
@@ -7885,7 +8508,7 @@ export function BacklogPlanningPanel({
                                       const flatStoryWork = storyWorkPlanRangeFromProgress(story);
                                                                             return (
                                     <div
-                                      className={cn("group grid min-w-full w-max items-center gap-2 py-1.5 text-left")}
+                                      className={cn("group/workitem grid min-w-full w-max items-center gap-2 py-1.5 text-left")}
                                       style={{ gridTemplateColumns: tableGridTemplate }}
                                     >
                                     {renderBacklogCells({
@@ -7939,17 +8562,19 @@ export function BacklogPlanningPanel({
                                           </span>
                                         )}
                                       </div>
+                                      <span className="group/tip relative inline-flex">
                                       <button
                                         type="button"
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           setOpenCreateMenuKey((prev) => (prev === `story:${story.id}` ? null : `story:${story.id}`));
                                         }}
-                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
-                                        title="Add from this row"
+                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+                                        aria-label="Add a sibling user story under the same epic"
                                       >
                                         <Plus className="size-3.5 text-slate-600" />
                                       </button>
+                                      <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a sibling user story under the same epic</span>
                                       {openCreateMenuKey === `story:${story.id}` ? (
                                         <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
                                           <button
@@ -7969,6 +8594,7 @@ export function BacklogPlanningPanel({
                                           </button>
                                         </div>
                                       ) : null}
+                                      </span>
                                     </div>
                                       ),
                                       team: isEditingParentTeam("epic", epic.id) ? (
@@ -7977,10 +8603,19 @@ export function BacklogPlanningPanel({
                                         renderBacklogTeamCell(epic.team ?? null)
                                       ),
                                       year: <span className="text-center text-[16px] text-slate-700">{initiative.year}</span>,
-                                      quarter: (
-                                    <span className="text-center text-[16px] text-slate-700">
-                                      {quarterFromMonth(epic.planStartMonth ?? initiative.startMonth)}
-                                    </span>
+                                      quarter: story.sprint != null ? (
+                                        // A story lives in exactly one
+                                        // sprint, so it has at most one
+                                        // quarter (derived from the sprint's
+                                        // month). Not a range.
+                                        renderQuarterChipsCell([
+                                          `Q${Math.ceil(monthLaneFromGlobalSprint(story.sprint).month / 3)}`,
+                                        ])
+                                      ) : (
+                                        // No sprint → render a neutral dash
+                                        // instead of the "Unscheduled work"
+                                        // pill (which is for epics/initiatives).
+                                        <span className="text-center text-[16px] text-slate-400">—</span>
                                       ),
                                       month: (
                                     <span className="text-center text-[16px] text-slate-700">
@@ -8100,6 +8735,11 @@ export function BacklogPlanningPanel({
                                       parent: renderParentCell({
                                         epicId: epic.id,
                                         epicTitle: epic.title,
+                                        editTarget: {
+                                          kind: "story",
+                                          id: story.id,
+                                          currentParentId: epic.id,
+                                        },
                                       }),
                                       labels: (
                                     <div className="w-full min-w-0 overflow-hidden">
