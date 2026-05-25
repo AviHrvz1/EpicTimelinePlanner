@@ -35,46 +35,6 @@ function storyAssigneeLabel(story: UserStoryItem): string {
   return story.assignee?.trim() || "Unassigned";
 }
 
-const LABEL_CHIP_PALETTES = [
-  "border-indigo-200/70 bg-indigo-50 text-indigo-700",
-  "border-violet-200/70 bg-violet-50 text-violet-700",
-  "border-sky-200/70 bg-sky-50 text-sky-700",
-  "border-emerald-200/70 bg-emerald-50 text-emerald-700",
-  "border-amber-200/70 bg-amber-50 text-amber-700",
-  "border-rose-200/70 bg-rose-50 text-rose-700",
-  "border-teal-200/70 bg-teal-50 text-teal-700",
-  "border-orange-200/70 bg-orange-50 text-orange-700",
-] as const;
-
-function labelChipClass(label: string): string {
-  let hash = 0;
-  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) & 0xffff;
-  return LABEL_CHIP_PALETTES[hash % LABEL_CHIP_PALETTES.length]!;
-}
-
-function parseLabels(raw: string | null | undefined): string[] {
-  return (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-}
-
-function LabelChips({ labels }: { labels: string[] }) {
-  if (labels.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1">
-      {labels.map((lab, i) => (
-        <span
-          key={`${lab}-${i}`}
-          className={cn(
-            "inline-flex max-w-[10rem] shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold leading-tight",
-            labelChipClass(lab),
-          )}
-        >
-          <span className="truncate">{lab}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function assigneeFilterIcon(name: string): LucideIcon {
   return name === "Unassigned" ? UserX : UserRound;
 }
@@ -179,6 +139,7 @@ function KanbanStoryCard({
   onPatchStory,
   emphasizeFlash = false,
   emphasizeTick = 0,
+  showProgress = false,
 }: {
   row: BoardStoryRow;
   boardStoryAssigneeNames: ReadonlySet<string>;
@@ -190,6 +151,7 @@ function KanbanStoryCard({
   onPatchStory?: (storyId: string, patch: SprintKanbanStoryPatch) => void;
   emphasizeFlash?: boolean;
   emphasizeTick?: number;
+  showProgress?: boolean;
 }) {
   const { story, epic } = row;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -295,7 +257,7 @@ function KanbanStoryCard({
           aria-hidden
         />
       ) : null}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-4">
         <div className="flex items-start gap-1.5">
           {dragDisabled ? null : (
             <button
@@ -341,7 +303,7 @@ function KanbanStoryCard({
             </button>
           ) : null}
         </div>
-        {storyEstimatedDays > 0 ? (
+        {showProgress && storyEstimatedDays > 0 ? (
           <div className="space-y-1">
             <div
               className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
@@ -520,12 +482,14 @@ function SprintEpicCard({
   yearSprint,
   onOpenEpic,
   workspaceDirectoryUsers,
+  showProgress = false,
 }: {
   row: BoardEpicRow;
   month: number;
   yearSprint: number;
   onOpenEpic?: (epicId: string) => void;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  showProgress?: boolean;
 }) {
   const { epic, initiative } = row;
   const sprintStories = (epic.userStories ?? []).filter(
@@ -536,10 +500,6 @@ function SprintEpicCard({
   const done = sprintStories.filter((s) => s.status === StoryStatus.done).length;
   const approved = sprintStories.filter((s) => s.status === StoryStatus.approved).length;
   const total = sprintStories.length;
-
-  const epicLabels = [...new Set(
-    sprintStories.flatMap((s) => parseLabels(s.labels)),
-  )];
 
   const planStatus = epicPlanningStatusMeta(epic);
   const execStatus = epicExecutionStatusMeta(epic);
@@ -565,9 +525,10 @@ function SprintEpicCard({
           <span className="min-w-0 truncate">{epic.title}</span>
         </p>
         <p className="mt-0.5 truncate text-[11px] text-slate-400">{initiative.title}</p>
-        {epicLabels.length > 0 && <LabelChips labels={epicLabels} />}
 
-        {total > 0 ? (
+        {total === 0 ? (
+          <p className="mt-1.5 text-[10px] text-slate-400">No stories in this sprint</p>
+        ) : showProgress ? (
           <div className="mt-2 space-y-1.5">
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <div className="flex h-full">
@@ -589,10 +550,8 @@ function SprintEpicCard({
               {approved > 0 && <span className="text-violet-500">{approved} approved</span>}
             </div>
           </div>
-        ) : (
-          <p className="mt-1.5 text-[10px] text-slate-400">No stories in this sprint</p>
-        )}
-        <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
+        ) : null}
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-1.5">
           {epic.assignee?.trim() ? (() => {
             const resolved = resolveAssigneeAvatar(epic.assignee, workspaceDirectoryUsers);
             return (
@@ -634,12 +593,14 @@ function SprintEpicKanbanView({
   yearSprint,
   onOpenEpic,
   workspaceDirectoryUsers,
+  showProgress = false,
 }: {
   epicRows: BoardEpicRow[];
   month: number;
   yearSprint: number;
   onOpenEpic?: (epicId: string) => void;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  showProgress?: boolean;
 }) {
   const byStatus = new Map<StoryStatus, BoardEpicRow[]>();
   for (const col of EPIC_STATUS_COLUMNS) byStatus.set(col.status, []);
@@ -678,6 +639,7 @@ function SprintEpicKanbanView({
                   yearSprint={yearSprint}
                   onOpenEpic={onOpenEpic}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
+                  showProgress={showProgress}
                 />
               ))}
               {colRows.length === 0 && (
@@ -709,6 +671,11 @@ type SprintKanbanProps = {
   searchQuery?: string;
   /** "epics" replaces story cards with read-only epic status cards. */
   viewMode?: "stories" | "epics";
+  /** When true, story cards show the burn-down progress bar and epic cards
+   *  show the status-breakdown bar. Off by default — the user opts in via
+   *  the "Progress" toggle in the sprint-board toolbar so cards stay
+   *  compact when progress isn't the focus. */
+  showProgress?: boolean;
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
   onOpenStory: (storyId: string) => void;
@@ -730,6 +697,7 @@ export function SprintKanbanBoard({
   sprintToolbarEnd = null,
   searchQuery: searchQueryProp = "",
   viewMode = "stories",
+  showProgress = false,
   onUnscheduleStory,
   onRequestUnscheduleStory,
   onOpenStory,
@@ -1007,6 +975,7 @@ export function SprintKanbanBoard({
           yearSprint={yearSprint}
           onOpenEpic={onOpenEpic}
           workspaceDirectoryUsers={workspaceDirectoryUsers}
+          showProgress={showProgress}
         />
       ) : null}
       <div className={cn("grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-4", viewMode === "epics" && "hidden")}>
@@ -1058,6 +1027,7 @@ export function SprintKanbanBoard({
                   onPatchStory={onPatchStory}
                   emphasizeFlash={emphasizeFlash}
                   emphasizeTick={emphasizeTick}
+                  showProgress={showProgress}
                 />
               );
             })}

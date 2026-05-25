@@ -2356,6 +2356,10 @@ export function TimelineGrid({
   /** Measures available width under the timeline card; drives right-panel + roadmap horizontal scroll. */
   const yearRoadmapMeasureRef = useRef<HTMLDivElement | null>(null);
   const [sprintKanbanViewMode, setSprintKanbanViewMode] = useState<"stories" | "epics">("stories");
+  /** Sprint Kanban: toggle progress bars on story / epic cards. Off by
+   *  default so cards stay compact — user opts in via the "Progress" chip
+   *  in the sprint-board toolbar. */
+  const [sprintKanbanShowProgress, setSprintKanbanShowProgress] = useState(false);
   const [sprintKanbanSearch, setSprintKanbanSearch] = useState("");
   const [sprintKanbanSearchOpen, setSprintKanbanSearchOpen] = useState(false);
   const sprintKanbanSearchRef = useRef<HTMLDivElement>(null);
@@ -5327,6 +5331,21 @@ export function TimelineGrid({
       ) : null}
       <button
         type="button"
+        onClick={() => setSprintKanbanShowProgress((v) => !v)}
+        aria-pressed={sprintKanbanShowProgress}
+        title={sprintKanbanShowProgress ? "Hide progress bars" : "Show progress bars on cards"}
+        className={cn(
+          summaryChipBaseClass,
+          sprintKanbanShowProgress
+            ? "bg-gradient-to-br from-emerald-100 via-emerald-200 to-emerald-200 text-emerald-950 ring-1 ring-emerald-300/75 shadow-sm"
+            : "bg-gradient-to-br from-emerald-50 via-emerald-100 to-emerald-100 text-emerald-950 ring-1 ring-emerald-200/75 hover:from-emerald-100 hover:via-emerald-200 hover:to-emerald-200",
+        )}
+      >
+        <Activity className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
+        Progress
+      </button>
+      <button
+        type="button"
         onClick={() => {
           setSprintKanbanViewMode((m) => m === "epics" ? "stories" : "epics");
           setRoadmapBarMode("epics");
@@ -6743,6 +6762,7 @@ export function TimelineGrid({
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
                   viewMode={sprintKanbanViewMode}
+                  showProgress={sprintKanbanShowProgress}
                   searchQuery={sprintKanbanSearch}
                   sprintToolbarEnd={null}
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}

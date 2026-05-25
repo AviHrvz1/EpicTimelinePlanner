@@ -5871,7 +5871,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   <BacklogPanelSkeleton />
                 ) : (
                 <BacklogPlanningPanel
-                summaryBarPortalElement={summaryBarEl}
+                /* Only portal summary chips into the shared bar when the
+                 *  backlog mode is actually active. The panel stays mounted
+                 *  for fast tab switching (see `hasMountedBacklog`), but
+                 *  passing the portal element while hidden caused the
+                 *  backlog's "16 Initiatives / 66 Epics / 504 Stories"
+                 *  chips to leak into Roadmap Planning's summary bar. */
+                summaryBarPortalElement={topMode === "backlog" ? summaryBarEl : null}
                 suppressInlineChips
                 initiatives={backlogInitiatives}
                 roadmaps={roadmaps}
