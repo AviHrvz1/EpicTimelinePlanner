@@ -5905,6 +5905,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   setTopMode("roadmap");
                   setPanelStatusQuickFilter("Unscheduled");
                   setMiddlePanelPrefillSearch(epicTitle ?? "");
+                  // Land the right view on the all-quarters Gantt so the
+                  // whole year is in view — easier to drop the unscheduled
+                  // epic anywhere. Reset month + quarter focus.
+                  setActiveTimelineMonth(null);
+                  setFocusedQuarterLabel(null);
+                  setActiveQuarterViewTab("gantt");
                   // Reset the seed shortly after so a subsequent jump with
                   // the same title still triggers the panel's effect.
                   window.setTimeout(() => setMiddlePanelPrefillSearch(null), 200);
