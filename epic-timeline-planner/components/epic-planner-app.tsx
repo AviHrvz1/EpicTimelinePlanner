@@ -2041,7 +2041,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     const t0 = performance.now();
     console.log("[backlog] refresh: fetch start", { year: selectedYear, source: "refreshBacklogInitiatives" });
     try {
-      const res = await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all&slim=1`, { cache: "no-store" });
+      const res = await fetch(`/api/initiatives?year=all&roadmapId=all&slim=1`, { cache: "no-store" });
       const text = await res.text();
       const tFetched = performance.now();
       const data = JSON.parse(text) as InitiativeItem[];
@@ -2083,7 +2083,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       if (cancelled || backlogInitiatives !== null) return;
       try {
         console.log("[backlog] idle prefetch start", { year: selectedYear });
-        const res = await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all&slim=1`, { cache: "no-store" });
+        const res = await fetch(`/api/initiatives?year=all&roadmapId=all&slim=1`, { cache: "no-store" });
         const data = (await res.json()) as InitiativeItem[];
         if (cancelled) return;
         setBacklogInitiatives(data);
@@ -2109,7 +2109,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     (async () => {
       const t0 = performance.now();
       try {
-        const res = await fetch(`/api/initiatives?year=${selectedYear}&roadmapId=all&slim=1`, { cache: "no-store" });
+        const res = await fetch(`/api/initiatives?year=all&roadmapId=all&slim=1`, { cache: "no-store" });
         const text = await res.text();
         const tFetched = performance.now();
         const data = JSON.parse(text) as InitiativeItem[];
@@ -2668,12 +2668,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     handleSelectRoadmap(newRoadmap.id, newRoadmap.years[0] ?? selectedYear, [newRoadmap]);
   }
 
-  async function createRoadmapQuick(name: string): Promise<string | null> {
-    const currentYear = new Date().getFullYear();
+  async function createRoadmapQuick(name: string, years?: number[]): Promise<string | null> {
+    const fallbackYear = new Date().getFullYear();
+    const yearList = years && years.length > 0 ? years : [fallbackYear];
     const res = await fetch("/api/roadmaps", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, years: [currentYear] }),
+      body: JSON.stringify({ name, years: yearList }),
     });
     if (!res.ok) { toast.error("Failed to create roadmap"); return null; }
     const newRoadmap = await parseJson<RoadmapItem>(res);
@@ -3034,11 +3035,37 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     await Promise.all([refresh(), refreshBacklogInitiatives()]);
   }
 
-  async function createInitiativeQuick(title: string): Promise<string> {
+  async function createInitiativeQuick(
+    title: string,
+    /** Optional roadmap override — when omitted, falls back to the
+     *  currently-selected roadmap (matches the previous behavior). The
+     *  backlog passes an explicit id when the user picks a roadmap in the
+     *  inline create form. */
+    roadmapIdOverride?: string | null,
+  ): Promise<string> {
+    const finalRoadmapId =
+      roadmapIdOverride !== undefined ? roadmapIdOverride : selectedRoadmapId;
+    // When a specific roadmap is picked, default the initiative's year to
+    // that roadmap's FIRST year so it lands inside the roadmap's own
+    // calendar (instead of selectedYear, which can be a different year that
+    // the roadmap doesn't cover — the user would then see an empty
+    // "Year=2026" subfolder under "Roadmap with years [2027]"). Falls back
+    // to selectedYear when the roadmap is unknown.
+    const roadmapMatch = finalRoadmapId
+      ? roadmaps.find((r) => r.id === finalRoadmapId)
+      : null;
+    const yearForInitiative =
+      roadmapMatch && roadmapMatch.years.length > 0
+        ? (roadmapMatch.years.includes(selectedYear) ? selectedYear : roadmapMatch.years[0])
+        : selectedYear;
     const response = await fetch("/api/initiatives", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, year: selectedYear, roadmapId: selectedRoadmapId }),
+      body: JSON.stringify({
+        title,
+        year: yearForInitiative,
+        roadmapId: finalRoadmapId,
+      }),
     });
     if (!response.ok) {
       throw new Error("Failed to create initiative");
@@ -5785,15 +5812,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onOpenStory={(storyId) => {
                   setSelectedStoryId(storyId);
                 }}
-                onCreateInitiativeQuick={async (title) => {
+                onCreateInitiativeQuick={async (title, roadmapId) => {
                   try {
-                    const id = await createInitiativeQuick(title);
+                    const id = await createInitiativeQuick(title, roadmapId);
                     toast.success("Initiative added");
                     return id;
                   } catch {
                     toast.error("Failed to add initiative");
                   }
                 }}
+                onCreateRoadmapQuick={createRoadmapQuick}
+                onRenameRoadmap={handleRenameRoadmap}
                 onCreateEpicQuick={async (initiativeId, title) => {
                   try {
                     await createEpicQuick(initiativeId, title);

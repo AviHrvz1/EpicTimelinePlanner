@@ -7,6 +7,7 @@ import {
   ArrowUpDown,
   Bookmark,
   CalendarDays,
+  CalendarOff,
   CalendarRange,
   Check,
   CheckCheck,
@@ -17,7 +18,6 @@ import {
   ChevronsUp,
   ChevronUp,
   Eraser,
-  FileSpreadsheet,
   Filter,
   Flag,
   Folder,
@@ -30,6 +30,7 @@ import {
   Plus,
   Save,
   Search,
+  SquarePen,
   TableProperties,
   Tag,
   Trash2,
@@ -50,6 +51,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import { toast } from "sonner";
 
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -63,7 +65,9 @@ import {
   ganttDateRangeForInitiative,
   storyWorkPlanRangeFromProgress,
 } from "@/lib/backlog-plan-dates";
-import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { QuarterYearProgressIcon } from "@/components/ui/quarter-year-progress-icon";
+import { TimelineDatePopover } from "@/components/epics/timeline-date-popover";
 import { exportBacklogToPrintableWindow } from "@/lib/backlog-excel-export";
 import { collectAssigneeNameSuggestions } from "@/lib/delivery-assignees";
 import { monthTeamLabelForId, MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
@@ -101,7 +105,12 @@ type BacklogPlanningPanelProps = {
   onOpenInitiative: (initiativeId: string) => void;
   onOpenEpic: (epicId: string) => void;
   onOpenStory: (storyId: string) => void;
-  onCreateInitiativeQuick: (title: string) => Promise<string | void>;
+  onCreateInitiativeQuick: (title: string, roadmapId?: string | null) => Promise<string | void>;
+  /** Optional roadmap operations exposed by the parent. When undefined, the
+   *  backlog hides its create-roadmap/edit-roadmap-name affordances. Years
+   *  default to the current calendar year when omitted. */
+  onCreateRoadmapQuick?: (name: string, years?: number[]) => Promise<string | null>;
+  onRenameRoadmap?: (id: string, name: string) => Promise<void>;
   onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   onPatchStoryQuick: (
@@ -163,6 +172,7 @@ type BacklogColumnKey =
   | "status"
   | "sprint"
   | "assignee"
+  | "parent"
   | "labels"
   | "estDays"
   | "epicOriginalEst"
@@ -444,6 +454,7 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "status",
   "team",
   "assignee",
+  "parent",
   "epicOriginalEst",
   "estDays",
   "daysLeft",
@@ -468,6 +479,7 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   status: "Status",
   sprint: "Sprint",
   assignee: "Assignee",
+  parent: "Parent",
   labels: "Labels",
   estDays: "Est Days",
   epicOriginalEst: "Epic Est",
@@ -486,6 +498,7 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   status: 100,
   sprint: 90,
   assignee: 120,
+  parent: 200,
   labels: 140,
   estDays: 90,
   epicOriginalEst: 110,
@@ -504,6 +517,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   status: 168,
   sprint: 148,
   assignee: 190,
+  parent: 260,
   labels: 200,
   estDays: 128,
   epicOriginalEst: 150,
@@ -515,7 +529,7 @@ const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
 /** Bump when default visibility for columns changes so stored layout can migrate once. */
-const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 10;
+const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 11;
 const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
 const BACKLOG_SAVED_VIEWS_STORAGE_KEY = "epic-planner.backlog.saved-views.v1";
 
@@ -531,6 +545,7 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   status: true,
   sprint: true,
   assignee: true,
+  parent: true,
   labels: true,
   /** Core planning columns -- on by default. */
   estDays: true,
@@ -1019,110 +1034,40 @@ function SprintSelectEditor({
  * clipped by the cell's `overflow-hidden` wrapper. Anchored to the closest
  * positioned ancestor's bounding box via the host span ref.
  */
+/** Inline date editor for epic (date) / initiative (month). Reuses the same
+ *  `TimelineDatePopover` the epic dialog uses so the user sees the Q1-Q4 chip
+ *  above the month grid here too. For initiatives the day is ignored on
+ *  commit — picking any day in March sets `startMonth=3`. */
 function ParentDateEditorOverlay({
-  isEpic,
-  value,
-  onChange,
+  initialValue,
+  fallbackYear,
   onCommit,
   onCancel,
-  shouldStillCommit,
 }: {
-  isEpic: boolean;
-  value: string;
-  onChange: (v: string) => void;
-  onCommit: () => void;
+  initialValue: string;
+  fallbackYear: number;
+  onCommit: (next: string) => void;
   onCancel: () => void;
-  shouldStillCommit: () => boolean;
 }) {
-  // Inline placeholder span keeps a stable position in the document for
-  // the portaled card to anchor against (uses parentElement bounding box).
+  // Tiny anchor placed where the cell sits so the popover positions under it.
   const hostRef = useRef<HTMLSpanElement | null>(null);
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const [style, setStyle] = useState<CSSProperties>({ position: "fixed", visibility: "hidden", zIndex: CELL_POPOVER_Z });
-
-  const recalc = useCallback(() => {
-    const anchor = hostRef.current?.parentElement;
-    if (!anchor) return;
-    const r = anchor.getBoundingClientRect();
-    const cardW = cardRef.current?.offsetWidth ?? 240;
-    const left = Math.round(r.left + r.width / 2 - cardW / 2);
-    const top = Math.round(r.top + r.height / 2 - (cardRef.current?.offsetHeight ?? 32) / 2);
-    setStyle({
-      position: "fixed",
-      left: Math.max(8, left),
-      top: Math.max(8, top),
-      zIndex: CELL_POPOVER_Z,
-      visibility: "visible",
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    recalc();
-  }, [recalc, value]);
-
-  useEffect(() => {
-    window.addEventListener("scroll", recalc, true);
-    window.addEventListener("resize", recalc);
-    return () => {
-      window.removeEventListener("scroll", recalc, true);
-      window.removeEventListener("resize", recalc);
-    };
-  }, [recalc]);
-
-  const card =
-    typeof document !== "undefined"
-      ? createPortal(
-          <div
-            ref={cardRef}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-md ring-1 ring-black/[0.04]"
-            style={style}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <input
-              type={isEpic ? "date" : "month"}
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-              onBlur={() => {
-                // Defer so click on Check/X buttons can fire first.
-                window.setTimeout(() => {
-                  if (shouldStillCommit()) onCommit();
-                }, 120);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  onCancel();
-                } else if (event.key === "Enter") {
-                  event.preventDefault();
-                  onCommit();
-                }
-              }}
-              autoFocus
-              className="h-7 rounded-md bg-white px-2 text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
-            />
-            <button
-              type="button"
-              onClick={onCancel}
-              className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-            >
-              <X className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={onCommit}
-              className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-            >
-              <Check className="size-3.5" />
-            </button>
-          </div>,
-          document.body,
-        )
-      : null;
-
   return (
     <>
-      <span ref={hostRef} data-cell-editing aria-hidden style={{ display: "none" }} />
-      {card}
+      <span
+        ref={hostRef}
+        data-cell-editing
+        aria-hidden
+        className="pointer-events-none inline-block h-4 w-1"
+      />
+      <TimelineDatePopover
+        open
+        anchorRef={hostRef}
+        value={initialValue}
+        fallbackYear={fallbackYear}
+        fallbackMonth1={1}
+        onChange={(next) => onCommit(next)}
+        onClose={onCancel}
+      />
     </>
   );
 }
@@ -1927,6 +1872,160 @@ function MultiCheckboxFilter({
 }
 
 /**
+ * Hierarchical Parent picker — top-level initiative checkboxes with epic
+ * children indented below. Ticking an initiative cascade-adds all its epic
+ * ids (so subsequently unticking a single epic still hides that epic).
+ * Selected ids are a flat list mixing initiative + epic ids — filter logic
+ * treats either-membership as a match.
+ */
+type BacklogParentFilterTree = ReadonlyArray<{
+  initiativeId: string;
+  initiativeTitle: string;
+  epics: ReadonlyArray<{ epicId: string; epicTitle: string }>;
+}>;
+
+function BacklogParentFilterControl({
+  tree,
+  selected,
+  onChange,
+  buttonClassName,
+}: {
+  tree: BacklogParentFilterTree;
+  selected: string[];
+  onChange: (next: string[]) => void;
+  buttonClassName?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const allSelected = selected.length === 0;
+  const selectedLabel = allSelected
+    ? "All"
+    : `${selected.length} selected`;
+
+  useEffect(() => () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  }, []);
+
+  function scheduleClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setIsOpen(false), 180);
+  }
+  function cancelScheduledClose() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
+  const lowerQuery = query.trim().toLowerCase();
+  const filteredTree = useMemo(() => {
+    if (!lowerQuery) return tree;
+    return tree
+      .map((init) => {
+        const initMatch = init.initiativeTitle.toLowerCase().includes(lowerQuery);
+        const epics = init.epics.filter((e) => initMatch || e.epicTitle.toLowerCase().includes(lowerQuery));
+        if (!initMatch && epics.length === 0) return null;
+        return { ...init, epics };
+      })
+      .filter(Boolean) as typeof tree;
+  }, [tree, lowerQuery]);
+
+  function toggleInitiative(initiativeId: string, epicIds: string[]) {
+    const isOn = selectedSet.has(initiativeId);
+    if (isOn) {
+      onChange(selected.filter((id) => id !== initiativeId && !epicIds.includes(id)));
+    } else {
+      const next = new Set(selected);
+      next.add(initiativeId);
+      for (const eid of epicIds) next.add(eid);
+      onChange(Array.from(next));
+    }
+  }
+  function toggleEpic(epicId: string) {
+    if (selectedSet.has(epicId)) {
+      onChange(selected.filter((id) => id !== epicId));
+    } else {
+      onChange([...selected, epicId]);
+    }
+  }
+
+  return (
+    <div className="group relative min-w-0 w-full" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className={cn(
+          "flex h-[34px] min-w-[8rem] cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-2.5 text-[14px] text-slate-900 outline-none transition hover:border-slate-400 hover:bg-slate-50",
+          buttonClassName,
+        )}
+      >
+        <span className="shrink-0 font-medium text-slate-500">Parent: </span>
+        <span className="ml-1 min-w-0 truncate font-normal text-slate-600">{selectedLabel}</span>
+      </button>
+      {isOpen ? (
+        <div className="absolute z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
+          <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() => onChange([])}
+              className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+            />
+            All
+          </label>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search initiative or epic..."
+            className="mb-2 h-7 w-full rounded-md border border-slate-200 bg-white px-2 text-[13px] outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
+          />
+          <div className="max-h-72 space-y-1 overflow-auto pr-1">
+            {filteredTree.length === 0 ? (
+              <div className="px-1 py-2 text-[12px] text-slate-400">No matches</div>
+            ) : null}
+            {filteredTree.map((init) => {
+              const initChecked = selectedSet.has(init.initiativeId);
+              const epicIds = init.epics.map((e) => e.epicId);
+              return (
+                <div key={init.initiativeId} className="rounded">
+                  <label className="flex items-center gap-2 text-[14px] font-medium text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={initChecked}
+                      onChange={() => toggleInitiative(init.initiativeId, epicIds)}
+                      className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
+                    />
+                    <span className="truncate" title={init.initiativeTitle}>{init.initiativeTitle}</span>
+                  </label>
+                  {init.epics.length > 0 ? (
+                    <div className="ml-5 mt-0.5 space-y-0.5 border-l border-slate-200/70 pl-2">
+                      {init.epics.map((e) => (
+                        <label key={e.epicId} className="flex items-center gap-2 text-[13px] text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={selectedSet.has(e.epicId)}
+                            onChange={() => toggleEpic(e.epicId)}
+                            className="h-3 w-3 rounded border-indigo-200 accent-indigo-600"
+                          />
+                          <span className="truncate" title={e.epicTitle}>{e.epicTitle}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Tiny avatar/icon used in backlog row "assignee" cells. Same fallback
  * pattern as the rest of the app: photo when the directory has one for this
  * name, else the generic `UserRound` icon at the historical 14px size.
@@ -2142,6 +2241,7 @@ function IsolatedCreateRowForm({
   formStyle,
   submitting,
   saveDisabledExtra,
+  leadingIcon,
 }: {
   placeholder: string;
   inputClassName?: string;
@@ -2156,6 +2256,8 @@ function IsolatedCreateRowForm({
   /** Extra disable condition (e.g. story form requires a target epic to
    *  be picked before save is allowed). */
   saveDisabledExtra?: boolean;
+  /** Type-affordance icon (initiative/epic/story) shown left of the input. */
+  leadingIcon?: ReactNode;
 }) {
   const [title, setTitle] = useState("");
   const trimmed = title.trim();
@@ -2170,19 +2272,42 @@ function IsolatedCreateRowForm({
       style={formStyle}
     >
       <div className="flex min-w-0 items-center gap-2" style={inputWrapperStyle}>
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder={placeholder}
-          className={inputClassName ?? "h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"}
-          autoFocus
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onCancel();
-            }
-          }}
-        />
+        {leadingIcon ? (
+          /* When a leading icon is provided, swap to a wrapper that owns the
+           * border/ring so the icon sits visually INSIDE the field. */
+          <div className="relative flex h-9 max-w-[28rem] flex-1 items-center rounded-md bg-white ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-ring/40">
+            <span className="pointer-events-none flex h-full w-7 items-center justify-center text-slate-400">
+              {leadingIcon}
+            </span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={placeholder}
+              className="h-full w-full bg-transparent pl-0 pr-2.5 text-[16px] outline-none"
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onCancel();
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder={placeholder}
+            className={inputClassName ?? "h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"}
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onCancel();
+              }
+            }}
+          />
+        )}
       </div>
       <div className="flex items-center gap-2" style={rightSlotStyle}>
         {extras}
@@ -2223,16 +2348,27 @@ function QuarterInitiativeCreateForm({
   submitting,
   onSubmit,
   onCancel,
+  leadingIcon,
+  extras,
+  canSubmitExtra = true,
 }: {
   placeholder: string;
   indentPx: number;
   submitting: boolean;
   onSubmit: (title: string) => void;
   onCancel: () => void;
+  /** Type-affordance icon shown inside the input (left side) so the user
+   *  knows what kind of work item this composer will create. */
+  leadingIcon?: ReactNode;
+  /** Optional UI rendered to the right of the input (e.g. roadmap selector). */
+  extras?: ReactNode;
+  /** Additional submit gate — when false, save is disabled even with a valid
+   *  title. Used by the header initiative form to require a roadmap pick. */
+  canSubmitExtra?: boolean;
 }) {
   const [title, setTitle] = useState("");
   const trimmed = title.trim();
-  const canSubmit = trimmed.length >= 2 && !submitting;
+  const canSubmit = trimmed.length >= 2 && !submitting && canSubmitExtra;
   return (
     <div className="border-b border-slate-200/80 bg-slate-50 px-3 py-2">
       <form
@@ -2244,24 +2380,136 @@ function QuarterInitiativeCreateForm({
         className="flex items-center gap-2"
         style={{ paddingLeft: indentPx }}
       >
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder={placeholder}
-          className="h-8 flex-1 rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
-          autoFocus
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onCancel();
-            }
-          }}
-        />
+        <div className="relative flex h-8 max-w-[28rem] flex-1 items-center rounded-md bg-white ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-ring/40">
+          {leadingIcon ? (
+            <span className="pointer-events-none flex h-full w-7 items-center justify-center text-slate-400">
+              {leadingIcon}
+            </span>
+          ) : null}
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder={placeholder}
+            className={cn(
+              "h-full w-full bg-transparent pr-2.5 text-[14px] outline-none",
+              leadingIcon ? "pl-0" : "pl-2.5",
+            )}
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onCancel();
+              }
+            }}
+          />
+        </div>
+        {extras}
         <button
           type="submit"
           disabled={!canSubmit}
           className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"
           aria-label="Save"
+        >
+          <Plus className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+          aria-label="Cancel"
+        >
+          <X className="size-3.5" />
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Self-contained roadmap create form — name + years picker. Mirrors the
+ * roadmap planning header's create flow (1-4 years selectable from this
+ * calendar year forward). Keeps state local so keystrokes don't re-render
+ * the whole 7k-line backlog panel.
+ */
+function IsolatedRoadmapCreateForm({
+  indentPx,
+  submitting,
+  onSubmit,
+  onCancel,
+}: {
+  indentPx: number;
+  submitting: boolean;
+  onSubmit: (name: string, years: number[]) => void;
+  onCancel: () => void;
+}) {
+  const currentCalYear = new Date().getFullYear();
+  const [name, setName] = useState("");
+  const [years, setYears] = useState<number[]>([currentCalYear]);
+  const trimmed = name.trim();
+  const canSubmit = trimmed.length >= 2 && years.length > 0 && !submitting;
+  return (
+    <div className="border-b border-slate-200/80 bg-slate-50 px-3 py-2">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!canSubmit) return;
+          onSubmit(trimmed, [...years].sort());
+        }}
+        className="flex flex-wrap items-center gap-2"
+        style={{ paddingLeft: indentPx }}
+      >
+        <div className="relative flex h-8 max-w-[24rem] flex-1 items-center rounded-md bg-white ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-ring/40">
+          <span className="pointer-events-none flex h-full w-7 items-center justify-center text-indigo-500">
+            <MapIcon className="size-3.5" aria-hidden />
+          </span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="New roadmap name…"
+            className="h-full w-full bg-transparent pl-0 pr-2.5 text-[14px] outline-none"
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onCancel();
+              }
+            }}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Years
+          </span>
+          {[0, 1, 2, 3].map((i) => {
+            const y = currentCalYear + i;
+            const checked = years.includes(y);
+            return (
+              <button
+                key={y}
+                type="button"
+                onClick={() =>
+                  setYears((prev) => (checked ? prev.filter((x) => x !== y) : [...prev, y]))
+                }
+                className={cn(
+                  "rounded-md border px-2 py-0.5 text-[12px] font-medium transition",
+                  checked
+                    ? "border-indigo-400 bg-indigo-50 text-indigo-950"
+                    : "border-slate-200 text-slate-500 hover:bg-slate-50",
+                )}
+              >
+                {y}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"
+          aria-label="Save"
+          title={
+            !trimmed ? "Enter a roadmap name" : years.length === 0 ? "Pick at least one year" : "Save"
+          }
         >
           <Plus className="size-3.5" />
         </button>
@@ -2286,6 +2534,8 @@ export function BacklogPlanningPanel({
   onOpenEpic,
   onOpenStory,
   onCreateInitiativeQuick,
+  onCreateRoadmapQuick,
+  onRenameRoadmap,
   onCreateEpicQuick,
   onCreateStoryQuick,
   onPatchStoryQuick,
@@ -2325,6 +2575,10 @@ export function BacklogPlanningPanel({
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [roadmapFilter, setRoadmapFilter] = useState<string[]>([]);
+  /** Hierarchical parent filter — holds initiative IDs and/or epic IDs the user
+   *  ticked in the Parent picker. A row matches if either its initiativeId or
+   *  its epicId is in the set. Empty array = no filter. */
+  const [parentFilter, setParentFilter] = useState<string[]>([]);
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
   const [sortBy, setSortBy] = useState<BacklogSortBy>("titleAsc");
   // Per-column header sort: overrides initiative ordering when non-null. Third
@@ -2347,6 +2601,17 @@ export function BacklogPlanningPanel({
     epicId?: string;
   } | null>(null);
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
+  /** Roadmap picked when the user uses the header "+" to create an
+   *  initiative. Empty string = "no roadmap chosen yet" — required for the
+   *  form to submit (see `canSubmitExtra`). */
+  const [initiativeTargetRoadmapId, setInitiativeTargetRoadmapId] = useState<string>("");
+  /** When true, an inline roadmap-create form appears BELOW the initiative
+   *  composer so the user can spin up a roadmap without losing the title
+   *  they've already typed. Cleared after create succeeds or cancels. */
+  const [inlineCreatingRoadmap, setInlineCreatingRoadmap] = useState(false);
+  /** Roadmap inline-edit target. Null = not editing. Active id swaps the
+   *  folder label for an `IsolatedTextInput` until save / cancel. */
+  const [editingRoadmapId, setEditingRoadmapId] = useState<string | null>(null);
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["roadmap", "year", "quarter"]);
@@ -2652,9 +2917,11 @@ export function BacklogPlanningPanel({
     const d = Math.min(Math.max(day ?? 1, 1), dim);
     return `${year}-${pad2(m)}-${pad2(d)}`;
   }
-  /** YYYY-MM from initiative month + year. Falls back to month=1 when missing. */
+  /** YYYY-MM-DD (day = 01) for the initiative month. Day is ignored on commit —
+   *  the format only matches `TimelineDatePopover`'s expected ISO string so the
+   *  same picker can be reused for both epic (date) and initiative (month). */
   function initiativeMonthInputValue(year: number, month: number | null | undefined): string {
-    return `${year}-${pad2(month ?? 1)}`;
+    return `${year}-${pad2(month ?? 1)}-01`;
   }
   function beginEpicDateEdit(
     epicId: string,
@@ -2685,10 +2952,10 @@ export function BacklogPlanningPanel({
       console.warn(message);
     }
   }
-  async function commitEpicDateEdit() {
+  async function commitEpicDateEdit(explicitRaw?: string) {
     if (!editingParentDate || editingParentDate.kind !== "epic") return;
-    const raw = editingParentDate.value.trim();
-    // <input type="date"> emits YYYY-MM-DD.
+    const raw = (explicitRaw ?? editingParentDate.value).trim();
+    // YYYY-MM-DD from TimelineDatePopover (or the legacy native input).
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
     if (!m) {
       reportParentDateValidationError("Enter a valid date (YYYY-MM-DD)");
@@ -2717,11 +2984,11 @@ export function BacklogPlanningPanel({
     }
     setEditingParentDate(null);
   }
-  async function commitInitiativeDateEdit() {
+  async function commitInitiativeDateEdit(explicitRaw?: string) {
     if (!editingParentDate || editingParentDate.kind !== "initiative") return;
-    const raw = editingParentDate.value.trim();
-    // <input type="month"> emits YYYY-MM.
-    const m = /^(\d{4})-(\d{2})$/.exec(raw);
+    const raw = (explicitRaw ?? editingParentDate.value).trim();
+    // Accept YYYY-MM-DD (from TimelineDatePopover — day is ignored) or YYYY-MM.
+    const m = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(raw);
     if (!m) {
       reportParentDateValidationError("Enter a valid month (YYYY-MM)");
       return;
@@ -2753,29 +3020,35 @@ export function BacklogPlanningPanel({
       editingParentDate.field === field
     );
   }
-  /** Inline editor for epic (date) and initiative (month). Commits on Enter / blur; cancels on Escape. */
+  /** Inline editor for epic (date) and initiative (month). Picking a day in
+   *  the calendar commits immediately; closing/Escape cancels. */
+  /** Per-render guard so the editor mounts at most once even when the same
+   *  initiative/epic row appears in multiple group buckets (e.g. an initiative
+   *  that spans Q1+Q2 renders in both quarter folders — without this, two
+   *  popovers would stack on top of each other). Reset on every render. */
+  const renderedDateEditorRef = useRef(false);
+  renderedDateEditorRef.current = false;
   function renderParentDateEditor(args: {
     kind: "epic" | "initiative";
     id: string;
     field: "start" | "end";
   }): ReactNode {
+    if (renderedDateEditorRef.current) return null;
+    renderedDateEditorRef.current = true;
     const isEpic = args.kind === "epic";
-    const commit = isEpic ? commitEpicDateEdit : commitInitiativeDateEdit;
+    const initial = editingParentDate?.value ?? "";
+    // The popover needs a year fallback for the case the value is blank.
+    const yearFromValue = /^(\d{4})-/.exec(initial)?.[1];
+    const fallbackYear = yearFromValue ? Number(yearFromValue) : new Date().getFullYear();
     return (
       <ParentDateEditorOverlay
-        isEpic={isEpic}
-        value={editingParentDate?.value ?? ""}
-        onChange={(v) =>
-          setEditingParentDate((prev) => (prev ? { ...prev, value: v } : prev))
-        }
-        onCommit={() => void commit()}
+        initialValue={initial}
+        fallbackYear={fallbackYear}
+        onCommit={(next) => {
+          if (isEpic) void commitEpicDateEdit(next);
+          else void commitInitiativeDateEdit(next);
+        }}
         onCancel={() => setEditingParentDate(null)}
-        shouldStillCommit={() =>
-          !!editingParentDate &&
-          editingParentDate.kind === args.kind &&
-          editingParentDate.id === args.id &&
-          editingParentDate.field === args.field
-        }
       />
     );
   }
@@ -3000,11 +3273,13 @@ export function BacklogPlanningPanel({
 
   const filteredWithControls = useMemo(() => {
     const statusRank: Record<string, number> = { todo: 0, inProgress: 1, done: 2, approved: 3 };
+    const storyFilterActive = statusFilter.length > 0 || sprintFilter.length > 0 || labelFilter.length > 0;
     return filtered
-      .map((initiative) => ({
-        ...initiative,
-        epics: (initiative.epics ?? [])
+      .map((initiative) => {
+        const originalHadEpics = (initiative.epics ?? []).length > 0;
+        const epics = (initiative.epics ?? [])
           .map((epic) => {
+            const originalHadStories = (epic.userStories ?? []).length > 0;
             const stories = [...(epic.userStories ?? [])]
               .filter((story) => {
                 if (statusFilter.length > 0 && !statusFilter.includes(story.status)) return false;
@@ -3024,19 +3299,28 @@ export function BacklogPlanningPanel({
                 if (sortBy === "status") return (statusRank[a.status] ?? 99) - (statusRank[b.status] ?? 99);
                 return a.title.localeCompare(b.title);
               });
-            return { ...epic, userStories: stories };
+            return { epic, originalHadStories, stories };
           })
-          .filter(
-            (epic) =>
-              (epic.userStories ?? []).length > 0 ||
-              (statusFilter.length === 0 && sprintFilter.length === 0 && labelFilter.length === 0),
-          ),
-      }))
-      .filter(
-        (initiative) =>
-          (initiative.epics ?? []).length > 0 ||
-          (statusFilter.length === 0 && sprintFilter.length === 0 && labelFilter.length === 0),
-      );
+          // Keep epics whose stories survived a story-level filter, OR
+          // brand-new epics that never had stories (so users see things
+          // they just created even with filters active).
+          .filter(({ originalHadStories, stories }) => {
+            if (!storyFilterActive) return true;
+            if (!originalHadStories) return true;
+            return stories.length > 0;
+          })
+          .map(({ epic, stories }) => ({ ...epic, userStories: stories }));
+        return { initiative, originalHadEpics, epics };
+      })
+      // Keep initiatives whose epics survived, OR brand-new initiatives that
+      // never had epics (the just-created standalone case — without this, a
+      // story-level filter would silently hide newly added initiatives).
+      .filter(({ originalHadEpics, epics }) => {
+        if (!storyFilterActive) return true;
+        if (!originalHadEpics) return true;
+        return epics.length > 0;
+      })
+      .map(({ initiative, epics }) => ({ ...initiative, epics }));
   }, [filtered, statusFilter, sprintFilter, labelFilter, sortBy]);
 
   const suggestions = useMemo(() => {
@@ -3079,6 +3363,20 @@ export function BacklogPlanningPanel({
       .map((id) => ({ id, label: byId.get(id) ?? id }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [roadmaps, initiatives]);
+
+  /** Parent picker tree — built from the unfiltered initiatives so users can
+   *  always re-select a parent they previously filtered out. Sorted by title. */
+  const parentFilterTree = useMemo<BacklogParentFilterTree>(() => {
+    return [...initiatives]
+      .map((init) => ({
+        initiativeId: init.id,
+        initiativeTitle: init.title,
+        epics: (init.epics ?? [])
+          .map((epic) => ({ epicId: epic.id, epicTitle: epic.title }))
+          .sort((a, b) => a.epicTitle.localeCompare(b.epicTitle)),
+      }))
+      .sort((a, b) => a.initiativeTitle.localeCompare(b.initiativeTitle));
+  }, [initiatives]);
 
   const roadmapNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -3160,10 +3458,15 @@ export function BacklogPlanningPanel({
   ];
 
   const backlogFilteredBeforeWorkItem = useMemo(() => {
+    /** Parent filter: ticking an initiative keeps all its epics; ticking only
+     *  certain epics restricts to those epics. The hierarchical picker enforces
+     *  cascade-tick at write time, so here we only check membership. */
+    const parentFilterSet = new Set(parentFilter);
     return filteredWithControls
       .map((initiative) => {
         if (roadmapFilter.length > 0 && (!initiative.roadmapId || !roadmapFilter.includes(initiative.roadmapId))) return null;
         if (yearFilter.length > 0 && !yearFilter.includes(String(initiative.year))) return null;
+        const initiativeInParentFilter = parentFilterSet.has(initiative.id);
         const initiativeQuarterMatch = matchesAnySelectedQuarterByRange(
           quarterFilter,
           initiative.startMonth,
@@ -3172,6 +3475,7 @@ export function BacklogPlanningPanel({
         const initAssignee = initiative.assignee?.trim() || "Unassigned";
         const epics = (initiative.epics ?? [])
           .map((epic) => {
+            if (parentFilterSet.size > 0 && !initiativeInParentFilter && !parentFilterSet.has(epic.id)) return null;
             const epicStartMonth = epic.planStartMonth ?? initiative.startMonth;
             const epicEndMonth = epic.planEndMonth ?? initiative.endMonth ?? epicStartMonth;
             const epicQuarterMatch = matchesAnySelectedQuarterByRange(quarterFilter, epicStartMonth, epicEndMonth);
@@ -3195,6 +3499,7 @@ export function BacklogPlanningPanel({
           })
           .filter(Boolean) as typeof initiative.epics;
 
+        if (parentFilterSet.size > 0 && !initiativeInParentFilter && epics.length === 0) return null;
         const initiativeAssigneeMatch = assigneeFilter.length === 0 || assigneeFilter.includes(initAssignee);
         if (assigneeFilter.length > 0 && epics.length === 0 && !initiativeAssigneeMatch) return null;
         if (!initiativeQuarterMatch && epics.length === 0 && quarterFilter.length > 0) return null;
@@ -3202,7 +3507,7 @@ export function BacklogPlanningPanel({
         return { ...initiative, epics };
       })
       .filter(Boolean) as typeof filteredWithControls;
-  }, [filteredWithControls, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter]);
+  }, [filteredWithControls, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, parentFilter]);
 
   const fullyFiltered = useMemo(() => {
     const base = applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter);
@@ -3377,6 +3682,64 @@ export function BacklogPlanningPanel({
         <span className="truncate">{label}</span>
       </span>
     );
+  }
+
+  /** Parent cell — story rows show "Initiative · Epic" (both clickable);
+   *  epic rows show just the initiative; initiative rows show "—".
+   *  Used by the new Parent column to keep hierarchy visible alongside any
+   *  group-by choice (so users can flatten by status/sprint and still see
+   *  what each row belongs to). */
+  /** Type-affordance icon for an inline create form, so the user can see at
+   *  a glance whether the composer will create an initiative, epic, or
+   *  story (matches what's shown in the corresponding row icon). */
+  function createKindIcon(kind: CreateKind): ReactNode {
+    // Use the canonical icons from epic-plan-bar so the composer field matches
+    // the row icons used everywhere else (Zap for initiative, Folder for epic).
+    if (kind === "initiative") return <InitiativePlanBarIcon className="mr-0 [&_svg]:size-3.5" />;
+    if (kind === "epic") return <EpicPlanBarIcon className="mr-0 text-slate-500 [&_svg]:size-3.5" />;
+    return <UserStoryIcon className="size-4" />;
+  }
+
+  function renderParentCell(args: {
+    initiativeId?: string | null;
+    initiativeTitle?: string | null;
+    epicId?: string | null;
+    epicTitle?: string | null;
+  }): ReactNode {
+    const parts: ReactNode[] = [];
+    if (args.initiativeId && args.initiativeTitle) {
+      parts.push(
+        <button
+          key="init"
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenInitiative(args.initiativeId!); }}
+          className="min-w-0 max-w-[14rem] truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+          title={args.initiativeTitle ?? undefined}
+        >
+          {args.initiativeTitle}
+        </button>,
+      );
+    }
+    if (args.epicId && args.epicTitle) {
+      if (parts.length > 0) {
+        parts.push(<span key="sep" className="shrink-0 text-slate-400">·</span>);
+      }
+      parts.push(
+        <button
+          key="epic"
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenEpic(args.epicId!); }}
+          className="min-w-0 max-w-[14rem] truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+          title={args.epicTitle ?? undefined}
+        >
+          {args.epicTitle}
+        </button>,
+      );
+    }
+    if (parts.length === 0) {
+      return <span className="text-[16px] text-slate-400">-</span>;
+    }
+    return <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden">{parts}</span>;
   }
 
   function renderBacklogCells(
@@ -3682,6 +4045,7 @@ export function BacklogPlanningPanel({
     assigneeFilter.length > 0 ||
     labelFilter.length > 0 ||
     roadmapFilter.length > 0 ||
+    parentFilter.length > 0 ||
     workItemFilter.length > 0 ||
     groupLevels.length > 0 ||
     query.trim().length > 0 ||
@@ -3707,6 +4071,7 @@ export function BacklogPlanningPanel({
     setAssigneeFilter([]);
     setLabelFilter([]);
     setRoadmapFilter([]);
+    setParentFilter([]);
     setWorkItemFilter([]);
     setGroupLevels([]);
     setGroupMenuOpen(false);
@@ -4121,6 +4486,10 @@ export function BacklogPlanningPanel({
               )}
             </span>
               ),
+              parent: renderParentCell({
+                epicId: row.epicId,
+                epicTitle: row.epicTitle,
+              }),
               labels: (
             <div className="w-full min-w-0 overflow-hidden">
               {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "labels" ? (
@@ -4245,8 +4614,18 @@ export function BacklogPlanningPanel({
     /** Trailing UI shown to the right of the folder title (used by the
      *  quarter folder's `+ Add initiative` button). */
     trailingAction?: React.ReactNode,
+    /** When provided, overrides `defaultGroupExpanded` for the FIRST render of
+     *  this folder. Used to start empty quarter folders collapsed so the
+     *  always-rendered Q1-Q4 scaffolding doesn't fill the screen with blank
+     *  rows. The user's explicit toggle (saved in `openGroupFolders`) still
+     *  wins after they interact with the folder. */
+    defaultOpenOverride?: boolean,
+    /** When provided, replaces the rendered `<span>{label}</span>` (e.g. an
+     *  inline rename editor for roadmaps). The `label` arg is still used for
+     *  zebra-stripe data attributes so DOM diagnostics keep working. */
+    labelOverride?: React.ReactNode,
   ) {
-    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    const isOpen = openGroupFolders[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded);
     const renderedChildren = isOpen ? renderChildren() : null;
     return (
       <div key={folderId}>
@@ -4263,13 +4642,13 @@ export function BacklogPlanningPanel({
                 <BacklogTreeConnector indentPx={indentPx} />
                 <button
                   type="button"
-                  onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? defaultGroupExpanded) }))}
+                  onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
                   className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
                   style={{ paddingLeft: indentPx }}
                 >
                   {isOpen ? <ChevronDown className="size-4 shrink-0 text-slate-500" /> : <ChevronRight className="size-4 shrink-0 text-slate-500" />}
                   {leadingIcon}
-                  <span className="truncate">{label}</span>
+                  {labelOverride ?? <span className="truncate">{label}</span>}
                   <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
                 </button>
                 {trailingAction}
@@ -4284,6 +4663,7 @@ export function BacklogPlanningPanel({
             status: <span className="text-center text-[16px] text-slate-400">-</span>,
             sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
             assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
+            parent: <span className="text-[16px] text-slate-400">-</span>,
             labels: <BacklogLabelsEmptyRowSlot />,
             estDays: <span className="text-center text-[16px] text-slate-400">-</span>,
             epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -4518,6 +4898,10 @@ export function BacklogPlanningPanel({
                   )}
                 </span>
               ),
+              parent: renderParentCell({
+                initiativeId: epicRows[0]?.initiativeId,
+                initiativeTitle: epicRows[0]?.initiativeTitle,
+              }),
               labels: isEditingParentLabels("epic", epicId) ? (
                 renderParentLabelsEditor({ kind: "epic", id: epicId })
               ) : (
@@ -4607,6 +4991,7 @@ export function BacklogPlanningPanel({
               inputWrapperStyle={{ paddingLeft: epicIndentPx + 18 }}
               rightSlotStyle={createFormRestGridStyle}
               submitting={submittingKey === "create"}
+              leadingIcon={createKindIcon("story")}
               onCancel={closeInlineCreator}
               onSubmit={(title) => { void handleCreateSubmit(null, title); }}
             />
@@ -4782,6 +5167,7 @@ export function BacklogPlanningPanel({
                   )}
                 </span>
               ),
+              parent: <span className="text-[16px] text-slate-400">-</span>,
               labels: isEditingParentLabels("initiative", initiativeId) ? (
                 renderParentLabelsEditor({ kind: "initiative", id: initiativeId })
               ) : (
@@ -4855,6 +5241,7 @@ export function BacklogPlanningPanel({
               inputWrapperStyle={{ paddingLeft: initIndentPx + 18 }}
               rightSlotStyle={createFormRestGridStyle}
               submitting={submittingKey === "create"}
+              leadingIcon={createKindIcon(createSelection.kind)}
               saveDisabledExtra={createSelection.kind === "story" && !storyTargetEpicId}
               extras={createSelection.kind === "story" ? (
                 <select
@@ -4990,6 +5377,23 @@ export function BacklogPlanningPanel({
         groups.set(key, { label, sort: label.toLowerCase(), rows: [], standaloneRows: [] });
       }
     }
+    // Quarter level: always seed Q1-Q4 PLUS an "Unscheduled" bucket so the
+    // user has a predictable parking spot for any initiative/epic/story that
+    // doesn't have a start month yet. New initiatives without a planned
+    // quarter land here automatically instead of getting buried under a
+    // dynamically-created folder users can miss.
+    if (level === "quarter") {
+      for (const q of ["Q1", "Q2", "Q3", "Q4"] as const) {
+        groups.set(q, { label: q, sort: quarterSortValue(q), rows: [], standaloneRows: [] });
+      }
+      const unscheduledKey = "Unscheduled";
+      groups.set(unscheduledKey, {
+        label: unscheduledKey,
+        sort: quarterSortValue(unscheduledKey),
+        rows: [],
+        standaloneRows: [],
+      });
+    }
     for (const row of rows) {
       const { key, label, sort } = keyForLevel(row, level);
       if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
@@ -5000,14 +5404,19 @@ export function BacklogPlanningPanel({
       if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
       groups.get(key)!.standaloneRows.push(row);
     }
+    // Year level with no real data: seed the current calendar year so the
+    // recursion can still descend into a quarter level for empty roadmaps.
+    if (level === "year" && groups.size === 0) {
+      const y = String(new Date().getFullYear());
+      groups.set(y, { label: y, sort: y.padStart(4, "0"), rows: [], standaloneRows: [] });
+    }
     return Array.from(groups.entries())
       .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
       .map(([key, group]) => {
         const folderId = `${path}${level}:${key}`;
-        // Trailing "+" on quarter folders → opens a composer that creates
-        // a new initiative scoped to that quarter. Uses the same inline
-        // form rendered FIRST inside the children (below) — keeps the
-        // create flow consistent with the row-level + buttons.
+        // Trailing actions vary by level:
+        //  - Quarter: "+ Add initiative" composer trigger
+        //  - Roadmap: inline-edit pencil (hover-revealed) when rename is wired
         const trailingAction = level === "quarter" ? (
           <button
             type="button"
@@ -5028,7 +5437,45 @@ export function BacklogPlanningPanel({
           >
             <Plus className="size-3.5 text-slate-600" />
           </button>
+        ) : level === "roadmap" && onRenameRoadmap && key !== "__no_roadmap__" && editingRoadmapId !== key ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setEditingRoadmapId(key);
+              // Ensure folder stays expanded so the edit input is visible.
+              setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
+            }}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-40 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+            title="Rename roadmap"
+            aria-label="Rename roadmap"
+          >
+            <SquarePen className="size-3.5 text-slate-600" />
+          </button>
         ) : undefined;
+        // Inline rename: swap the label for an IsolatedTextInput when this
+        // roadmap is the active rename target.
+        const labelOverride =
+          level === "roadmap" && editingRoadmapId === key && onRenameRoadmap ? (
+            <IsolatedTextInput
+              initial={group.label}
+              ariaLabel="Rename roadmap"
+              inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+              onCancel={() => setEditingRoadmapId(null)}
+              onSave={async (value) => {
+                const next = value.trim();
+                if (next && next !== group.label) {
+                  try {
+                    await onRenameRoadmap(key, next);
+                    toast.success("Roadmap renamed");
+                  } catch {
+                    toast.error("Failed to rename roadmap");
+                  }
+                }
+                setEditingRoadmapId(null);
+              }}
+            />
+          ) : undefined;
         const showQuarterForm =
           level === "quarter" && createSelection?.anchorKey === `group-quarter:${folderId}`;
         return renderFolderRow(
@@ -5045,6 +5492,7 @@ export function BacklogPlanningPanel({
                   placeholder={`New initiative in ${group.label}…`}
                   indentPx={levelIndex * 14 + 18}
                   submitting={submittingKey === "create"}
+                  leadingIcon={createKindIcon("initiative")}
                   onSubmit={async (title) => {
                     setSubmittingKey("create");
                     try {
@@ -5060,10 +5508,26 @@ export function BacklogPlanningPanel({
               {renderGroupedTree(group.rows, group.standaloneRows, levelIndex + 1, `${path}${level}:${key}/`)}
             </>
           ),
+          // Per-level leading icon: roadmap=map, year=full calendar, quarter
+          // =the 4-bars progress icon (same icon used on the year-Gantt quarter
+          // chips, so users see a consistent "this is a quarter" identity).
           level === "roadmap"
             ? <MapIcon className="size-4 shrink-0 text-indigo-500" aria-hidden />
-            : undefined,
+            : level === "year"
+              ? <CalendarDays className="size-4 shrink-0 text-sky-600" aria-hidden />
+              : level === "quarter"
+                ? key === "Unscheduled"
+                  ? <CalendarOff className="size-4 shrink-0 text-slate-400" aria-hidden />
+                  : <QuarterYearProgressIcon quarterLabel={key} className="text-violet-600" />
+                : undefined,
           trailingAction,
+          // Empty quarter folders default to collapsed so the always-rendered
+          // Q1-Q4 scaffolding doesn't fill the screen with blank rows. The
+          // user's manual toggle still wins via openGroupFolders.
+          level === "quarter" && group.rows.length === 0 && group.standaloneRows.length === 0
+            ? false
+            : undefined,
+          labelOverride,
         );
       });
   }
@@ -5209,6 +5673,7 @@ export function BacklogPlanningPanel({
                     {initiative.initiativeAssignee}
                   </span>
                 ),
+                parent: <span className="text-[16px] text-slate-400">-</span>,
                 labels: isEditingParentLabels("initiative", initiative.initiativeId) ? (
                   renderParentLabelsEditor({ kind: "initiative", id: initiative.initiativeId })
                 ) : (
@@ -5294,6 +5759,7 @@ export function BacklogPlanningPanel({
                 inputWrapperStyle={{ paddingLeft: indentPx + 18 }}
                 rightSlotStyle={createFormRestGridStyle}
                 submitting={submittingKey === "create"}
+                leadingIcon={createKindIcon(createSelection.kind)}
                 onCancel={closeInlineCreator}
                 onSubmit={(title) => { void handleCreateSubmit(null, title); }}
               />
@@ -5419,6 +5885,10 @@ export function BacklogPlanningPanel({
                             {epic.epicAssignee}
                           </span>
                         ),
+                        parent: renderParentCell({
+                          initiativeId: initiative.initiativeId,
+                          initiativeTitle: initiative.initiativeTitle,
+                        }),
                         labels: isEditingParentLabels("epic", epic.epicId) ? (
                           renderParentLabelsEditor({ kind: "epic", id: epic.epicId })
                         ) : (
@@ -5514,6 +5984,7 @@ export function BacklogPlanningPanel({
                         inputWrapperStyle={{ paddingLeft: indentPx + 52 }}
                         rightSlotStyle={createFormRestGridStyle}
                         submitting={submittingKey === "create"}
+                        leadingIcon={createKindIcon("story")}
                         onCancel={closeInlineCreator}
                         onSubmit={(title) => { void handleCreateSubmit(null, title); }}
                       />
@@ -6028,14 +6499,46 @@ export function BacklogPlanningPanel({
           {!(suppressInlineChips || summaryBarPortalElement) && (
             <div className="flex flex-wrap items-center gap-1.5">{summaryChipsJsx}</div>
           )}
+          {onCreateRoadmapQuick ? (
+            <button
+              type="button"
+              onClick={() => openCreateComposer({ anchorKey: "header:roadmap", scope: "initiative", kind: "initiative" })}
+              /* Soft tinted background matching the indigo accent, with the
+               * same `--ring`-tinted outline. Hover deepens the tint a touch. */
+              className="inline-flex h-8 w-[7.25rem] items-center justify-center gap-1.5 rounded-lg bg-indigo-50/80 px-3 text-[13px] font-semibold text-indigo-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] transition hover:bg-indigo-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
+              aria-label="Add roadmap"
+              title="Add roadmap"
+            >
+              <MapIcon className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+              <Plus className="size-3 shrink-0" strokeWidth={2.4} aria-hidden />
+              <span>Roadmap</span>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={handleExcelExport}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 text-[13px] font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+            /* Same visual shape as the "+ Roadmap" button — soft tinted
+             * emerald background with the `--ring`-tinted outline, icon on
+             * the left, label on the right. */
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-50/80 px-3 text-[13px] font-semibold text-emerald-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
             aria-label="Export backlog to Excel"
             title="Export to Excel (preview, then download .xls)"
           >
-            <FileSpreadsheet className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+            <Image
+              src="/export-to-excel-icon.png"
+              alt=""
+              width={28}
+              height={28}
+              /* `unoptimized` skips Next's image optimizer so the source PNG
+               * is served as-is. The optimizer caches derived webp files in
+               * `.next/dev/cache/images/`, and that cache doesn't invalidate
+               * when the source file changes — every icon swap would
+               * silently keep showing the old version until manual cleanup. */
+              unoptimized
+              /* size-3.5 (14px) matches the Roadmap button's MapIcon. */
+              className="size-3.5 shrink-0 select-none"
+              aria-hidden
+            />
             <span>Export Excel</span>
           </button>
         </div>
@@ -6045,9 +6548,9 @@ export function BacklogPlanningPanel({
       <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-9 pt-9 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
-          style={{ gridTemplateColumns: "auto auto repeat(11, minmax(0, 1fr)) auto" }}
+          style={{ gridTemplateColumns: "auto auto repeat(12, minmax(0, 1fr)) auto" }}
         >
-          <div className="relative col-span-14 col-start-1 row-start-1 min-w-0">
+          <div className="relative col-span-15 col-start-1 row-start-1 min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
@@ -6079,8 +6582,16 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
+          <div className="col-start-12 row-start-2 min-w-0">
+            <BacklogParentFilterControl
+              tree={parentFilterTree}
+              selected={parentFilter}
+              onChange={setParentFilter}
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+            />
+          </div>
           <div
-            className="relative col-start-12 row-start-2 min-w-0"
+            className="relative col-start-13 row-start-2 min-w-0"
             ref={savedFilterMenuRef}
           >
             <button
@@ -6158,7 +6669,7 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div className="relative col-start-13 row-start-2 min-w-0" ref={savedViewMenuRef}>
+          <div className="relative col-start-14 row-start-2 min-w-0" ref={savedViewMenuRef}>
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
@@ -6343,7 +6854,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-14 row-start-2 flex min-w-0 justify-start">
+          <div className="col-start-15 row-start-2 flex min-w-0 justify-start">
             <span className="group relative inline-flex h-[34px] w-[34px] shrink-0">
             <button
               type="button"
@@ -6373,9 +6884,9 @@ export function BacklogPlanningPanel({
             placeholder="Type initiative title and press Enter..."
             formClassName={cn("grid w-max min-w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 py-2 ps-3")}
             formStyle={{ gridTemplateColumns: tableGridTemplate }}
-            inputClassName="h-9 w-full rounded-md bg-white px-2.5 text-[14px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"
             rightSlotStyle={createFormRestGridStyle}
             submitting={submittingKey === "create"}
+            leadingIcon={createKindIcon("initiative")}
             onCancel={closeInlineCreator}
             onSubmit={(title) => { void handleCreateSubmit(null, title); }}
           />
@@ -6439,6 +6950,72 @@ export function BacklogPlanningPanel({
                               role="group"
                               aria-label="Row tree expand and collapse"
                             >
+                              {/* Always-visible "+" — primary path to create
+                               *  an initiative or a roadmap when the table is
+                               *  empty (or just the fastest path generally).
+                               *  Opens a small popover with both options so
+                               *  the header button covers both creation paths. */}
+                              <div className="relative mr-1">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setOpenCreateMenuKey((prev) => (prev === "header" ? null : "header"));
+                                  }}
+                                  title="Add"
+                                  aria-label="Add initiative or roadmap"
+                                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/15 text-white transition hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                                >
+                                  <Plus className="size-3.5" strokeWidth={2.2} />
+                                </button>
+                                {openCreateMenuKey === "header" ? (
+                                  <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1.5 text-slate-900 shadow-xl backdrop-blur-sm">
+                                    <p className="px-2 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">Create</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenCreateMenuKey(null);
+                                        openCreateComposer({
+                                          anchorKey: "header:initiative",
+                                          scope: "initiative",
+                                          kind: "initiative",
+                                        });
+                                      }}
+                                      className="group/menu-item flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-blue-50"
+                                    >
+                                      <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 ring-1 ring-blue-200/80 group-hover/menu-item:bg-blue-200">
+                                        <Zap className="size-3.5" strokeWidth={2} aria-hidden />
+                                      </span>
+                                      <span className="flex min-w-0 flex-col">
+                                        <span className="text-[13.5px] font-semibold text-slate-900">Initiative</span>
+                                        <span className="text-[11px] text-slate-500">Pick a roadmap below</span>
+                                      </span>
+                                    </button>
+                                    {onCreateRoadmapQuick ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenCreateMenuKey(null);
+                                          openCreateComposer({
+                                            anchorKey: "header:roadmap",
+                                            scope: "initiative",
+                                            kind: "initiative",
+                                          });
+                                        }}
+                                        className="group/menu-item flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-indigo-50"
+                                      >
+                                        <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200/80 group-hover/menu-item:bg-indigo-200">
+                                          <MapIcon className="size-3.5" strokeWidth={2} aria-hidden />
+                                        </span>
+                                        <span className="flex min-w-0 flex-col">
+                                          <span className="text-[13.5px] font-semibold text-slate-900">Roadmap</span>
+                                          <span className="text-[11px] text-slate-500">New top-level grouping</span>
+                                        </span>
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
                               <button
                                 type="button"
                                 onClick={collapseAllRows}
@@ -6483,10 +7060,104 @@ export function BacklogPlanningPanel({
           </div>
         ) : null}
 
-        {fullyFiltered.length === 0 ? (
+        {fullyFiltered.length === 0 && effectiveGroupLevels.length === 0 ? (
           <div className="px-4 py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
         ) : (
           <div className="min-w-max bg-white" ref={backlogRowsRootRef}>
+            {/* Header-level "New initiative" composer — sits ABOVE the
+             *  grouped tree so it works regardless of grouping/filter state
+             *  (the primary path to start when the table is empty). The
+             *  roadmap picker is required so the user always knows where the
+             *  initiative will land. */}
+            {createSelection?.anchorKey === "header:initiative" ? (
+              <>
+                <QuarterInitiativeCreateForm
+                  placeholder="New initiative…"
+                  indentPx={18}
+                  submitting={submittingKey === "create"}
+                  leadingIcon={createKindIcon("initiative")}
+                  canSubmitExtra={initiativeTargetRoadmapId !== ""}
+                  extras={
+                    <select
+                      value={initiativeTargetRoadmapId}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        if (next === "__create__") {
+                          // Stay on the previous value; render the inline
+                          // roadmap create form below until the user finishes
+                          // (or cancels) — preserves the initiative title
+                          // they've already typed.
+                          if (onCreateRoadmapQuick) setInlineCreatingRoadmap(true);
+                          return;
+                        }
+                        setInitiativeTargetRoadmapId(next);
+                      }}
+                      className="h-8 min-w-[160px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-ring/40"
+                    >
+                      <option value="">Pick roadmap…</option>
+                      {(roadmaps ?? []).map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                      {onCreateRoadmapQuick ? (
+                        <option value="__create__">+ Create new roadmap…</option>
+                      ) : null}
+                    </select>
+                  }
+                  onSubmit={async (title) => {
+                    setSubmittingKey("create");
+                    try {
+                      await onCreateInitiativeQuick(title, initiativeTargetRoadmapId);
+                      setCreateSelection(null);
+                      setInitiativeTargetRoadmapId("");
+                      setInlineCreatingRoadmap(false);
+                    } finally {
+                      setSubmittingKey(null);
+                    }
+                  }}
+                  onCancel={() => {
+                    closeInlineCreator();
+                    setInitiativeTargetRoadmapId("");
+                    setInlineCreatingRoadmap(false);
+                  }}
+                />
+                {inlineCreatingRoadmap && onCreateRoadmapQuick ? (
+                  <IsolatedRoadmapCreateForm
+                    indentPx={36}
+                    submitting={submittingKey === "create-roadmap"}
+                    onSubmit={async (name, years) => {
+                      setSubmittingKey("create-roadmap");
+                      try {
+                        const id = await onCreateRoadmapQuick(name, years);
+                        if (id) setInitiativeTargetRoadmapId(id);
+                        setInlineCreatingRoadmap(false);
+                      } finally {
+                        setSubmittingKey(null);
+                      }
+                    }}
+                    onCancel={() => setInlineCreatingRoadmap(false)}
+                  />
+                ) : null}
+              </>
+            ) : null}
+            {/* Header-level "New roadmap" composer. */}
+            {createSelection?.anchorKey === "header:roadmap" && onCreateRoadmapQuick ? (
+              <IsolatedRoadmapCreateForm
+                indentPx={18}
+                submitting={submittingKey === "create"}
+                onSubmit={async (name, years) => {
+                  setSubmittingKey("create");
+                  try {
+                    await onCreateRoadmapQuick(name, years);
+                    setCreateSelection(null);
+                  } finally {
+                    setSubmittingKey(null);
+                  }
+                }}
+                onCancel={closeInlineCreator}
+              />
+            ) : null}
             {effectiveGroupLevels.length > 0 ? (
               renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives)
             ) : (
@@ -6699,6 +7370,7 @@ export function BacklogPlanningPanel({
                           )}
                         </span>
                       ),
+                      parent: <span className="text-[16px] text-slate-400">-</span>,
                       labels: isEditingParentLabels("initiative", initiative.id) ? (
                         renderParentLabelsEditor({ kind: "initiative", id: initiative.id })
                       ) : (
@@ -6790,6 +7462,7 @@ export function BacklogPlanningPanel({
                       formStyle={{ gridTemplateColumns: tableGridTemplate }}
                       rightSlotStyle={createFormRestGridStyle}
                       submitting={submittingKey === "create"}
+                      leadingIcon={createKindIcon("initiative")}
                       onCancel={closeInlineCreator}
                       onSubmit={(title) => { void handleCreateSubmit(null, title); }}
                     />
@@ -6809,6 +7482,7 @@ export function BacklogPlanningPanel({
                           inputWrapperStyle={{ paddingLeft: 24 }}
                           rightSlotStyle={createFormRestGridStyle}
                           submitting={submittingKey === "create"}
+                          leadingIcon={createKindIcon(createSelection.kind)}
                           saveDisabledExtra={createSelection.kind === "story" && !storyTargetEpicId}
                           extras={createSelection.kind === "story" ? (
                             <select
@@ -7040,6 +7714,10 @@ export function BacklogPlanningPanel({
                                     )}
                                   </span>
                                 ),
+                                parent: renderParentCell({
+                                  initiativeId: initiative.id,
+                                  initiativeTitle: initiative.title,
+                                }),
                                 labels: isEditingParentLabels("epic", epic.id) ? (
                                   renderParentLabelsEditor({ kind: "epic", id: epic.id })
                                 ) : (
@@ -7153,6 +7831,7 @@ export function BacklogPlanningPanel({
                                 inputWrapperStyle={{ paddingLeft: 48 }}
                                 rightSlotStyle={createFormRestGridStyle}
                                 submitting={submittingKey === "create"}
+                                leadingIcon={createKindIcon(createSelection.kind)}
                                 onCancel={closeInlineCreator}
                                 onSubmit={(title) => { void handleCreateSubmit(null, title); }}
                               />
@@ -7385,6 +8064,10 @@ export function BacklogPlanningPanel({
                                       )}
                                     </span>
                                       ),
+                                      parent: renderParentCell({
+                                        epicId: epic.id,
+                                        epicTitle: epic.title,
+                                      }),
                                       labels: (
                                     <div className="w-full min-w-0 overflow-hidden">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "labels" ? (
@@ -7541,6 +8224,7 @@ export function BacklogPlanningPanel({
                                       inputWrapperStyle={{ paddingLeft: 64 }}
                                       rightSlotStyle={createFormRestGridStyle}
                                       submitting={submittingKey === "create"}
+                                      leadingIcon={createKindIcon("story")}
                                       onCancel={closeInlineCreator}
                                       onSubmit={(title) => { void handleCreateSubmit(null, title); }}
                                     />

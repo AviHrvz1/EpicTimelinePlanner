@@ -58,13 +58,22 @@ const createInitiativeSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const year = Number(request.nextUrl.searchParams.get("year")) || DEFAULT_YEAR;
+  // `year=all` drops the year filter — needed by the Backlog workspace,
+  // which groups by year client-side and must surface initiatives from any
+  // year (otherwise a roadmap with years [2027] looks empty while
+  // selectedYear is still 2026).
+  const yearParam = request.nextUrl.searchParams.get("year");
+  const allYears = yearParam === "all";
+  const year = allYears ? undefined : (Number(yearParam) || DEFAULT_YEAR);
   const roadmapIdParam = request.nextUrl.searchParams.get("roadmapId");
   const allRoadmaps = roadmapIdParam === "all";
   const roadmapId = allRoadmaps ? undefined : (roadmapIdParam || DEFAULT_ROADMAP_ID);
   const slim = request.nextUrl.searchParams.get("slim") === "1";
   const initiatives = await db.initiative.findMany({
-    where: { year, ...(roadmapId ? { roadmapId } : {}) },
+    where: {
+      ...(year !== undefined ? { year } : {}),
+      ...(roadmapId ? { roadmapId } : {}),
+    },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     include: slim ? INITIATIVE_INCLUDE_SLIM : INITIATIVE_INCLUDE,
   });

@@ -58,6 +58,7 @@ import { SprintEndCountdown } from "@/components/timeline/sprint-end-countdown";
 import { PeriodEndCountdown } from "@/components/timeline/period-end-countdown";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
+import { QuarterYearProgressIcon } from "@/components/ui/quarter-year-progress-icon";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { computeSprintKanbanSummaryStats, collectStoriesForSprintBoard, collectEpicsForSprintKanban } from "@/lib/sprint-plan";
 import { sprintStoryBoardEpicTeamFilter, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
@@ -1591,36 +1592,6 @@ const FULL_MONTHS = [
   "November",
   "December",
 ] as const;
-
-function QuarterYearProgressIcon({
-  quarterLabel,
-  className,
-}: {
-  quarterLabel: string;
-  className?: string;
-}) {
-  const activeSteps = Math.max(1, Math.min(4, QUARTER_PROGRESS_STEPS[quarterLabel] ?? 1));
-
-  return (
-    <span className={cn("inline-flex h-4 w-4 items-center justify-center", className)} aria-hidden>
-      <span className="inline-flex h-3 w-3 items-end gap-[1px]">
-        {Array.from({ length: 4 }, (_, idx) => (
-          <span
-            key={idx}
-            className={cn(
-              "w-[2px] rounded-[1px] bg-current transition-opacity",
-              idx === 0 && "h-[4px]",
-              idx === 1 && "h-[6px]",
-              idx === 2 && "h-[8px]",
-              idx === 3 && "h-[10px]",
-              idx < activeSteps ? "opacity-95" : "opacity-25",
-            )}
-          />
-        ))}
-      </span>
-    </span>
-  );
-}
 
 /** Year control: soft sky tint + dark type (calmer than saturated gradient). */
 function RoadmapDeleteConfirm({
