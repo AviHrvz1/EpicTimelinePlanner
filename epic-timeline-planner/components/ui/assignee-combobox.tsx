@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import {
   type CSSProperties,
   type KeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -47,6 +48,16 @@ type AssigneeComboboxProps = {
    * Off by default to keep small inline-edit comboboxes flush.
    */
   showLeadingAvatar?: boolean;
+  /**
+   * Optional override for the icon shown next to each suggestion (and the
+   * "Use 'xxx'" create row). Defaults to `UserRound` since this combobox
+   * was built for assignees, but callers picking non-person values like
+   * labels can pass a `<Tag />` to match the rest of their UI.
+   *
+   * Has no effect when a directory image renders in place of the icon
+   * (i.e. for users with photos).
+   */
+  optionIcon?: ReactNode;
 };
 
 const MENU_Z = 8000;
@@ -72,6 +83,7 @@ export function AssigneeCombobox({
   onSuggestionPick,
   directoryUsers,
   showLeadingAvatar = false,
+  optionIcon,
 }: AssigneeComboboxProps) {
   const uid = useId().replace(/:/g, "");
   const inputId = idProp ?? `assignee-input-${uid}`;
@@ -202,6 +214,8 @@ export function AssigneeCombobox({
                     >
                       {resolved.image ? (
                         <UserAvatar name={resolved.name} image={resolved.image} size={20} />
+                      ) : optionIcon ? (
+                        optionIcon
                       ) : (
                         <UserRound
                           className={cn(
@@ -229,7 +243,7 @@ export function AssigneeCombobox({
                       pick(trimmed);
                     }}
                   >
-                    <UserRound className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                    {optionIcon ?? <UserRound className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
                     <span className="min-w-0 flex-1 truncate leading-tight">
                       Use <span className="font-medium text-slate-800">&ldquo;{trimmed}&rdquo;</span>
                     </span>

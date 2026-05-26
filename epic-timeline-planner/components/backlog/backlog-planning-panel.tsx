@@ -1940,6 +1940,10 @@ function BacklogLabelsFilterControl({
             className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
             aria-label="Add label to filter"
             onSuggestionPick={pickLabel}
+            // Labels aren't people — render a Tag icon next to each
+            // suggestion so the dropdown matches the Tag icon used by
+            // the chips in the Labels column.
+            optionIcon={<Tag className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
           />
           {!allSelected && localSelected.length > 0 ? (
             <ul className="mt-2 max-h-36 space-y-1 overflow-auto pr-0.5">
