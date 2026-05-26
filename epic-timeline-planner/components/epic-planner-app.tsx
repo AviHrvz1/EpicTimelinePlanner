@@ -5103,10 +5103,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             className="group absolute left-1 top-1/2 -translate-y-1/2 cursor-pointer bg-white pl-2 pr-[5px] pt-[11px] pb-1.5 shadow-[6px_0_8px_-4px_rgba(15,23,42,0.10),0_6px_8px_-4px_rgba(15,23,42,0.22)] transition-transform duration-150 hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Image
-              src="/bird-eye-logo-simple.png"
+              src="/downloads/Designer.png"
               alt="Bird Eye Viewer"
-              width={192}
-              height={192}
+              width={1024}
+              height={1024}
               priority
               quality={100}
               sizes="44px"

@@ -21,10 +21,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <header className="flex items-center border-b border-slate-200/70 bg-white px-5 py-3 shadow-sm sm:px-8">
         <Link href="/" aria-label="Bird Eye Viewer home" className="inline-flex items-center">
           <Image
-            src="/auth-logo-v6.png"
+            src="/downloads/Designer.png"
             alt="Bird Eye Viewer"
-            width={1536}
-            height={430}
+            width={1024}
+            height={1024}
             priority
             className="block h-14 w-auto select-none"
           />

@@ -56,6 +56,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { toast } from "sonner";
 
+import { FilterLatencyDebugger, markFilterChange, reportFilterStable, timePhase } from "@/components/dev/filter-latency-debugger";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
@@ -1382,13 +1383,23 @@ function applyWorkItemKindFilter(rows: InitiativeItem[], workItemFilter: WorkIte
     .map((initiative) => {
       const epics = (initiative.epics ?? [])
         .map((epic) => {
-          const stories = (epic.userStories ?? []).filter(() => allowStory);
-          if (allowEpic || allowInitiative) return { ...epic, userStories: allowStory ? epic.userStories ?? [] : [] };
-          if (stories.length > 0) return { ...epic, userStories: stories };
-          return null;
+          // Stories appear only when story kind is selected.
+          const stories = allowStory ? (epic.userStories ?? []) : [];
+          // Drop the epic itself when epic kind isn't selected AND there
+          // are no stories to render under it — without either, this epic
+          // contributes nothing visible to the tree.
+          if (!allowEpic && stories.length === 0) return null;
+          return { ...epic, userStories: stories };
         })
         .filter(Boolean) as NonNullable<InitiativeItem["epics"]>;
+      // Initiative stays only when initiative kind is selected, OR when
+      // some epic/story under it is still visible (needs a parent folder).
       if (!allowInitiative && epics.length === 0) return null;
+      // When the user picked ONLY "initiative", drop the children entirely
+      // so the tree shows initiatives without any nested epics or stories.
+      if (allowInitiative && !allowEpic && !allowStory) {
+        return { ...initiative, epics: [] };
+      }
       return { ...initiative, epics };
     })
     .filter(Boolean) as InitiativeItem[];
@@ -1510,21 +1521,34 @@ function BacklogTeamFilterControl({
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Local mirror so the chip/button visuals (active tint, X visibility,
+  // counted label) flip THIS frame on click. Parent's onChange runs
+  // inside a transition so the slow backlog reconciliation doesn't
+  // block the visual feedback.
+  const [localSelected, setLocalSelected] = useState<string[]>(selectedIds);
+  useEffect(() => {
+    setLocalSelected(selectedIds);
+  }, [selectedIds]);
+  function applyChange(next: string[]) {
+    markFilterChange("Team");
+    setLocalSelected(next);
+    startTransition(() => onChange(next));
+  }
   const teamAutocompleteLabels = useMemo(
     () =>
       BACKLOG_TEAM_FILTER_LABELS.filter((label) => {
         const col = MONTH_TEAM_COLUMNS.find((c) => c.label === label);
-        return col != null && !selectedIds.includes(col.id);
+        return col != null && !localSelected.includes(col.id);
       }),
-    [selectedIds],
+    [localSelected],
   );
-  const allSelected = selectedIds.length === 0;
+  const allSelected = localSelected.length === 0;
   const selectedLabel =
     allSelected
       ? "All"
-      : selectedIds.length === 1
-        ? backlogTeamLabelFromId(selectedIds[0]!)
-        : `${selectedIds.length} selected`;
+      : localSelected.length === 1
+        ? backlogTeamLabelFromId(localSelected[0]!)
+        : `${localSelected.length} selected`;
 
   useEffect(() => {
     return () => {
@@ -1551,12 +1575,11 @@ function BacklogTeamFilterControl({
       (c) => c.label === t || c.label.toLowerCase() === t.toLowerCase(),
     );
     if (!col) return;
-    if (!allSelected && selectedIds.includes(col.id)) {
+    if (!allSelected && localSelected.includes(col.id)) {
       setDraft("");
       return;
     }
-    if (allSelected) onChange([col.id]);
-    else onChange([...selectedIds, col.id]);
+    applyChange(allSelected ? [col.id] : [...localSelected, col.id]);
     setDraft("");
   }
 
@@ -1587,12 +1610,8 @@ function BacklogTeamFilterControl({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            // Deferred so the X click feels instant — the heavy table
-            // re-render (1.5s with 500 rows) happens as a background
-            // priority. Without this, the user clicks X, sees no
-            // immediate change, and tries again — but the filter is
-            // already cleared, so subsequent clicks land on a no-op.
-            startTransition(() => onChange([]));
+            applyChange([]);
+            setIsOpen(false);
           }}
           className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
         >
@@ -1606,7 +1625,7 @@ function BacklogTeamFilterControl({
               type="checkbox"
               checked={allSelected}
               onChange={() => {
-                onChange([]);
+                applyChange([]);
                 setDraft("");
               }}
               className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
@@ -1622,9 +1641,9 @@ function BacklogTeamFilterControl({
             aria-label="Add team to filter"
             onSuggestionPick={pickTeam}
           />
-          {!allSelected && selectedIds.length > 0 ? (
+          {!allSelected && localSelected.length > 0 ? (
             <ul className="mt-2 max-h-36 space-y-1 overflow-auto pr-0.5">
-              {selectedIds.map((id) => {
+              {localSelected.map((id) => {
                 const label = backlogTeamLabelFromId(id);
                 return (
                   <li
@@ -1636,7 +1655,7 @@ function BacklogTeamFilterControl({
                       type="button"
                       className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
                       aria-label={`Remove ${label} from filter`}
-                      onClick={() => onChange(selectedIds.filter((x) => x !== id))}
+                      onClick={() => applyChange(localSelected.filter((x) => x !== id))}
                     >
                       <X className="size-3.5" strokeWidth={2} />
                     </button>
@@ -1670,9 +1689,20 @@ function BacklogAssigneeFilterControl({
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const allSelected = selected.length === 0;
+  // Local mirror — see BacklogTeamFilterControl / MultiCheckboxFilter for
+  // the rationale. Lets the chip/X visuals flip this frame on click.
+  const [localSelected, setLocalSelected] = useState<string[]>(selected);
+  useEffect(() => {
+    setLocalSelected(selected);
+  }, [selected]);
+  function applyChange(next: string[]) {
+    markFilterChange("Assignee");
+    setLocalSelected(next);
+    startTransition(() => onChange(next));
+  }
+  const allSelected = localSelected.length === 0;
   const selectedLabel =
-    allSelected ? "All" : selected.length === 1 ? selected[0]! : `${selected.length} selected`;
+    allSelected ? "All" : localSelected.length === 1 ? localSelected[0]! : `${localSelected.length} selected`;
 
   useEffect(() => {
     return () => {
@@ -1695,8 +1725,8 @@ function BacklogAssigneeFilterControl({
   function pickAssignee(name: string) {
     const t = name.trim();
     if (!t) return;
-    if (allSelected) onChange([t]);
-    else if (!selected.includes(t)) onChange([...selected, t]);
+    if (allSelected) applyChange([t]);
+    else if (!localSelected.includes(t)) applyChange([...localSelected, t]);
     setDraft("");
   }
 
@@ -1727,12 +1757,8 @@ function BacklogAssigneeFilterControl({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            // Deferred so the X click feels instant — the heavy table
-            // re-render (1.5s with 500 rows) happens as a background
-            // priority. Without this, the user clicks X, sees no
-            // immediate change, and tries again — but the filter is
-            // already cleared, so subsequent clicks land on a no-op.
-            startTransition(() => onChange([]));
+            applyChange([]);
+            setIsOpen(false);
           }}
           className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
         >
@@ -1746,7 +1772,7 @@ function BacklogAssigneeFilterControl({
               type="checkbox"
               checked={allSelected}
               onChange={() => {
-                onChange([]);
+                applyChange([]);
                 setDraft("");
               }}
               className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
@@ -1763,9 +1789,9 @@ function BacklogAssigneeFilterControl({
             aria-label="Add assignee to filter"
             onSuggestionPick={pickAssignee}
           />
-          {!allSelected && selected.length > 0 ? (
+          {!allSelected && localSelected.length > 0 ? (
             <ul className="mt-2 max-h-36 space-y-1 overflow-auto pr-0.5">
-              {selected.map((name) => (
+              {localSelected.map((name) => (
                 <li
                   key={name}
                   className="flex items-center justify-between gap-2 rounded-md bg-white/85 px-2 py-1 text-[13px] text-slate-800 ring-1 ring-indigo-200/60"
@@ -1778,7 +1804,7 @@ function BacklogAssigneeFilterControl({
                     type="button"
                     className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
                     aria-label={`Remove ${name} from filter`}
-                    onClick={() => onChange(selected.filter((x) => x !== name))}
+                    onClick={() => applyChange(localSelected.filter((x) => x !== name))}
                   >
                     <X className="size-3.5" strokeWidth={2} />
                   </button>
@@ -1806,9 +1832,19 @@ function BacklogLabelsFilterControl({
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const allSelected = selected.length === 0;
+  // Local mirror — same instant-feedback pattern as other filter controls.
+  const [localSelected, setLocalSelected] = useState<string[]>(selected);
+  useEffect(() => {
+    setLocalSelected(selected);
+  }, [selected]);
+  function applyChange(next: string[]) {
+    markFilterChange("Labels");
+    setLocalSelected(next);
+    startTransition(() => onChange(next));
+  }
+  const allSelected = localSelected.length === 0;
   const selectedLabel =
-    allSelected ? "All" : selected.length === 1 ? selected[0]! : `${selected.length} selected`;
+    allSelected ? "All" : localSelected.length === 1 ? localSelected[0]! : `${localSelected.length} selected`;
 
   useEffect(() => {
     return () => {
@@ -1831,8 +1867,8 @@ function BacklogLabelsFilterControl({
   function pickLabel(name: string) {
     const t = name.trim();
     if (!t) return;
-    if (allSelected) onChange([t]);
-    else if (!selected.includes(t)) onChange([...selected, t]);
+    if (allSelected) applyChange([t]);
+    else if (!localSelected.includes(t)) applyChange([...localSelected, t]);
     setDraft("");
   }
 
@@ -1863,12 +1899,8 @@ function BacklogLabelsFilterControl({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            // Deferred so the X click feels instant — the heavy table
-            // re-render (1.5s with 500 rows) happens as a background
-            // priority. Without this, the user clicks X, sees no
-            // immediate change, and tries again — but the filter is
-            // already cleared, so subsequent clicks land on a no-op.
-            startTransition(() => onChange([]));
+            applyChange([]);
+            setIsOpen(false);
           }}
           className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
         >
@@ -1882,7 +1914,7 @@ function BacklogLabelsFilterControl({
               type="checkbox"
               checked={allSelected}
               onChange={() => {
-                onChange([]);
+                applyChange([]);
                 setDraft("");
               }}
               className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
@@ -1898,9 +1930,9 @@ function BacklogLabelsFilterControl({
             aria-label="Add label to filter"
             onSuggestionPick={pickLabel}
           />
-          {!allSelected && selected.length > 0 ? (
+          {!allSelected && localSelected.length > 0 ? (
             <ul className="mt-2 max-h-36 space-y-1 overflow-auto pr-0.5">
-              {selected.map((name) => (
+              {localSelected.map((name) => (
                 <li
                   key={name}
                   className="flex items-center justify-between gap-2 rounded-md bg-white/85 px-2 py-1 text-[13px] text-slate-800 ring-1 ring-indigo-200/60"
@@ -1910,7 +1942,7 @@ function BacklogLabelsFilterControl({
                     type="button"
                     className="shrink-0 rounded p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
                     aria-label={`Remove ${name} from label filter`}
-                    onClick={() => onChange(selected.filter((x) => x !== name))}
+                    onClick={() => applyChange(localSelected.filter((x) => x !== name))}
                   >
                     <X className="size-3.5" strokeWidth={2} />
                   </button>
@@ -1939,13 +1971,39 @@ function MultiCheckboxFilter({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const allSelected = selected.length === 0;
+  // Local mirror of `selected` so the checkbox's `checked` attribute can flip
+  // synchronously the instant the user clicks — without waiting for the
+  // parent to finish its heavy re-render (which can take 1s+ on 500-row
+  // backlogs). Without this, even with startTransition, the controlled
+  // input visually lags behind the click because React 18 still blocks the
+  // commit for the input until the new `selected` prop arrives. We keep
+  // the local copy in sync with parent in case the parent resets it
+  // (e.g. "Clear all filters", saved view load).
+  const [localSelected, setLocalSelected] = useState<string[]>(selected);
+  useEffect(() => {
+    setLocalSelected(selected);
+  }, [selected]);
+  const allSelected = localSelected.length === 0;
   const selectedLabel =
     allSelected
       ? "All"
-      : selected.length === 1
-        ? options.find((option) => option.id === selected[0])?.label ?? "1 selected"
-        : `${selected.length} selected`;
+      : localSelected.length === 1
+        ? options.find((option) => option.id === localSelected[0])?.label ?? "1 selected"
+        : `${localSelected.length} selected`;
+  function applyChange(next: string[]) {
+    // 0. Mark the click moment SYNCHRONOUSLY so the latency debugger
+    //    measures from this T0 (not from the deferred transition
+    //    callback, which fires after the local commit and would hide
+    //    most of the perceived delay).
+    markFilterChange(label);
+    // 1. Update the local mirror SYNCHRONOUSLY so the checkbox flips this
+    //    frame — gives the user instant feedback that their click landed.
+    setLocalSelected(next);
+    // 2. Hand off to the parent inside a transition so the slow backlog
+    //    reconciliation runs as a non-urgent update and doesn't block
+    //    further interactions (e.g. ticking a second box).
+    startTransition(() => onChange(next));
+  }
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -1997,12 +2055,8 @@ function MultiCheckboxFilter({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            // Deferred so the X click feels instant — the heavy table
-            // re-render (1.5s with 500 rows) happens as a background
-            // priority. Without this, the user clicks X, sees no
-            // immediate change, and tries again — but the filter is
-            // already cleared, so subsequent clicks land on a no-op.
-            startTransition(() => onChange([]));
+            applyChange([]);
+            setIsOpen(false);
           }}
           className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
         >
@@ -2015,7 +2069,7 @@ function MultiCheckboxFilter({
           <input
             type="checkbox"
             checked={allSelected}
-            onChange={() => startTransition(() => onChange([]))}
+            onChange={() => applyChange([])}
             className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
           />
           All
@@ -2025,19 +2079,14 @@ function MultiCheckboxFilter({
             <label key={option.id} className="flex items-center gap-2 text-[14px] text-slate-700">
               <input
                 type="checkbox"
-                checked={allSelected || selected.includes(option.id)}
+                checked={allSelected || localSelected.includes(option.id)}
                 onChange={() => {
                   const next = allSelected
                     ? [option.id]
-                    : selected.includes(option.id)
-                      ? selected.filter((x) => x !== option.id)
-                      : [...selected, option.id];
-                  // Deferred so the checkbox visual flips instantly and the
-                  // heavy backlog re-render (500+ rows ≈ 1.5s) happens as a
-                  // background priority update. Without this the toggle feels
-                  // unresponsive — exactly the "status filter not working"
-                  // user-perceived symptom.
-                  startTransition(() => onChange(next));
+                    : localSelected.includes(option.id)
+                      ? localSelected.filter((x) => x !== option.id)
+                      : [...localSelected, option.id];
+                  applyChange(next);
                 }}
                 className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
               />
@@ -2172,11 +2221,21 @@ function BacklogParentFilterControl({
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const allSelected = selected.length === 0;
+  // Local mirror — same instant-feedback pattern as other filter controls.
+  const [localSelected, setLocalSelected] = useState<string[]>(selected);
+  useEffect(() => {
+    setLocalSelected(selected);
+  }, [selected]);
+  function applyChange(next: string[]) {
+    markFilterChange("Parent");
+    setLocalSelected(next);
+    startTransition(() => onChange(next));
+  }
+  const selectedSet = useMemo(() => new Set(localSelected), [localSelected]);
+  const allSelected = localSelected.length === 0;
   const selectedLabel = allSelected
     ? "All"
-    : `${selected.length} selected`;
+    : `${localSelected.length} selected`;
 
   useEffect(() => () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -2209,19 +2268,19 @@ function BacklogParentFilterControl({
   function toggleInitiative(initiativeId: string, epicIds: string[]) {
     const isOn = selectedSet.has(initiativeId);
     if (isOn) {
-      onChange(selected.filter((id) => id !== initiativeId && !epicIds.includes(id)));
+      applyChange(localSelected.filter((id) => id !== initiativeId && !epicIds.includes(id)));
     } else {
-      const next = new Set(selected);
+      const next = new Set(localSelected);
       next.add(initiativeId);
       for (const eid of epicIds) next.add(eid);
-      onChange(Array.from(next));
+      applyChange(Array.from(next));
     }
   }
   function toggleEpic(epicId: string) {
     if (selectedSet.has(epicId)) {
-      onChange(selected.filter((id) => id !== epicId));
+      applyChange(localSelected.filter((id) => id !== epicId));
     } else {
-      onChange([...selected, epicId]);
+      applyChange([...localSelected, epicId]);
     }
   }
 
@@ -2252,12 +2311,8 @@ function BacklogParentFilterControl({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            // Deferred so the X click feels instant — the heavy table
-            // re-render (1.5s with 500 rows) happens as a background
-            // priority. Without this, the user clicks X, sees no
-            // immediate change, and tries again — but the filter is
-            // already cleared, so subsequent clicks land on a no-op.
-            startTransition(() => onChange([]));
+            applyChange([]);
+            setIsOpen(false);
           }}
           className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-slate-700 group-hover:opacity-100 focus-visible:opacity-100"
         >
@@ -2274,7 +2329,7 @@ function BacklogParentFilterControl({
             <input
               type="checkbox"
               checked={allSelected}
-              onChange={() => onChange([])}
+              onChange={() => applyChange([])}
               className="h-3.5 w-3.5 rounded border-indigo-200 accent-indigo-600"
             />
             All
@@ -2922,6 +2977,33 @@ export function BacklogPlanningPanel({
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["roadmap", "year", "quarter"]);
+  // Local mirror of `groupLevels` for instant-feedback checkbox display in
+  // the Group By popover. Same pattern as `MultiCheckboxFilter.localSelected`
+  // — the checkbox `checked` flips this frame on click, while the heavy
+  // backlog reconciliation runs via `startTransition` behind it.
+  const [localGroupLevels, setLocalGroupLevels] = useState<GroupLevel[]>(groupLevels);
+  useEffect(() => {
+    setLocalGroupLevels(groupLevels);
+  }, [groupLevels]);
+  // Filter-latency probe end marker — fires when any filter or group-level
+  // state actually commits (which for transition-wrapped setters is AFTER
+  // the heavy backlog re-render). Pairs with `markFilterChange()` calls
+  // inside each filter's click handler to capture full click→stable time.
+  useEffect(() => {
+    reportFilterStable();
+  }, [
+    workItemFilter,
+    roadmapFilter,
+    yearFilter,
+    quarterFilter,
+    statusFilter,
+    sprintFilter,
+    teamFilter,
+    assigneeFilter,
+    labelFilter,
+    parentFilter,
+    groupLevels,
+  ]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [openGroupFolders, setOpenGroupFolders] = useState<Record<string, boolean>>({});
   const [defaultTreeExpanded, setDefaultTreeExpanded] = useState(true);
@@ -3797,7 +3879,7 @@ export function BacklogPlanningPanel({
     { id: "story", label: "User Story" },
   ];
 
-  const backlogFilteredBeforeWorkItem = useMemo(() => {
+  const backlogFilteredBeforeWorkItem = useMemo(() => timePhase("backlogFilteredBeforeWorkItem", () => {
     /** Parent filter: ticking an initiative keeps all its epics; ticking only
      *  certain epics restricts to those epics. The hierarchical picker enforces
      *  cascade-tick at write time, so here we only check membership. */
@@ -3847,16 +3929,16 @@ export function BacklogPlanningPanel({
         return { ...initiative, epics };
       })
       .filter(Boolean) as typeof filteredWithControls;
-  }, [filteredWithControls, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, parentFilter]);
+  }), [filteredWithControls, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, parentFilter]);
 
-  const fullyFiltered = useMemo(() => {
+  const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
     const base = applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter);
     // When the user clicks a column header, columnSort takes priority over the
     // saved-view sortBy (which still governs per-epic story ordering inside
     // `filteredWithControls`). Cleared (null) → fall back to the upstream order.
     if (columnSort) return [...base].sort((a, b) => compareByColumn(a, b, columnSort));
     return base;
-  }, [backlogFilteredBeforeWorkItem, workItemFilter, columnSort]);
+  }), [backlogFilteredBeforeWorkItem, workItemFilter, columnSort]);
   // O(1) lookups by id — replaces `fullyFiltered.find(...)` calls that fired once per rendered
   // row (= O(N²) total) and made changing Group by feel slow on large backlogs.
   const initiativeById = useMemo(() => {
@@ -4244,7 +4326,7 @@ export function BacklogPlanningPanel({
       );
     });
   }
-  const groupedStoryRows = useMemo(() => {
+  const groupedStoryRows = useMemo(() => timePhase("groupedStoryRows", () => {
     return fullyFiltered.flatMap((initiative) =>
       (initiative.epics ?? []).flatMap((epic) =>
         (epic.userStories ?? []).map((story) => {
@@ -4296,12 +4378,12 @@ export function BacklogPlanningPanel({
         }),
       ),
     );
-  }, [fullyFiltered]);
+  }), [fullyFiltered]);
 
   // Sort the story-row list by the user's column choice. The bucket renderer preserves iteration order
   // when filling groups, so sorting here causes rows to appear in the chosen order both flat AND inside
   // each group bucket. Bucket order itself stays alphabetical (group-by isn't changed).
-  const sortedGroupedStoryRows = useMemo(() => {
+  const sortedGroupedStoryRows = useMemo(() => timePhase("sortedGroupedStoryRows", () => {
     if (!columnSort) return groupedStoryRows;
     const dir = columnSort.dir === "asc" ? 1 : -1;
     const key = columnSort.key;
@@ -4347,8 +4429,8 @@ export function BacklogPlanningPanel({
       }
     });
     return arr;
-  }, [groupedStoryRows, columnSort]);
-  const groupedStandaloneInitiatives = useMemo(() => {
+  }), [groupedStoryRows, columnSort]);
+  const groupedStandaloneInitiatives = useMemo(() => timePhase("groupedStandaloneInitiatives", () => {
     return fullyFiltered
       .filter((initiative) => (initiative.epics ?? []).every((epic) => (epic.userStories ?? []).length === 0))
       .map((initiative) => {
@@ -4386,7 +4468,7 @@ export function BacklogPlanningPanel({
           })),
         };
       });
-  }, [fullyFiltered]);
+  }), [fullyFiltered]);
 
   /**
    * Excel export — builds a row-per-story payload from the currently filtered `groupedStoryRows`, mapping
@@ -4512,19 +4594,19 @@ export function BacklogPlanningPanel({
     presetSearch.trim().length > 0;
 
   function toggleGroupLevel(level: GroupLevel) {
-    // Mark the group-level change as a non-urgent transition so the
-    // checkbox check appears instantly in the dropdown while React
-    // schedules the expensive re-render (renderGroupedTree across 500+
-    // story rows took ~1.6s in profiling). The user perceives the dropdown
-    // as responsive even when the table needs a moment to settle.
+    markFilterChange(`Group By: ${level}`);
+    // Compute the next selection from the LOCAL mirror so the user can
+    // toggle multiple levels in quick succession without each click
+    // racing the parent's deferred update. Apply locally this frame
+    // (checkbox flips immediately), then hand off to the parent inside
+    // a transition so the heavy backlog re-render is non-urgent.
+    const idx = GROUP_LEVEL_ORDER.indexOf(level);
+    const next = localGroupLevels.includes(level)
+      ? GROUP_LEVEL_ORDER.slice(0, idx).filter((item) => localGroupLevels.includes(item))
+      : GROUP_LEVEL_ORDER.slice(0, idx + 1);
+    setLocalGroupLevels(next);
     startTransition(() => {
-      setGroupLevels((prev) => {
-        const idx = GROUP_LEVEL_ORDER.indexOf(level);
-        if (prev.includes(level)) {
-          return GROUP_LEVEL_ORDER.slice(0, idx).filter((item) => prev.includes(item));
-        }
-        return GROUP_LEVEL_ORDER.slice(0, idx + 1);
-      });
+      setGroupLevels(next);
     });
   }
 
@@ -5119,7 +5201,7 @@ export function BacklogPlanningPanel({
                 <button
                   type="button"
                   onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-semibold text-slate-700"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
                   style={{ paddingLeft: indentPx }}
                 >
                   {/* Chevron always rendered so the folder is visibly
@@ -5179,6 +5261,15 @@ export function BacklogPlanningPanel({
 
   function renderLeafRows(rows: typeof groupedStoryRows, indentPx: number, path: string): React.ReactNode {
     if (groupLevels.includes("sprint")) {
+      return renderStoryDataRows(rows, indentPx, `${path}/stories`);
+    }
+    // Work Item filter set to "Story" only — flatten the tree: skip the
+    // initiative + epic folder layers and render story rows directly so
+    // the user sees a flat list of stories matching the rest of their
+    // filters. (Epic-only flattening happens in
+    // `renderStandaloneInitiativeRows` because Epic-only strips stories,
+    // so all initiatives go through the standalone path.)
+    if (workItemFilter.length === 1 && workItemFilter[0] === "story") {
       return renderStoryDataRows(rows, indentPx, `${path}/stories`);
     }
 
@@ -6117,6 +6208,11 @@ export function BacklogPlanningPanel({
   }
 
   function renderStandaloneInitiativeRows(rows: typeof groupedStandaloneInitiatives, indentPx: number): React.ReactNode {
+    // Work Item filter set to "Epic" only — flatten the tree: hide the
+    // initiative folder rows and the indented background wrapper so the
+    // epics appear as a flat list, matching the same behavior story-only
+    // gets via `renderLeafRows`.
+    const isEpicOnlyMode = workItemFilter.length === 1 && workItemFilter[0] === "epic";
     return rows
       .slice()
       .sort((a, b) => {
@@ -6131,13 +6227,18 @@ export function BacklogPlanningPanel({
       })
       .map((initiative) => {
         const initFolderId = `standalone-init:${initiative.initiativeId}`;
-        const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
+        // In Epic-only mode, force the initiative open so its epics render
+        // (the initiative row itself is hidden below via `hidden`).
+        const isInitOpen = isEpicOnlyMode ? true : (openGroupFolders[initFolderId] ?? defaultGroupExpanded);
         const standInitModel = initiativeById.get(initiative.initiativeId);
         const standInitGantt = standInitModel ? ganttDateRangeForInitiative(standInitModel) : { start: null, end: null };
         return (
               <div key={initFolderId}>
                 <div
-                  className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                  className={cn(
+                    "group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40",
+                    isEpicOnlyMode && "hidden",
+                  )}
                   style={{
                     gridTemplateColumns: tableGridTemplate,
                   }}
@@ -6336,7 +6437,8 @@ export function BacklogPlanningPanel({
               />
             ) : null}
             {isInitOpen ? (
-              <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
+              <div className={isEpicOnlyMode ? "relative" : "relative bg-slate-50/50"}>
+                {!isEpicOnlyMode ? <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden /> : null}
                 {initiative.epics.map((epic) => {
                   const standEpicModel = standInitModel?.epics?.find((e) => e.id === epic.epicId);
                   const standPlanYear = Number(initiative.initiativeYear);
@@ -6357,8 +6459,8 @@ export function BacklogPlanningPanel({
                     >
                       {renderBacklogCells({
                         workItem: (
-                          <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx + 34 }}>
-                            <BacklogTreeConnector indentPx={indentPx + 34} />
+                          <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: isEpicOnlyMode ? indentPx : indentPx + 34 }}>
+                            <BacklogTreeConnector indentPx={isEpicOnlyMode ? indentPx : indentPx + 34} />
                             <span className="inline-block h-7 w-7 shrink-0" />
                             <div
                               role="button"
@@ -7143,6 +7245,7 @@ export function BacklogPlanningPanel({
         </div>
       </div>
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
+      <FilterLatencyDebugger />
 
       <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-9 pt-9 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div
@@ -7210,7 +7313,7 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
-          <div className="col-start-11 row-start-2 min-w-0">
+          <div className="col-start-10 row-start-2 min-w-0">
             <BacklogParentFilterControl
               tree={parentFilterTree}
               selected={parentFilter}
@@ -7402,8 +7505,8 @@ export function BacklogPlanningPanel({
             {groupMenuOpen ? (
               <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg bg-white p-2 shadow-lg">
                 {GROUP_LEVEL_ORDER.map((level, idx) => {
-                  const checked = groupLevels.includes(level);
-                  const disabled = idx > 0 && !groupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
+                  const checked = localGroupLevels.includes(level);
+                  const disabled = idx > 0 && !localGroupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
                   return (
                     <label key={level} className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[14px] text-slate-700", disabled && "opacity-50")}>
                       <input
@@ -7501,7 +7604,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-10 row-start-2 min-w-0">
+          <div className="col-start-11 row-start-2 min-w-0">
             <BacklogLabelsFilterControl
               selected={labelFilter}
               onChange={setLabelFilter}
@@ -7817,6 +7920,18 @@ export function BacklogPlanningPanel({
             ) : null}
             {effectiveGroupLevels.length > 0 ? (
               renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives)
+            ) : workItemFilter.length === 1 && workItemFilter[0] === "story" ? (
+              // Story-only filter without grouping → flat story rows. Skip
+              // the initiative + epic folder layers so the user sees a
+              // direct list of matching stories.
+              renderStoryDataRows(sortedGroupedStoryRows, 0, "flat-story-only")
+            ) : workItemFilter.length === 1 && workItemFilter[0] === "epic" ? (
+              // Epic-only filter without grouping → flat epic rows. With
+              // stories stripped by `applyWorkItemKindFilter`, every
+              // initiative passes the "all epics have no stories" check
+              // and lands in `groupedStandaloneInitiatives`, which already
+              // knows to render epics flat in Epic-only mode.
+              renderStandaloneInitiativeRows(groupedStandaloneInitiatives, 0)
             ) : (
             <>
             {fullyFiltered.map((initiative) => {

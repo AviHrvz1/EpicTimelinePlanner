@@ -17,9 +17,9 @@ export function LoginConfetti() {
     if (sessionStorage.getItem(FLAG_KEY) !== "1") return;
     sessionStorage.removeItem(FLAG_KEY);
 
-    // Two side-cannons firing inward — small, ~1.2s total. Keeps the
+    // Two side-cannons firing inward — small, ~0.5s total. Keeps the
     // celebration brief so it doesn't get in the way of work.
-    const duration = 1200;
+    const duration = 500;
     const end = Date.now() + duration;
     const colors = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444"];
 
