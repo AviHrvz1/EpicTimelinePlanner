@@ -1605,17 +1605,17 @@ export function UsersWorkspacePanel() {
             }}
             className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-semibold"
           >
-            <Tag className="size-3.5" aria-hidden />
-            Add team
+            <Users className="size-3.5" aria-hidden />
+            Add Team
           </Button>
           <Button type="button" size="sm" onClick={openCreate} className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-bold">
-            <Plus className="size-3.5" aria-hidden />
+            <User className="size-3.5" aria-hidden />
             Add User
           </Button>
         </div>
       </header>
 
-      <div className="mb-5 shrink-0 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-5 pt-5 shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-7 pt-7 shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-3">
         <div className="flex min-w-0 w-full flex-1 flex-col gap-1.5 lg:max-w-md">
           <div ref={searchFieldWrapRef} className="relative min-w-0 w-full">
@@ -1630,7 +1630,7 @@ export function UsersWorkspacePanel() {
             onBlur={handleDirectorySearchBlur}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search name, email, team, or permission…"
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+            className="h-8 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
             aria-label="Search users"
             aria-controls="users-directory-name-suggestions"
             aria-expanded={searchSuggestOpen && nameSuggestions.length > 0}
@@ -1678,7 +1678,7 @@ export function UsersWorkspacePanel() {
               suggestions={teamFilterSuggestions}
               placeholder="All Teams"
               aria-label="Filter by team"
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
               onSuggestionPick={(s) => {
                 const next = resolveTeamFilterQuery(s, rows, registeredTeamSlugs);
                 setTeamFilter(next);
@@ -1701,7 +1701,7 @@ export function UsersWorkspacePanel() {
               suggestions={PERMISSION_FILTER_SUGGESTIONS}
               placeholder="All Permissions"
               aria-label="Filter by permission"
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
               onSuggestionPick={(s) => {
                 const next = resolvePermissionFilterQuery(s);
                 setPermissionFilter(next);
@@ -1720,7 +1720,7 @@ export function UsersWorkspacePanel() {
             <button
               type="button"
               onClick={() => setUserDirGroupMenuOpen((prev) => !prev)}
-              className="flex h-10 min-w-[11rem] items-center justify-between rounded-lg border border-slate-300 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80"
+              className="flex h-8 min-w-[11rem] items-center justify-between rounded-lg border border-slate-300 bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80"
             >
               <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
@@ -1762,7 +1762,7 @@ export function UsersWorkspacePanel() {
       </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-white">
+      <div className="-mt-5 min-h-0 flex-1 overflow-hidden rounded-b-xl border border-slate-200/60 bg-white shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div className="h-full min-h-0 overflow-auto text-[16px]">
           <DndContext
             sensors={userDirColumnDragSensors}

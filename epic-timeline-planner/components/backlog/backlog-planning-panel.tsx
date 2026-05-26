@@ -1595,7 +1595,7 @@ function BacklogTeamFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -1742,7 +1742,7 @@ function BacklogAssigneeFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -1884,7 +1884,7 @@ function BacklogLabelsFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -2043,7 +2043,7 @@ function MultiCheckboxFilter({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -2305,7 +2305,7 @@ function BacklogParentFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-[34px] min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -8044,7 +8044,7 @@ export function BacklogPlanningPanel({
 
   return (
     <section className="ml-1 mr-0 flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
-      <div className="mb-6 flex shrink-0 items-center justify-between gap-3 pb-2 pt-4">
+      <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 pb-4 pt-4">
         <div className="flex items-center gap-2.5">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
             <ListTodo className="size-4.5" strokeWidth={2} aria-hidden />
@@ -8102,9 +8102,9 @@ export function BacklogPlanningPanel({
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
       <FilterLatencyDebugger />
 
-      <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-9 pt-9 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="relative z-20 mt-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-5 pt-5 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div
-          className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
+          className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-4"
           style={{ gridTemplateColumns: "auto repeat(10, minmax(0, 1fr))" }}
         >
           <div className="relative col-span-6 col-start-1 row-start-1 min-w-0">
@@ -8119,7 +8119,7 @@ export function BacklogPlanningPanel({
                 window.setTimeout(() => setShowSearchSuggestions(false), 120);
               }}
               className={cn(
-                "h-9 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
+                "h-8 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
                 query ? "pr-9" : "pr-3",
               )}
             />
@@ -8173,7 +8173,7 @@ export function BacklogPlanningPanel({
               tree={parentFilterTree}
               selected={parentFilter}
               onChange={setParentFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div
@@ -8185,7 +8185,7 @@ export function BacklogPlanningPanel({
               onClick={() => setPresetMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={presetMenuOpen}
-              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[14px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
+              className="flex h-7 w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[13px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-500">
                 <Bookmark className="size-3 shrink-0 text-indigo-400" strokeWidth={2} aria-hidden />
@@ -8259,7 +8259,7 @@ export function BacklogPlanningPanel({
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
-              className="flex h-[34px] w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[14px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
+              className="flex h-7 w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[13px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
               aria-haspopup="listbox"
               aria-expanded={viewPresetMenuOpen}
             >
@@ -8324,7 +8324,7 @@ export function BacklogPlanningPanel({
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
               className={cn(
-                "flex h-[34px] w-full min-w-0 items-center justify-between rounded-lg border bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[14px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80",
+                "flex h-7 w-full min-w-0 items-center justify-between rounded-lg border bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80",
                 // Active grouping → stronger border + ring so the user
                 // sees the table is grouped at a glance.
                 groupLevels.length > 0
@@ -8395,7 +8395,7 @@ export function BacklogPlanningPanel({
                   next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
                 )
               }
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-3 row-start-2 min-w-0">
@@ -8404,7 +8404,7 @@ export function BacklogPlanningPanel({
               options={roadmapOptions}
               selected={roadmapFilter}
               onChange={setRoadmapFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-4 row-start-2 min-w-0">
@@ -8413,7 +8413,7 @@ export function BacklogPlanningPanel({
               options={yearOptions}
               selected={yearFilter}
               onChange={setYearFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-5 row-start-2 min-w-0">
@@ -8422,7 +8422,7 @@ export function BacklogPlanningPanel({
               options={quarterOptions}
               selected={quarterFilter}
               onChange={setQuarterFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-6 row-start-2 min-w-0">
@@ -8431,7 +8431,7 @@ export function BacklogPlanningPanel({
               options={statusOptions}
               selected={statusFilter}
               onChange={setStatusFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-7 row-start-2 min-w-0">
@@ -8440,14 +8440,14 @@ export function BacklogPlanningPanel({
               options={sprintOptions}
               selected={sprintFilter}
               onChange={setSprintFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-8 row-start-2 min-w-0">
             <BacklogTeamFilterControl
               selectedIds={teamFilter}
               onChange={setTeamFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-9 row-start-2 min-w-0">
@@ -8456,7 +8456,7 @@ export function BacklogPlanningPanel({
               onChange={setAssigneeFilter}
               suggestions={assigneeAutocompleteSuggestions}
               directoryUsers={workspaceDirectoryUsers}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-11 row-start-2 min-w-0">
@@ -8464,16 +8464,16 @@ export function BacklogPlanningPanel({
               selected={labelFilter}
               onChange={setLabelFilter}
               suggestions={storyLabelSuggestions}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
+              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
             />
           </div>
           <div className="col-start-11 row-start-1 flex min-w-0 justify-end">
-            <span className="group relative inline-flex h-[34px] w-[34px] shrink-0">
+            <span className="group relative inline-flex h-7 w-7 shrink-0">
             <button
               type="button"
               onClick={resetAllFilters}
               disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="relative z-0 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label="Clear all filters"
             >
               <Eraser className="size-3.5" strokeWidth={2} />
@@ -8506,7 +8506,7 @@ export function BacklogPlanningPanel({
         </div>
       ) : null}
 
-      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/60 bg-white">
+      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-b-xl border border-slate-200/60 bg-white shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div ref={tableScrollRef} className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]">
         <div className="w-max min-w-full text-[15px] leading-snug text-slate-700">
         <>
