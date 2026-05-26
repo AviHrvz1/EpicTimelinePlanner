@@ -44,6 +44,7 @@ import {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  memo as ReactMemo,
   startTransition,
   useCallback,
   useEffect,
@@ -56,7 +57,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { toast } from "sonner";
 
-import { FilterLatencyDebugger, markFilterChange, reportFilterStable, timePhase } from "@/components/dev/filter-latency-debugger";
+import { FilterLatencyDebugger, getPendingMarkStartedAt, markFilterChange, recordPhase, reportFilterStable, timePhase } from "@/components/dev/filter-latency-debugger";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
@@ -2887,6 +2888,439 @@ function IsolatedRoadmapCreateForm({
   );
 }
 
+/* =====================================================================
+ * BacklogStoryRow — memoized leaf-row component.
+ *
+ * Extracted out of `renderStoryDataRows` and wrapped in `React.memo` so a
+ * filter change that doesn't actually change a row's data, indent, or
+ * editing flags skips reconciliation entirely. The parent re-renders, but
+ * each of the ~500 row instances see byte-identical props and short-circuit.
+ *
+ * Three categories of props:
+ *
+ *   1. `row` — the per-story data record (reference-stable across
+ *      filter changes because `groupedStoryRows` is `useMemo`'d).
+ *   2. `is*` / `editing*Value` primitives — derived in the parent map
+ *      so editing ONE row doesn't change the props of the other 499.
+ *   3. `ctx` — a single object holding every callback & helper the row
+ *      needs. The parent builds it via `useBacklogStoryRowCtx()` with an
+ *      always-latest-callback ref pattern so the object reference stays
+ *      stable across renders (only changes when the few literal props
+ *      it holds — gridTemplate, directoryUsers, sprint suggestions —
+ *      actually change).
+ *
+ * `areEqual` compares only the above; callback identity is irrelevant
+ * because they all route through ctx, which is itself memoized.
+ * =====================================================================
+ */
+
+/** Fields of `groupedStoryRows[number]` that the row component reads. */
+type BacklogStoryRowData = {
+  storyId: string;
+  storyTitle: string;
+  storyStatus: string;
+  storySprintLabel: string;
+  storySprintNum: number | null;
+  storyEstimatedDays: number;
+  storyDaysLeft: number;
+  storyLabels: string | null;
+  storyAssignee: string;
+  storyQuarterLabelValue: string | null;
+  storyStartDateLabel: string;
+  storyEndDateLabel: string;
+  initiativeYear: string;
+  monthLabelValue: string;
+  epicId: string;
+  epicTitle: string;
+  teamId: string | null;
+};
+
+type BacklogStoryRowCtx = {
+  /** CSS Grid columns string used by every row + the header — change here
+   *  re-flows the table; the memo invalidates row instances when it
+   *  changes. */
+  tableGridTemplate: string;
+  workspaceDirectoryUsers: readonly { name: string; image?: string | null }[] | null;
+  /** Names suggested by the assignee combobox while editing. */
+  assigneeNameSuggestions: readonly string[];
+  /** Sprint options for the year of the story currently being edited.
+   *  Kept as a function so the row only resolves them when actually
+   *  rendering the editor for itself. */
+  assignableSprintsForYear: (year: number) => number[];
+
+  // ---- always-latest callbacks (wrappers around refs in the parent) ----
+  onOpenStory: (storyId: string) => void;
+  patchStoryInline: (storyId: string, patch: Record<string, unknown>) => Promise<unknown>;
+  setEditingStoryTitle: (next: { id: string; value: string } | null) => void;
+  setEditingStoryCell: (updater: any) => void;
+  beginStoryCellEdit: (storyId: string, field: string, value: string) => void;
+  cancelStoryCellEdit: () => void;
+  confirmStoryCellEdit: (storyId: string, field: string, snapshot: StoryCellEditSnapshot, value?: string) => Promise<unknown>;
+  handleStoryCellKeyDown: (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    storyId: string,
+    field: string,
+    snapshot: StoryCellEditSnapshot,
+  ) => void;
+  beginEpicTeamEdit: (params: { id: string; team: string | null }) => void;
+  renderParentTeamEditor: (params: { kind: "epic"; id: string }) => React.ReactNode;
+  renderBacklogTeamCell: (teamId: string | null) => React.ReactNode;
+  renderQuarterChipsCell: (quarters: string[]) => React.ReactNode;
+  renderParentCell: (params: {
+    epicId?: string;
+    epicTitle?: string;
+    initiativeId?: string;
+    initiativeTitle?: string;
+    editTarget?: { kind: "story" | "epic" | "initiative"; id: string; currentParentId: string | null };
+  }) => React.ReactNode;
+  renderBacklogCells: (cells: any, edits: any) => React.ReactNode;
+  formatStoryLabelsForEditInput: (raw: string | null | undefined) => string;
+};
+
+type BacklogStoryRowProps = {
+  row: BacklogStoryRowData;
+  indentPx: number;
+  /** When true, the title cell renders the inline title editor instead
+   *  of the read-only title button. The string lives in `editingTitleValue`. */
+  isEditingTitle: boolean;
+  editingTitleValue: string;
+  /** When true, a CELL on this row is being edited (status / sprint /
+   *  assignee / labels / estDays / daysLeft). Which one is encoded by
+   *  `editingCellField`. */
+  isEditingCell: boolean;
+  editingCellField: string | null;
+  editingCellValue: string;
+  /** True when the team editor popover is open for this row's epic. */
+  isEditingTeam: boolean;
+  ctx: BacklogStoryRowCtx;
+};
+
+const BacklogStoryRowImpl = function BacklogStoryRow({
+  row,
+  indentPx,
+  isEditingTitle,
+  editingTitleValue,
+  isEditingCell,
+  editingCellField,
+  editingCellValue,
+  isEditingTeam,
+  ctx,
+}: BacklogStoryRowProps) {
+  const progress = storyCompletion({
+    status: row.storyStatus,
+    estimatedDays: row.storyEstimatedDays,
+    daysLeft: row.storyDaysLeft,
+  });
+  return (
+    <div
+      className={cn(
+        "group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40",
+        // `content-visibility: auto` lets the browser skip layout + paint
+        // for rows scrolled off-screen. `contain-intrinsic-size` gives it
+        // an estimated row height so the scrollbar + later rows still
+        // sit at the right offsets when offscreen rows are skipped.
+        "[content-visibility:auto] [contain-intrinsic-size:0_38px]",
+      )}
+      data-backlog-zebra-row="true"
+      data-backlog-zebra-kind="story"
+      data-backlog-zebra-label={row.storyTitle}
+      style={{
+        gridTemplateColumns: ctx.tableGridTemplate,
+      }}
+    >
+      {ctx.renderBacklogCells({
+        workItem: (
+          <div className="relative min-w-0" style={{ paddingLeft: indentPx }}>
+            <BacklogTreeConnector indentPx={indentPx} />
+            <div className="flex min-w-0 items-center gap-2 truncate text-left text-slate-800">
+              <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                <UserStoryIcon />
+              </span>
+              {isEditingTitle ? (
+                <IsolatedTextInput
+                  initial={editingTitleValue}
+                  inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                  onCancel={() => ctx.setEditingStoryTitle(null)}
+                  onSave={async (value) => {
+                    const next = value.trim();
+                    if (next.length >= 2 && next !== row.storyTitle) {
+                      await ctx.patchStoryInline(row.storyId, { title: next });
+                      toast.success("User story title updated");
+                    }
+                    ctx.setEditingStoryTitle(null);
+                  }}
+                />
+              ) : (
+                <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
+                  <button
+                    type="button"
+                    className="min-w-0 truncate text-left hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+                    onClick={() => ctx.onOpenStory(row.storyId)}
+                  >
+                    {row.storyTitle}
+                  </button>
+                  <span className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100">
+                    <EditRowIconButton
+                      label="Edit user story title"
+                      onClick={() => ctx.setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
+                    />
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+        ),
+        team: isEditingTeam ? (
+          ctx.renderParentTeamEditor({ kind: "epic", id: row.epicId })
+        ) : (
+          ctx.renderBacklogTeamCell(row.teamId)
+        ),
+        year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
+        quarter: row.storyQuarterLabelValue ? (
+          ctx.renderQuarterChipsCell([row.storyQuarterLabelValue])
+        ) : (
+          <span className="text-center text-[16px] text-slate-400">—</span>
+        ),
+        month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
+        startDate: (
+          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+            {row.storyStartDateLabel && row.storyStartDateLabel !== "—" ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+            {row.storyStartDateLabel}
+          </span>
+        ),
+        endDate: (
+          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+            {row.storyEndDateLabel && row.storyEndDateLabel !== "—" ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+            {row.storyEndDateLabel}
+          </span>
+        ),
+        status: (
+          <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
+            {isEditingCell && editingCellField === "status" ? (
+              <StoryStatusEditor
+                currentValue={editingCellValue as WorkflowStatus}
+                onSelect={(v) => {
+                  ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev));
+                  void ctx.confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row), v);
+                }}
+                onCancel={ctx.cancelStoryCellEdit}
+              />
+            ) : (
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus);
+                }}
+                className="inline-flex items-center gap-1.5 font-semibold"
+              >
+                {statusIcon(row.storyStatus)}
+                {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
+              </button>
+            )}
+          </span>
+        ),
+        sprint: (
+          <span className="text-center text-[16px] text-slate-700">
+            {isEditingCell && editingCellField === "sprint" ? (
+              <SprintSelectEditor
+                currentValue={editingCellValue}
+                options={ctx.assignableSprintsForYear(Number(row.initiativeYear))}
+                onSelect={(v) => {
+                  ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev));
+                  void ctx.confirmStoryCellEdit(row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row), v);
+                }}
+                onCancel={ctx.cancelStoryCellEdit}
+              />
+            ) : (
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  ctx.beginStoryCellEdit(
+                    row.storyId,
+                    "sprint",
+                    row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum),
+                  );
+                }}
+                className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
+              >
+                <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                {row.storySprintLabel}
+              </button>
+            )}
+          </span>
+        ),
+        assignee: (
+          <span className="text-center text-[16px] text-slate-700">
+            {isEditingCell && editingCellField === "assignee" ? (
+              <span className="inline-flex items-center gap-1">
+                <AssigneeCombobox
+                  value={editingCellValue}
+                  onChange={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
+                  onKeyDown={(event) =>
+                    ctx.handleStoryCellKeyDown(event, row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
+                  }
+                  suggestions={ctx.assigneeNameSuggestions}
+                  directoryUsers={ctx.workspaceDirectoryUsers ?? undefined}
+                  showLeadingAvatar
+                  placeholder="Unassigned"
+                  className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                />
+                <button type="button" onClick={ctx.cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    ctx.confirmStoryCellEdit(row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
+                  }
+                  className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                ><Check className="size-3.5" /></button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  ctx.beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee);
+                }}
+                className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
+              >
+                <BacklogRowAvatar name={row.storyAssignee} directoryUsers={ctx.workspaceDirectoryUsers ?? undefined} />
+                {row.storyAssignee}
+              </button>
+            )}
+          </span>
+        ),
+        parent: ctx.renderParentCell({
+          epicId: row.epicId,
+          epicTitle: row.epicTitle,
+          editTarget: { kind: "story", id: row.storyId, currentParentId: row.epicId },
+        }),
+        labels: (
+          <div className="w-full min-w-0 overflow-hidden">
+            {isEditingCell && editingCellField === "labels" ? (
+              <div className="mx-auto flex w-full min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-indigo-200/55 bg-gradient-to-b from-white to-slate-50/95 p-2 shadow-sm ring-1 ring-slate-200/45">
+                <IsolatedStoryCellTextEditor
+                  initial={editingCellValue}
+                  multiline
+                  placeholder="Comma-separated labels"
+                  className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
+                  onCancel={ctx.cancelStoryCellEdit}
+                  onSave={(value) =>
+                    ctx.confirmStoryCellEdit(row.storyId, "labels", storyEditSnapshotFromGroupedRow(row), value)
+                  }
+                />
+              </div>
+            ) : (
+              <BacklogLabelsChipPanel
+                labelsSerialized={row.storyLabels}
+                onMouseDownBeginEdit={(event) => {
+                  event.preventDefault();
+                  ctx.beginStoryCellEdit(row.storyId, "labels", ctx.formatStoryLabelsForEditInput(row.storyLabels));
+                }}
+              />
+            )}
+          </div>
+        ),
+        estDays: (
+          <span className="text-center text-[16px] text-slate-700">
+            {isEditingCell && editingCellField === "estimatedDays" ? (
+              <IsolatedStoryCellTextEditor
+                initial={editingCellValue}
+                inputType="number"
+                className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                onCancel={ctx.cancelStoryCellEdit}
+                onSave={(value) =>
+                  ctx.confirmStoryCellEdit(row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row), value)
+                }
+              />
+            ) : (
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  ctx.beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays));
+                }}
+                className="rounded px-1 py-0.5 hover:bg-slate-100"
+              >
+                {row.storyEstimatedDays}d
+              </button>
+            )}
+          </span>
+        ),
+        epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
+        daysLeft: (
+          <span className="text-center text-[16px] text-slate-700">
+            {isEditingCell && editingCellField === "daysLeft" ? (
+              <IsolatedStoryCellTextEditor
+                initial={editingCellValue}
+                inputType="number"
+                className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                onCancel={ctx.cancelStoryCellEdit}
+                onSave={(value) =>
+                  ctx.confirmStoryCellEdit(row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row), value)
+                }
+              />
+            ) : (
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  ctx.beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft));
+                }}
+                className="rounded px-1 py-0.5 hover:bg-slate-100"
+              >
+                {row.storyDaysLeft}d
+              </button>
+            )}
+          </span>
+        ),
+        progress: (
+          <button
+            type="button"
+            onClick={() => {}}
+            className={backlogReadonlyProgressButtonClass}
+          >
+            <div className="text-right text-[13px] tabular-nums text-slate-600">
+              <span>{progress.percent}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500" style={{ width: `${progress.percent}%` }} />
+            </div>
+          </button>
+        ),
+      }, {
+        team: { kind: "edit", onEdit: () => ctx.beginEpicTeamEdit({ id: row.epicId, team: row.teamId }) },
+        status: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus) },
+        sprint: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
+        assignee: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
+        labels: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "labels", ctx.formatStoryLabelsForEditInput(row.storyLabels)) },
+        estDays: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays)) },
+        daysLeft: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft)) },
+        year: { kind: "lock" },
+        quarter: { kind: "lock" },
+        month: { kind: "lock" },
+        startDate: { kind: "lock" },
+        endDate: { kind: "lock" },
+        epicOriginalEst: { kind: "lock" },
+        progress: { kind: "lock" },
+      })}
+    </div>
+  );
+};
+
+const BacklogStoryRow = ReactMemo(BacklogStoryRowImpl, (prev, next) =>
+  prev.row === next.row &&
+  prev.indentPx === next.indentPx &&
+  prev.isEditingTitle === next.isEditingTitle &&
+  prev.editingTitleValue === next.editingTitleValue &&
+  prev.isEditingCell === next.isEditingCell &&
+  prev.editingCellField === next.editingCellField &&
+  prev.editingCellValue === next.editingCellValue &&
+  prev.isEditingTeam === next.isEditingTeam &&
+  prev.ctx === next.ctx,
+);
+
 export function BacklogPlanningPanel({
   initiatives,
   roadmaps,
@@ -2991,6 +3425,29 @@ export function BacklogPlanningPanel({
   // inside each filter's click handler to capture full click→stable time.
   useEffect(() => {
     reportFilterStable();
+  }, [
+    workItemFilter,
+    roadmapFilter,
+    yearFilter,
+    quarterFilter,
+    statusFilter,
+    sprintFilter,
+    teamFilter,
+    assigneeFilter,
+    labelFilter,
+    parentFilter,
+    groupLevels,
+  ]);
+  // `useLayoutEffect` fires AFTER the DOM has been updated but BEFORE the
+  // browser paints. The time from click → here is "render + reconciliation
+  // + DOM mutations" (the React commit) — separating it from the rAF
+  // probe (total) tells us how much of the wait is React vs paint.
+  useLayoutEffect(() => {
+    const startedAt = getPendingMarkStartedAt();
+    if (startedAt != null) {
+      const elapsed = performance.now() - startedAt;
+      recordPhase("reactCommit (click→DOM mutated)", elapsed);
+    }
   }, [
     workItemFilter,
     roadmapFilter,
@@ -4845,6 +5302,70 @@ export function BacklogPlanningPanel({
   // Backlog zebra striping:
   // Applied after render via a DOM hook (see useEffect above).
 
+  // Always-latest-callback bag for `BacklogStoryRow`. Each render replaces
+  // `.current` with the current closure values; the wrapper functions in
+  // `storyRowCtx` below read through `.current` so the wrapper identities
+  // stay stable for memoization while always calling the latest impl.
+  const storyRowRefs = useRef({
+    onOpenStory,
+    patchStoryInline,
+    setEditingStoryTitle,
+    setEditingStoryCell,
+    beginStoryCellEdit,
+    cancelStoryCellEdit,
+    confirmStoryCellEdit,
+    handleStoryCellKeyDown,
+    beginEpicTeamEdit,
+    isEditingParentTeam,
+    renderParentTeamEditor,
+    renderBacklogTeamCell,
+    renderQuarterChipsCell,
+    renderParentCell,
+    renderBacklogCells,
+    assignableSprintsForYear,
+  });
+  storyRowRefs.current = {
+    onOpenStory,
+    patchStoryInline,
+    setEditingStoryTitle,
+    setEditingStoryCell,
+    beginStoryCellEdit,
+    cancelStoryCellEdit,
+    confirmStoryCellEdit,
+    handleStoryCellKeyDown,
+    beginEpicTeamEdit,
+    isEditingParentTeam,
+    renderParentTeamEditor,
+    renderBacklogTeamCell,
+    renderQuarterChipsCell,
+    renderParentCell,
+    renderBacklogCells,
+    assignableSprintsForYear,
+  };
+  const storyRowCtx = useMemo<BacklogStoryRowCtx>(() => ({
+    tableGridTemplate,
+    workspaceDirectoryUsers: workspaceDirectoryUsers ?? null,
+    assigneeNameSuggestions,
+    assignableSprintsForYear: (year) => storyRowRefs.current.assignableSprintsForYear(year),
+    onOpenStory: (id) => storyRowRefs.current.onOpenStory(id),
+    patchStoryInline: (id, patch) => storyRowRefs.current.patchStoryInline(id, patch as any),
+    setEditingStoryTitle: (next) => storyRowRefs.current.setEditingStoryTitle(next),
+    setEditingStoryCell: (updater) => storyRowRefs.current.setEditingStoryCell(updater),
+    beginStoryCellEdit: (id, field, value) => storyRowRefs.current.beginStoryCellEdit(id, field as any, value),
+    cancelStoryCellEdit: () => storyRowRefs.current.cancelStoryCellEdit(),
+    confirmStoryCellEdit: (id, field, snapshot, value) =>
+      storyRowRefs.current.confirmStoryCellEdit(id, field as any, snapshot, value),
+    handleStoryCellKeyDown: (event, id, field, snapshot) =>
+      storyRowRefs.current.handleStoryCellKeyDown(event as any, id, field as any, snapshot),
+    beginEpicTeamEdit: (params) => storyRowRefs.current.beginEpicTeamEdit(params),
+    renderParentTeamEditor: (params) => storyRowRefs.current.renderParentTeamEditor(params),
+    renderBacklogTeamCell: (teamId) => storyRowRefs.current.renderBacklogTeamCell(teamId),
+    renderQuarterChipsCell: (quarters) => storyRowRefs.current.renderQuarterChipsCell(quarters),
+    renderParentCell: (params) => storyRowRefs.current.renderParentCell(params as any),
+    renderBacklogCells: (cells, edits) => storyRowRefs.current.renderBacklogCells(cells, edits),
+    formatStoryLabelsForEditInput,
+  }), [tableGridTemplate, workspaceDirectoryUsers, assigneeNameSuggestions]);
+
   function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
     return rows
       .slice()
@@ -4859,308 +5380,25 @@ export function BacklogPlanningPanel({
         return a.storyTitle.localeCompare(b.storyTitle);
       })
       .map((row) => {
-        const progress = storyCompletion({
-          status: row.storyStatus,
-          estimatedDays: row.storyEstimatedDays,
-          daysLeft: row.storyDaysLeft,
-        });
+        const isEditingTitle = editingStoryTitle?.id === row.storyId;
+        const isEditingCell = editingStoryCell?.storyId === row.storyId;
         return (
-          <div
+          <BacklogStoryRow
             key={`${keyPrefix}-story-${row.storyId}`}
-            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
-            data-backlog-zebra-row="true"
-            data-backlog-zebra-kind="story"
-            data-backlog-zebra-label={row.storyTitle}
-            style={{
-              gridTemplateColumns: tableGridTemplate,
-            }}
-          >
-            {renderBacklogCells({
-              workItem: (
-                <div className="relative min-w-0" style={{ paddingLeft: indentPx }}>
-                  <BacklogTreeConnector indentPx={indentPx} />
-                  <div className="flex min-w-0 items-center gap-2 truncate text-left text-slate-800">
-                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
-                      <UserStoryIcon />
-                    </span>
-                    {editingStoryTitle?.id === row.storyId ? (
-                      <IsolatedTextInput
-                        initial={editingStoryTitle.value}
-                        inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                        onCancel={() => setEditingStoryTitle(null)}
-                        onSave={async (value) => {
-                          const next = value.trim();
-                          if (next.length >= 2 && next !== row.storyTitle) {
-                            await patchStoryInline(row.storyId, { title: next });
-                            toast.success("User story title updated");
-                          }
-                          setEditingStoryTitle(null);
-                        }}
-                      />
-                    ) : (
-                      <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
-                        <button
-                          type="button"
-                          className="min-w-0 truncate text-left hover:underline hover:decoration-slate-400 hover:underline-offset-2"
-                          onClick={() => onOpenStory(row.storyId)}
-                        >
-                          {row.storyTitle}
-                        </button>
-                        <span className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100">
-                          <EditRowIconButton
-                            label="Edit user story title"
-                            onClick={() => setEditingStoryTitle({ id: row.storyId, value: row.storyTitle })}
-                          />
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ),
-              team: isEditingParentTeam("epic", row.epicId) ? (
-                renderParentTeamEditor({ kind: "epic", id: row.epicId })
-              ) : (
-                renderBacklogTeamCell(row.teamId)
-              ),
-              year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
-              quarter: row.storyQuarterLabelValue ? (
-                renderQuarterChipsCell([row.storyQuarterLabelValue])
-              ) : (
-                // A story without a sprint has no quarter — render the same
-                // neutral dash other "no value" cells use, rather than the
-                // "Unscheduled work" pill (which is more meaningful for
-                // epics/initiatives that span multiple quarters).
-                <span className="text-center text-[16px] text-slate-400">—</span>
-              ),
-              month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
-              startDate: (
-                <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
-                  {/* storyStartDateLabel is the formatted string (em-dash when null), so also skip on "—" */}
-                  {row.storyStartDateLabel && row.storyStartDateLabel !== "—" ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
-                  {row.storyStartDateLabel}
-                </span>
-              ),
-              endDate: (
-                <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
-                  {row.storyEndDateLabel && row.storyEndDateLabel !== "—" ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
-                  {row.storyEndDateLabel}
-                </span>
-              ),
-              status: (
-            <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
-              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "status" ? (
-                <StoryStatusEditor
-                  currentValue={editingStoryCell.value as WorkflowStatus}
-                  onSelect={(v) => {
-                    setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
-                    void confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row), v);
-                  }}
-                  onCancel={cancelStoryCellEdit}
-                />
-              ) : (
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    beginStoryCellEdit(row.storyId, "status", row.storyStatus);
-                  }}
-                  className="inline-flex items-center gap-1.5 font-semibold"
-                >
-                  {statusIcon(row.storyStatus)}
-                  {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
-                </button>
-              )}
-            </span>
-              ),
-              sprint: (
-            <span className="text-center text-[16px] text-slate-700">
-              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "sprint" ? (
-                <SprintSelectEditor
-                  currentValue={editingStoryCell.value}
-                  options={assignableSprintsForYear(Number(row.initiativeYear))}
-                  onSelect={(v) => {
-                    setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
-                    void confirmStoryCellEdit(row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row), v);
-                  }}
-                  onCancel={cancelStoryCellEdit}
-                />
-              ) : (
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    beginStoryCellEdit(
-                      row.storyId,
-                      "sprint",
-                      row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum),
-                    );
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
-                >
-                  <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
-                  {row.storySprintLabel}
-                </button>
-              )}
-            </span>
-              ),
-              assignee: (
-            <span className="text-center text-[16px] text-slate-700">
-              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "assignee" ? (
-                <span className="inline-flex items-center gap-1">
-                  <AssigneeCombobox
-                    value={editingStoryCell.value}
-                    onChange={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
-                    onKeyDown={(event) =>
-                      handleStoryCellKeyDown(event, row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    suggestions={assigneeNameSuggestions}
-                    directoryUsers={workspaceDirectoryUsers}
-                    showLeadingAvatar
-                    placeholder="Unassigned"
-                    className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  />
-                  <button type="button" onClick={cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      confirmStoryCellEdit(row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
-                    }
-                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-                  ><Check className="size-3.5" /></button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
-                >
-                  <BacklogRowAvatar name={row.storyAssignee} directoryUsers={workspaceDirectoryUsers} />
-                  {row.storyAssignee}
-                </button>
-              )}
-            </span>
-              ),
-              parent: renderParentCell({
-                epicId: row.epicId,
-                epicTitle: row.epicTitle,
-                editTarget: { kind: "story", id: row.storyId, currentParentId: row.epicId },
-              }),
-              labels: (
-            <div className="w-full min-w-0 overflow-hidden">
-              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "labels" ? (
-                <div className="mx-auto flex w-full min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-indigo-200/55 bg-gradient-to-b from-white to-slate-50/95 p-2 shadow-sm ring-1 ring-slate-200/45">
-                  <IsolatedStoryCellTextEditor
-                    initial={editingStoryCell.value}
-                    multiline
-                    placeholder="Comma-separated labels"
-                    className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
-                    onCancel={cancelStoryCellEdit}
-                    onSave={(value) =>
-                      confirmStoryCellEdit(row.storyId, "labels", storyEditSnapshotFromGroupedRow(row), value)
-                    }
-                  />
-                </div>
-              ) : (
-                <BacklogLabelsChipPanel
-                  labelsSerialized={row.storyLabels}
-                  onMouseDownBeginEdit={(event) => {
-                    event.preventDefault();
-                    beginStoryCellEdit(row.storyId, "labels", formatStoryLabelsForEditInput(row.storyLabels));
-                  }}
-                />
-              )}
-            </div>
-              ),
-              estDays: (
-            <span className="text-center text-[16px] text-slate-700">
-              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "estimatedDays" ? (
-                <IsolatedStoryCellTextEditor
-                  initial={editingStoryCell.value}
-                  inputType="number"
-                  className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  onCancel={cancelStoryCellEdit}
-                  onSave={(value) =>
-                    confirmStoryCellEdit(row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row), value)
-                  }
-                />
-              ) : (
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays));
-                  }}
-                  className="rounded px-1 py-0.5 hover:bg-slate-100"
-                >
-                  {row.storyEstimatedDays}d
-                </button>
-              )}
-            </span>
-              ),
-              epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
-              daysLeft: (
-            <span className="text-center text-[16px] text-slate-700">
-              {editingStoryCell?.storyId === row.storyId && editingStoryCell.field === "daysLeft" ? (
-                <IsolatedStoryCellTextEditor
-                  initial={editingStoryCell.value}
-                  inputType="number"
-                  className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                  onCancel={cancelStoryCellEdit}
-                  onSave={(value) =>
-                    confirmStoryCellEdit(row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row), value)
-                  }
-                />
-              ) : (
-                <button
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft));
-                  }}
-                  className="rounded px-1 py-0.5 hover:bg-slate-100"
-                >
-                  {row.storyDaysLeft}d
-                </button>
-              )}
-            </span>
-              ),
-              progress: (
-            <button
-              type="button"
-              onClick={() => {}}
-              className={backlogReadonlyProgressButtonClass}
-            >
-              <div className="text-right text-[13px] tabular-nums text-slate-600">
-                <span>{progress.percent}%</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
-                <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-500" style={{ width: `${progress.percent}%` }} />
-              </div>
-            </button>
-              ),
-            }, {
-              team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: row.epicId, team: row.teamId }) },
-              status: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "status", row.storyStatus) },
-              sprint: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
-              assignee: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
-              labels: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "labels", formatStoryLabelsForEditInput(row.storyLabels)) },
-              estDays: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays)) },
-              daysLeft: { kind: "edit", onEdit: () => beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft)) },
-              year: { kind: "lock" },
-              quarter: { kind: "lock" },
-              month: { kind: "lock" },
-              startDate: { kind: "lock" },
-              endDate: { kind: "lock" },
-              epicOriginalEst: { kind: "lock" },
-              progress: { kind: "lock" },
-            })}
-          </div>
+            row={row}
+            indentPx={indentPx}
+            isEditingTitle={isEditingTitle}
+            editingTitleValue={isEditingTitle ? editingStoryTitle!.value : ""}
+            isEditingCell={isEditingCell}
+            editingCellField={isEditingCell ? editingStoryCell!.field : null}
+            editingCellValue={isEditingCell ? editingStoryCell!.value : ""}
+            isEditingTeam={isEditingParentTeam("epic", row.epicId)}
+            ctx={storyRowCtx}
+          />
         );
       });
   }
+
 
   function renderFolderRow(
     folderId: string,
@@ -5188,7 +5426,7 @@ export function BacklogPlanningPanel({
     return (
       <div key={folderId}>
         <div
-          className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+          className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
           style={{ gridTemplateColumns: tableGridTemplate }}
           data-backlog-zebra-row="true"
           data-backlog-zebra-kind="folder"
@@ -5326,7 +5564,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -5627,7 +5865,7 @@ export function BacklogPlanningPanel({
       return (
         <div key={folderId}>
           <div
-            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
             style={{
               gridTemplateColumns: tableGridTemplate,
             }}
@@ -6449,7 +6687,7 @@ export function BacklogPlanningPanel({
                   return (
                   <div key={`standalone-epic:${epic.epicId}`}>
                     <div
-                      className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                      className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
                       style={{
                         gridTemplateColumns: tableGridTemplate,
                       }}
@@ -7919,7 +8157,7 @@ export function BacklogPlanningPanel({
               />
             ) : null}
             {effectiveGroupLevels.length > 0 ? (
-              renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives)
+              timePhase("renderTreeJSX (grouped)", () => renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives))
             ) : workItemFilter.length === 1 && workItemFilter[0] === "story" ? (
               // Story-only filter without grouping → flat story rows. Skip
               // the initiative + epic folder layers so the user sees a
@@ -7944,7 +8182,7 @@ export function BacklogPlanningPanel({
               return (
                 <div key={initiative.id}>
                   <div
-                    className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                    className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
                     style={{
                       gridTemplateColumns: tableGridTemplate,
                     }}
@@ -8280,7 +8518,7 @@ export function BacklogPlanningPanel({
                         return (
                           <div key={epic.id}>
                             <div
-                            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40")}
+                            className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
                               style={{ gridTemplateColumns: tableGridTemplate }}
                             data-backlog-zebra-row="true"
                             data-backlog-zebra-kind="epic"

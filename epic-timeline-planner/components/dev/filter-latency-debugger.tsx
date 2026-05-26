@@ -78,16 +78,31 @@ export function timePhase<T>(label: string, fn: () => T): T {
   const started = performance.now();
   const result = fn();
   const elapsed = performance.now() - started;
+  recordPhase(label, elapsed);
+  return result;
+}
+
+/** Record a measured duration as a phase entry (logs + popup feed). */
+export function recordPhase(label: string, durationMs: number) {
+  if (process.env.NODE_ENV !== "development") return;
   // eslint-disable-next-line no-console
-  console.log(`[backlog-perf] ${label}: ${elapsed.toFixed(1)}ms`);
+  console.log(`[backlog-perf] ${label}: ${durationMs.toFixed(1)}ms`);
   emit({
     id: `phase-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     label,
-    durationMs: elapsed,
+    durationMs,
     timestamp: Date.now(),
     kind: "phase",
   });
-  return result;
+}
+
+/**
+ * Returns the active pending mark's `startedAt` (the click moment) so
+ * downstream code (useLayoutEffect, rAF) can compute "click → commit"
+ * or "click → paint" deltas. Returns null when nothing is pending.
+ */
+export function getPendingMarkStartedAt(): number | null {
+  return pendingMark?.startedAt ?? null;
 }
 
 export function reportFilterStable() {
