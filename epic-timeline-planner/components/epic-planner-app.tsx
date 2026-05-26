@@ -117,6 +117,12 @@ import {
 } from "@/lib/year-sprint";
 
 const ROADMAP_STORAGE_KEY = "epicPlanner.selectedRoadmapId.v1";
+/** Cookie name for the last-picked roadmap. Read server-side in
+ *  `app/page.tsx` so the very first render after login already shows
+ *  the roadmap the user last chose — no client-side flash from the
+ *  server-default roadmap to the localStorage-restored one. */
+const ROADMAP_COOKIE_NAME = "epicPlanner.selectedRoadmapId";
+const ROADMAP_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 
 type PlannerProps = {
   initialInitiatives: InitiativeItem[];
@@ -2815,6 +2821,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     setSelectedRoadmapId(id);
     setSelectedYear(nextYear);
     localStorage.setItem(ROADMAP_STORAGE_KEY, id);
+    document.cookie = `${ROADMAP_COOKIE_NAME}=${encodeURIComponent(id)}; path=/; max-age=${ROADMAP_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
     setFocusedQuarterLabel(null);
     setActiveTimelineMonth(null);
     setActiveYearSprint(null);

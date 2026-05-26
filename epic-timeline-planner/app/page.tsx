@@ -1,8 +1,11 @@
+import { cookies } from "next/headers";
 import { EpicPlannerApp } from "@/components/epic-planner-app";
 import { db } from "@/lib/db";
 import type { RoadmapItem } from "@/lib/types";
 
 const DEFAULT_ROADMAP_ID = "default-roadmap-0000-0000-000000000001";
+/** Must match the client write in `components/epic-planner-app.tsx`. */
+const ROADMAP_COOKIE_NAME = "epicPlanner.selectedRoadmapId";
 
 const INITIATIVE_INCLUDE = {
   comments: { orderBy: { createdAt: "desc" as const } },
@@ -36,8 +39,15 @@ export default async function Home() {
     updatedAt: r.updatedAt.toISOString(),
   }));
 
-  // Default roadmap: most recently updated (first after orderBy updatedAt desc), fallback to hardcoded default id
-  const defaultRoadmap = roadmaps[0] ?? null;
+  // Default roadmap: honor the user's last picked roadmap via cookie
+  // (written client-side in `handleSelectRoadmap`) so the first paint after
+  // login already shows their previous selection. Falls back to the
+  // most-recently-updated roadmap if the cookie is missing or stale.
+  const cookieStore = await cookies();
+  const cookieRoadmapId = cookieStore.get(ROADMAP_COOKIE_NAME)?.value;
+  const preferredRoadmap =
+    (cookieRoadmapId && roadmaps.find((r) => r.id === cookieRoadmapId)) || null;
+  const defaultRoadmap = preferredRoadmap ?? roadmaps[0] ?? null;
   const defaultRoadmapId = defaultRoadmap?.id ?? DEFAULT_ROADMAP_ID;
   // Default year: current year if in the roadmap's years list, else first year in list
   const defaultYear =
