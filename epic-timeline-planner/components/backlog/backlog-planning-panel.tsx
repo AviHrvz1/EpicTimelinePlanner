@@ -5549,7 +5549,18 @@ export function BacklogPlanningPanel({
       return { estimated, left };
     }
 
-    function renderEpicRow(epicId: string, epicTitle: string, epicAssignee: string, epicRows: typeof groupedStoryRows, epicIndentPx: number, epicPath: string) {
+    function renderEpicRow(
+      epicId: string,
+      epicTitle: string,
+      epicAssignee: string,
+      epicRows: typeof groupedStoryRows,
+      epicIndentPx: number,
+      epicPath: string,
+      /** When provided, this replaces the default "render stories under
+       *  the epic" body. Used by the descriptor walker to render JUST
+       *  the epic header (children are separate descriptors). */
+      renderChildrenOverride?: () => React.ReactNode,
+    ) {
       const folderId = `${epicPath}/epic:${epicId}`;
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(epicRows);
@@ -5849,15 +5860,33 @@ export function BacklogPlanningPanel({
             />
           ) : null}
           {isOpen ? (
-            <div>
-              {renderStoryDataRows(epicRows, epicIndentPx + 34, `${folderId}/stories`)}
-            </div>
+            renderChildrenOverride ? renderChildrenOverride() : (
+              <div>
+                {renderStoryDataRows(epicRows, epicIndentPx + 34, `${folderId}/stories`)}
+              </div>
+            )
           ) : null}
         </div>
       );
     }
 
-    function renderInitiativeRow(initiativeId: string, initiativeTitle: string, initiativeYear: string, initiativeStatus: WorkflowStatus, initiativeAssignee: string, initiativeQuarterLabel: string, initiativeMonthLabel: string, initiativeRows: typeof groupedStoryRows, initIndentPx: number, initPath: string) {
+    function renderInitiativeRow(
+      initiativeId: string,
+      initiativeTitle: string,
+      initiativeYear: string,
+      initiativeStatus: WorkflowStatus,
+      initiativeAssignee: string,
+      initiativeQuarterLabel: string,
+      initiativeMonthLabel: string,
+      initiativeRows: typeof groupedStoryRows,
+      initIndentPx: number,
+      initPath: string,
+      /** When provided, replaces the default "render nested epic rows
+       *  under the initiative" body. The walker passes `() => null` so
+       *  this descriptor renders ONLY the initiative folder header;
+       *  nested epics + stories appear as separate descriptors. */
+      renderChildrenOverride?: () => React.ReactNode,
+    ) {
       const folderId = `${initPath}/initiative:${initiativeId}`;
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
       const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
@@ -6106,6 +6135,7 @@ export function BacklogPlanningPanel({
             />
           ) : null}
           {isOpen ? (
+            renderChildrenOverride ? renderChildrenOverride() : (
             <div className="relative bg-slate-50/50"><div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-slate-300/70" aria-hidden />
               {(() => {
                 const byEpic = new Map<string, typeof groupedStoryRows>();
@@ -6134,6 +6164,7 @@ export function BacklogPlanningPanel({
                   });
               })()}
             </div>
+            )
           ) : null}
         </div>
       );

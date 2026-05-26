@@ -58,15 +58,28 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 
 ---
 
-### Chunk 2 — Render from descriptors (non-virtualized)  **STATUS: TODO**
+### Chunk 2 — Render from descriptors (non-virtualized)  **STATUS: IN PROGRESS**
 
 **Goal:** Replace the grouped-tree JSX with `descriptors.map(d => d.render())`. Still rendering ALL rows. **This forces the walker to be correct before adding virtualization complexity.**
 
-**Output:**
-- In the panel, the JSX entry point at line ~8160 changes from `renderGroupedTree(...)` to walking + mapping the descriptor list.
-- Verify visual parity: tree shape, indent, folder open/close, inline-create form, edit popovers, search highlights — all unchanged.
+**What's already in place (scaffolding from end of chunk-1 session, committed alongside):**
+- `renderEpicRow` and `renderInitiativeRow` now accept an optional `renderChildrenOverride?: () => React.ReactNode` param. When provided, it replaces the default "render nested children" body. The walker will pass `() => null` so each descriptor renders ONLY its own header row.
+- `renderFolderRow` already accepts `renderChildren` natively (existing signature) — nothing to change there.
 
-**Acceptance:** App looks identical to chunk 1. `timePhase("renderTreeJSX")` is replaced (or augmented) with a `renderFromDescriptors` phase entry so we can measure cost.
+**What still needs to happen in chunk 2:**
+1. **Capture the per-descriptor data in the walker.** Right now descriptors only carry `{key, kind, estimatedHeight, render: () => null}`. Each render closure needs to bind the row's data + indent + group-folder icons/actions when emitted in the walker:
+   - `groupFolder` needs: folderId, label, count, indentPx, leadingIcon (depends on level: roadmap=MapIcon / year=CalendarDays / quarter=QuarterYearProgressIcon | CalendarOff for unscheduled), trailingAction (Schedule jump for Unscheduled / + button for quarter / rename button for roadmap when applicable), defaultOpenOverride (false for empty quarter folders), labelOverride (IsolatedTextInput when actively renaming a roadmap). Duplicate the icon/action logic from `renderGroupedTree`'s loop into a helper used by both the walker and the existing renderer.
+   - `initiative` needs: all 10 args of `renderInitiativeRow` + indent. Call `renderInitiativeRow(..., () => null)`.
+   - `epic` needs: all 6 args of `renderEpicRow` + indent. Call `renderEpicRow(..., () => null)`.
+   - `story` needs: row, indentPx, all the editing flags. Render `<BacklogStoryRow row={row} indentPx={indentPx} ... ctx={storyRowCtx} />` directly using the existing `storyRowCtx`.
+   - `standaloneInit` needs: extract a "render one standalone-init folder header (no epics)" helper out of `renderStandaloneInitiativeRows`. Pass `init.epics = []` workaround vs a real refactor — pick one.
+   - `standaloneEpic` needs: extract a per-epic helper from the inline body of `renderStandaloneInitiativeRows` (the `initiative.epics.map((epic) => ...)` block).
+2. **Inline-create forms** that currently appear mid-tree (e.g. when user clicks "+" on an initiative folder) should also be emitted as `createForm` descriptors in the walker's iteration so they show up at the right position in the flat list.
+3. **Replace the call site** at the JSX entry point (currently `timePhase("renderTreeJSX (grouped)", () => renderGroupedTree(...))`) with a `descriptors.map(d => d.render())` mapper, wrapped in `timePhase("renderFromDescriptors (grouped)")` for comparison.
+4. **Visual smoke test:** every group level open/close, edit a row, click +Add Initiative inside a quarter, rename a roadmap, click Schedule on an unscheduled epic, search, every filter type. Anything broken vs the live `main` branch?
+5. **Acceptable visual deltas to defer:** losing the `bg-slate-50/50` subtle background tint on nested epic children (it lived on the wrapper div around children that no longer exists in the flat output). Fix in chunk 6 polish if it matters.
+
+**Acceptance:** App looks identical to before chunk 2 (modulo the bg-tint delta noted above) and the grouped path now flows through the descriptor list.
 
 ---
 
