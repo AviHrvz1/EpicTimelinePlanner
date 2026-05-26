@@ -1914,7 +1914,12 @@ function BacklogLabelsFilterControl({
         </button>
       ) : null}
       {isOpen ? (
-        <div className="absolute z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
+        // `right-0` (instead of the default `left-0`) anchors the popover
+        // to the chip's right edge so it grows leftward — keeps it inside
+        // the viewport when the Labels chip itself sits flush against the
+        // panel's right edge. Same pattern applies to other rightmost
+        // filters if their popovers ever overflow.
+        <div className="absolute right-0 z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
           <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
             <input
               type="checkbox"
