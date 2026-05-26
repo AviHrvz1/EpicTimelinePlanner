@@ -40,6 +40,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { CSSProperties, MouseEvent, ReactNode, RefObject } from "react";
+import * as React from "react";
 import {
   Fragment,
   FormEvent,
@@ -53,6 +54,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
@@ -3342,7 +3344,7 @@ function VirtualizedBacklogRows({
   pinStoryIds,
 }: {
   descriptors: RowDescriptor[];
-  scrollElementRef: React.RefObject<HTMLDivElement | null>;
+  scrollElementRef: RefObject<HTMLDivElement | null>;
   /** Story IDs whose descriptor must stay mounted even when scrolled
    *  outside the visible window. Used to keep the inline editor (and
    *  its focus/draft state) alive while the user scrolls. */
@@ -8818,8 +8820,14 @@ export function BacklogPlanningPanel({
                 return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} pinStoryIds={pinStoryIds} />;
               })()
             ) : (
-            <>
-            {fullyFiltered.map((initiative) => {
+            // [VIRT CHUNK 6] Ungrouped default view → initiative-level
+            // virtualization. Each initiative is ONE descriptor whose
+            // `render()` returns the full init+epics+stories unit. Not as
+            // fine-grained as per-row virtualization but solves the "all
+            // 50 initiatives mounted up front" problem with minimal
+            // refactor of the 1100-line inline block.
+            (() => {
+              function renderOneUngroupedInitiative(initiative: typeof fullyFiltered[number]) {
               const isInitOpen = openInitiatives[initiative.id] ?? defaultTreeExpanded;
               const initiativeStories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
               const initiativeWorkflowStatus = rollupWorkflowStatus(initiativeStories);
@@ -9913,8 +9921,23 @@ export function BacklogPlanningPanel({
                   ) : null}
                 </div>
               );
-            })}
-            </>
+              }
+              const descriptors: RowDescriptor[] = fullyFiltered.map((init) => {
+                const isOpen = openInitiatives[init.id] ?? defaultTreeExpanded;
+                const epicCount = (init.epics ?? []).length;
+                const storyCount = isOpen
+                  ? (init.epics ?? []).reduce((s, e) => s + (e.userStories ?? []).length, 0)
+                  : 0;
+                return {
+                  key: `ungrouped-init-${init.id}`,
+                  kind: "initiative",
+                  estimatedHeight: ROW_ESTIMATED_HEIGHTS.initiative
+                    + (isOpen ? epicCount * ROW_ESTIMATED_HEIGHTS.epic + storyCount * ROW_ESTIMATED_HEIGHTS.story : 0),
+                  render: () => renderOneUngroupedInitiative(init),
+                };
+              });
+              return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} pinStoryIds={pinStoryIds} />;
+            })()
             )}
           </div>
         )}
