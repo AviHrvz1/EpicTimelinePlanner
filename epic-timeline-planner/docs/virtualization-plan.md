@@ -1,6 +1,11 @@
-# Backlog Virtualization — chunked plan
+# Backlog Perf — multi-phase plan
 
 > **Resume protocol:** A new session should read this file FIRST to find the next `TODO` chunk and start there. After each chunk, update its status to `DONE` and add notes about what was actually done + any decisions/deviations.
+
+> **Phase status at a glance:**
+> - **Phase 1 — Backlog table virtualization:** DONE (chunks 1-6, all four rendering paths). Awaiting user verification before merge to main.
+> - **Phase 2 — Charts / dashboard optimization:** TODO. Scroll to "## Phase 2" below.
+> - **Phase 3 — Server-side aggregation:** Future. Triggered only at true scale (10k+ stories).
 >
 > **Branch:** `perf/backlog-virtualization`
 > **Goal:** Drop Group By toggle from ~3s `reactCommit` to ~150-300ms by only mounting the ~30 visible rows instead of all 500.
@@ -249,6 +254,75 @@ Stuff worth remembering when picking up later:
 - **TanStack Virtual "Sticky" example** shows `rangeExtractor` returning specific indices to keep certain rows always-mounted. Same trick handles edit + drag pinning.
 - **Per-kind estimateSize** matters: story (38px) and folder (42px) have different intrinsic heights. Wrong estimates → scroll-position jumps when virtualizer measures real heights.
 - The current `content-visibility: auto` on row containers (shipped in `e32d9e0`) becomes redundant once virtualization is in (offscreen rows don't exist in DOM at all). Can be removed in chunk 6 polish.
+
+---
+
+## Phase 2 — Charts / dashboard optimization
+
+**Trigger:** user says "continue with phase 2" / "do the charts perf work" / similar.
+
+**Why:** at enterprise scale (5k+ stories), the dashboard (17 chart components) becomes slow because every chart re-renders on any state change, all data is computed client-side from raw stories, and 17 SVGs paint together. Different bottleneck than the backlog (which was DOM mount cost) — here the bottleneck is **redundant chart re-renders + data aggregation**.
+
+**Inventory:** charts live in `components/dashboard/charts/`. Currently 17 files: `at-risk-stories-card.tsx`, `burndown-chart.tsx`, `cfd-chart.tsx`, `epic-burndown-chart.tsx`, `epic-burnup-chart.tsx`, `epic-cfd-chart.tsx`, `mini-gantt-card.tsx`, `quarter-status-chart.tsx`, `sprint-burnup-chart.tsx`, `sprint-countdown-card.tsx`, `sprint-load-chart.tsx`, `sticky-note-card.tsx`, `story-status-chart.tsx`, `team-focus-mix-card.tsx`, `velocity-chart.tsx`, `workload-balance-chart.tsx`, `workload-chart.tsx`.
+
+### Chunk 2.1 — Memoize every chart with `React.memo`  **STATUS: TODO**
+
+**Goal:** when one chart's data changes, only that chart re-renders. Other charts on the same dashboard skip reconciliation.
+
+**Output:**
+- Wrap each chart component's default export with `React.memo`.
+- Verify each chart's props are stable: any callback should be wrapped in `useCallback` upstream, any object/array prop in `useMemo`. If props are unstable (e.g. `data={[1,2,3]}` inline), `React.memo` does nothing.
+- Add a custom `areEqual` only if a chart has a known-stable prop that needs shallow comparison — usually the default `Object.is` comparison is fine.
+
+**Acceptance:** flipping a single chart's filter (e.g. team) only re-renders that chart's tree. Verifiable via React DevTools profiler.
+
+### Chunk 2.2 — `content-visibility: auto` on chart wrappers  **STATUS: TODO**
+
+**Goal:** browser skips layout + paint for off-screen chart blocks. Each chart's bounding box is ~250-400px tall, so this is a meaningful saving on long dashboards.
+
+**Output:**
+- Add `[content-visibility:auto] [contain-intrinsic-size:0_320px]` (or similar per-chart estimated height) to each chart's outermost wrapper.
+- Chrome/Edge benefit. Firefox is flagged off — graceful degradation.
+
+**Acceptance:** off-screen charts don't paint until scrolled near (visible in DevTools Performance tab).
+
+### Chunk 2.3 — `IntersectionObserver` lazy-mount  **STATUS: TODO**
+
+**Goal:** never even MOUNT a chart until it's scrolled near. Charts that the user never looks at don't pay any React cost at all.
+
+**Output:**
+- New helper hook `useLazyMountOnView(ref, { rootMargin: '200px' })` that returns `true` once the wrapped element enters the viewport (with a 200px head start so the chart is rendered slightly before becoming visible — no pop-in).
+- New `<LazyMountedChart>` wrapper. Render a placeholder block of the chart's intrinsic height until `inView`; swap in the real chart component once true. Stays mounted afterwards (don't unmount on scroll out — that'd defeat the memoization win).
+- Apply to every chart on the dashboard surface (not necessarily charts that are part of small modal popovers, which always render).
+
+**Acceptance:** initial dashboard load with 17 charts mounts only the ~3-4 above-the-fold charts. Scrolling reveals the rest as needed.
+
+### Chunk 2.4 — Measure + verify  **STATUS: TODO**
+
+**Goal:** quantify the wins before declaring done.
+
+**Output:**
+- Use the same `timePhase` / `recordPhase` instrumentation from phase 1 (already in `components/dev/filter-latency-debugger.tsx`) to time:
+  - `dashboardInitialMount` — time from first paint to all charts mounted (in phase 2.3 this should drop dramatically).
+  - Per-chart `chartReRender` — time when a single chart's data changes.
+- Smoke test: scroll a dashboard with all 17 charts mounted; nothing should jank.
+
+**Acceptance:** dashboard interactive in < 500ms on a typical dataset (vs current ~1-2s baseline at 500 stories).
+
+---
+
+## Phase 3 — Server-side aggregation (future, scale-dependent)
+
+**Trigger:** user reports dashboard slowness at 10k+ stories AND phases 2.1-2.4 don't get it under 500ms.
+
+**Goal:** stop computing chart data (burndown days, velocity, CFD, etc.) client-side from raw stories. Move to backend pre-aggregated time-bucketed series.
+
+**Sketch:**
+- New API routes (one per chart family) that return pre-bucketed time series.
+- Charts consume the aggregated data directly — no more `.flatMap()` over thousands of stories on the main thread.
+- Web Worker fallback if backend changes are too invasive: do the same aggregation off the main thread in a worker.
+
+**Effort:** 1-2 days. Defer unless metrics force it.
 
 ---
 
