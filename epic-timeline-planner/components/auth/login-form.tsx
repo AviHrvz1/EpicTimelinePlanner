@@ -147,6 +147,11 @@ export function LoginForm({
       setWelcomeName(firstName);
       // Keep `pending` true so the submit button stays in its loading state
       // behind the overlay (no UI flicker if the overlay is dismissed).
+      // Flag the next page load so the planner can fire a short confetti
+      // burst once the destination page mounts.
+      try {
+        sessionStorage.setItem("epicPlanner.justLoggedIn", "1");
+      } catch {}
       setTimeout(() => {
         router.push(callbackURL);
         router.refresh();

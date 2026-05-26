@@ -183,6 +183,7 @@ type SprintCapacityBoardProps = {
 function CapacityStoryCard({
   card,
   onEstimateChange,
+  onEstimateDraftChange,
   onDaysLeftChange,
   onUnscheduleStory,
   onOpenStory,
@@ -190,6 +191,9 @@ function CapacityStoryCard({
 }: {
   card: CapacityStoryCardModel;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
+  /** Mirrors the in-progress draft (or `null` on commit/cancel) up to the
+   *  bucket so its thermometer + "Over capacity" badge react live. */
+  onEstimateDraftChange?: (storyId: string, days: number | null) => void;
   onDaysLeftChange: (storyId: string, daysLeft: number) => void;
   onUnscheduleStory: (storyId: string) => void;
   onOpenStory: (storyId: string) => void;
@@ -225,14 +229,18 @@ function CapacityStoryCard({
     setDraftDaysLeft(null);
   }
 
+  function applyDraftDays(next: number | null) {
+    setDraftDays(next);
+    onEstimateDraftChange?.(card.id, next);
+  }
   function commitDraft() {
     if (draftDays !== null) {
       onEstimateChange(card.id, draftDays);
-      setDraftDays(null);
+      applyDraftDays(null);
     }
   }
   function cancelDraft() {
-    setDraftDays(null);
+    applyDraftDays(null);
   }
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: storyBoardDraggableId(card.id),
@@ -335,7 +343,7 @@ function CapacityStoryCard({
               max={20}
               step={1}
               value={displayDays}
-              onChange={(event) => setDraftDays(Number(event.target.value || 0))}
+              onChange={(event) => applyDraftDays(Number(event.target.value || 0))}
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitDraft();
                 if (e.key === "Escape") cancelDraft();
@@ -458,22 +466,41 @@ function CapacityBucket({
     if (draftCapacity !== null) { onCapacityChange(draftCapacity); setDraftCapacity(null); }
   }
   function cancelCapacity() { setDraftCapacity(null); }
+  /** Per-story Est-days drafts mirrored from each CapacityStoryCard while
+   *  the user is typing — lets the thermometer / "Over capacity" badge
+   *  react live without waiting for save. */
+  const [storyEstimateDrafts, setStoryEstimateDrafts] = useState<Record<string, number>>({});
+  function handleStoryEstimateDraftChange(storyId: string, days: number | null) {
+    setStoryEstimateDrafts((prev) => {
+      if (days === null) {
+        if (!(storyId in prev)) return prev;
+        const { [storyId]: _drop, ...rest } = prev;
+        void _drop;
+        return rest;
+      }
+      if (prev[storyId] === days) return prev;
+      return { ...prev, [storyId]: days };
+    });
+  }
   const memberGradientKey = member.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const svgKey = `scap-${memberGradientKey}-${teamKey.replace(/[^a-zA-Z0-9]+/g, "-")}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
   const sprintGaugeMaxDays = 10;
-  const assignedTotal = cards.reduce((sum, c) => sum + c.estimatedDays, 0);
-  const storiesOverCapacity = assignedTotal > capacity;
+  const assignedTotal = cards.reduce(
+    (sum, c) => sum + (storyEstimateDrafts[c.id] ?? c.estimatedDays),
+    0,
+  );
+  const storiesOverCapacity = assignedTotal > displayCapacity;
   const fillPct = Math.max(
     0,
-    Math.min(100, capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 100 : 0),
+    Math.min(100, displayCapacity > 0 ? (assignedTotal / displayCapacity) * 100 : assignedTotal > 0 ? 100 : 0),
   );
-  const utilization = capacity > 0 ? (assignedTotal / capacity) * 100 : assignedTotal > 0 ? 200 : 0;
+  const utilization = displayCapacity > 0 ? (assignedTotal / displayCapacity) * 100 : assignedTotal > 0 ? 200 : 0;
   const thermometerPct = Math.max(0, Math.min(100, utilization));
   const capacityMarkerPct = Math.max(
     0,
-    Math.min(100, sprintGaugeMaxDays > 0 ? (capacity / sprintGaugeMaxDays) * 100 : 0),
+    Math.min(100, sprintGaugeMaxDays > 0 ? (displayCapacity / sprintGaugeMaxDays) * 100 : 0),
   );
-  const stressRatio = capacity > 0 ? assignedTotal / capacity : 0;
+  const stressRatio = displayCapacity > 0 ? assignedTotal / displayCapacity : 0;
   const fluidStops = capacityGaugeFluidStops(stressRatio);
   const bucketFill =
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
@@ -633,7 +660,7 @@ function CapacityBucket({
                     >
                       <span className="font-semibold text-rose-800">Over capacity</span>
                       <span className="mt-0.5 block text-slate-600">
-                        Σ Stories is {assignedTotal.toFixed(1)} Days but Capacity is {capacity} Days. Lower story
+                        Σ Stories is {assignedTotal.toFixed(1)} Days but Capacity is {displayCapacity} Days. Lower story
                         estimates, raise Capacity, or move stories.
                       </span>
                     </RollupOverCapWarn>
@@ -717,6 +744,7 @@ function CapacityBucket({
                       <CapacityStoryCard
                         card={card}
                         onEstimateChange={onEstimateChange}
+                        onEstimateDraftChange={handleStoryEstimateDraftChange}
                         onDaysLeftChange={onDaysLeftChange}
                         onUnscheduleStory={onUnscheduleStory}
                         onOpenStory={onOpenStory}
@@ -798,7 +826,7 @@ function CapacityBucket({
           </div>
           <div className="text-center text-[11px] text-slate-500">
             <p className="font-semibold text-slate-700">{assignedTotal.toFixed(1)}d</p>
-            <p className="text-slate-400">/ {capacity.toFixed(1)}d</p>
+            <p className="text-slate-400">/ {displayCapacity.toFixed(1)}d</p>
           </div>
         </div>
       </div>

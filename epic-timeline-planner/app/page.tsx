@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { EpicPlannerApp } from "@/components/epic-planner-app";
+import { LoginConfetti } from "@/components/auth/login-confetti";
 import { db } from "@/lib/db";
 import type { RoadmapItem } from "@/lib/types";
 
@@ -60,11 +61,14 @@ export default async function Home() {
   });
 
   return (
-    <EpicPlannerApp
-      initialInitiatives={initiatives}
-      year={defaultYear}
-      initialRoadmaps={roadmaps}
-      initialRoadmapId={defaultRoadmapId}
-    />
+    <>
+      <LoginConfetti />
+      <EpicPlannerApp
+        initialInitiatives={initiatives}
+        year={defaultYear}
+        initialRoadmaps={roadmaps}
+        initialRoadmapId={defaultRoadmapId}
+      />
+    </>
   );
 }

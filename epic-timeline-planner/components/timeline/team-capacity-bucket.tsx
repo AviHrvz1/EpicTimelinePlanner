@@ -120,6 +120,7 @@ export function TeamEpicCard({
   onOpenEpic,
   onRemoveEpicFromCapacity,
   onOriginalEstimateChange,
+  onEstimateDraftChange,
   highlight = false,
 }: {
   epicId: string;
@@ -134,6 +135,10 @@ export function TeamEpicCard({
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
   onOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
+  /** Optional bucket-level mirror — called with the in-progress draft (or
+   *  `null` on commit/cancel) so the parent can recompute its aggregations
+   *  (thermometer, "Over capacity", fluid stops) live while the user types. */
+  onEstimateDraftChange?: (epicId: string, days: number | null) => void;
   /** Glow the card to mark it as the search match. */
   highlight?: boolean;
 }) {
@@ -143,10 +148,14 @@ export function TeamEpicCard({
   const [draftEst, setDraftEst] = useState<number | null>(null);
   const isEstDirty = draftEst !== null && draftEst !== originalEstimateDays;
   const displayEst = draftEst !== null ? draftEst : originalEstimateDays;
-  function commitEst() {
-    if (draftEst !== null) { onOriginalEstimateChange(epicId, draftEst); setDraftEst(null); }
+  function applyDraft(next: number | null) {
+    setDraftEst(next);
+    onEstimateDraftChange?.(epicId, next);
   }
-  function cancelEst() { setDraftEst(null); }
+  function commitEst() {
+    if (draftEst !== null) { onOriginalEstimateChange(epicId, draftEst); applyDraft(null); }
+  }
+  function cancelEst() { applyDraft(null); }
 
   return (
     <article
@@ -232,7 +241,7 @@ export function TeamEpicCard({
               max={5000}
               step={1}
               value={displayEst}
-              onChange={(event) => setDraftEst(Math.max(0, Number(event.target.value || 0)))}
+              onChange={(event) => applyDraft(Math.max(0, Number(event.target.value || 0)))}
               onKeyDown={(e) => { if (e.key === "Enter") commitEst(); if (e.key === "Escape") cancelEst(); }}
               className={cn(
                 "h-5 w-10 shrink-0 rounded border bg-white px-0.5 text-center text-[10px] font-semibold leading-none text-slate-800 focus:outline-none focus:ring-1",
@@ -316,20 +325,26 @@ export function TeamCapacityBucket({
   /** Epic ids that match the active capacity search — cards in this set glow. */
   highlightEpicIds?: ReadonlySet<string> | null;
 }) {
+  /** Per-epic Est-days drafts mirrored from each TeamEpicCard while the user
+   *  is typing — lets us recompute aggregations live without waiting for save. */
+  const [epicEstimateDrafts, setEpicEstimateDrafts] = useState<Record<string, number>>({});
+  function handleEpicEstimateDraftChange(epicId: string, days: number | null) {
+    setEpicEstimateDrafts((prev) => {
+      if (days === null) {
+        if (!(epicId in prev)) return prev;
+        const { [epicId]: _drop, ...rest } = prev;
+        void _drop;
+        return rest;
+      }
+      if (prev[epicId] === days) return prev;
+      return { ...prev, [epicId]: days };
+    });
+  }
   const sumChildStoryEstimates = cards.reduce((sum, c) => sum + c.childStoryEstimateDays, 0);
-  const sumOriginalEstimates = cards.reduce((sum, c) => sum + c.originalEstimateDays, 0);
-  const primaryLoad = loadBasis === "child" ? sumChildStoryEstimates : sumOriginalEstimates;
-  const childSumOverCapacity = sumChildStoryEstimates > capacity;
-  const estSumOverCapacity = sumOriginalEstimates > capacity;
-  const utilization = capacity > 0 ? (primaryLoad / capacity) * 100 : primaryLoad > 0 ? 200 : 0;
-  const fillPct = Math.max(0, Math.min(100, capacity > 0 ? (primaryLoad / capacity) * 100 : 0));
-  /**
-   * Fluid height vs team Capacity (not vs period max days).
-   * Capped at 100% so e.g. 11d vs 1d capacity reads as a full bar, not 11/60 of the tube.
-   */
-  const gaugeFillPct = Math.max(0, Math.min(100, utilization));
-  /** Dashed line: where this team’s Capacity sits on the period scale (days). */
-  const markerPct = Math.max(0, Math.min(100, gaugeScaleMax > 0 ? (capacity / gaugeScaleMax) * 100 : 0));
+  const sumOriginalEstimates = cards.reduce(
+    (sum, c) => sum + (epicEstimateDrafts[c.epicId] ?? c.originalEstimateDays),
+    0,
+  );
   const { setNodeRef, isOver } = useDroppable({ id: dropId });
   const [draftCap, setDraftCap] = useState<number | null>(null);
   const isCapDirty = draftCap !== null && draftCap !== capacity;
@@ -338,9 +353,25 @@ export function TeamCapacityBucket({
     if (draftCap !== null) { onCapacityChange(draftCap); setDraftCap(null); }
   }
   function cancelCap() { setDraftCap(null); }
+  /** "Effective" capacity for the aggregations — the draft when present so
+   *  the thermometer + over-capacity badges react live while the user is
+   *  still typing in the Capacity input. */
+  const effectiveCapacity = displayCap;
+  const primaryLoad = loadBasis === "child" ? sumChildStoryEstimates : sumOriginalEstimates;
+  const childSumOverCapacity = sumChildStoryEstimates > effectiveCapacity;
+  const estSumOverCapacity = sumOriginalEstimates > effectiveCapacity;
+  const utilization = effectiveCapacity > 0 ? (primaryLoad / effectiveCapacity) * 100 : primaryLoad > 0 ? 200 : 0;
+  const fillPct = Math.max(0, Math.min(100, effectiveCapacity > 0 ? (primaryLoad / effectiveCapacity) * 100 : 0));
+  /**
+   * Fluid height vs team Capacity (not vs period max days).
+   * Capped at 100% so e.g. 11d vs 1d capacity reads as a full bar, not 11/60 of the tube.
+   */
+  const gaugeFillPct = Math.max(0, Math.min(100, utilization));
+  /** Dashed line: where this team’s Capacity sits on the period scale (days). */
+  const markerPct = Math.max(0, Math.min(100, gaugeScaleMax > 0 ? (effectiveCapacity / gaugeScaleMax) * 100 : 0));
   const gradientKey = team.id.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const stressPct = utilization;
-  const fluidStops = capacityGaugeFluidStops(capacity > 0 ? stressPct / 100 : 0);
+  const fluidStops = capacityGaugeFluidStops(effectiveCapacity > 0 ? stressPct / 100 : 0);
   const bucketFill =
     "linear-gradient(180deg, rgba(186,230,253,0.06) 0%, rgba(56,189,248,0.16) 45%, rgba(2,132,199,0.30) 100%)";
   const trackGradId = `tcap-track-${gradientKey}-${dropId.replace(/[^a-zA-Z0-9]+/g, "")}`;
@@ -484,6 +515,7 @@ export function TeamCapacityBucket({
                     onOpenEpic={onOpenEpic}
                     onRemoveEpicFromCapacity={onRemoveEpicFromCapacity}
                     onOriginalEstimateChange={onEpicOriginalEstimateChange}
+                    onEstimateDraftChange={handleEpicEstimateDraftChange}
                     highlight={highlightEpicIds?.has(card.epicId) ?? false}
                   />
                 ))
@@ -552,7 +584,7 @@ export function TeamCapacityBucket({
           </div>
           <div className="text-center text-[11px] text-slate-500">
             <p className="font-semibold text-slate-700">{primaryLoad.toFixed(1)}d</p>
-            <p className="text-slate-400">/ {capacity.toFixed(1)}d</p>
+            <p className="text-slate-400">/ {displayCap.toFixed(1)}d</p>
           </div>
         </div>
       </div>
@@ -573,7 +605,7 @@ export function TeamCapacityBucket({
             <RollupOverCapWarn tooltipId={rollupWarnChildId} ariaLabel="Σ Stories Estimation exceeds team capacity — details">
               <span className="font-semibold text-rose-800">Over capacity</span>
               <span className="mt-0.5 block text-slate-600">
-                Σ Stories Estimation totals {Math.round(sumChildStoryEstimates)} Days but team capacity is {capacity} Days.
+                Σ Stories Estimation totals {Math.round(sumChildStoryEstimates)} Days but team capacity is {displayCap} Days.
                 Reduce story estimates, raise capacity, or move epics.
               </span>
             </RollupOverCapWarn>
@@ -593,7 +625,7 @@ export function TeamCapacityBucket({
             <RollupOverCapWarn tooltipId={rollupWarnEstId} ariaLabel="Σ Epic Estimations exceeds team capacity — details">
               <span className="font-semibold text-rose-800">Over capacity</span>
               <span className="mt-0.5 block text-slate-600">
-                Σ Epic Estimations is {Math.round(sumOriginalEstimates)} Days but team capacity is {capacity} Days.
+                Σ Epic Estimations is {Math.round(sumOriginalEstimates)} Days but team capacity is {displayCap} Days.
                 Lower epic estimates, raise capacity, or remove epics.
               </span>
             </RollupOverCapWarn>
