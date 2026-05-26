@@ -208,8 +208,8 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 - **Flat story-only path** (Work Item filter = "story", no grouping) now goes through the descriptor pipeline + VirtualizedBacklogRows. Each story row in `sortedGroupedStoryRows` becomes one descriptor; same memoized `BacklogStoryRow` + `pinStoryIds` pinning. Group By's perf pattern now applies to "story-only" filter too.
 
 **What's still TODO in chunk 6 for the next session:**
-1. **Flat epic-only path** (Work Item filter = "epic", no grouping). Currently calls `renderStandaloneInitiativeRows(groupedStandaloneInitiatives, 0)` directly. To virtualize: walk `groupedStandaloneInitiatives` (which holds all initiatives in this mode because the data-filter strips stories) and emit `standaloneEpic` descriptors using the same "render init with single epic, init wrapper hidden via `hidden` class" approach as the grouped Epic-only path.
-2. **Ungrouped initiative list** (no Work Item filter active + no grouping). Currently the inline `fullyFiltered.map((initiative) => { ... ~300 lines of inline JSX ... })` block at line ~8745. Needs a parallel walker that:
+1. ✅ **Flat epic-only path** — DONE in this commit. Reuses the existing `walkStandaloneInitiativeRowsIntoDescriptors` (which already knows how to emit per-epic descriptors in Epic-only mode) and pipes through `VirtualizedBacklogRows`.
+2. **Ungrouped initiative list** (no Work Item filter active + no grouping). The biggest remaining piece. Currently the inline `fullyFiltered.map((initiative) => { ... ~1100 lines of inline JSX ... })` block at lines ~8822-9916. Needs a parallel walker that:
    - Iterates `fullyFiltered` initiatives.
    - Each emits an `initiative` descriptor; the render thunk calls the existing inline JSX as a function (extract into a `renderUngroupedInitiative(initiative)` helper).
    - When open (`openInitiatives[initiative.id]`), iterate its epics; each emits an `epic` descriptor whose render is similar — extract from the inline body.

@@ -8807,12 +8807,16 @@ export function BacklogPlanningPanel({
                 return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} pinStoryIds={pinStoryIds} />;
               })()
             ) : workItemFilter.length === 1 && workItemFilter[0] === "epic" ? (
-              // Epic-only filter without grouping → flat epic rows. With
-              // stories stripped by `applyWorkItemKindFilter`, every
-              // initiative passes the "all epics have no stories" check
-              // and lands in `groupedStandaloneInitiatives`, which already
-              // knows to render epics flat in Epic-only mode.
-              renderStandaloneInitiativeRows(groupedStandaloneInitiatives, 0)
+              // Epic-only filter without grouping → flat epic rows.
+              // [VIRT CHUNK 6] Each init's epics emit one standaloneEpic
+              // descriptor each (same approach as the grouped Epic-only
+              // path); init folder wrapper rendered but `hidden` so no
+              // duplicate folder visuals.
+              (() => {
+                const descriptors: RowDescriptor[] = [];
+                walkStandaloneInitiativeRowsIntoDescriptors(descriptors, groupedStandaloneInitiatives, 0);
+                return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} pinStoryIds={pinStoryIds} />;
+              })()
             ) : (
             <>
             {fullyFiltered.map((initiative) => {
