@@ -3339,10 +3339,34 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
 function VirtualizedBacklogRows({
   descriptors,
   scrollElementRef,
+  pinStoryIds,
 }: {
   descriptors: RowDescriptor[];
   scrollElementRef: React.RefObject<HTMLDivElement | null>;
+  /** Story IDs whose descriptor must stay mounted even when scrolled
+   *  outside the visible window. Used to keep the inline editor (and
+   *  its focus/draft state) alive while the user scrolls. */
+  pinStoryIds?: readonly string[];
 }) {
+  // Resolve pin IDs → descriptor indices. Story descriptor keys end with
+  // `-story-${storyId}` (see the walker's `pushStoryDescriptor`); a
+  // suffix match is reliable across grouping paths.
+  const pinnedIndices = useMemo(() => {
+    if (!pinStoryIds || pinStoryIds.length === 0) return [] as number[];
+    const suffixes = pinStoryIds.map((id) => `-story-${id}`);
+    const indices: number[] = [];
+    for (let i = 0; i < descriptors.length; i++) {
+      const k = descriptors[i]?.key ?? "";
+      for (const suffix of suffixes) {
+        if (k.endsWith(suffix)) {
+          indices.push(i);
+          break;
+        }
+      }
+    }
+    return indices;
+  }, [descriptors, pinStoryIds]);
+
   const virtualizer = useVirtualizer({
     count: descriptors.length,
     getScrollElement: () => scrollElementRef.current,
@@ -3351,6 +3375,19 @@ function VirtualizedBacklogRows({
     // Stable item-key callback so React reconciliation reuses row
     // instances when descriptors shift positions (e.g. open/close).
     getItemKey: (i) => descriptors[i]?.key ?? String(i),
+    // Force-include pinned indices in the rendered range so editing
+    // rows scrolled outside the viewport keep their editor mounted.
+    // Without this, scrolling away from an in-edit cell would unmount
+    // the editor and lose the user's typed draft + focus state.
+    rangeExtractor: (range) => {
+      const next = new Set<number>();
+      // Default range: visible indices ± overscan.
+      for (let i = range.startIndex; i <= range.endIndex; i++) next.add(i);
+      for (const idx of pinnedIndices) {
+        if (idx >= 0 && idx < descriptors.length) next.add(idx);
+      }
+      return Array.from(next).sort((a, b) => a - b);
+    },
   });
   const items = virtualizer.getVirtualItems();
   return (
@@ -3602,6 +3639,19 @@ export function BacklogPlanningPanel({
     id: string;
   } | null>(null);
   const [editingStoryTitle, setEditingStoryTitle] = useState<{ id: string; value: string } | null>(null);
+  /** Story IDs whose descriptor must stay mounted in the virtualizer
+   *  even when scrolled offscreen — keeps the inline editor + typed
+   *  draft + focus state alive across scroll. Recomputed only when the
+   *  editing state actually changes so the virtualizer's
+   *  `rangeExtractor` memoization holds. */
+  const pinStoryIds = useMemo(() => {
+    const ids: string[] = [];
+    if (editingStoryCell?.storyId) ids.push(editingStoryCell.storyId);
+    if (editingStoryTitle?.id && editingStoryTitle.id !== editingStoryCell?.storyId) {
+      ids.push(editingStoryTitle.id);
+    }
+    return ids;
+  }, [editingStoryCell, editingStoryTitle]);
   type ParentDateEditTarget = {
     kind: "epic" | "initiative";
     id: string;
@@ -8725,7 +8775,7 @@ export function BacklogPlanningPanel({
                   // eslint-disable-next-line no-console
                   console.log(`[virt] grouped descriptors: ${descriptors.length}`);
                 }
-                return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} />;
+                return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} pinStoryIds={pinStoryIds} />;
               })()
             ) : workItemFilter.length === 1 && workItemFilter[0] === "story" ? (
               // Story-only filter without grouping → flat story rows. Skip

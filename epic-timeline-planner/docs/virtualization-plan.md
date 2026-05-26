@@ -144,7 +144,18 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 
 ---
 
-### Chunk 4 — Keep editing + dragging rows mounted  **STATUS: TODO**
+### Chunk 4 — Keep editing + dragging rows mounted  **STATUS: DONE**
+
+**What was actually done:**
+- Pinning logic via `rangeExtractor` on `useVirtualizer`. Default visible range (start..end) is computed as a Set; pinned indices are added on top so they're always included in the rendered items.
+- `VirtualizedBacklogRows` accepts `pinStoryIds: readonly string[]`. Resolves each ID → descriptor index via suffix match on `-story-${id}` (story descriptor keys always end with this).
+- Panel computes `pinStoryIds` via `useMemo` over `[editingStoryCell, editingStoryTitle]`. Empty array when nothing is being edited.
+
+**DnD: no change needed** — the only DnD in this panel is column-reorder in the table header, which is OUTSIDE the virtualizer. No row-level drag-and-drop exists. If row DnD is added later, the same pinning pattern will handle the active drag id.
+
+**Behavior expected:**
+- Edit a story cell → scroll the edited row out of view → scroll back. Editor's typed draft + focus state preserved (was being lost before because the row unmounted).
+- Same for an in-progress story title rename.
 
 **Goal:** A row being edited or actively dragged shouldn't unmount when it scrolls out of the virtual window.
 
