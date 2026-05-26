@@ -58,6 +58,7 @@ import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/wor
 import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint } from "@/lib/year-sprint";
+import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { cn } from "@/lib/utils";
 
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
@@ -534,8 +535,10 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
         : story.sprint >= 3
           ? story.sprint
           : null;
+  // Compact label ("Spt-10") keeps story chips narrow in the middle panel.
+  // Non-breaking hyphen so the chip never wraps onto two lines.
   const sprintLabel =
-    story.sprint == null ? null : resolved != null ? `Sprint ${resolved}` : `Sprint ${story.sprint}`;
+    story.sprint == null ? null : resolved != null ? `Spt‑${resolved}` : `Spt‑${story.sprint}`;
 
   if (story.sprint == null) {
     return {
@@ -908,6 +911,7 @@ function InitiativeTreeEpicRow({
   showDragHint = false,
   isCapacityMode = false,
   searchQuery,
+  workspaceDirectoryUsers = [],
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -927,6 +931,8 @@ function InitiativeTreeEpicRow({
    *  when it contains this string; matched story titles ride the same
    *  treatment via MiddlePanelStoryTitleButton's `highlight` prop. */
   searchQuery?: string;
+  /** Used to swap the User icon for a real photo on story-row assignee chips. */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 }) {
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
@@ -1019,7 +1025,7 @@ function InitiativeTreeEpicRow({
           <div className="flex min-w-0 items-center gap-0 pl-0">
             <p
               className={cn(
-                "min-w-0 truncate rounded px-1 text-[18px] font-normal leading-7 tracking-tight text-slate-900",
+                "min-w-0 truncate rounded px-1 text-[16px] font-normal leading-6 tracking-tight text-slate-900",
                 searchQuery && epic.title.toLowerCase().includes(searchQuery) && "bg-yellow-100",
               )}
             >
@@ -1114,15 +1120,22 @@ function InitiativeTreeEpicRow({
                             highlight={Boolean(searchQuery && story.title.toLowerCase().includes(searchQuery))}
                           />
                           <div className="flex max-w-[58%] shrink-0 items-center justify-end gap-1">
-                            {assigneeName ? (
-                              <span
-                                className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-0.5 truncate rounded-md border border-border/60 bg-background px-1 py-0.5 text-[11px] font-medium text-slate-600"
-                                title={assigneeName}
-                              >
-                                <User className="size-3 shrink-0 text-slate-500" aria-hidden />
-                                <span className="min-w-0 truncate">{assigneeName}</span>
-                              </span>
-                            ) : null}
+                            {assigneeName ? (() => {
+                              const resolved = resolveAssigneeAvatar(assigneeName, workspaceDirectoryUsers);
+                              return (
+                                <span
+                                  className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate rounded-md border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[11px] font-medium text-slate-600"
+                                  title={assigneeName}
+                                >
+                                  {resolved.image ? (
+                                    <UserAvatar name={resolved.name} image={resolved.image} size={16} />
+                                  ) : (
+                                    <User className="size-3 shrink-0 text-slate-500" aria-hidden />
+                                  )}
+                                  <span className="min-w-0 truncate">{assigneeName}</span>
+                                </span>
+                              );
+                            })() : null}
                             {sprintLabel ? (
                               <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                                 {sprintLabel}
@@ -1206,6 +1219,7 @@ function InitiativeTreeCard({
   progressBasis,
   forceOpenEpicIds,
   searchQuery,
+  workspaceDirectoryUsers = [],
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -1232,6 +1246,7 @@ function InitiativeTreeCard({
   /** Lowercased search query — children use this to apply a yellow highlight
    *  ring to titles that include the query. Empty string = no highlight. */
   searchQuery?: string;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 }) {
   const inMonthView = planContextMonth != null;
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
@@ -1494,6 +1509,7 @@ function InitiativeTreeCard({
                             onCreateStoryQuick={onCreateStoryQuick}
                             storyProgressDetailsVisible={storyProgressDetailsVisible}
                             progressBasis={progressBasis}
+                            workspaceDirectoryUsers={workspaceDirectoryUsers}
                           />
                         </div>
                       );
@@ -1573,6 +1589,7 @@ function SprintEpicCard({
   onToggleControlled,
   showDragHint = false,
   isCapacityMode = false,
+  workspaceDirectoryUsers = [],
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -1593,6 +1610,7 @@ function SprintEpicCard({
   onToggleControlled?: () => void;
   showDragHint?: boolean;
   isCapacityMode?: boolean;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 }) {
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
@@ -1733,7 +1751,7 @@ function SprintEpicCard({
           >
             <div className="flex w-full min-w-0 items-center gap-0">
               <div className="flex min-w-0 flex-1 items-center gap-0 pl-0">
-                <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
+                <p className="min-w-0 truncate text-[16px] font-normal leading-6 tracking-tight text-slate-900">
                   {epic.title}
                 </p>
               </div>
@@ -1830,15 +1848,22 @@ function SprintEpicCard({
                     className="rounded-md px-0.5 text-left text-[14px] font-normal text-slate-700 hover:text-foreground"
                   />
                   <div className="flex max-w-[58%] shrink-0 items-center justify-end gap-1">
-                    {assigneeName ? (
-                      <span
-                        className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-0.5 truncate rounded-md border border-border/60 bg-background px-1 py-0.5 text-[11px] font-medium text-slate-600"
-                        title={assigneeName}
-                      >
-                        <User className="size-3 shrink-0 text-slate-500" aria-hidden />
-                        <span className="min-w-0 truncate">{assigneeName}</span>
-                      </span>
-                    ) : null}
+                    {assigneeName ? (() => {
+                      const resolved = resolveAssigneeAvatar(assigneeName, workspaceDirectoryUsers);
+                      return (
+                        <span
+                          className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate rounded-md border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[11px] font-medium text-slate-600"
+                          title={assigneeName}
+                        >
+                          {resolved.image ? (
+                            <UserAvatar name={resolved.name} image={resolved.image} size={16} />
+                          ) : (
+                            <User className="size-3 shrink-0 text-slate-500" aria-hidden />
+                          )}
+                          <span className="min-w-0 truncate">{assigneeName}</span>
+                        </span>
+                      );
+                    })() : null}
                     {sprintLabel ? (
                       <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                         {sprintLabel}
@@ -2954,6 +2979,7 @@ export function InitiativeListPanel({
                             progressBasis={progressBasis}
                     showDragHint={newestEpicId === epic.id}
                     isCapacityMode={isCapacityPlanningMode}
+                    workspaceDirectoryUsers={workspaceDirectoryUsers}
                     isOpenControlled={monthEpicOpenIds[epic.id] ?? false}
                     onToggleControlled={() =>
                       setMonthEpicOpenIds((prev) => ({ ...prev, [epic.id]: !(prev[epic.id] ?? false) }))
@@ -3194,6 +3220,7 @@ export function InitiativeListPanel({
                     isCapacityPlanningMode={isCapacityPlanningMode}
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
                             progressBasis={progressBasis}
+                    workspaceDirectoryUsers={workspaceDirectoryUsers}
                     onToggle={() => {
                       const next = !(openInitiativeIds[initiative.id] ?? false);
                       setOpenInitiativeIds((prev) => ({ ...prev, [initiative.id]: next }));

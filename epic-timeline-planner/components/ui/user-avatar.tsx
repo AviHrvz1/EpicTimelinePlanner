@@ -154,9 +154,17 @@ export function AssigneeFieldDecoration({
 
 /**
  * Looks up `image` (and resolves the canonical display name) for a given
- * assignee string against the workspace directory. Case-insensitive,
- * full-name match. Returns the original name when no match. Centralized
- * here so the rendering surfaces don't each re-implement the lookup.
+ * assignee string against the workspace directory.
+ *
+ * 1. Case-insensitive full-name match (exact).
+ * 2. Fallback: when the input is a single token (no spaces), match against
+ *    each directory entry's first name. Lets stories that store just the
+ *    first name (e.g. legacy data, or where a teammate is uniquely
+ *    identifiable by first name like "Aaron") still pick up the photo for
+ *    "Aaron Mendel". First match wins on ambiguous first names.
+ *
+ * Returns the original `rawName` (untouched) when no match — chip labels
+ * stay as authored.
  */
 export function resolveAssigneeAvatar(
   rawName: string | null | undefined,
@@ -170,6 +178,15 @@ export function resolveAssigneeAvatar(
   for (const u of directory) {
     if ((u.name ?? "").trim().toLowerCase() === lower) {
       return { name: u.name, image: u.image ?? null };
+    }
+  }
+  if (!lower.includes(" ")) {
+    for (const u of directory) {
+      const dirName = (u.name ?? "").trim();
+      const firstToken = dirName.split(/\s+/)[0]?.toLowerCase() ?? "";
+      if (firstToken === lower) {
+        return { name: u.name, image: u.image ?? null };
+      }
     }
   }
   return { name: trimmed, image: null };

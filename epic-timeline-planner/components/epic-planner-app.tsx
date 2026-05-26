@@ -5148,14 +5148,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             className="group absolute left-1 top-1/2 inline-flex h-[59px] -translate-x-[5px] -translate-y-1/2 cursor-pointer items-start bg-white px-1 pb-[5px] pt-[4px] shadow-[6px_0_8px_-4px_rgba(15,23,42,0.10),0_6px_8px_-4px_rgba(15,23,42,0.22)] transition-transform duration-150 hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Image
-              src="/downloads/Designer.png"
+              src="/downloads/Logo-simple.png"
               alt="Bird Eye Viewer"
               width={1024}
               height={1024}
               priority
               quality={100}
               sizes="44px"
-              className="block size-[50px] shrink-0 -translate-x-[3px] transition-transform duration-150 group-hover:rotate-[-4deg]"
+              className="block size-[50px] shrink-0 -translate-x-[3px] scale-[0.88] transition-transform duration-150 group-hover:rotate-[-4deg] group-hover:scale-[0.93]"
             />
           </button>
           <div className="ml-1 mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
