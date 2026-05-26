@@ -7147,9 +7147,9 @@ export function BacklogPlanningPanel({
       <div className="relative z-20 mb-10 max-w-full shrink-0 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-9 pt-9 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-5"
-          style={{ gridTemplateColumns: "auto auto repeat(12, minmax(0, 1fr)) auto" }}
+          style={{ gridTemplateColumns: "auto repeat(10, minmax(0, 1fr))" }}
         >
-          <div className="relative col-span-15 col-start-1 row-start-1 min-w-0">
+          <div className="relative col-span-6 col-start-1 row-start-1 min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
             <input
               value={query}
@@ -7210,7 +7210,7 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
-          <div className="col-start-12 row-start-2 min-w-0">
+          <div className="col-start-11 row-start-2 min-w-0">
             <BacklogParentFilterControl
               tree={parentFilterTree}
               selected={parentFilter}
@@ -7219,7 +7219,7 @@ export function BacklogPlanningPanel({
             />
           </div>
           <div
-            className="relative col-start-13 row-start-2 min-w-0"
+            className="relative col-start-7 row-start-1 min-w-0"
             ref={savedFilterMenuRef}
           >
             <button
@@ -7297,7 +7297,7 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div className="relative col-start-14 row-start-2 min-w-0" ref={savedViewMenuRef}>
+          <div className="relative col-start-8 row-start-1 min-w-0" ref={savedViewMenuRef}>
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
@@ -7361,7 +7361,7 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div className="group relative col-start-1 row-start-2 min-w-0" ref={groupMenuRef}>
+          <div className="group relative col-start-9 col-span-2 row-start-1 min-w-0" ref={groupMenuRef}>
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
@@ -7420,14 +7420,14 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
-          <div className="col-start-2 row-start-2 flex min-w-0 w-full items-center justify-center gap-1.5">
+          <div className="col-start-1 row-start-2 flex min-w-0 w-full items-center justify-center gap-1.5">
             <div className="h-5 w-px shrink-0 bg-slate-300/70" aria-hidden />
             <span className="inline-flex min-w-0 items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
               <Filter className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
               <span className="truncate">Filters</span>
             </span>
           </div>
-          <div className="col-start-3 row-start-2 min-w-0">
+          <div className="col-start-2 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Work Item"
               options={workItemOptions}
@@ -7440,7 +7440,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-4 row-start-2 min-w-0">
+          <div className="col-start-3 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Roadmap"
               options={roadmapOptions}
@@ -7449,7 +7449,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-5 row-start-2 min-w-0">
+          <div className="col-start-4 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Year"
               options={yearOptions}
@@ -7458,7 +7458,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-6 row-start-2 min-w-0">
+          <div className="col-start-5 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Quarter"
               options={quarterOptions}
@@ -7467,7 +7467,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-7 row-start-2 min-w-0">
+          <div className="col-start-6 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Status"
               options={statusOptions}
@@ -7476,7 +7476,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-8 row-start-2 min-w-0">
+          <div className="col-start-7 row-start-2 min-w-0">
             <MultiCheckboxFilter
               label="Sprint"
               options={sprintOptions}
@@ -7485,14 +7485,14 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-9 row-start-2 min-w-0">
+          <div className="col-start-8 row-start-2 min-w-0">
             <BacklogTeamFilterControl
               selectedIds={teamFilter}
               onChange={setTeamFilter}
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-10 row-start-2 min-w-0">
+          <div className="col-start-9 row-start-2 min-w-0">
             <BacklogAssigneeFilterControl
               selected={assigneeFilter}
               onChange={setAssigneeFilter}
@@ -7501,7 +7501,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-11 row-start-2 min-w-0">
+          <div className="col-start-10 row-start-2 min-w-0">
             <BacklogLabelsFilterControl
               selected={labelFilter}
               onChange={setLabelFilter}
@@ -7509,7 +7509,7 @@ export function BacklogPlanningPanel({
               buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[15px]"
             />
           </div>
-          <div className="col-start-15 row-start-2 flex min-w-0 justify-end">
+          <div className="col-start-11 row-start-1 flex min-w-0 justify-end">
             <span className="group relative inline-flex h-[34px] w-[34px] shrink-0">
             <button
               type="button"
