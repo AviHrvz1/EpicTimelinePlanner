@@ -8778,10 +8778,34 @@ export function BacklogPlanningPanel({
                 return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} pinStoryIds={pinStoryIds} />;
               })()
             ) : workItemFilter.length === 1 && workItemFilter[0] === "story" ? (
-              // Story-only filter without grouping → flat story rows. Skip
-              // the initiative + epic folder layers so the user sees a
-              // direct list of matching stories.
-              renderStoryDataRows(sortedGroupedStoryRows, 0, "flat-story-only")
+              // Story-only filter without grouping → flat story rows.
+              // [VIRT CHUNK 6] Virtualized via the same descriptor +
+              // VirtualizedBacklogRows pipeline as the grouped path.
+              (() => {
+                const descriptors: RowDescriptor[] = sortedGroupedStoryRows.map((row) => {
+                  const isEditingTitle = editingStoryTitle?.id === row.storyId;
+                  const isEditingCell = editingStoryCell?.storyId === row.storyId;
+                  return {
+                    key: `flat-story-${row.storyId}`,
+                    kind: "story",
+                    estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
+                    render: () => (
+                      <BacklogStoryRow
+                        row={row}
+                        indentPx={0}
+                        isEditingTitle={isEditingTitle}
+                        editingTitleValue={isEditingTitle ? editingStoryTitle!.value : ""}
+                        isEditingCell={isEditingCell}
+                        editingCellField={isEditingCell ? editingStoryCell!.field : null}
+                        editingCellValue={isEditingCell ? editingStoryCell!.value : ""}
+                        isEditingTeam={isEditingParentTeam("epic", row.epicId)}
+                        ctx={storyRowCtx}
+                      />
+                    ),
+                  };
+                });
+                return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} pinStoryIds={pinStoryIds} />;
+              })()
             ) : workItemFilter.length === 1 && workItemFilter[0] === "epic" ? (
               // Epic-only filter without grouping → flat epic rows. With
               // stories stripped by `applyWorkItemKindFilter`, every

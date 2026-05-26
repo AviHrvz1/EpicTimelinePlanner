@@ -179,7 +179,17 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 
 ---
 
-### Chunk 5 — Sticky column header + alignment  **STATUS: TODO**
+### Chunk 5 — Sticky column header + alignment  **STATUS: DONE (verification only — no code change)**
+
+**Findings:**
+- The existing layout already matches the TanStack Virtual recommended two-div pattern (research notes section).
+  - Outer scroll container: `<div ref={tableScrollRef} className="overflow-y-auto">`.
+  - Inner wrapper: `<div className="w-max min-w-full">`.
+  - Header: `<div className="sticky top-0 z-10 ...">` lives INSIDE the inner wrapper (not the scroll container) — exactly what fixes the TanStack Virtual issue #640 "sticky header disappears mid-scroll" failure mode.
+  - Virtualizer wrapper is a sibling of the header inside the same inner wrapper. Header sticks to the top of the scroll container; rows scroll under it as expected.
+- Column-width alignment: both the header and each virtualized row use `style={{ gridTemplateColumns: tableGridTemplate }}`. The header naturally sizes to its grid (max-content sum). The inner wrapper inherits that width via `w-max`. The virtualizer wrapper at `width: 100%` matches the inner wrapper. Each row at `width: 100%` matches too → header and row columns align byte-for-byte regardless of column resizing.
+
+**No code change required.** If user reports a sticky-header glitch during the chunks 1-4 smoke test, revisit and apply the explicit fix recipes from issue #640.
 
 **Goal:** Column header stays visible while scrolling; column widths align perfectly with the virtualized rows below.
 
@@ -192,7 +202,29 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 
 ---
 
-### Chunk 6 — Extend to non-grouped paths + verify  **STATUS: TODO**
+### Chunk 6 — Extend to non-grouped paths + verify  **STATUS: PARTIAL — flat story-only done; flat epic-only + ungrouped initiative list TODO**
+
+**What's done in this chunk's commit:**
+- **Flat story-only path** (Work Item filter = "story", no grouping) now goes through the descriptor pipeline + VirtualizedBacklogRows. Each story row in `sortedGroupedStoryRows` becomes one descriptor; same memoized `BacklogStoryRow` + `pinStoryIds` pinning. Group By's perf pattern now applies to "story-only" filter too.
+
+**What's still TODO in chunk 6 for the next session:**
+1. **Flat epic-only path** (Work Item filter = "epic", no grouping). Currently calls `renderStandaloneInitiativeRows(groupedStandaloneInitiatives, 0)` directly. To virtualize: walk `groupedStandaloneInitiatives` (which holds all initiatives in this mode because the data-filter strips stories) and emit `standaloneEpic` descriptors using the same "render init with single epic, init wrapper hidden via `hidden` class" approach as the grouped Epic-only path.
+2. **Ungrouped initiative list** (no Work Item filter active + no grouping). Currently the inline `fullyFiltered.map((initiative) => { ... ~300 lines of inline JSX ... })` block at line ~8745. Needs a parallel walker that:
+   - Iterates `fullyFiltered` initiatives.
+   - Each emits an `initiative` descriptor; the render thunk calls the existing inline JSX as a function (extract into a `renderUngroupedInitiative(initiative)` helper).
+   - When open (`openInitiatives[initiative.id]`), iterate its epics; each emits an `epic` descriptor whose render is similar — extract from the inline body.
+   - Each epic's stories emit `story` descriptors → `<BacklogStoryRow ... />`.
+   - **Catch:** this path uses `openInitiatives` (separate state from `openGroupFolders`). Need to honor that.
+3. **Full smoke test** of every interaction across every path:
+   - Open/close folders at every level
+   - Edit each cell type in a story
+   - Inline-create at quarter / initiative / epic level
+   - Rename roadmap
+   - Schedule jump button for unscheduled epic
+   - Search with highlight
+   - Every filter type independently and in combinations
+   - Column resize alignment with virtualized rows
+   - Compare side-by-side with `main` for visual regressions (the bg-slate-50/50 tint and extra wrapper divs noted in chunk 2 are expected; anything else is a regression).
 
 **Goal:** Apply the descriptor + virtualizer pattern to the three non-grouped paths and run a full interaction smoke test.
 
