@@ -23,7 +23,14 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 
 ## Chunks
 
-### Chunk 1 — Descriptor types + walker  **STATUS: TODO**
+### Chunk 1 — Descriptor types + walker  **STATUS: DONE**
+
+**Done in commit (this chunk):**
+- New file `components/backlog/backlog-row-descriptors.ts` with `RowDescriptor` type, `RowDescriptorKind` union, and `ROW_ESTIMATED_HEIGHTS` per-kind defaults.
+- Walker functions inside the panel (next to `renderGroupedTree`): `buildBacklogRowDescriptors`, `walkGroupedTreeIntoDescriptors`, `walkLeafRowsIntoDescriptors`, `walkStandaloneInitiativeRowsIntoDescriptors`. Each mirrors the bucketing / sorting / open-folder logic of its counterpart renderer so descriptor order matches existing visual order. Edge cases handled: roadmap seeding, Q1-Q4 + Unscheduled seeding, quarter fan-out for standalone initiatives spanning quarters, Epic-only flatten.
+- For chunk 1, every descriptor's `render()` returns `null` (placeholder). Chunk 2 wires real per-row JSX.
+- Walker is called in parallel with the existing render in the grouped path; the count logs to console as `[virt] grouped descriptors: N`. Build time logs as `↳ buildDescriptors (grouped)` in the latency popup.
+- Visual: zero change (descriptors aren't used for rendering yet).
 
 **Goal:** Have a working `buildBacklogRowDescriptors()` function that walks the grouped tree exactly the way the current renderers do, but emits a flat `RowDescriptor[]` instead of nested JSX. **Not yet used for rendering** — pure prep.
 

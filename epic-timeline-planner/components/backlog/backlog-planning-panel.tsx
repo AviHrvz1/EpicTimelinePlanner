@@ -58,6 +58,7 @@ import Image from "next/image";
 import { toast } from "sonner";
 
 import { FilterLatencyDebugger, getPendingMarkStartedAt, markFilterChange, recordPhase, reportFilterStable, timePhase } from "@/components/dev/filter-latency-debugger";
+import { ROW_ESTIMATED_HEIGHTS, type RowDescriptor } from "@/components/backlog/backlog-row-descriptors";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
@@ -6190,6 +6191,257 @@ export function BacklogPlanningPanel({
       });
   }
 
+  /**
+   * VIRTUALIZATION CHUNK 1 — descriptor walker.
+   *
+   * Mirrors the structure of `renderGroupedTree` / `renderLeafRows` /
+   * `renderEpicRow` / `renderInitiativeRow` / `renderStandaloneInitiativeRows`
+   * but emits a flat `RowDescriptor[]` instead of nested JSX. Used in
+   * chunk 2 to replace `renderGroupedTree(...)` with
+   * `descriptors.map(d => d.render())`, and in chunk 3 to feed
+   * `useVirtualizer`.
+   *
+   * For chunk 1 the `render()` thunks are placeholders — the walker's
+   * job is to enumerate the right rows in the right order. Chunk 2
+   * extracts the per-row JSX from the existing renderers and plugs it
+   * into these thunks.
+   *
+   * IMPORTANT: keep this in lockstep with the existing renderers. If you
+   * change one path's bucketing/sorting/filter rules, change both.
+   */
+  function buildBacklogRowDescriptors(
+    rows: typeof groupedStoryRows,
+    standaloneRows: typeof groupedStandaloneInitiatives = [],
+    levelIndex = 0,
+    path = "",
+  ): RowDescriptor[] {
+    const out: RowDescriptor[] = [];
+    walkGroupedTreeIntoDescriptors(out, rows, standaloneRows, levelIndex, path);
+    return out;
+  }
+
+  function walkGroupedTreeIntoDescriptors(
+    out: RowDescriptor[],
+    rows: typeof groupedStoryRows,
+    standaloneRows: typeof groupedStandaloneInitiatives,
+    levelIndex: number,
+    path: string,
+  ): void {
+    if (levelIndex >= effectiveGroupLevels.length) {
+      walkLeafRowsIntoDescriptors(out, rows, levelIndex * 14, path);
+      if (standaloneRows.length > 0) {
+        walkStandaloneInitiativeRowsIntoDescriptors(out, standaloneRows, levelIndex * 14);
+      }
+      return;
+    }
+    // Bucket the rows by the current grouping level. Mirrors the
+    // bucket-building logic in `renderGroupedTree` exactly — seed
+    // roadmaps / Q1-Q4 / Unscheduled when applicable, honor the active
+    // quarter/roadmap filters so we don't materialize buckets the user
+    // has filtered away.
+    const level = effectiveGroupLevels[levelIndex];
+    type Bucket = {
+      label: string;
+      sort: string;
+      rows: typeof groupedStoryRows;
+      standaloneRows: typeof groupedStandaloneInitiatives;
+    };
+    const groups = new Map<string, Bucket>();
+    if (level === "roadmap" && roadmaps && roadmaps.length > 0) {
+      for (const r of roadmaps) {
+        if (roadmapFilter.length > 0 && !roadmapFilter.includes(r.id)) continue;
+        groups.set(r.id, { label: r.name, sort: r.name.toLowerCase(), rows: [], standaloneRows: [] });
+      }
+    }
+    if (level === "quarter") {
+      for (const q of ["Q1", "Q2", "Q3", "Q4"] as const) {
+        if (quarterFilter.length > 0 && !quarterFilter.includes(q)) continue;
+        groups.set(q, { label: q, sort: quarterSortValue(q), rows: [], standaloneRows: [] });
+      }
+      if (quarterFilter.length === 0) {
+        groups.set("Unscheduled work", { label: "Unscheduled work", sort: quarterSortValue("Unscheduled work"), rows: [], standaloneRows: [] });
+      }
+    }
+    for (const row of rows) {
+      const { key, label, sort } = keyForLevel(row, level);
+      if (level === "quarter" && quarterFilter.length > 0 && !quarterFilter.includes(key)) continue;
+      if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
+      groups.get(key)!.rows.push(row);
+    }
+    // Quarter-level fan-out of standalone initiatives: an initiative
+    // with multiple epics spanning multiple quarters appears in each
+    // quarter its epics live in. Same shape as the existing renderer.
+    if (level === "quarter") {
+      for (const init of standaloneRows) {
+        const epicQuarters = new Set<string>();
+        for (const epic of init.epics) {
+          const q = quarterLabelOrUnscheduled(epic.epicQuarterLabelValue);
+          if (quarterFilter.length === 0 || quarterFilter.includes(q)) epicQuarters.add(q);
+        }
+        if (epicQuarters.size === 0) {
+          // No epics → land under Unscheduled work.
+          const q = "Unscheduled work";
+          if (quarterFilter.length === 0 && groups.has(q)) {
+            groups.get(q)!.standaloneRows.push(init);
+          }
+          continue;
+        }
+        for (const q of epicQuarters) {
+          if (!groups.has(q)) {
+            groups.set(q, { label: q, sort: quarterSortValue(q), rows: [], standaloneRows: [] });
+          }
+          groups.get(q)!.standaloneRows.push(init);
+        }
+      }
+    } else {
+      for (const init of standaloneRows) {
+        const { key, label, sort } = keyForStandaloneLevel(init, level);
+        if (!groups.has(key)) groups.set(key, { label, sort, rows: [], standaloneRows: [] });
+        groups.get(key)!.standaloneRows.push(init);
+      }
+    }
+    const entries = Array.from(groups.entries()).sort((a, b) => a[1].sort.localeCompare(b[1].sort));
+    for (const [key, group] of entries) {
+      const folderId = `${path}${level}:${key}`;
+      const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+      out.push({
+        key: `folder-${folderId}`,
+        kind: "groupFolder",
+        estimatedHeight: ROW_ESTIMATED_HEIGHTS.groupFolder,
+        // Chunk 1: placeholder. Chunk 2 wires the real folder-row JSX.
+        render: () => null,
+      });
+      if (isOpen) {
+        walkGroupedTreeIntoDescriptors(out, group.rows, group.standaloneRows, levelIndex + 1, `${path}${level}:${key}/`);
+      }
+    }
+  }
+
+  function walkLeafRowsIntoDescriptors(
+    out: RowDescriptor[],
+    rows: typeof groupedStoryRows,
+    indentPx: number,
+    path: string,
+  ): void {
+    // Mirror `renderLeafRows`: sprint-grouped or story-only → flat
+    // stories; month-grouped → epic-bucketed (no initiative folder);
+    // default → initiative-bucketed with nested epic & story rows.
+    const storyOnly = workItemFilter.length === 1 && workItemFilter[0] === "story";
+    if (groupLevels.includes("sprint") || storyOnly) {
+      for (const row of rows) {
+        out.push({
+          key: `story-${path}-${row.storyId}`,
+          kind: "story",
+          estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
+          render: () => null,
+        });
+      }
+      return;
+    }
+    if (groupLevels.includes("month")) {
+      const byEpic = new Map<string, typeof groupedStoryRows>();
+      for (const row of rows) {
+        if (!byEpic.has(row.epicId)) byEpic.set(row.epicId, []);
+        byEpic.get(row.epicId)!.push(row);
+      }
+      for (const [epicId, epicRows] of byEpic) {
+        const folderId = `${path}/epic:${epicId}`;
+        const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+        out.push({
+          key: `epic-${folderId}`,
+          kind: "epic",
+          estimatedHeight: ROW_ESTIMATED_HEIGHTS.epic,
+          render: () => null,
+        });
+        if (isOpen) {
+          for (const row of epicRows) {
+            out.push({
+              key: `story-${folderId}-${row.storyId}`,
+              kind: "story",
+              estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
+              render: () => null,
+            });
+          }
+        }
+      }
+      return;
+    }
+    const byInitiative = new Map<string, typeof groupedStoryRows>();
+    for (const row of rows) {
+      if (!byInitiative.has(row.initiativeId)) byInitiative.set(row.initiativeId, []);
+      byInitiative.get(row.initiativeId)!.push(row);
+    }
+    for (const [initiativeId, initiativeRows] of byInitiative) {
+      const initFolderId = `${path}/initiative:${initiativeId}`;
+      const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
+      out.push({
+        key: `init-${initFolderId}`,
+        kind: "initiative",
+        estimatedHeight: ROW_ESTIMATED_HEIGHTS.initiative,
+        render: () => null,
+      });
+      if (isInitOpen) {
+        const byEpic = new Map<string, typeof groupedStoryRows>();
+        for (const row of initiativeRows) {
+          if (!byEpic.has(row.epicId)) byEpic.set(row.epicId, []);
+          byEpic.get(row.epicId)!.push(row);
+        }
+        for (const [epicId, epicRows] of byEpic) {
+          const epicFolderId = `${initFolderId}/epic:${epicId}`;
+          const isEpicOpen = openGroupFolders[epicFolderId] ?? defaultGroupExpanded;
+          out.push({
+            key: `epic-${epicFolderId}`,
+            kind: "epic",
+            estimatedHeight: ROW_ESTIMATED_HEIGHTS.epic,
+            render: () => null,
+          });
+          if (isEpicOpen) {
+            for (const row of epicRows) {
+              out.push({
+                key: `story-${epicFolderId}-${row.storyId}`,
+                kind: "story",
+                estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
+                render: () => null,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function walkStandaloneInitiativeRowsIntoDescriptors(
+    out: RowDescriptor[],
+    rows: typeof groupedStandaloneInitiatives,
+    _indentPx: number,
+  ): void {
+    // Mirror `renderStandaloneInitiativeRows` shape (incl. Epic-only
+    // flatten where the initiative folder row is hidden).
+    const isEpicOnlyMode = workItemFilter.length === 1 && workItemFilter[0] === "epic";
+    for (const init of rows) {
+      const initFolderId = `standalone-init:${init.initiativeId}`;
+      const isInitOpen = isEpicOnlyMode ? true : (openGroupFolders[initFolderId] ?? defaultGroupExpanded);
+      if (!isEpicOnlyMode) {
+        out.push({
+          key: `standalone-init-${init.initiativeId}`,
+          kind: "standaloneInit",
+          estimatedHeight: ROW_ESTIMATED_HEIGHTS.standaloneInit,
+          render: () => null,
+        });
+      }
+      if (isInitOpen) {
+        for (const epic of init.epics) {
+          out.push({
+            key: `standalone-epic-${init.initiativeId}-${epic.epicId}`,
+            kind: "standaloneEpic",
+            estimatedHeight: ROW_ESTIMATED_HEIGHTS.standaloneEpic,
+            render: () => null,
+          });
+        }
+      }
+    }
+  }
+
   function renderGroupedTree(
     rows: typeof groupedStoryRows,
     standaloneRows: typeof groupedStandaloneInitiatives = [],
@@ -8157,7 +8409,24 @@ export function BacklogPlanningPanel({
               />
             ) : null}
             {effectiveGroupLevels.length > 0 ? (
-              timePhase("renderTreeJSX (grouped)", () => renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives))
+              <>
+                {(() => {
+                  // [VIRT CHUNK 1] Build descriptors in parallel with the
+                  // real render and log the count. Walker is unused for
+                  // rendering — chunk 2 swaps it in. This call proves the
+                  // walker enumerates the right number of rows and matches
+                  // the grouping/folding state.
+                  const descriptors = timePhase("buildDescriptors (grouped)", () =>
+                    buildBacklogRowDescriptors(sortedGroupedStoryRows, groupedStandaloneInitiatives),
+                  );
+                  if (process.env.NODE_ENV === "development") {
+                    // eslint-disable-next-line no-console
+                    console.log(`[virt] grouped descriptors: ${descriptors.length}`);
+                  }
+                  return null;
+                })()}
+                {timePhase("renderTreeJSX (grouped)", () => renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives))}
+              </>
             ) : workItemFilter.length === 1 && workItemFilter[0] === "story" ? (
               // Story-only filter without grouping → flat story rows. Skip
               // the initiative + epic folder layers so the user sees a
