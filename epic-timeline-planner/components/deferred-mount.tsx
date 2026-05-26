@@ -84,12 +84,16 @@ export function DeferredMount({
   // and only toggle the placeholder overlay's visibility.
   const fadeIn = phase === "ready" || phase === "done";
   const placeholderMounted = phase !== "done";
+  // Slide-up: content lifts from 10px below into place as it fades in.
+  // Pairs with the opacity transition for a single, cohesive entrance.
+  const SLIDE_PX = 10;
   return (
     <div className="relative">
       <div
-        className="transition-opacity ease-out"
+        className="transition-[opacity,transform] ease-out motion-reduce:transition-none motion-reduce:transform-none"
         style={{
           opacity: fadeIn ? 1 : 0,
+          transform: fadeIn ? "translateY(0px)" : `translateY(${SLIDE_PX}px)`,
           transitionDuration: `${DEFERRED_MOUNT_FADE_MS}ms`,
         }}
       >

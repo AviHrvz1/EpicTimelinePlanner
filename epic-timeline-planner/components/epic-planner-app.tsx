@@ -1154,6 +1154,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const [editingEpicInitiativeId, setEditingEpicInitiativeId] = useState<string | null>(null);
   const [insightsScopeEpicId, setInsightsScopeEpicId] = useState<string | null>(null);
   const [insightsScopeInitId, setInsightsScopeInitId] = useState<string | null>(null);
+  /** Stable identity prevents TimelineGrid → MonthAnalytics from seeing a new
+   *  `onScopeChange` reference on every parent render, which otherwise cascades
+   *  through MonthAnalytics' scope-change effect (deps include onScopeChange). */
+  const handleInsightsScopePropChange = useCallback((epicId: string | null, initId: string | null) => {
+    setInsightsScopeEpicId(epicId);
+    setInsightsScopeInitId(initId);
+  }, []);
   const [focusedQuarterLabel, setFocusedQuarterLabel] = useState<string | null>(null);
   const [isSprintModeActive, setIsSprintModeActive] = useState(false);
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
@@ -2016,6 +2023,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           activeMonthPlanTab === "sprint-retrospective"))
     );
   }, [topMode, activeTimelineMonth, activeQuarterViewTab, activeMonthPlanTab]);
+  /** All-quarters Gantt is the only view where 4 quarter panels reflow during
+   *  a width-driven slide, so the 320ms slide stutters even with debounced
+   *  ResizeObserver state writes. On every other view (single quarter, month,
+   *  sprint) the slide is cheap and stays smooth, so we keep it there. */
+  const isAllQuartersGanttView =
+    topMode === "roadmap" &&
+    activeTimelineMonth == null &&
+    focusedQuarterLabel == null &&
+    activeQuarterViewTab === "gantt";
 
   useEffect(() => {
     const isInsightsSurface =
@@ -2036,18 +2052,47 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     return () => cancelAnimationFrame(raf);
   }, [activeTimelineMonth, activeMonthPlanTab, activeQuarterViewTab]);
 
-  useEffect(() => {
+  /**
+   * Derived-state suppression for the left-rail slide on Insights enter/exit.
+   *
+   * Why derived (not useEffect): the previous useEffect-based suppress flipped
+   * one render too late. By the time the effect fired, React had already
+   * committed the render where `width` flipped to 0 with the transition class
+   * still active — the CSS animation kicked off, then a later render stripped
+   * the class but the animation was already in flight (slide-perf log showed
+   * `OUTER width transitionend` ~1.4s after the click). Setting state DURING
+   * the render that observes the lock change causes React to discard and
+   * restart the render, so the committed DOM has `width: 0px` AND the
+   * transition class already removed in the same commit — browser snaps, no
+   * animation runs.
+   */
+  const [committedLeftRailLockedClosed, setCommittedLeftRailLockedClosed] = useState(leftRailLockedClosed);
+  const [suppressLeftPanelTransition, setSuppressLeftPanelTransitionForOneTick] = useState(false);
+  if (committedLeftRailLockedClosed !== leftRailLockedClosed) {
+    setCommittedLeftRailLockedClosed(leftRailLockedClosed);
+    setSuppressLeftPanelTransitionForOneTick(true);
     if (leftRailLockedClosed) {
-      setIsLeftPanelHidden((prev) => {
-        if (prev) return true;
+      if (!isLeftPanelHidden) {
         leftInitiativePanelAutoCollapsedForInsightsRef.current = true;
-        return true;
-      });
+        setIsLeftPanelHidden(true);
+      }
     } else if (leftInitiativePanelAutoCollapsedForInsightsRef.current) {
-      setIsLeftPanelHidden(false);
       leftInitiativePanelAutoCollapsedForInsightsRef.current = false;
+      setIsLeftPanelHidden(false);
     }
-  }, [leftRailLockedClosed]);
+    // React will discard this render and restart with the new state values
+    // batched together — the next committed render has suppress=true AND the
+    // new width style, so no transition is triggered.
+  }
+  useEffect(() => {
+    if (!suppressLeftPanelTransition) return;
+    // Re-enable transitions one frame after commit so the user's manual
+    // chevron-toggle keeps its slide animation.
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSuppressLeftPanelTransitionForOneTick(false));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [suppressLeftPanelTransition]);
 
   useEffect(() => {
     const el = planningRightSurfaceRef.current;
@@ -5193,7 +5238,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               <div
                 className={cn(
                   "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-0.5 shadow-xl",
-                  !isResizingPanel && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                  !isResizingPanel && !suppressLeftPanelTransition && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
                 style={{
@@ -5207,7 +5252,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 <div
                   className={cn(
                     "flex h-full min-h-0 motion-reduce:transition-none",
-                    "transition-transform duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                    !suppressLeftPanelTransition && "transition-transform duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                     isLeftPanelHidden && "pointer-events-none",
                   )}
                   style={{
@@ -5295,7 +5340,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       panelStatusQuickFilter={panelStatusQuickFilter}
                       prefillSearchQuery={middlePanelPrefillSearch}
                       onHidePanel={
-                        leftRailLockedClosed ? undefined : () => setIsLeftPanelHidden(true)
+                        leftRailLockedClosed
+                          ? undefined
+                          : () => {
+                              if (isAllQuartersGanttView) setSuppressLeftPanelTransitionForOneTick(true);
+                              setIsLeftPanelHidden(true);
+                            }
                       }
                       workspaceDirectoryUsers={workspaceDirectoryUsers}
                     />
@@ -5316,6 +5366,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     className="h-7 w-7 shrink-0"
                     onClick={() => {
                       if (leftRailLockedClosed) return;
+                      if (isAllQuartersGanttView) setSuppressLeftPanelTransitionForOneTick(true);
                       setIsLeftPanelHidden(false);
                       leftInitiativePanelAutoCollapsedForInsightsRef.current = false;
                     }}
@@ -5389,10 +5440,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onProgressBasisChange={setProgressBasis}
                 initialInsightsScopeEpicId={insightsScopeEpicId}
                 initialInsightsScopeInitId={insightsScopeInitId}
-                onInsightsScopeChange={(epicId, initId) => {
-                  setInsightsScopeEpicId(epicId);
-                  setInsightsScopeInitId(initId);
-                }}
+                onInsightsScopeChange={handleInsightsScopePropChange}
                 onOpenInsights={handleOpenInsightsInApp}
                 summaryBadges={roadmapSummary}
                 summaryBarPortalElement={summaryBarEl}

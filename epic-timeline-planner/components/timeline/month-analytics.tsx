@@ -2507,7 +2507,7 @@ export function MonthAnalytics({
                     label={piePercentLabel}
                     labelLine={false}
                     filter="url(#monthPieShadow)"
-                    isAnimationActive={chartsReady}
+                    isAnimationActive={false}
                     onClick={(entry) => openStatusDrilldown(String((entry as { name?: string }).name ?? ""))}
                   >
                     {pieData.map((entry) => (
@@ -2672,7 +2672,7 @@ export function MonthAnalytics({
                         strokeWidth={2}
                         dot={false}
                         name={burndownFocusedEpicOption.epic.title}
-                        isAnimationActive={chartsReady}
+                        isAnimationActive={false}
                       />
                     ) : monthBurndownEpics.map((epic, idx) =>
                       burndownVisibleKeys.includes(epic.id) ? (
@@ -2684,7 +2684,7 @@ export function MonthAnalytics({
                         strokeWidth={2}
                         dot={false}
                         name={epic.title}
-                        isAnimationActive={chartsReady}
+                        isAnimationActive={false}
                       />
                       ) : null,
                     )}
@@ -2697,7 +2697,7 @@ export function MonthAnalytics({
                         strokeDasharray="5 4"
                         dot={false}
                         name="Epic ideal to due"
-                        isAnimationActive={chartsReady}
+                        isAnimationActive={false}
                       />
                     ) : null}
                     {burndownFocusedEpicOption && monthEndMarker ? (
@@ -3031,7 +3031,7 @@ export function MonthAnalytics({
                     {WORKLOAD_BAR_SEGMENTS.map((s) => (
                       <Bar key={s.key} dataKey={s.label} fill={s.color} radius={[3, 3, 0, 0]} maxBarSize={14}
                         minPointSize={2}
-                        isAnimationActive={chartsReady}
+                        isAnimationActive={false}
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
                         style={{ cursor: "pointer" }}

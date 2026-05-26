@@ -2449,7 +2449,12 @@ export function TimelineGrid({
   const ganttSearchInputRef = useRef<HTMLInputElement | null>(null);
   // Q4 panel in the all-quarters Gantt header strip — its width + left position drive the Gantt search box.
   const [quarter4PanelMetrics, setQuarter4PanelMetrics] = useState<{ width: number; left: number } | null>(null);
+  const quarter4PanelMetricsRef = useRef<{ width: number; left: number } | null>(null);
   const quarter4NodeRef = useRef<HTMLElement | null>(null);
+  /** Debounce: during the left-rail slide the Q4 panel resizes ~20 times in 320ms — each ResizeObserver hit otherwise
+   *  re-renders the whole timeline-grid (4 quarters × all rows). First measurement commits sync so the search aligns
+   *  on first paint; later ones land 150ms after the resize stream stops. */
+  const quarter4MetricsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const measureQuarter4 = useCallback(() => {
     const node = quarter4NodeRef.current;
     const searchEl = ganttSearchRef.current;
@@ -2460,7 +2465,25 @@ export function TimelineGrid({
     const parentRect = parent.getBoundingClientRect();
     const width = Math.round(rect.width);
     const left = Math.max(0, Math.round(rect.left - parentRect.left));
-    if (width > 0) setQuarter4PanelMetrics({ width, left });
+    if (width <= 0) return;
+    const next = { width, left };
+    if (quarter4PanelMetricsRef.current === null) {
+      quarter4PanelMetricsRef.current = next;
+      setQuarter4PanelMetrics(next);
+      return;
+    }
+    quarter4PanelMetricsRef.current = next;
+    if (quarter4MetricsTimerRef.current) clearTimeout(quarter4MetricsTimerRef.current);
+    quarter4MetricsTimerRef.current = setTimeout(() => {
+      quarter4MetricsTimerRef.current = null;
+      const latest = quarter4PanelMetricsRef.current;
+      if (latest) {
+        setQuarter4PanelMetrics(latest);
+      }
+    }, 150);
+  }, []);
+  useEffect(() => () => {
+    if (quarter4MetricsTimerRef.current) clearTimeout(quarter4MetricsTimerRef.current);
   }, []);
   const quarter4ResizeObserverRef = useRef<ResizeObserver | null>(null);
   if (typeof window !== "undefined" && !quarter4ResizeObserverRef.current) {
@@ -2482,6 +2505,11 @@ export function TimelineGrid({
       ro.observe(node);
       measureQuarter4();
     } else {
+      quarter4PanelMetricsRef.current = null;
+      if (quarter4MetricsTimerRef.current) {
+        clearTimeout(quarter4MetricsTimerRef.current);
+        quarter4MetricsTimerRef.current = null;
+      }
       setQuarter4PanelMetrics(null);
     }
   }, [measureQuarter4]);
@@ -2489,7 +2517,9 @@ export function TimelineGrid({
   // Last-month panel in the single-quarter Gantt — same idea as Q4, but for the quarter view: search aligns with
   // the rightmost month panel (e.g. June for Q2, December for Q4) and the export icon sits inside that panel's tail.
   const [lastMonthPanelMetrics, setLastMonthPanelMetrics] = useState<{ width: number; left: number } | null>(null);
+  const lastMonthPanelMetricsRef = useRef<{ width: number; left: number } | null>(null);
   const lastMonthNodeRef = useRef<HTMLElement | null>(null);
+  const lastMonthMetricsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const measureLastMonthPanel = useCallback(() => {
     const node = lastMonthNodeRef.current;
     const searchEl = ganttSearchRef.current;
@@ -2500,7 +2530,25 @@ export function TimelineGrid({
     const parentRect = parent.getBoundingClientRect();
     const width = Math.round(rect.width);
     const left = Math.max(0, Math.round(rect.left - parentRect.left));
-    if (width > 0) setLastMonthPanelMetrics({ width, left });
+    if (width <= 0) return;
+    const next = { width, left };
+    if (lastMonthPanelMetricsRef.current === null) {
+      lastMonthPanelMetricsRef.current = next;
+      setLastMonthPanelMetrics(next);
+      return;
+    }
+    lastMonthPanelMetricsRef.current = next;
+    if (lastMonthMetricsTimerRef.current) clearTimeout(lastMonthMetricsTimerRef.current);
+    lastMonthMetricsTimerRef.current = setTimeout(() => {
+      lastMonthMetricsTimerRef.current = null;
+      const latest = lastMonthPanelMetricsRef.current;
+      if (latest) {
+        setLastMonthPanelMetrics(latest);
+      }
+    }, 150);
+  }, []);
+  useEffect(() => () => {
+    if (lastMonthMetricsTimerRef.current) clearTimeout(lastMonthMetricsTimerRef.current);
   }, []);
   const lastMonthResizeObserverRef = useRef<ResizeObserver | null>(null);
   if (typeof window !== "undefined" && !lastMonthResizeObserverRef.current) {
@@ -2521,6 +2569,11 @@ export function TimelineGrid({
       ro.observe(node);
       measureLastMonthPanel();
     } else {
+      lastMonthPanelMetricsRef.current = null;
+      if (lastMonthMetricsTimerRef.current) {
+        clearTimeout(lastMonthMetricsTimerRef.current);
+        lastMonthMetricsTimerRef.current = null;
+      }
       setLastMonthPanelMetrics(null);
     }
   }, [measureLastMonthPanel]);
@@ -4082,6 +4135,11 @@ export function TimelineGrid({
     const el = yearRoadmapMeasureRef.current;
     if (!el) return;
     const hyst = YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX;
+    /** First measurement commits sync so initial scroll-state is correct;
+     *  subsequent ones (e.g. during the rail-slide width change) coalesce
+     *  150ms after the resize stream stops, avoiding per-frame setState. */
+    let initialApplied = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const apply = () => {
       const raw = el.clientWidth;
       const nextFromThreshold = (prev: boolean) => {
@@ -4097,10 +4155,25 @@ export function TimelineGrid({
       }
       setYearRoadmapHScroll(nextFromThreshold);
     };
-    apply();
-    const ro = new ResizeObserver(() => apply());
+    const scheduleApply = () => {
+      if (!initialApplied) {
+        initialApplied = true;
+        apply();
+        return;
+      }
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        apply();
+      }, 150);
+    };
+    scheduleApply();
+    const ro = new ResizeObserver(() => scheduleApply());
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      ro.disconnect();
+    };
   }, [portfolioRoadmapGanttHScrollMeasure]);
 
   /** Today line over initiative lanes (sprint resolution). */
@@ -6968,7 +7041,7 @@ export function TimelineGrid({
                     }
                     initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
                     initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-                    onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+                    onScopeChange={handleInsightsScopeChange}
                     workspaceDirectoryUsers={workspaceDirectoryUsers}
                   />
                 </div>
@@ -7401,7 +7474,7 @@ export function TimelineGrid({
               }
               initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
               initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-              onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+              onScopeChange={handleInsightsScopeChange}
               workspaceDirectoryUsers={workspaceDirectoryUsers}
             />
           </DeferredMount>
@@ -7421,7 +7494,7 @@ export function TimelineGrid({
               }
               initialSelectedEpicId={initialInsightsScopeEpicId ?? undefined}
               initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
-              onScopeChange={(type, id) => handleInsightsScopeChange(type, id)}
+              onScopeChange={handleInsightsScopeChange}
               workspaceDirectoryUsers={workspaceDirectoryUsers}
             />
           </DeferredMount>
