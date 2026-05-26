@@ -57,7 +57,7 @@ import {
 
 import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
-import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, StoryDailySnapshotItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
@@ -174,17 +174,6 @@ const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#b
 
 function isStoryOpen(status: UserStoryItem["status"] | null | undefined) {
   return status === "todo" || status === "inProgress";
-}
-
-function latestSnapshotAtDay(story: UserStoryItem, day: Date) {
-  const snapshots = story.snapshots ?? [];
-  if (snapshots.length === 0) return null;
-  const cutoff = day.getTime();
-  for (let i = snapshots.length - 1; i >= 0; i -= 1) {
-    const ts = new Date(snapshots[i].snapshotDate).getTime();
-    if (ts <= cutoff) return snapshots[i];
-  }
-  return null;
 }
 
 type BurndownTooltipPayload = {
@@ -658,6 +647,52 @@ export function MonthAnalytics({
   useEffect(() => {
     setChartsReady(true);
   }, []);
+  /**
+   * Per-render snapshot cache: each story's snapshots get parsed once into a
+   * pre-sorted (ascending ts) array of `{ ts, snap }`. Lookups for
+   * "latest snapshot at day D" then become an O(log n) binary search instead
+   * of the previous O(n) reverse-linear-scan + per-call `new Date()` parse.
+   *
+   * At year scope (12 months, ~250 workdays, dozens of stories per epic,
+   * 5+ time-series charts each iterating day-by-story) this is the hot path.
+   */
+  const storySnapshotCache = useMemo(() => {
+    const map = new Map<string, { ts: number; snap: StoryDailySnapshotItem }[]>();
+    for (const init of initiatives) {
+      for (const epic of init.epics ?? []) {
+        for (const story of epic.userStories ?? []) {
+          const snaps = story.snapshots ?? [];
+          if (snaps.length === 0) continue;
+          const parsed = snaps
+            .map((s) => ({ ts: new Date(s.snapshotDate).getTime(), snap: s }))
+            .sort((a, b) => a.ts - b.ts);
+          map.set(story.id, parsed);
+        }
+      }
+    }
+    return map;
+  }, [initiatives]);
+  const latestSnapshotAtDayCached = useCallback(
+    (story: UserStoryItem, day: Date) => {
+      const arr = storySnapshotCache.get(story.id);
+      if (!arr || arr.length === 0) return null;
+      const cutoff = day.getTime();
+      let lo = 0;
+      let hi = arr.length - 1;
+      let best = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >>> 1;
+        if (arr[mid].ts <= cutoff) {
+          best = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      return best === -1 ? null : arr[best].snap;
+    },
+    [storySnapshotCache],
+  );
   const [selectedEpicId, setSelectedEpicId] = useState<string>(initialSelectedEpicId ?? "all");
   const [epicInput, setEpicInput] = useState("");
   const [isEpicDropdownOpen, setIsEpicDropdownOpen] = useState(false);
@@ -1485,7 +1520,7 @@ export function MonthAnalytics({
         const epicStories = epic.userStories ?? [];
         let epicValue = 0;
         for (const story of epicStories) {
-          const snapshot = latestSnapshotAtDay(story, day);
+          const snapshot = latestSnapshotAtDayCached(story, day);
           const status = snapshot?.status ?? story.status;
           if (!isStoryOpen(status)) continue;
           if (metric === "storyCount") {
@@ -1686,7 +1721,7 @@ export function MonthAnalytics({
     });
     const monthStartDay = dayDates[0];
     const storiesOpenAtStart = sourceStories.filter((story) => {
-      const snapshot = latestSnapshotAtDay(story, monthStartDay);
+      const snapshot = latestSnapshotAtDayCached(story, monthStartDay);
       const status = snapshot?.status ?? story.status;
       return isStoryOpen(status);
     });
@@ -1714,7 +1749,7 @@ export function MonthAnalytics({
       let done = 0;
       let approved = 0;
       for (const story of storiesOpenAtStart) {
-        const snapshot = latestSnapshotAtDay(story, dayDate);
+        const snapshot = latestSnapshotAtDayCached(story, dayDate);
         const status = snapshot?.status ?? story.status;
         if (status === "todo") todo += 1;
         else if (status === "inProgress") inProgress += 1;
@@ -1770,7 +1805,7 @@ export function MonthAnalytics({
         if (days === 0) continue;
         let status: string = story.status;
         if (hasSnapshots) {
-          const snap = latestSnapshotAtDay(story, dayDate);
+          const snap = latestSnapshotAtDayCached(story, dayDate);
           status = snap?.status ?? story.status;
         } else {
           const progress = (dayInMonth - 1) / Math.max(elapsedDays - 1, 1);
@@ -1893,7 +1928,7 @@ export function MonthAnalytics({
         if (hasSnapshots) {
           completed = 0;
           for (const story of allStories) {
-            const snap = latestSnapshotAtDay(story, dayDate);
+            const snap = latestSnapshotAtDayCached(story, dayDate);
             const status = snap?.status ?? story.status;
             if (storyDone(status)) completed += storyValue(story);
           }
