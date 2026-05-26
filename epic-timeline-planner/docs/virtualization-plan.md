@@ -58,7 +58,30 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 
 ---
 
-### Chunk 2 — Render from descriptors (non-virtualized)  **STATUS: IN PROGRESS**
+### Chunk 2 — Render from descriptors (non-virtualized)  **STATUS: DONE**
+
+**Done in this chunk's commit:**
+- Walker fully captures per-descriptor data (folder icons/actions, init/epic/story row data, indents). `render()` thunks now return real JSX.
+- Per-row descriptors:
+  - `groupFolder` → `renderFolderRow(... () => null)`. Quarter-level "+" form becomes a sibling `createForm` descriptor emitted right after the folder.
+  - `initiative` → `renderInitiativeRow(... () => null)`. The init's own create-row form (when active) still renders inside the init's wrapper div — automatic via the existing renderer body.
+  - `epic` → `renderEpicRow(... () => null)`. Epic's own create-row form renders inside the epic wrapper — automatic.
+  - `story` → `<BacklogStoryRow row={row} indentPx={indentPx} isEditing… ctx={storyRowCtx} />` directly.
+  - `standaloneInit` → `renderStandaloneInitiativeRows([init], indentPx)` — full unit in non-Epic-only mode (giving up per-epic flattening; standalone inits are a small subset).
+  - `standaloneEpic` (Epic-only only) → `renderStandaloneInitiativeRows([{...init, epics: [oneEpic]}], indentPx)` — leverages the existing renderer's Epic-only `hidden` class on the init folder so per-epic descriptors don't visually duplicate.
+- Grouped-path call site now uses `descriptors.map((d) => <Fragment key={d.key}>{d.render()}</Fragment>)`. Phase `renderFromDescriptors (grouped)` shows up in the latency popup alongside the existing `buildDescriptors (grouped)`.
+
+**Known visual deltas vs main (to revisit in chunk 6 polish if they matter):**
+- The subtle `bg-slate-50/50` gray tint that used to wrap nested epic rows under an initiative is gone, because nested children are now sibling descriptors not children of the init wrapper. Connector lines + indent are still per-row so the tree is still readable.
+- DOM has an extra wrapping `<div>` per non-story descriptor (the existing `renderFolderRow` / `renderEpicRow` / `renderInitiativeRow` `<div key={folderId}>` outer). Cosmetic — no layout change.
+
+**Behavioral verification needed (run before chunk 3):**
+- Open/close every folder level → all descriptors update correctly.
+- Click "+" at each level (quarter, initiative, epic) → create form appears at right position.
+- Edit story title/cell → only that row re-renders (memo intact via `BacklogStoryRow`).
+- Rename a roadmap → inline input shows in folder header.
+- Search → search-matching highlight still works.
+- Toggle every Work Item filter combination → grouped path uses descriptors; non-grouped still uses old rendering (chunks 6).
 
 **Goal:** Replace the grouped-tree JSX with `descriptors.map(d => d.render())`. Still rendering ALL rows. **This forces the walker to be correct before adding virtualization complexity.**
 

@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import type { CSSProperties, MouseEvent, ReactNode, RefObject } from "react";
 import {
+  Fragment,
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -6331,17 +6332,129 @@ export function BacklogPlanningPanel({
         groups.get(key)!.standaloneRows.push(init);
       }
     }
+    // Year level with no real data: seed the current calendar year so the
+    // recursion can still descend into a quarter level for empty roadmaps.
+    if (level === "year" && groups.size === 0) {
+      const y = String(new Date().getFullYear());
+      groups.set(y, { label: y, sort: y.padStart(4, "0"), rows: [], standaloneRows: [] });
+    }
     const entries = Array.from(groups.entries()).sort((a, b) => a[1].sort.localeCompare(b[1].sort));
     for (const [key, group] of entries) {
       const folderId = `${path}${level}:${key}`;
       const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+      const count = group.rows.length + group.standaloneRows.length;
+      const indentPx = levelIndex * 14;
+      // Compute per-level icons / actions / overrides — same logic as in
+      // `renderGroupedTree`'s loop. Captured by reference here; the render
+      // closure below uses them when the descriptor's row is actually
+      // rendered (will be only when virtualized window includes it).
+      const leadingIcon =
+        level === "roadmap"
+          ? <MapIcon className="size-4 shrink-0 text-sky-500" aria-hidden />
+          : level === "year"
+            ? <CalendarDays className="size-4 shrink-0 text-sky-500" aria-hidden />
+            : level === "quarter"
+              ? key === "Unscheduled work"
+                ? <CalendarOff className="size-4 shrink-0 text-slate-400" aria-hidden />
+                : <QuarterYearProgressIcon quarterLabel={key} className="text-sky-500" />
+              : undefined;
+      const trailingAction = level === "quarter" && key === "Unscheduled work" && onJumpToRoadmapPlanning ? (
+        <button
+          type="button"
+          onClick={(event) => { event.stopPropagation(); onJumpToRoadmapPlanning(); }}
+          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+          title="Open Roadmap Planning with Unscheduled epics filter"
+          aria-label="Open Roadmap Planning to schedule these epics"
+        >
+          <ExternalLink className="size-3 text-sky-600" />
+          Schedule
+        </button>
+      ) : level === "quarter" ? (
+        <span className="group/tip relative inline-flex">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
+              openCreateComposer({ anchorKey: `group-quarter:${folderId}`, scope: "initiative", kind: "initiative" });
+            }}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+            aria-label="Add a new initiative starting in this quarter"
+          >
+            <Plus className="size-3.5 text-slate-600" />
+          </button>
+          <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a new initiative starting in this quarter</span>
+        </span>
+      ) : level === "roadmap" && onRenameRoadmap && key !== "__no_roadmap__" && editingRoadmapId !== key ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setEditingRoadmapId(key);
+            setOpenGroupFolders((prev) => ({ ...prev, [folderId]: true }));
+          }}
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-indigo-700 hover:ring-indigo-300 group-hover/workitem:opacity-100 focus-visible:opacity-100"
+          title="Rename roadmap"
+          aria-label="Rename roadmap"
+        >
+          <SquarePen className="size-3.5 text-slate-600" />
+        </button>
+      ) : undefined;
+      const labelOverride =
+        level === "roadmap" && editingRoadmapId === key && onRenameRoadmap ? (
+          <IsolatedTextInput
+            initial={group.label}
+            ariaLabel="Rename roadmap"
+            inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+            onCancel={() => setEditingRoadmapId(null)}
+            onSave={async (value) => {
+              const next = value.trim();
+              if (next && next !== group.label) {
+                try {
+                  await onRenameRoadmap(key, next);
+                  toast.success("Roadmap renamed");
+                } catch {
+                  toast.error("Failed to rename roadmap");
+                }
+              }
+              setEditingRoadmapId(null);
+            }}
+          />
+        ) : undefined;
+      const defaultOpenOverride = level === "quarter" && count === 0 ? false : undefined;
+      const showQuarterForm = level === "quarter" && createSelection?.anchorKey === `group-quarter:${folderId}`;
+      const groupLabel = group.label;
       out.push({
         key: `folder-${folderId}`,
         kind: "groupFolder",
         estimatedHeight: ROW_ESTIMATED_HEIGHTS.groupFolder,
-        // Chunk 1: placeholder. Chunk 2 wires the real folder-row JSX.
-        render: () => null,
+        render: () => renderFolderRow(folderId, groupLabel, count, indentPx, () => null, leadingIcon, trailingAction, defaultOpenOverride, labelOverride),
       });
+      if (showQuarterForm) {
+        out.push({
+          key: `createform-quarter-${folderId}`,
+          kind: "createForm",
+          estimatedHeight: ROW_ESTIMATED_HEIGHTS.createForm,
+          render: () => (
+            <QuarterInitiativeCreateForm
+              placeholder={`New initiative in ${groupLabel}…`}
+              indentPx={indentPx + 18}
+              submitting={submittingKey === "create"}
+              leadingIcon={createKindIcon("initiative")}
+              onSubmit={async (title) => {
+                setSubmittingKey("create");
+                try {
+                  await onCreateInitiativeQuick(title);
+                  setCreateSelection(null);
+                } finally {
+                  setSubmittingKey(null);
+                }
+              }}
+              onCancel={closeInlineCreator}
+            />
+          ),
+        });
+      }
       if (isOpen) {
         walkGroupedTreeIntoDescriptors(out, group.rows, group.standaloneRows, levelIndex + 1, `${path}${level}:${key}/`);
       }
@@ -6360,12 +6473,7 @@ export function BacklogPlanningPanel({
     const storyOnly = workItemFilter.length === 1 && workItemFilter[0] === "story";
     if (groupLevels.includes("sprint") || storyOnly) {
       for (const row of rows) {
-        out.push({
-          key: `story-${path}-${row.storyId}`,
-          kind: "story",
-          estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
-          render: () => null,
-        });
+        pushStoryDescriptor(out, row, indentPx, path);
       }
       return;
     }
@@ -6376,24 +6484,8 @@ export function BacklogPlanningPanel({
         byEpic.get(row.epicId)!.push(row);
       }
       for (const [epicId, epicRows] of byEpic) {
-        const folderId = `${path}/epic:${epicId}`;
-        const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
-        out.push({
-          key: `epic-${folderId}`,
-          kind: "epic",
-          estimatedHeight: ROW_ESTIMATED_HEIGHTS.epic,
-          render: () => null,
-        });
-        if (isOpen) {
-          for (const row of epicRows) {
-            out.push({
-              key: `story-${folderId}-${row.storyId}`,
-              kind: "story",
-              estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
-              render: () => null,
-            });
-          }
-        }
+        const first = epicRows[0]!;
+        pushEpicDescriptor(out, epicId, first.epicTitle, first.epicAssignee, epicRows, indentPx, path);
       }
       return;
     }
@@ -6403,40 +6495,120 @@ export function BacklogPlanningPanel({
       byInitiative.get(row.initiativeId)!.push(row);
     }
     for (const [initiativeId, initiativeRows] of byInitiative) {
-      const initFolderId = `${path}/initiative:${initiativeId}`;
-      const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
-      out.push({
-        key: `init-${initFolderId}`,
-        kind: "initiative",
-        estimatedHeight: ROW_ESTIMATED_HEIGHTS.initiative,
-        render: () => null,
-      });
-      if (isInitOpen) {
-        const byEpic = new Map<string, typeof groupedStoryRows>();
-        for (const row of initiativeRows) {
-          if (!byEpic.has(row.epicId)) byEpic.set(row.epicId, []);
-          byEpic.get(row.epicId)!.push(row);
-        }
-        for (const [epicId, epicRows] of byEpic) {
-          const epicFolderId = `${initFolderId}/epic:${epicId}`;
-          const isEpicOpen = openGroupFolders[epicFolderId] ?? defaultGroupExpanded;
-          out.push({
-            key: `epic-${epicFolderId}`,
-            kind: "epic",
-            estimatedHeight: ROW_ESTIMATED_HEIGHTS.epic,
-            render: () => null,
-          });
-          if (isEpicOpen) {
-            for (const row of epicRows) {
-              out.push({
-                key: `story-${epicFolderId}-${row.storyId}`,
-                kind: "story",
-                estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
-                render: () => null,
-              });
-            }
-          }
-        }
+      const first = initiativeRows[0]!;
+      pushInitiativeDescriptor(
+        out,
+        initiativeId,
+        first.initiativeTitle,
+        first.initiativeYear,
+        first.initiativeStatus,
+        first.initiativeAssignee,
+        first.initiativeQuarterLabelValue ?? "-",
+        first.initiativeMonthLabelValue ?? "-",
+        initiativeRows,
+        indentPx,
+        path,
+      );
+    }
+  }
+
+  function pushStoryDescriptor(
+    out: RowDescriptor[],
+    row: (typeof groupedStoryRows)[number],
+    indentPx: number,
+    pathPrefix: string,
+  ): void {
+    const isEditingTitle = editingStoryTitle?.id === row.storyId;
+    const isEditingCell = editingStoryCell?.storyId === row.storyId;
+    out.push({
+      key: `${pathPrefix}-story-${row.storyId}`,
+      kind: "story",
+      estimatedHeight: ROW_ESTIMATED_HEIGHTS.story,
+      render: () => (
+        <BacklogStoryRow
+          row={row}
+          indentPx={indentPx}
+          isEditingTitle={isEditingTitle}
+          editingTitleValue={isEditingTitle ? editingStoryTitle!.value : ""}
+          isEditingCell={isEditingCell}
+          editingCellField={isEditingCell ? editingStoryCell!.field : null}
+          editingCellValue={isEditingCell ? editingStoryCell!.value : ""}
+          isEditingTeam={isEditingParentTeam("epic", row.epicId)}
+          ctx={storyRowCtx}
+        />
+      ),
+    });
+  }
+
+  function pushEpicDescriptor(
+    out: RowDescriptor[],
+    epicId: string,
+    epicTitle: string,
+    epicAssignee: string,
+    epicRows: typeof groupedStoryRows,
+    indentPx: number,
+    pathPrefix: string,
+  ): void {
+    const folderId = `${pathPrefix}/epic:${epicId}`;
+    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    out.push({
+      key: `epic-${folderId}`,
+      kind: "epic",
+      estimatedHeight: ROW_ESTIMATED_HEIGHTS.epic,
+      render: () => renderEpicRow(epicId, epicTitle, epicAssignee, epicRows, indentPx, pathPrefix, () => null),
+    });
+    if (isOpen) {
+      const storyIndent = indentPx + 34;
+      const storyPathPrefix = `${folderId}/stories`;
+      for (const r of epicRows) {
+        pushStoryDescriptor(out, r, storyIndent, storyPathPrefix);
+      }
+    }
+  }
+
+  function pushInitiativeDescriptor(
+    out: RowDescriptor[],
+    initiativeId: string,
+    initiativeTitle: string,
+    initiativeYear: string,
+    initiativeStatus: WorkflowStatus,
+    initiativeAssignee: string,
+    initiativeQuarterLabel: string,
+    initiativeMonthLabel: string,
+    initiativeRows: typeof groupedStoryRows,
+    indentPx: number,
+    pathPrefix: string,
+  ): void {
+    const folderId = `${pathPrefix}/initiative:${initiativeId}`;
+    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    out.push({
+      key: `init-${folderId}`,
+      kind: "initiative",
+      estimatedHeight: ROW_ESTIMATED_HEIGHTS.initiative,
+      render: () => renderInitiativeRow(
+        initiativeId,
+        initiativeTitle,
+        initiativeYear,
+        initiativeStatus,
+        initiativeAssignee,
+        initiativeQuarterLabel,
+        initiativeMonthLabel,
+        initiativeRows,
+        indentPx,
+        pathPrefix,
+        () => null,
+      ),
+    });
+    if (isOpen) {
+      const epicIndent = indentPx + 18;
+      const byEpic = new Map<string, typeof groupedStoryRows>();
+      for (const r of initiativeRows) {
+        if (!byEpic.has(r.epicId)) byEpic.set(r.epicId, []);
+        byEpic.get(r.epicId)!.push(r);
+      }
+      for (const [epicId, epicRows] of byEpic) {
+        const first = epicRows[0]!;
+        pushEpicDescriptor(out, epicId, first.epicTitle, first.epicAssignee, epicRows, epicIndent, folderId);
       }
     }
   }
@@ -6444,31 +6616,53 @@ export function BacklogPlanningPanel({
   function walkStandaloneInitiativeRowsIntoDescriptors(
     out: RowDescriptor[],
     rows: typeof groupedStandaloneInitiatives,
-    _indentPx: number,
+    indentPx: number,
   ): void {
-    // Mirror `renderStandaloneInitiativeRows` shape (incl. Epic-only
-    // flatten where the initiative folder row is hidden).
+    // Mirror `renderStandaloneInitiativeRows` shape.
+    //
+    // Two paths:
+    //  - Epic-only mode: init folder is hidden; each standalone epic
+    //    flattens into its own descriptor. Init wrapper is included by
+    //    the renderer but invisible via `hidden`, so per-epic descriptors
+    //    don't visually duplicate the init.
+    //  - Default mode: emit ONE descriptor per init that renders the
+    //    init folder + all its epics together as a single unit. We give
+    //    up per-epic virtualization granularity here because splitting
+    //    would visually duplicate the init folder N times (existing
+    //    standalone JSX always emits the init wrapper). Standalone inits
+    //    are a small subset anyway (initiatives where every epic has zero
+    //    stories), so the per-init granularity is fine.
     const isEpicOnlyMode = workItemFilter.length === 1 && workItemFilter[0] === "epic";
     for (const init of rows) {
-      const initFolderId = `standalone-init:${init.initiativeId}`;
-      const isInitOpen = isEpicOnlyMode ? true : (openGroupFolders[initFolderId] ?? defaultGroupExpanded);
-      if (!isEpicOnlyMode) {
-        out.push({
-          key: `standalone-init-${init.initiativeId}`,
-          kind: "standaloneInit",
-          estimatedHeight: ROW_ESTIMATED_HEIGHTS.standaloneInit,
-          render: () => null,
-        });
-      }
-      if (isInitOpen) {
+      const initSnapshot = init;
+      if (isEpicOnlyMode) {
         for (const epic of init.epics) {
+          const epicSnapshot = epic;
           out.push({
             key: `standalone-epic-${init.initiativeId}-${epic.epicId}`,
             kind: "standaloneEpic",
             estimatedHeight: ROW_ESTIMATED_HEIGHTS.standaloneEpic,
-            render: () => null,
+            render: () => renderStandaloneInitiativeRows(
+              [{ ...initSnapshot, epics: [epicSnapshot] }],
+              indentPx,
+            ),
           });
         }
+      } else {
+        // Estimate the init's full visual height: folder row + epic rows
+        // if open. Lets the virtualizer compute scroll positions roughly
+        // before measuring.
+        const initFolderId = `standalone-init:${init.initiativeId}`;
+        const isInitOpen = openGroupFolders[initFolderId] ?? defaultGroupExpanded;
+        const estimatedHeight =
+          ROW_ESTIMATED_HEIGHTS.standaloneInit +
+          (isInitOpen ? init.epics.length * ROW_ESTIMATED_HEIGHTS.standaloneEpic : 0);
+        out.push({
+          key: `standalone-init-${init.initiativeId}`,
+          kind: "standaloneInit",
+          estimatedHeight,
+          render: () => renderStandaloneInitiativeRows([initSnapshot], indentPx),
+        });
       }
     }
   }
@@ -8440,24 +8634,22 @@ export function BacklogPlanningPanel({
               />
             ) : null}
             {effectiveGroupLevels.length > 0 ? (
-              <>
-                {(() => {
-                  // [VIRT CHUNK 1] Build descriptors in parallel with the
-                  // real render and log the count. Walker is unused for
-                  // rendering — chunk 2 swaps it in. This call proves the
-                  // walker enumerates the right number of rows and matches
-                  // the grouping/folding state.
-                  const descriptors = timePhase("buildDescriptors (grouped)", () =>
-                    buildBacklogRowDescriptors(sortedGroupedStoryRows, groupedStandaloneInitiatives),
-                  );
-                  if (process.env.NODE_ENV === "development") {
-                    // eslint-disable-next-line no-console
-                    console.log(`[virt] grouped descriptors: ${descriptors.length}`);
-                  }
-                  return null;
-                })()}
-                {timePhase("renderTreeJSX (grouped)", () => renderGroupedTree(sortedGroupedStoryRows, groupedStandaloneInitiatives))}
-              </>
+              // [VIRT CHUNK 2] Render from the descriptor list instead of
+              // the recursive renderGroupedTree. All rows still mount —
+              // virtualization itself is chunk 3, which only changes
+              // `{descriptors.map(...)}` below to filter to visible items.
+              (() => {
+                const descriptors = timePhase("buildDescriptors (grouped)", () =>
+                  buildBacklogRowDescriptors(sortedGroupedStoryRows, groupedStandaloneInitiatives),
+                );
+                if (process.env.NODE_ENV === "development") {
+                  // eslint-disable-next-line no-console
+                  console.log(`[virt] grouped descriptors: ${descriptors.length}`);
+                }
+                return timePhase("renderFromDescriptors (grouped)", () =>
+                  descriptors.map((d) => <Fragment key={d.key}>{d.render()}</Fragment>),
+                );
+              })()
             ) : workItemFilter.length === 1 && workItemFilter[0] === "story" ? (
               // Story-only filter without grouping → flat story rows. Skip
               // the initiative + epic folder layers so the user sees a
