@@ -106,7 +106,27 @@ The 2024-2025 consensus for tables of this size (Linear, Notion-style apps, ever
 
 ---
 
-### Chunk 3 — Wire `useVirtualizer` for grouped path  **STATUS: TODO**
+### Chunk 3 — Wire `useVirtualizer` for grouped path  **STATUS: DONE**
+
+**Done in this chunk's commit:**
+- `@tanstack/react-virtual`'s `useVirtualizer` wired up in a new module-level `VirtualizedBacklogRows` component.
+- Scroll container: existing `overflow-y-auto` div on the table body now carries a `tableScrollRef` that's passed to the virtualizer's `getScrollElement`.
+- `estimateSize` reads each descriptor's `estimatedHeight` (per-kind defaults from `ROW_ESTIMATED_HEIGHTS`).
+- `getItemKey` returns the descriptor's stable key so reconciliation reuses row instances when descriptors reorder (e.g. folder open/close).
+- Each visible row mounts inside a `position: absolute` wrapper with `transform: translateY(start)`, `width: 100%`, and `ref={virtualizer.measureElement}` so the virtualizer corrects estimated heights with real measurements.
+- Grouped-path JSX entry now uses `<VirtualizedBacklogRows descriptors={...} scrollElementRef={tableScrollRef} />` instead of `descriptors.map((d) => d.render())`.
+- Other paths (story-only flat, epic-only flat, ungrouped initiative list) keep current rendering — chunk 6 extends virtualization to them.
+
+**Expected behavior:**
+- Group By toggle: `reactCommit` should drop dramatically (verifiable in the latency popup). ~30 rows mount instead of ~500.
+- Scrolling: smooth. Rows offscreen unmount; new visible rows mount with their estimated height, then auto-correct after measurement.
+- Open/close folder: walker re-runs (folder state in deps), descriptor list shrinks/grows, virtualizer reconciles.
+
+**Known limitations to address in chunks 4–6:**
+- **Inline edit popovers** unmount when row scrolls offscreen (chunk 4 fixes via `rangeExtractor` pinning the editing row).
+- **DnD ghost** likewise unmounts mid-drag (chunk 4 + `verticalListSortingStrategy`).
+- **Sticky column header alignment**: the header is OUTSIDE the virtualizer wrapper and uses `position: sticky`. Should still work but verify (chunk 5).
+- Standalone-init descriptors in non-Epic-only mode emit a SINGLE descriptor for the whole init+epics block (per chunk 2 design). The virtualizer's `estimateSize` for these is `standaloneInit + epics*standaloneEpic` so the scrollbar is sane.
 
 **Goal:** Only ~30 visible rows render. Group By drops from 3s to under 300ms.
 

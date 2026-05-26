@@ -60,6 +60,7 @@ import { toast } from "sonner";
 
 import { FilterLatencyDebugger, getPendingMarkStartedAt, markFilterChange, recordPhase, reportFilterStable, timePhase } from "@/components/dev/filter-latency-debugger";
 import { ROW_ESTIMATED_HEIGHTS, type RowDescriptor } from "@/components/backlog/backlog-row-descriptors";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
@@ -3311,6 +3312,81 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
   );
 };
 
+/* =====================================================================
+ * VirtualizedBacklogRows — chunk-3 wrapper around `@tanstack/react-virtual`.
+ *
+ * Renders a flat `RowDescriptor[]` into the table body using virtualization:
+ * only descriptors whose virtual position is within the visible window
+ * (plus an `overscan` buffer) have their `render()` called and mount in
+ * the DOM. For 500 rows where ~30 are on-screen, that's ~30 row mounts
+ * per render instead of 500 — the source of the Group By perf win.
+ *
+ * Notes:
+ *  - Outer wrapper is absolute-positioned children, so it intentionally
+ *    has no intrinsic height. Total scrollable height comes from
+ *    `getTotalSize()` set inline on the spacer.
+ *  - `estimateSize` reads each descriptor's `estimatedHeight` so the
+ *    scrollbar position is roughly right BEFORE the virtualizer measures
+ *    real heights. Per-kind defaults live in `backlog-row-descriptors.ts`.
+ *  - Width: `width: '100%'` on each row wrapper. Rows themselves use
+ *    `grid` + `gridTemplateColumns` internally, so they fill the
+ *    container and the table header (which uses the same grid template)
+ *    aligns naturally.
+ *  - `rangeExtractor` will be extended in chunk 4 to force-include the
+ *    indices of an in-edit row and an actively-dragged row so they
+ *    don't unmount when scrolled out of the visible window.
+ */
+function VirtualizedBacklogRows({
+  descriptors,
+  scrollElementRef,
+}: {
+  descriptors: RowDescriptor[];
+  scrollElementRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const virtualizer = useVirtualizer({
+    count: descriptors.length,
+    getScrollElement: () => scrollElementRef.current,
+    estimateSize: (i) => descriptors[i]?.estimatedHeight ?? 38,
+    overscan: 8,
+    // Stable item-key callback so React reconciliation reuses row
+    // instances when descriptors shift positions (e.g. open/close).
+    getItemKey: (i) => descriptors[i]?.key ?? String(i),
+  });
+  const items = virtualizer.getVirtualItems();
+  return (
+    <div
+      style={{
+        height: `${virtualizer.getTotalSize()}px`,
+        width: "100%",
+        position: "relative",
+      }}
+    >
+      {items.map((virtualRow) => {
+        const descriptor = descriptors[virtualRow.index];
+        if (!descriptor) return null;
+        return (
+          <div
+            key={descriptor.key}
+            data-virtual-row-key={descriptor.key}
+            data-virtual-row-kind={descriptor.kind}
+            ref={virtualizer.measureElement}
+            data-index={virtualRow.index}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${virtualRow.start}px)`,
+            }}
+          >
+            {descriptor.render()}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const BacklogStoryRow = ReactMemo(BacklogStoryRowImpl, (prev, next) =>
   prev.row === next.row &&
   prev.indentPx === next.indentPx &&
@@ -3470,6 +3546,9 @@ export function BacklogPlanningPanel({
   // The O(N²) `.find()` removal earlier in this file makes eager expansion fast enough.
   const [defaultGroupExpanded, setDefaultGroupExpanded] = useState(true);
   const groupMenuRef = useRef<HTMLDivElement | null>(null);
+  /** Scroll container for the table body — used by `useVirtualizer`
+   *  to know which descriptors are currently in the viewport. */
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const savedFilterMenuRef = useRef<HTMLDivElement | null>(null);
   const savedViewMenuRef = useRef<HTMLDivElement | null>(null);
   const columnsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -8367,7 +8446,7 @@ export function BacklogPlanningPanel({
       ) : null}
 
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/60 bg-white">
-        <div className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]">
+        <div ref={tableScrollRef} className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]">
         <div className="w-max min-w-full text-[15px] leading-snug text-slate-700">
         <>
         {showTableHeaderRow ? (
@@ -8634,10 +8713,10 @@ export function BacklogPlanningPanel({
               />
             ) : null}
             {effectiveGroupLevels.length > 0 ? (
-              // [VIRT CHUNK 2] Render from the descriptor list instead of
-              // the recursive renderGroupedTree. All rows still mount —
-              // virtualization itself is chunk 3, which only changes
-              // `{descriptors.map(...)}` below to filter to visible items.
+              // [VIRT CHUNK 3] Render from descriptors VIA the virtualizer.
+              // Only the ~30 descriptors in the visible window mount per
+              // render — that's the source of the Group By perf win
+              // (500 rows × 16 cells → ~30 rows × 16 cells per render).
               (() => {
                 const descriptors = timePhase("buildDescriptors (grouped)", () =>
                   buildBacklogRowDescriptors(sortedGroupedStoryRows, groupedStandaloneInitiatives),
@@ -8646,9 +8725,7 @@ export function BacklogPlanningPanel({
                   // eslint-disable-next-line no-console
                   console.log(`[virt] grouped descriptors: ${descriptors.length}`);
                 }
-                return timePhase("renderFromDescriptors (grouped)", () =>
-                  descriptors.map((d) => <Fragment key={d.key}>{d.render()}</Fragment>),
-                );
+                return <VirtualizedBacklogRows descriptors={descriptors} scrollElementRef={tableScrollRef} />;
               })()
             ) : workItemFilter.length === 1 && workItemFilter[0] === "story" ? (
               // Story-only filter without grouping → flat story rows. Skip
