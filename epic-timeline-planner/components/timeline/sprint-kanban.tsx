@@ -10,6 +10,7 @@ import {
   ArrowRight,
   CheckCheck,
   CheckCircle2,
+  Flag,
   Folder,
   ListTodo,
   PlayCircle,
@@ -868,18 +869,32 @@ export function SprintKanbanBoard({
               />
             </div>
             {showGoToOpenSprint ? (
-              <a
-                href="#"
-                className="pointer-events-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-sky-700 underline decoration-sky-400 underline-offset-4 hover:text-sky-800"
-                onClick={(event) => {
-                  event.preventDefault();
+              /* Card-style panel for the jump-to-current-sprint link.
+               * Floats above the closed-sprint frosted overlay with a
+               * soft sky→indigo gradient, gentle ring + shadow, and an
+               * arrow that nudges right on hover. Replaces the previous
+               * underlined inline link with something that feels like a
+               * proper "call to action" panel. */
+              <button
+                type="button"
+                onClick={() => {
                   const target = currentWorkYearSprintForPlan(planYear);
                   if (target != null) onGoToOpenSprint!(target);
                 }}
+                className="group/jump pointer-events-auto inline-flex items-center gap-3 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-4 py-2 text-left shadow-sm ring-1 ring-white/60 transition-all duration-150 hover:-translate-y-px hover:from-sky-100 hover:via-indigo-100 hover:to-violet-100 hover:shadow-md hover:ring-sky-200/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
-                <ArrowRight className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
-                View current sprint (Sprint {workTargetSprint})
-              </a>
+                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                  <ArrowRight className="size-4 shrink-0 transition-transform duration-150 group-hover/jump:translate-x-0.5" strokeWidth={2.25} aria-hidden />
+                </span>
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-500">Jump to</span>
+                  <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+                    <span>Current sprint ·</span>
+                    <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
+                    <span>Sprint {workTargetSprint}</span>
+                  </span>
+                </span>
+              </button>
             ) : null}
           </div>
         </>
