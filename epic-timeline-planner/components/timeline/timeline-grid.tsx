@@ -217,22 +217,47 @@ function DeferredMount({
 }
 
 /** Vertical sprint columns + subtle month pairs (2 sprints) for roadmap Gantt lanes. */
-function GanttLaneSprintBackdrop({ columnCount, className }: { columnCount: number; className?: string }) {
+function GanttLaneSprintBackdrop({
+  columnCount,
+  className,
+  daySubdivisions,
+}: {
+  columnCount: number;
+  className?: string;
+  /** Optional per-column day count. When provided, the backdrop renders
+   *  `days - 1` thin vertical guides inside each column at uniform
+   *  fractions, so the month view shows day-level demarcations on top
+   *  of the existing sprint boundary. */
+  daySubdivisions?: readonly number[];
+}) {
   if (columnCount <= 0) return null;
   return (
     <div
       className={cn("pointer-events-none absolute inset-0 z-0 flex w-full gap-2", className)}
       aria-hidden
     >
-      {Array.from({ length: columnCount }, (_, i) => (
-        <div
-          key={i}
-          className={cn(
-            "min-h-full min-w-0 flex-1",
-            i < columnCount - 1 && "border-r border-slate-100/60",
-          )}
-        />
-      ))}
+      {Array.from({ length: columnCount }, (_, i) => {
+        const days = daySubdivisions?.[i] ?? 0;
+        return (
+          <div
+            key={i}
+            className={cn(
+              "relative min-h-full min-w-0 flex-1",
+              i < columnCount - 1 && "border-r border-slate-100/60",
+            )}
+          >
+            {days > 1
+              ? Array.from({ length: days - 1 }, (_, k) => (
+                  <div
+                    key={k}
+                    className="pointer-events-none absolute top-0 bottom-0 w-px bg-slate-200/55"
+                    style={{ left: `${((k + 1) / days) * 100}%` }}
+                  />
+                ))
+              : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1351,8 +1376,18 @@ function EpicGanttLaneRow({
     >
       {month != null ? (
         <>
-          {/* gap-0 overrides gap-2 so the sprint halves each occupy exactly 50% — aligns with absolute % bar positions */}
-          <GanttLaneSprintBackdrop columnCount={2} className="gap-0" />
+          {/* gap-0 overrides gap-2 so the sprint halves each occupy exactly 50% — aligns with absolute % bar positions.
+           *  Day-level vertical guides are rendered inside each sprint
+           *  half: sprint 1 = days 1-15, sprint 2 = days 16-DIM. */}
+          <GanttLaneSprintBackdrop
+            columnCount={2}
+            className="gap-0"
+            daySubdivisions={
+              planYear != null
+                ? [15, Math.max(1, daysInMonth(planYear, month) - 15)]
+                : undefined
+            }
+          />
           <div className="relative z-[1]">{laneBody}</div>
         </>
       ) : (
@@ -1371,6 +1406,8 @@ function MonthInitiativeGanttLaneRow({
   healthTooltip,
   effortProgressPercent = null,
   teamAssignmentChip = null,
+  planYear,
+  month,
 }: {
   initiative: InitiativeItem;
   onOpenInitiative: (initiativeId: string) => void;
@@ -1380,6 +1417,10 @@ function MonthInitiativeGanttLaneRow({
   healthTooltip?: string;
   effortProgressPercent?: number | null;
   teamAssignmentChip?: { label: string; className: string } | null;
+  /** When set, the row's backdrop also renders day-level vertical
+   *  guides matching the active month's sprint-1 / sprint-2 splits. */
+  planYear?: number;
+  month?: number;
 }) {
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
@@ -1393,7 +1434,14 @@ function MonthInitiativeGanttLaneRow({
       data-gantt-lane-index={ganttLaneSortIndex}
       data-gantt-timeline-row={Number.isFinite(initiative.timelineRow) ? initiative.timelineRow : 0}
     >
-      <GanttLaneSprintBackdrop columnCount={2} />
+      <GanttLaneSprintBackdrop
+        columnCount={2}
+        daySubdivisions={
+          planYear != null && month != null
+            ? [15, Math.max(1, daysInMonth(planYear, month) - 15)]
+            : undefined
+        }
+      />
       <div className="relative z-[1] grid min-w-0 gap-2" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
         <div className="relative z-20 min-w-0 pt-2.5 pb-2.5" style={{ gridColumn: "1 / span 2", gridRow: 1 }}>
           <InitiativeTimelineBar
@@ -5002,7 +5050,11 @@ export function TimelineGrid({
                   key={`year-init-row-${group.timelineRow}`}
                   className={cn(
                     "relative min-w-0 z-10 py-1.5",
-                    idx < ganttHealthFilteredYearInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                    // Zebra striping: every odd-index row gets a soft slate
+                    // tint so adjacent lanes read as distinct. Translucent so
+                    // the today line + sprint backdrop still show through.
+                    idx % 2 === 1 && "bg-slate-100/55",
+                    "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
@@ -5064,6 +5116,26 @@ export function TimelineGrid({
                   </div>
                 </div>
               ))}
+              {/* Trailing empty rows extend the zebra pattern below the
+               *  last initiative so the unused area at the bottom of the
+               *  Gantt reads as part of the same striped grid (instead of
+               *  blank white space). 24 placeholders is enough to cover
+               *  any realistic viewport height; the scroll container
+               *  clips overflow. */}
+              {Array.from({ length: 24 }).map((_, padIdx) => {
+                const stripeIdx = ganttHealthFilteredYearInitiativeRows.length + padIdx;
+                return (
+                  <div
+                    key={`year-init-row-pad-${padIdx}`}
+                    aria-hidden
+                    className={cn(
+                      "relative min-w-0 z-10 py-1.5 border-b border-slate-200/50",
+                      stripeIdx % 2 === 1 && "bg-slate-100/55",
+                    )}
+                    style={{ minHeight: 52 }}
+                  />
+                );
+              })}
               </div>
             </div>
           </div>
@@ -5096,7 +5168,9 @@ export function TimelineGrid({
                   key={`year-epic-row-${group.timelineRow}`}
                   className={cn(
                     "relative min-w-0 z-10 py-1.5",
-                    idx < ganttHealthFilteredYearEpicRows.length - 1 && "border-b border-slate-200/50",
+                    // Zebra striping (matches initiative-mode rows above).
+                    idx % 2 === 1 && "bg-slate-100/55",
+                    "border-b border-slate-200/50",
                   )}
                   data-gantt-lane-index={idx}
                   data-gantt-timeline-row={group.timelineRow}
@@ -5204,6 +5278,23 @@ export function TimelineGrid({
                   </div>
                 </div>
               ))}
+              {/* Trailing empty rows extend the zebra pattern below the
+               *  last epic so the unused area at the bottom of the
+               *  Gantt reads as part of the same striped grid. */}
+              {Array.from({ length: 24 }).map((_, padIdx) => {
+                const stripeIdx = ganttHealthFilteredYearEpicRows.length + padIdx;
+                return (
+                  <div
+                    key={`year-epic-row-pad-${padIdx}`}
+                    aria-hidden
+                    className={cn(
+                      "relative min-w-0 z-10 py-1.5 border-b border-slate-200/50",
+                      stripeIdx % 2 === 1 && "bg-slate-100/55",
+                    )}
+                    style={{ minHeight: 52 }}
+                  />
+                );
+              })}
               </div>
             </div>
           </div>
@@ -6694,7 +6785,10 @@ export function TimelineGrid({
                               <div
                                 key={initiative.id}
                                 className={cn(
-                                  rowIndex < ganttHealthFilteredMonthInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                                  "border-b border-slate-200/50",
+                                  // Zebra striping — matches the year and
+                                  // single-quarter Gantt views.
+                                  rowIndex % 2 === 1 && "bg-slate-100/55",
                                 )}
                               >
                                 <MonthInitiativeGanttLaneRow
@@ -6706,6 +6800,8 @@ export function TimelineGrid({
                                   healthTooltip={initTooltip}
                                   effortProgressPercent={initHealth.progressPercent}
                                   teamAssignmentChip={showGanttTeamChips && initiative.team ? epicDeliveryTeamAssignmentChip(initiative.team) : null}
+                                  planYear={currentYear}
+                                  month={activeMonth}
                                 />
                               </div>
                             );
@@ -6743,7 +6839,9 @@ export function TimelineGrid({
                               <div
                                 key={epic.id}
                                 className={cn(
-                                  rowIndex < ganttHealthFilteredMonthEpicRows.length - 1 && "border-b border-slate-200/50",
+                                  "border-b border-slate-200/50",
+                                  // Zebra striping — matches the other Gantt views.
+                                  rowIndex % 2 === 1 && "bg-slate-100/55",
                                 )}
                               >
                                 <EpicGanttLaneRow
@@ -6768,6 +6866,47 @@ export function TimelineGrid({
                             );
                           })
                         )}
+                        {/* Trailing empty rows extend the zebra pattern
+                         *  below the last month-view row — matches the
+                         *  year and single-quarter Gantt views. The
+                         *  stripe offset honors which mode is active so
+                         *  the alternating pattern stays continuous from
+                         *  the last real row. */}
+                        {(() => {
+                          const realCount =
+                            roadmapBarMode === "initiatives"
+                              ? ganttHealthFilteredMonthInitiativeRows.length
+                              : ganttHealthFilteredMonthEpicRows.length;
+                          if (realCount === 0) return null;
+                          // Day-level subdivisions used by every pad row's
+                          // backdrop so vertical day lines continue from
+                          // the last real row down to the bottom of the
+                          // scroll area (instead of stopping abruptly).
+                          const monthDaySubdivisions: readonly number[] = [
+                            15,
+                            Math.max(1, daysInMonth(currentYear, activeMonth) - 15),
+                          ];
+                          return Array.from({ length: 24 }).map((_, padIdx) => {
+                            const stripeIdx = realCount + padIdx;
+                            return (
+                              <div
+                                key={`m-row-pad-${padIdx}`}
+                                aria-hidden
+                                className={cn(
+                                  "relative border-b border-slate-200/50",
+                                  stripeIdx % 2 === 1 && "bg-slate-100/55",
+                                )}
+                                style={{ minHeight: 56 }}
+                              >
+                                <GanttLaneSprintBackdrop
+                                  columnCount={2}
+                                  className="gap-0"
+                                  daySubdivisions={monthDaySubdivisions}
+                                />
+                              </div>
+                            );
+                          });
+                        })()}
                       </StripedGanttLaneScrollArea>
                       {(roadmapBarMode === "initiatives" && ganttSearchAppliedMonthInitiativeRows.length === 0) ||
                       (roadmapBarMode !== "initiatives" && ganttSearchAppliedMonthEpicRows.length === 0) ? (
@@ -7230,7 +7369,11 @@ export function TimelineGrid({
                             key={`q-init-row-${group.timelineRow}`}
                             className={cn(
                               "relative min-w-0 z-10 py-2.5",
-                              idx < ganttHealthFilteredQuarterInitiativeRows.length - 1 && "border-b border-slate-200/50",
+                              // Zebra striping — same pattern as the
+                              // all-quarters Gantt so single-quarter
+                              // and year views read consistently.
+                              idx % 2 === 1 && "bg-slate-100/55",
+                              "border-b border-slate-200/50",
                             )}
                             data-gantt-lane-index={idx}
                             data-gantt-timeline-row={group.timelineRow}
@@ -7293,6 +7436,22 @@ export function TimelineGrid({
                             </div>
                           </div>
                         ))}
+                        {/* Trailing empty rows extend the zebra pattern
+                         *  below the last quarter initiative. */}
+                        {Array.from({ length: 24 }).map((_, padIdx) => {
+                          const stripeIdx = ganttHealthFilteredQuarterInitiativeRows.length + padIdx;
+                          return (
+                            <div
+                              key={`q-init-row-pad-${padIdx}`}
+                              aria-hidden
+                              className={cn(
+                                "relative min-w-0 z-10 py-2.5 border-b border-slate-200/50",
+                                stripeIdx % 2 === 1 && "bg-slate-100/55",
+                              )}
+                              style={{ minHeight: 60 }}
+                            />
+                          );
+                        })}
                       </StripedGanttLaneScrollArea>
                     )
                   ) : quarterRoadmapEpics.length === 0 ? (
@@ -7332,7 +7491,9 @@ export function TimelineGrid({
                           key={`q-epic-row-${group.timelineRow}`}
                           className={cn(
                             "relative min-w-0 z-10 py-2.5",
-                            idx < ganttHealthFilteredQuarterEpicRows.length - 1 && "border-b border-slate-200/50",
+                            // Zebra striping — matches the other Gantt views.
+                            idx % 2 === 1 && "bg-slate-100/55",
+                            "border-b border-slate-200/50",
                           )}
                           data-gantt-lane-index={idx}
                           data-gantt-timeline-row={group.timelineRow}
@@ -7447,6 +7608,22 @@ export function TimelineGrid({
                           </div>
                         </div>
                       ))}
+                      {/* Trailing empty rows extend the zebra pattern
+                       *  below the last quarter epic. */}
+                      {Array.from({ length: 24 }).map((_, padIdx) => {
+                        const stripeIdx = ganttHealthFilteredQuarterEpicRows.length + padIdx;
+                        return (
+                          <div
+                            key={`q-epic-row-pad-${padIdx}`}
+                            aria-hidden
+                            className={cn(
+                              "relative min-w-0 z-10 py-2.5 border-b border-slate-200/50",
+                              stripeIdx % 2 === 1 && "bg-slate-100/55",
+                            )}
+                            style={{ minHeight: 60 }}
+                          />
+                        );
+                      })}
                     </StripedGanttLaneScrollArea>
                   )}
                   </div>

@@ -59,6 +59,7 @@ import {
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { toast } from "sonner";
+import { fireApprovalConfetti } from "@/lib/approval-confetti";
 
 import { FilterLatencyDebugger, getPendingMarkStartedAt, markFilterChange, recordPhase, reportFilterStable, timePhase } from "@/components/dev/filter-latency-debugger";
 import { ROW_ESTIMATED_HEIGHTS, type RowDescriptor } from "@/components/backlog/backlog-row-descriptors";
@@ -4002,7 +4003,13 @@ export function BacklogPlanningPanel({
     const nextRaw = (nextValueOverride ?? editingStoryCell?.value ?? "").trim();
     if (field === "status") {
       const next = nextRaw as "todo" | "inProgress" | "done" | "approved";
-      if (next !== current.status) await patchStoryInline(storyId, { status: next });
+      if (next !== current.status) {
+        await patchStoryInline(storyId, { status: next });
+        // Short confetti burst on done → approved transitions.
+        if (current.status === "done" && next === "approved") {
+          fireApprovalConfetti();
+        }
+      }
     } else if (field === "sprint") {
       const next = nextRaw === "unscheduled" ? null : Number(nextRaw);
       if (next !== current.sprint) await patchStoryInline(storyId, { sprint: next });

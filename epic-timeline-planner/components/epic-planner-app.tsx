@@ -8,6 +8,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
+import { fireApprovalConfetti } from "@/lib/approval-confetti";
 
 import { UserChip } from "@/components/auth/user-chip";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
@@ -3995,6 +3996,21 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       const status = kanbanMatch[2] as StoryStatus;
       const nextStatus = status;
 
+      // Capture the story's current status BEFORE the optimistic update so
+      // we can detect a done → approved transition and fire a short
+      // confetti celebration after the patch lands.
+      let prevStatus: StoryStatus | null = null;
+      outer: for (const init of initiatives) {
+        for (const epic of init.epics ?? []) {
+          for (const s of epic.userStories ?? []) {
+            if (s.id === storyId) {
+              prevStatus = s.status as StoryStatus;
+              break outer;
+            }
+          }
+        }
+      }
+
       const teamFilter = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
       const monthForBoard = sprintCapacityPlanMonth;
       let collectRows = 0;
@@ -4046,6 +4062,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           throw new Error(`Failed to update story: ${response.status}`);
         }
         toast.success("Story updated");
+        // Celebrate done → approved transitions with a short confetti
+        // burst. Other transitions stay quiet so the effect remains tied
+        // to the specific approval moment.
+        if (prevStatus === "done" && nextStatus === "approved") {
+          fireApprovalConfetti();
+        }
         record("story:kanban", {
           storyId,
           sprint,
