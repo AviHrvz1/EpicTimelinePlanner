@@ -104,7 +104,7 @@ export function UserChip() {
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         title={displayName}
-        className="group inline-flex h-[32px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border-0 bg-white px-1.5 pr-3 text-[12.5px] font-semibold leading-none tracking-wide text-slate-800 ring-1 ring-slate-200 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+        className="group inline-flex h-[32px] shrink-0 items-center gap-2 whitespace-nowrap rounded-l-none rounded-r-full border-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pl-3 pr-4 text-[12.5px] font-semibold leading-none tracking-wide text-indigo-900 ring-1 ring-indigo-200/80 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
       >
         {effectiveImage ? (
           // eslint-disable-next-line @next/next/no-img-element

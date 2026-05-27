@@ -5192,7 +5192,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               className="block size-[50px] shrink-0 -translate-x-[3px] scale-[0.88] transition-transform duration-150 group-hover:rotate-[-4deg] group-hover:scale-[0.93]"
             />
           </button>
-          <div className="ml-1 mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
+          {/* Chip sits flush against the logo panel's right edge so the
+           *  flat left side of the user chip reads as a tab extending
+           *  from the logo. -ml-[3px] cancels the few pixels between the
+           *  bar's pl-[3.75rem] reserve and the logo card's actual right
+           *  edge (left-1 + -translate-x-[5px] + ~58px width). */}
+          <div className="-ml-[1px] mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
             <UserChip />
           </div>
           <div ref={setSummaryBarEl} className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
