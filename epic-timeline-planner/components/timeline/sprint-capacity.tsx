@@ -200,6 +200,7 @@ function CapacityStoryCard({
   onOpenStory,
   highlight = false,
   readOnly = false,
+  workspaceDirectoryUsers = null,
 }: {
   card: CapacityStoryCardModel;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
@@ -215,6 +216,8 @@ function CapacityStoryCard({
    *  unschedule button, and the drag listeners are all disabled.
    *  Used by the closed-sprint overlay. */
   readOnly?: boolean;
+  /** Used to resolve the assignee's avatar photo on the assignee chip. */
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null;
 }) {
   const isUnassigned = card.assigneeLabel === "Unassigned";
   const [showAssignHint, setShowAssignHint] = useState(isUnassigned);
@@ -319,15 +322,28 @@ function CapacityStoryCard({
           <div className="flex min-w-0 items-center gap-1">
             <div
               className={cn(
-                "inline-flex max-w-full min-w-0 items-center gap-0.5 rounded border px-1 py-px text-[10px] font-medium leading-tight",
+                "inline-flex max-w-full min-w-0 items-center gap-1 rounded border py-px pl-0.5 pr-1 text-[10px] font-medium leading-tight",
                 isUnassigned
                   ? "border-slate-200/70 bg-slate-50 text-slate-500"
                   : "border-emerald-200/80 bg-emerald-50 text-emerald-900",
               )}
               title={card.assigneeLabel}
             >
-              <User className="size-2.5 shrink-0 opacity-80" aria-hidden />
-              <span className="min-w-0 truncate">{card.assigneeLabel}</span>
+              {isUnassigned ? (
+                <User className="ml-0.5 size-2.5 shrink-0 opacity-80" aria-hidden />
+              ) : (
+                (() => {
+                  const resolved = resolveAssigneeAvatar(card.assigneeLabel, workspaceDirectoryUsers ?? null);
+                  return resolved.image ? (
+                    <UserAvatar name={resolved.name} image={resolved.image} size={14} className="ring-0" />
+                  ) : (
+                    <User className="ml-0.5 size-2.5 shrink-0 opacity-80" aria-hidden />
+                  );
+                })()
+              )}
+              <span className="min-w-0 truncate">
+                {isUnassigned ? card.assigneeLabel : formatAssigneeShortLabel(card.assigneeLabel)}
+              </span>
             </div>
             <span
               className={cn(
@@ -687,15 +703,22 @@ function CapacityBucket({
               >
                 <span
                   className={cn(
-                    "inline-flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5",
+                    "inline-flex items-center gap-1.5 whitespace-nowrap px-1.5 py-0.5",
                     storiesOverCapacity ? cn(rollupOverCapacityPill, "font-medium") : rollupNeutralPill,
                   )}
                 >
-                  Σ Stories{" "}
+                  {/* Σ | Stories | 2.0 Days — pipe-separated chip
+                   *  matches the user-story / initiative / epic dialog
+                   *  pattern so the rolled-up totals read consistently
+                   *  across the app. */}
+                  <span className={cn(storiesOverCapacity ? "text-rose-700" : "text-slate-400")}>Σ</span>
+                  <span aria-hidden className="inline-block h-3 w-px self-center bg-slate-300" />
+                  <span>Stories</span>
+                  <span aria-hidden className="inline-block h-3 w-px self-center bg-slate-300" />
                   <span className={cn("tabular-nums", storiesOverCapacity ? "text-rose-950" : "text-slate-800")}>
                     {assignedTotal.toFixed(1)}
                   </span>
-                  <span className={cn("ml-1", storiesOverCapacity && "text-rose-950")}>Days</span>
+                  <span className={cn(storiesOverCapacity && "text-rose-950")}>Days</span>
                   {storiesOverCapacity ? (
                     <RollupOverCapWarn
                       tooltipId={sprintStoriesWarnId}
@@ -793,6 +816,7 @@ function CapacityBucket({
                         onOpenStory={onOpenStory}
                         highlight={highlightStoryIds?.has(card.id) ?? false}
                         readOnly={readOnly}
+                        workspaceDirectoryUsers={workspaceDirectoryUsers}
                       />
                       <StoryDropSlot
                         yearSprint={yearSprint}

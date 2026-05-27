@@ -220,7 +220,11 @@ export function TeamEpicCard({
             ) : null}
           </div>
           <div className="grid shrink-0 grid-cols-[auto_2.5rem] items-center gap-x-2 gap-y-1">
-            <span className="whitespace-nowrap text-[11px] font-medium text-slate-400">Σ Stories</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-slate-400">
+              <span>Σ</span>
+              <span aria-hidden className="inline-block h-3 w-px self-center bg-slate-300" />
+              <span>Est. Stories Days</span>
+            </span>
             <input
               type="number"
               readOnly
@@ -234,7 +238,7 @@ export function TeamEpicCard({
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />
-            <span className="whitespace-nowrap text-[12px] font-semibold text-slate-600">Est Days</span>
+            <span className="whitespace-nowrap text-[12px] font-semibold text-slate-600">Est. Epic Days</span>
             <input
               type="number"
               min={0}
@@ -591,10 +595,22 @@ export function TeamCapacityBucket({
 
       {/* Bottom rollup bar */}
       <div className="mt-2 flex min-w-0 items-center gap-2 border-t border-slate-200/70 pt-2" role="status" aria-live="polite">
-        <span className={cn("whitespace-nowrap", rollupNeutralPill)}>
-          Σ Stories Estimation
+        <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap", rollupNeutralPill)}>
+          {/* Σ | Epic Stories Est. Days | N — pipe-separated chip,
+           *  matches the per-epic row label "Σ Est. Stories Days" so
+           *  the language stays consistent across scopes (per-epic
+           *  rollup vs. team-wide rollup). "Epic Stories" disambiguates
+           *  from a different epic's stories at a glance. */}
+          <span className={cn(childSumOverCapacity ? "text-rose-700" : "text-slate-400")}>Σ</span>
+          <span aria-hidden className="inline-block h-3 w-px self-center bg-slate-300" />
+          <span>Epic Stories Est. Days</span>
+          <span aria-hidden className="inline-block h-3 w-px self-center bg-slate-300" />
           <span className={cn(
-            "inline-flex size-5 items-center justify-center rounded-full text-[10px] tabular-nums font-bold",
+            // Pill shape: stays circular for 1-2 digit values and
+            // expands into a rounded rectangle for 3+ digit values so
+            // the number never overflows. `min-w-5` keeps the same
+            // visual weight at low digit counts.
+            "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tabular-nums font-bold",
             childSumOverCapacity
               ? "bg-rose-600 text-white shadow-sm"
               : "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200/80",
@@ -602,19 +618,26 @@ export function TeamCapacityBucket({
             {Math.round(sumChildStoryEstimates)}
           </span>
           {childSumOverCapacity ? (
-            <RollupOverCapWarn tooltipId={rollupWarnChildId} ariaLabel="Σ Stories Estimation exceeds team capacity — details">
+            <RollupOverCapWarn tooltipId={rollupWarnChildId} ariaLabel="Σ Epic Stories Est. Days exceeds team capacity — details">
               <span className="font-semibold text-rose-800">Over capacity</span>
               <span className="mt-0.5 block text-slate-600">
-                Σ Stories Estimation totals {Math.round(sumChildStoryEstimates)} Days but team capacity is {displayCap} Days.
+                Σ Epic Stories Est. Days totals {Math.round(sumChildStoryEstimates)} but team capacity is {displayCap} Days.
                 Reduce story estimates, raise capacity, or move epics.
               </span>
             </RollupOverCapWarn>
           ) : null}
         </span>
-        <span className={cn("whitespace-nowrap", rollupNeutralPill)}>
-          Σ Epic Estimations
+        <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap", rollupNeutralPill)}>
+          <span className={cn(estSumOverCapacity ? "text-rose-700" : "text-slate-400")}>Σ</span>
+          <span aria-hidden className="inline-block h-3 w-px self-center bg-slate-300" />
+          <span>Epic Est. Days</span>
+          <span aria-hidden className="inline-block h-3 w-px self-center bg-slate-300" />
           <span className={cn(
-            "inline-flex size-5 items-center justify-center rounded-full text-[10px] tabular-nums font-bold",
+            // Pill shape: stays circular for 1-2 digit values and
+            // expands into a rounded rectangle for 3+ digit values so
+            // the number never overflows. `min-w-5` keeps the same
+            // visual weight at low digit counts.
+            "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tabular-nums font-bold",
             estSumOverCapacity
               ? "bg-rose-600 text-white shadow-sm"
               : "bg-violet-100 text-violet-700 ring-1 ring-violet-200/80",
@@ -622,10 +645,10 @@ export function TeamCapacityBucket({
             {Math.round(sumOriginalEstimates)}
           </span>
           {estSumOverCapacity ? (
-            <RollupOverCapWarn tooltipId={rollupWarnEstId} ariaLabel="Σ Epic Estimations exceeds team capacity — details">
+            <RollupOverCapWarn tooltipId={rollupWarnEstId} ariaLabel="Σ Epic Est. Days exceeds team capacity — details">
               <span className="font-semibold text-rose-800">Over capacity</span>
               <span className="mt-0.5 block text-slate-600">
-                Σ Epic Estimations is {Math.round(sumOriginalEstimates)} Days but team capacity is {displayCap} Days.
+                Σ Epic Est. Days is {Math.round(sumOriginalEstimates)} but team capacity is {displayCap} Days.
                 Lower epic estimates, raise capacity, or remove epics.
               </span>
             </RollupOverCapWarn>
