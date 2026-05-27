@@ -7,8 +7,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Inter is loaded via <link> in app/layout.tsx and applied via `font-sans`
+     (Tailwind utility) which resolves through this token. Heading uses the
+     same font; mono falls back to a system monospace stack so utility
+     callsites (`font-mono`, tabular debug rows) still render with a
+     monospaced face even though we no longer ship a custom mono font. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Mono", "Roboto Mono", monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -351,10 +356,15 @@
   body {
     @apply bg-background text-foreground antialiased;
     text-rendering: optimizeLegibility;
+    /* Inter's stylistic alternates: cv01 (alternate single-storey a),
+       cv05 (alternate g), cv11 (alternate l), ss01 (open digits), ss03
+       (curved r). These are visually subtle but improve legibility at
+       small sizes — matching the previous Geist tuning. */
     font-feature-settings: "cv11", "ss01", "ss03";
   }
   html {
     @apply font-sans;
+    font-family: "Inter", sans-serif;
   }
 }
 

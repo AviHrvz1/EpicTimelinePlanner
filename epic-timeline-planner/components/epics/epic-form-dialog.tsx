@@ -1427,7 +1427,7 @@ export function EpicFormDialog({
                       suggestions={assigneeNameSuggestions}
                       directoryUsers={workspaceDirectoryUsers}
                       placeholder="Type or pick a name"
-                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                      className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-9 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                     />
                     {assignee ? (
                       <button

@@ -5978,7 +5978,7 @@ export function TimelineGrid({
                   {!summaryBarPortalElement ? summarySprintChipsJsx : null}
                   <div
                     ref={sprintKanbanSearchRef}
-                    className="relative -mr-[52px] flex items-center"
+                    className="relative -mr-2 flex items-center"
                     onMouseEnter={() => {
                       if (sprintKanbanSearchCloseTimer.current) clearTimeout(sprintKanbanSearchCloseTimer.current);
                     }}
@@ -5993,7 +5993,7 @@ export function TimelineGrid({
                         visual box so the search icon + clear-X land inside
                         the input rather than at the outer wrapper's edge
                         (which is shifted by the wrapper's negative margin). */}
-                    <div className="group relative w-[calc(25%-45px)] min-w-[8rem]">
+                    <div className="group relative w-[calc(30%-10px)] min-w-[14rem]">
                     <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                     <input
                       type="text"

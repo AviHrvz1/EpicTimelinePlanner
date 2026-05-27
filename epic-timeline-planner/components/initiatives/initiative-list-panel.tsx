@@ -1019,7 +1019,7 @@ function InitiativeTreeEpicRow({
         <button
           type="button"
           onClick={() => onOpenEpic(epic, initiative)}
-          className="min-w-0 flex-1 rounded-md pl-1.5 pr-0 text-left font-normal hover:bg-white/90"
+          className="min-w-0 flex-1 rounded-md pl-0.5 pr-0 text-left font-normal hover:bg-white/90"
           aria-label={`Open epic ${epic.title}`}
         >
           <div className="flex min-w-0 items-center gap-0 pl-0">
@@ -1383,7 +1383,7 @@ function InitiativeTreeCard({
                   aria-label={`Open initiative ${initiative.title}`}
                 >
                   <div className="flex w-full min-w-0 items-center gap-1">
-                    <div className="flex min-w-0 flex-1 items-center gap-2.5 pl-0">
+                    <div className="flex min-w-0 flex-1 items-center gap-1 pl-0">
                       <span className="inline-flex shrink-0 text-[16px] leading-none text-slate-800">
                         {/* Force the canonical initiative icon (Zap) in the list
                     panel — ignore the per-initiative custom icon here so the
@@ -1746,7 +1746,7 @@ function SprintEpicCard({
           <button
             type="button"
             onClick={() => onOpenEpic(epic, initiative)}
-            className="w-full rounded-md pl-1.5 pr-0 text-left font-normal hover:bg-slate-50"
+            className="w-full rounded-md pl-0.5 pr-0 text-left font-normal hover:bg-slate-50"
             aria-label={`Open epic ${epic.title}`}
           >
             <div className="flex w-full min-w-0 items-center gap-0">
