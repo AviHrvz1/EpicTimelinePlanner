@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, AlertOctagon, AlertTriangle, Check, ChevronDown, ChevronRight, Folder, GripHorizontal, Hourglass, ListChecks, Search, X, Zap } from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, Check, ChevronDown, ChevronRight, Folder, GripHorizontal, Hourglass, Info, ListChecks, Search, Sigma, X, Zap } from "lucide-react";
 
 import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 
-export type ProgressBasis = "stories" | "days";
+/** Re-export the canonical progress-basis type from `lib/progress` so the
+ *  rest of the planner picks up the new `epicEst` variant. */
+export type ProgressBasis = "stories" | "days" | "epicEst";
 
 export type RoadmapHealthItem = {
   id: string;
@@ -310,15 +312,28 @@ export function RoadmapHealthPopover({
             onChange={(v) => onBarModeChange(v as "initiatives" | "epics")}
           />
           <ToggleGroup
-            label="Progress basis"
+            label="Health & progress basis"
             options={[
-              { value: "days", label: "Days Left", icon: Hourglass },
-              { value: "stories", label: "Stories Done", icon: ListChecks },
+              { value: "days", label: "Σ | Child Stories", icon: Sigma },
+              { value: "epicEst", label: "Σ | Epic Est.", icon: Sigma },
             ]}
-            value={progressBasis}
+            value={progressBasis === "stories" ? "days" : progressBasis}
             onChange={(v) => onProgressBasisChange(v as ProgressBasis)}
           />
         </div>
+
+        {/* Help block explaining what each basis means — collapsed by
+         *  default, expandable for users who aren't sure which mode to
+         *  pick. Touches the same surface area as the Roadmap Health
+         *  popover so the toggle's reach is explicit. */}
+        <BasisHelp />
+        {progressBasis === "epicEst" ? (
+          <p className="mt-2 text-[11px] leading-snug text-slate-500">
+            <Info className="mr-1 inline size-3 align-[-2px] text-indigo-500" aria-hidden />
+            Using the epic-level <strong className="font-semibold text-slate-700">Est. Epic Days</strong> — epics without
+            an estimate read as Unestimated.
+          </p>
+        ) : null}
 
         {/* Status filter — horizontal pills */}
         <div className="mt-3">
@@ -519,6 +534,59 @@ export function RoadmapHealthPopover({
       </div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * Collapsible explanation of the two progress-basis modes. Sits under the
+ * "Health & progress basis" toggle in the popover. The toggle's choice is
+ * persisted globally and feeds the Gantt bar badges, middle-panel
+ * progress bars, and this popover's verdicts — so users hitting the
+ * toggle for the first time need a quick read on what flips when they
+ * change it.
+ */
+function BasisHelp() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2.5 rounded-lg border border-indigo-100/80 bg-indigo-50/40">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-semibold text-indigo-700 transition-colors hover:bg-indigo-50/70"
+        aria-expanded={open}
+      >
+        {open ? (
+          <ChevronDown className="size-3 shrink-0" aria-hidden />
+        ) : (
+          <ChevronRight className="size-3 shrink-0" aria-hidden />
+        )}
+        <Info className="size-3 shrink-0" aria-hidden />
+        How each mode works
+      </button>
+      {open ? (
+        <div className="space-y-2 border-t border-indigo-100/80 px-3 py-2.5 text-[11.5px] leading-snug text-slate-600">
+          <div>
+            <p className="font-semibold text-slate-800">Σ | Child Stories</p>
+            <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+              <li><strong>Epic</strong> — sum of <em>Est. Days</em> on every child story.</li>
+              <li><strong>Initiative</strong> — sum across <em>initiative → epics → stories</em>.</li>
+            </ul>
+            <p className="mt-0.5 text-slate-500">Most accurate once user stories are written.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-800">Σ | Epic Est.</p>
+            <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+              <li><strong>Epic</strong> — uses <em>Est. Epic Days</em> from the epic dialog.</li>
+              <li><strong>Initiative</strong> — sum of <em>Est. Epic Days</em> across child epics.</li>
+            </ul>
+            <p className="mt-0.5 text-slate-500">Useful for early-stage epics that don't have stories yet.</p>
+          </div>
+          <p className="text-[11px] italic text-slate-500">
+            Applies to this popup, the middle-panel progress bars, and the Gantt bar health badges.
+          </p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

@@ -606,7 +606,7 @@ const leftPanelProgressSummaryClass =
 
 function epicCompletionMeta(
   epic: EpicItem,
-  basis: "days" | "stories" = "stories",
+  basis: "days" | "stories" | "epicEst" = "stories",
 ): {
   total: number;
   finished: number;
@@ -757,7 +757,7 @@ type InitiativeListPanelProps = {
   storyProgressDetailsVisible: boolean;
   /** Whether progress is presented as story-count completion or estimated-days
    *  burn-down. Lifted to the parent so middle panel + Gantt agree. */
-  progressBasis?: "days" | "stories";
+  progressBasis?: "days" | "stories" | "epicEst";
   /**
    * When true, show the month epic backlog layout (Epics header, + Epic). When false, show the initiatives
    * tree. The parent sets this from timeline month scope: any drilled-in month (Gantt, sprint, capacity,
@@ -927,7 +927,7 @@ function InitiativeTreeEpicRow({
   onOpenStory: (storyId: string) => void;
   onCreateStoryQuick?: (epicId: string, title: string) => Promise<void>;
   storyProgressDetailsVisible: boolean;
-  progressBasis: "days" | "stories";
+  progressBasis: "days" | "stories" | "epicEst";
   showDragHint?: boolean;
   /** Lowercased active search query. Epic title gets a yellow highlight
    *  when it contains this string; matched story titles ride the same
@@ -1240,7 +1240,7 @@ function InitiativeTreeCard({
   epicPlanDragEnabled: boolean;
   isCapacityPlanningMode?: boolean;
   storyProgressDetailsVisible: boolean;
-  progressBasis: "days" | "stories";
+  progressBasis: "days" | "stories" | "epicEst";
   /** Search-driven force-open set — when an epic id is in this set the epic
    *  accordion opens regardless of the user's local toggle state. Used by
    *  the parent panel to expand epics that contain a matching story. */
@@ -1607,7 +1607,7 @@ function SprintEpicCard({
   planContextMonth: number | null;
   hideScheduledIcon?: boolean;
   storyProgressDetailsVisible: boolean;
-  progressBasis: "days" | "stories";
+  progressBasis: "days" | "stories" | "epicEst";
   isOpenControlled?: boolean;
   onToggleControlled?: () => void;
   showDragHint?: boolean;

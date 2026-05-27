@@ -1331,9 +1331,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   /** Synced with TimelineGrid “Progress” chip — Gantt bar rows + left-panel story progress. */
   const [showRoadmapProgress, setShowRoadmapProgress] = useState(false);
   /** Shared with TimelineGrid + InitiativeListPanel — chooses whether progress
-   * is presented as story-count completion or estimated-days burn-down.
-   * Lives here so the middle panel + the Gantt show consistent numbers. */
-  const [progressBasis, setProgressBasis] = useState<"days" | "stories">("days");
+   *  is computed from the rolled-up child-story estimates ("days"), the
+   *  per-epic Est. Epic Days field ("epicEst", useful when stories aren't
+   *  written yet), or a flat story-count completion ("stories"). Lives
+   *  here so the middle panel + the Gantt show consistent numbers, and
+   *  persisted to localStorage so the user's pick survives reloads. */
+  const [progressBasis, setProgressBasis] = useState<"days" | "stories" | "epicEst">("days");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem("epicPlanner.progressBasis");
+    if (raw === "days" || raw === "stories" || raw === "epicEst") {
+      setProgressBasis(raw);
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("epicPlanner.progressBasis", progressBasis);
+  }, [progressBasis]);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
   const leftInitiativePanelAutoCollapsedForInsightsRef = useRef(false);

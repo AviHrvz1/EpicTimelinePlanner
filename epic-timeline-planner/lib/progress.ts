@@ -16,9 +16,23 @@
  */
 export type HealthStatus = "onTrack" | "watch" | "atRisk" | "overdue";
 
-/** Which formula drives the rendered progress %. The at-risk verdict is
- * always days-based because that's the only meaningful capacity check. */
-export type ProgressBasis = "days" | "stories";
+/** Which formula drives the rendered progress %.
+ *
+ *  - `days` (default) — sum of Est. Days across child stories ("Σ Child
+ *    Stories" in the UI). Burn-down comes from each story's daysLeft.
+ *    Most accurate once user stories are defined.
+ *  - `stories` — headcount of done stories / total stories. Treats every
+ *    story as equal weight, ignores days entirely.
+ *  - `epicEst` — uses the epic's own `originalEstimateDays` ("Σ Epic Est."
+ *    in the UI). Burn-down is time-based (working days elapsed since
+ *    `start`). Useful for early-stage epics that don't have user stories
+ *    yet — R&D can put a guess on the epic and still get a health verdict
+ *    against the chosen Gantt window.
+ *
+ *  The at-risk verdict is always derived from the chosen totalEffort vs.
+ *  working-days remaining — only the totalEffort source differs between
+ *  modes. */
+export type ProgressBasis = "days" | "stories" | "epicEst";
 
 export interface ProgressStoryInput {
   estimatedDays: number | null;
@@ -36,6 +50,10 @@ export interface ProgressInputs {
   now?: Date;
   /** Which formula to use for `progressPercent`. Default = "days". */
   basis?: ProgressBasis;
+  /** Required when `basis === "epicEst"`. Sourced from `epic.originalEstimateDays`
+   *  (or, for initiative rollups, the sum across child epics). When omitted in
+   *  `epicEst` mode the math falls back to treating the epic as unestimated. */
+  epicOriginalEstimateDays?: number | null;
 }
 
 export interface ProgressResult {
@@ -104,8 +122,36 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
     }
   }
 
-  // Days basis uses effort burn-down; stories basis uses headcount of done.
-  // Both clamp to 0..100. Stories basis treats unestimated stories the same
+  // `epicEst` basis: ignore the child-story rollup entirely and treat the
+  // epic as a single unit of effort with an "ideal linear burn-down".
+  // - totalEffort = the epic's own originalEstimateDays
+  // - remainingEffort = totalEffort − workingDaysElapsed(start → now),
+  //   clamped to [0, totalEffort]
+  // This gives early-stage epics (no child stories yet) a deterministic
+  // verdict against the picked Gantt window, without leaning on stories
+  // that haven't been written.
+  if (basis === "epicEst") {
+    const epicEst = input.epicOriginalEstimateDays ?? null;
+    if (epicEst != null && epicEst > 0) {
+      const elapsedWorkingDays = workingDaysBetween(input.start, now);
+      const burned = Math.min(epicEst, Math.max(0, elapsedWorkingDays));
+      totalEffort = epicEst;
+      remainingEffort = Math.max(0, epicEst - burned);
+      // `unestimatedCount` represents child-story coverage; in epicEst mode
+      // we surface 0 since the verdict doesn't depend on child stories.
+      unestimatedCount = 0;
+    } else {
+      // Epic has no estimate in epicEst mode → treat as unestimated; the
+      // status fallthrough below will pick `onTrack` (no work claimed yet)
+      // unless past the deadline.
+      totalEffort = 0;
+      remainingEffort = 0;
+      unestimatedCount = 1;
+    }
+  }
+
+  // Days/epicEst basis uses effort burn-down; stories basis uses headcount of done.
+  // All clamp to 0..100. Stories basis treats unestimated stories the same
   // as estimated ones (it doesn't care about days at all).
   const daysProgressPercent =
     totalEffort > 0
@@ -159,6 +205,9 @@ export interface InitiativeRollupInputs {
   end: Date;
   now?: Date;
   basis?: ProgressBasis;
+  /** Required when `basis === "epicEst"`. For an initiative this is the
+   *  sum of `originalEstimateDays` across every child epic. */
+  epicOriginalEstimateDays?: number | null;
 }
 
 const STATUS_RANK: Record<HealthStatus, number> = {
@@ -177,6 +226,7 @@ export function computeInitiativeProgress(input: InitiativeRollupInputs): Progre
     end: input.end,
     now: input.now,
     basis: input.basis,
+    epicOriginalEstimateDays: input.epicOriginalEstimateDays,
   });
 
   // Then override the status to be the worst of (own status, child statuses)
