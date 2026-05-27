@@ -5172,9 +5172,19 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           <button
             type="button"
             onClick={() => {
+              // Reset every drill-in dimension so the planner lands on the
+              // all-quarters Gantt with the initiative middle panel open.
+              // Same shape as the roadmap-change reset above (search for
+              // setActiveQuarterViewTab("gantt")) — keep them in sync if
+              // either gains a new dimension.
               setTopMode("roadmap");
               setFocusedQuarterLabel(null);
               setActiveTimelineMonth(null);
+              setActiveYearSprint(null);
+              setActiveSprintTab("kanban");
+              setActiveMonthPlanTab("epic-gantt");
+              setActiveQuarterViewTab("gantt");
+              setSprintStoryBoardTeamId(null);
               router.replace("/");
             }}
             title="Back to all-quarters roadmap"
