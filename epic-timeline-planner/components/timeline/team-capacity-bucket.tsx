@@ -527,7 +527,19 @@ export function TeamCapacityBucket({
             </div>
           </div>
         </div>
-        <div className={cn("flex min-h-0 flex-col items-center rounded-xl bg-slate-50/80 p-2", bucketColumnShellClass)}>
+        <div
+          className={cn(
+            // Mirrors the sprint capacity treatment: gradient panel
+            // matching the parent board's lavender→pink + soft inset
+            // shadow so the LOAD / thermometer column reads as recessed
+            // into the bucket.
+            "flex min-h-0 flex-col items-center rounded-xl p-2 shadow-[inset_0_2px_8px_-2px_rgba(15,23,42,0.14),inset_0_-1px_3px_-1px_rgba(15,23,42,0.08)]",
+            bucketColumnShellClass,
+          )}
+          style={{
+            backgroundImage: "linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #fdf2f8 100%)",
+          }}
+        >
           <div className="text-center">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Load</p>
             <p className="text-[15px] font-bold text-slate-700">{Math.round(utilization)}%</p>
