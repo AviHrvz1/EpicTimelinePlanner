@@ -66,6 +66,7 @@ import { computeProgress, computeInitiativeProgress, type HealthStatus, type Pro
 import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
 import { HealthBadge, HealthBadgeWithDetail, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
 type BurndownMetric = "daysLeft" | "storyCount";
 type WorkloadStatusKey = "todo" | "inProgress" | "done" | "approved";
@@ -593,6 +594,58 @@ function statusDrilldownIcon(status: string | null) {
 function statusDrilldownDisplayLabel(status: string | null): string {
   if (status === "To do") return "To Do";
   return status ?? "";
+}
+
+/**
+ * Backlog-style icon + label combo for a workflow status. Mirrors the
+ * convention in `components/backlog/backlog-planning-panel.tsx` so the
+ * Workload + Month Load drilldown rows read the same as the backlog table.
+ */
+function StoryStatusPill({ status }: { status: UserStoryItem["status"] }) {
+  const meta = (() => {
+    switch (status) {
+      case "approved":
+        return { label: "Approved", Icon: CheckCircle2, color: "text-violet-600" };
+      case "done":
+        return { label: "Done", Icon: CheckCheck, color: "text-emerald-600" };
+      case "inProgress":
+        return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
+      default:
+        return { label: "To do", Icon: ListTodo, color: "text-amber-600" };
+    }
+  })();
+  const { Icon } = meta;
+  return (
+    <span className="inline-flex items-center gap-1.5 font-semibold">
+      <Icon className={cn("size-3.5 shrink-0", meta.color)} aria-hidden />
+      <span className="truncate text-slate-700">{meta.label}</span>
+    </span>
+  );
+}
+
+/**
+ * Drilldown assignee cell — small UserAvatar + compact name ("First L.") so
+ * rows match the Workload Balance bar labels + Month Load row labels. Hover
+ * tooltip keeps the full name. */
+function DrilldownAssigneeCell({
+  assignee,
+  workspaceDirectoryUsers,
+}: {
+  assignee: string | null | undefined;
+  workspaceDirectoryUsers?: readonly { name: string; team?: string; image?: string | null }[];
+}) {
+  const name = assignee?.trim();
+  if (!name) {
+    return <InsightsTruncatedHoverLabel text="Unassigned" />;
+  }
+  const resolved = resolveAssigneeAvatar(name, workspaceDirectoryUsers);
+  const compact = compactAssigneeName(name);
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5" title={name}>
+      <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+      <span className="min-w-0 flex-1 truncate">{compact}</span>
+    </span>
+  );
 }
 
 function deriveEpicStatus(epic: EpicItem): "Unscheduled" | "To do" | "In progress" | "Done" | "Approved" {
@@ -2719,7 +2772,7 @@ export function MonthAnalytics({
           ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
+          <div className={cn("mt-0 flex-1 min-h-0 w-full min-w-0 overflow-hidden", INSIGHTS_CHART_FRAME)}>
             <div className="relative h-full min-h-0 min-w-0">
               <div
                 ref={statusDrilldownScrollRef}
@@ -3275,7 +3328,7 @@ export function MonthAnalytics({
           ) : null}
         </div>
         {workloadDrilldownAssignee ? (
-          <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
+          <div className={cn("mt-0 flex-1 min-h-0 w-full min-w-0 overflow-hidden", INSIGHTS_CHART_FRAME)}>
             <div className="relative h-full min-h-0 min-w-0">
             <div
               ref={workloadDrilldownScrollRef}
@@ -3295,23 +3348,17 @@ export function MonthAnalytics({
                   </tr>
                 </thead>
                 <tbody>
-                  {workloadDrilldownStories.map((story) => {
-                    const workloadStatusLabel =
-                      story.status === "todo"
-                        ? "To do"
-                        : story.status === "inProgress"
-                          ? "In progress"
-                          : story.status === "done"
-                            ? "Done"
-                            : "Approved";
-                    return (
+                  {workloadDrilldownStories.map((story) => (
                     <tr key={story.id} className={drilldownTableRowZebra}>
                       <td className="min-w-0 px-2 py-0.5">
-                        <InsightsTruncatedHoverButton
-                          label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                          onClick={() => onOpenStory?.(story.id)}
-                          className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                        />
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <UserStoryIcon className="size-3.5" />
+                          <InsightsTruncatedHoverButton
+                            label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
+                            onClick={() => onOpenStory?.(story.id)}
+                            className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          />
+                        </span>
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
                         <InsightsTruncatedHoverLabel text={story.title} />
@@ -3332,14 +3379,13 @@ export function MonthAnalytics({
                         )}
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
-                        <InsightsTruncatedHoverLabel text={story.assignee?.trim() || "Unassigned"} />
+                        <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
-                        <InsightsTruncatedHoverLabel text={workloadStatusLabel} />
+                        <StoryStatusPill status={story.status} />
                       </td>
                     </tr>
-                    );
-                  })}
+                  ))}
                   {workloadDrilldownEmptyRows > 0
                     ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`workload-empty-${index}`} className={drilldownTableEmptyRowZebra}>
@@ -3663,7 +3709,7 @@ export function MonthAnalytics({
                   )}
                 </div>
                 {monthLoadDrilldownAssignee ? (
-                  <div className={cn("mt-0 w-full min-w-0 overflow-hidden", INSIGHTS_CONTENT_HEIGHT, INSIGHTS_CHART_FRAME)}>
+                  <div className={cn("mt-0 flex-1 min-h-0 w-full min-w-0 overflow-hidden", INSIGHTS_CHART_FRAME)}>
                     <div className="relative h-full min-h-0 min-w-0">
                       <div
                         ref={monthLoadDrilldownScrollRef}
@@ -3683,26 +3729,30 @@ export function MonthAnalytics({
                             </tr>
                           </thead>
                           <tbody>
-                            {monthLoadDrilldownStories.map((story) => {
-                              const statusLabel = story.status === "todo" ? "To do" : story.status === "inProgress" ? "In progress" : story.status === "done" ? "Done" : "Approved";
-                              return (
-                                <tr key={story.id} className={drilldownTableRowZebra}>
-                                  <td className="min-w-0 px-2 py-0.5">
-                                    <InsightsTruncatedHoverButton label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)} onClick={() => onOpenStory?.(story.id)} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
-                                  </td>
-                                  <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.title} /></td>
-                                  <td className="min-w-0 px-2 py-0.5">
-                                    {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                                      <InsightsTruncatedHoverButton label={storySprintDisplayLabel(story.sprint, scopeStartMonth)} onClick={() => { const t = normalizeStoryYearSprint(story.sprint, scopeStartMonth); if (t) onOpenSprintKanban?.(t, resolveStoryTeamForSprintNav(story)); }} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
-                                    ) : (
-                                      <InsightsTruncatedHoverLabel text="Unscheduled" />
-                                    )}
-                                  </td>
-                                  <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.assignee?.trim() || "Unassigned"} /></td>
-                                  <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={statusLabel} /></td>
-                                </tr>
-                              );
-                            })}
+                            {monthLoadDrilldownStories.map((story) => (
+                              <tr key={story.id} className={drilldownTableRowZebra}>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    <UserStoryIcon className="size-3.5" />
+                                    <InsightsTruncatedHoverButton label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)} onClick={() => onOpenStory?.(story.id)} className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
+                                  </span>
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.title} /></td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                                    <InsightsTruncatedHoverButton label={storySprintDisplayLabel(story.sprint, scopeStartMonth)} onClick={() => { const t = normalizeStoryYearSprint(story.sprint, scopeStartMonth); if (t) onOpenSprintKanban?.(t, resolveStoryTeamForSprintNav(story)); }} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
+                                  ) : (
+                                    <InsightsTruncatedHoverLabel text="Unscheduled" />
+                                  )}
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <StoryStatusPill status={story.status} />
+                                </td>
+                              </tr>
+                            ))}
                             {monthLoadDrilldownEmptyRows > 0 && Array.from({ length: monthLoadDrilldownEmptyRows }).map((_, i) => (
                               <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
                                 <td colSpan={5} className="px-3 py-0.5 text-[13px]">{" "}</td>

@@ -1,7 +1,8 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, ArrowLeft, CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronRight, ChevronUp, Layers, PieChart as PieChartIcon, User, UserRound, Users } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, CalendarDays, ChartNoAxesCombined, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers, ListTodo, PieChart as PieChartIcon, PlayCircle, User, UserRound, Users } from "lucide-react";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { SprintTimelinePopup } from "@/components/timeline/sprint-end-countdown";
 import {
   Area,
@@ -28,7 +29,7 @@ import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { type EstimateSource } from "@/lib/epic-estimates";
 import { collectMonthScopeEpicsForSprintPanel, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
-import { InitiativeItem } from "@/lib/types";
+import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type SprintWorkloadStatusKey = (typeof WORKLOAD_BAR_SEGMENTS)[number]["key"];
@@ -49,6 +50,78 @@ const WORKLOAD_BAR_SEGMENTS = [
   { key: "done" as const, label: "Done", color: STATUS_COLORS["Done"] },
   { key: "approved" as const, label: "Approved", color: STATUS_COLORS["Approved"] },
 ] as const;
+
+/**
+ * Backlog-style icon + label for a workflow status. Mirrors the same pill
+ * the backlog table uses so drilldown rows read consistently. Accepts both
+ * the enum form ("todo" / "inProgress" / ...) and the display labels
+ * ("To do" / "In progress" / ...) used by sprint-analytics' display rows.
+ */
+type StoryStatusPillValue =
+  | UserStoryItem["status"]
+  | "To do"
+  | "In progress"
+  | "Done"
+  | "Approved"
+  | "Unscheduled";
+
+function StoryStatusPill({ status }: { status: StoryStatusPillValue }) {
+  const meta = (() => {
+    switch (status) {
+      case "approved":
+      case "Approved":
+        return { label: "Approved", Icon: CheckCircle2, color: "text-violet-600" };
+      case "done":
+      case "Done":
+        return { label: "Done", Icon: CheckCheck, color: "text-emerald-600" };
+      case "inProgress":
+      case "In progress":
+        return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
+      case "Unscheduled":
+        return { label: "Unscheduled", Icon: ListTodo, color: "text-slate-400" };
+      default:
+        return { label: "To do", Icon: ListTodo, color: "text-amber-600" };
+    }
+  })();
+  const { Icon } = meta;
+  return (
+    <span className="inline-flex items-center gap-1.5 font-semibold">
+      <Icon className={cn("size-3.5 shrink-0", meta.color)} aria-hidden />
+      <span className="truncate text-slate-700">{meta.label}</span>
+    </span>
+  );
+}
+
+/** Compact display name: "John S." — matches the Workload Balance + Sprint Load
+ *  bar labels so drilldown rows read the same as the chart they came from. */
+function compactAssigneeName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return parts[0] ?? fullName;
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const initial = last?.[0]?.toUpperCase();
+  return initial ? `${first} ${initial}.` : first;
+}
+
+/** Avatar + compact name ("First L.") for an assignee column. Hover shows the full name. */
+function DrilldownAssigneeCell({
+  assignee,
+  workspaceDirectoryUsers,
+}: {
+  assignee: string | null | undefined;
+  workspaceDirectoryUsers?: readonly { name: string; team?: string; image?: string | null }[];
+}) {
+  const name = assignee?.trim();
+  if (!name) return <span className="text-slate-500">Unassigned</span>;
+  const resolved = resolveAssigneeAvatar(name, workspaceDirectoryUsers);
+  const compact = compactAssigneeName(name);
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5" title={name}>
+      <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+      <span className="truncate">{compact}</span>
+    </span>
+  );
+}
 
 /** Cumulative flow diagram stack: first rendered area = bottom (most “done”), last = top (not started). */
 const CFD_FLOW_SEGMENTS = [
@@ -529,12 +602,12 @@ export function SprintAnalytics({
           ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className="relative mt-1 rounded-none bg-white/80 p-2">
-            <div className="relative">
+          <div className="relative mt-1 flex-1 min-h-0 rounded-none bg-white/80 p-2">
+            <div className="relative h-full min-h-0">
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={() => updateArrowState(statusDrilldownScrollRef, setCanScrollStatusUp, setCanScrollStatusDown)}
-                className="h-[clamp(11.5rem,23vh,15.5rem)] overflow-auto rounded-none bg-white pr-5 [&::-webkit-scrollbar]:hidden"
+                className="h-full overflow-auto rounded-none bg-white pr-5 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 <table className="w-full border-separate border-spacing-0 text-left text-[13px]">
@@ -551,21 +624,24 @@ export function SprintAnalytics({
                     {statusDrilldownStories.map((story) => (
                       <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                         <td className="px-2 py-1.5">
-                          <button
-                            type="button"
-                            onClick={() => onOpenStory?.(story.id)}
-                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                          >
-                            {sprintStoryDisplayIds.get(story.id) ?? story.id}
-                          </button>
+                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <UserStoryIcon className="size-3.5" />
+                            <button
+                              type="button"
+                              onClick={() => onOpenStory?.(story.id)}
+                              className="truncate font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            >
+                              {sprintStoryDisplayIds.get(story.id) ?? story.id}
+                            </button>
+                          </span>
                         </td>
                         <td className="px-2 py-1.5">{story.title}</td>
                         <td className="px-2 py-1.5">{story.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`}</td>
-                        <td className="px-2 py-1.5">{story.assignee}</td>
                         <td className="px-2 py-1.5">
-                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
-                            {story.status}
-                          </span>
+                          <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <StoryStatusPill status={story.status} />
                         </td>
                       </tr>
                     ))}
@@ -826,12 +902,12 @@ export function SprintAnalytics({
           ) : null}
         </div>
         {workloadDrilldownAssignee ? (
-          <div className="mt-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
-            <div className="relative">
+          <div className="mt-0 flex-1 min-h-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
+            <div className="relative h-full min-h-0">
               <div
                 ref={workloadDrilldownScrollRef}
                 onScroll={() => updateArrowState(workloadDrilldownScrollRef, setCanScrollWorkloadUp, setCanScrollWorkloadDown)}
-                className="h-[clamp(10.75rem,21.5vh,14rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
+                className="h-full overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 <table className="w-full border-collapse text-left text-[13px]">
@@ -849,22 +925,25 @@ export function SprintAnalytics({
                     {workloadDrilldownStories.map((story) => (
                       <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                         <td className="px-2 py-1">
-                          <button
-                            type="button"
-                            onClick={() => onOpenStory?.(story.id)}
-                            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                          >
-                            {sprintStoryDisplayIds.get(story.id) ?? story.id}
-                          </button>
+                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <UserStoryIcon className="size-3.5" />
+                            <button
+                              type="button"
+                              onClick={() => onOpenStory?.(story.id)}
+                              className="truncate font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            >
+                              {sprintStoryDisplayIds.get(story.id) ?? story.id}
+                            </button>
+                          </span>
                         </td>
                         <td className="px-2 py-1">{story.title}</td>
                         <td className="px-2 py-1">{monthTeamLabelForId(story.team) ?? (story.team || "—")}</td>
                         <td className="px-2 py-1">{story.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`}</td>
-                        <td className="px-2 py-1">{story.assignee}</td>
                         <td className="px-2 py-1">
-                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
-                            {story.status}
-                          </span>
+                          <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                        </td>
+                        <td className="px-2 py-1">
+                          <StoryStatusPill status={story.status} />
                         </td>
                       </tr>
                     ))}
@@ -1258,12 +1337,12 @@ export function SprintAnalytics({
                   <SprintTimelinePopup planYear={planYear} yearSprint={yearSprint} onClose={() => setSprintTimelinePopupOpen(false)} />
                 )}
                 {sprintLoadDrilldownAssignee ? (
-                  <div className="mt-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
-                    <div className="relative">
+                  <div className="mt-0 flex-1 min-h-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
+                    <div className="relative h-full min-h-0">
                       <div
                         ref={sprintLoadDrilldownScrollRef}
                         onScroll={() => updateArrowState(sprintLoadDrilldownScrollRef, setCanScrollSprintLoadDrilldownUp, setCanScrollSprintLoadDrilldownDown)}
-                        className="h-[clamp(10.75rem,21.5vh,14rem)] overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
+                        className="h-full overflow-auto rounded-none bg-white pr-5 shadow-sm ring-1 ring-sky-100/90 [&::-webkit-scrollbar]:hidden"
                         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                       >
                         <table className="w-full border-collapse text-left text-[13px]">
@@ -1281,18 +1360,21 @@ export function SprintAnalytics({
                             {sprintLoadDrilldownStories.map((story) => (
                               <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
                                 <td className="px-2 py-1">
-                                  <button type="button" onClick={() => onOpenStory?.(story.id)} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                                    {sprintStoryDisplayIds.get(story.id) ?? story.id}
-                                  </button>
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    <UserStoryIcon className="size-3.5" />
+                                    <button type="button" onClick={() => onOpenStory?.(story.id)} className="truncate font-semibold text-blue-700 underline-offset-2 hover:underline">
+                                      {sprintStoryDisplayIds.get(story.id) ?? story.id}
+                                    </button>
+                                  </span>
                                 </td>
                                 <td className="px-2 py-1">{story.title}</td>
                                 <td className="px-2 py-1">{monthTeamLabelForId(story.team) ?? (story.team || "—")}</td>
                                 <td className="px-2 py-1">{story.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`}</td>
-                                <td className="px-2 py-1">{story.assignee}</td>
                                 <td className="px-2 py-1">
-                                  <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-700">
-                                    {story.status}
-                                  </span>
+                                  <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                                </td>
+                                <td className="px-2 py-1">
+                                  <StoryStatusPill status={story.status} />
                                 </td>
                               </tr>
                             ))}
