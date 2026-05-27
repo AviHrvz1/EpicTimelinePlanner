@@ -417,6 +417,347 @@ function avatarInitialsFromName(name: string): string {
 }
 
 /**
+ * Team logo dropzone — sibling of `AvatarField` with team-specific copy and
+ * a slightly more "logo" feel (rounded square instead of round). Reuses the
+ * same drag/drop + click-to-pick mechanics.
+ */
+function TeamLogoField({
+  name,
+  image,
+  onPick,
+  onClear,
+  onDropFile,
+  disabled,
+}: {
+  name: string;
+  image: string | null;
+  onPick: () => void;
+  onClear: () => void;
+  onDropFile?: (file: File) => void;
+  disabled?: boolean;
+}) {
+  const hasImage = Boolean(image);
+  const initials = avatarInitialsFromName(name);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) setDragOver(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === e.target) setDragOver(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+    if (file && onDropFile) onDropFile(file);
+  };
+
+  return (
+    <div
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        "flex items-center gap-4 rounded-xl border border-dashed p-3 transition-colors",
+        dragOver
+          ? "border-emerald-400 bg-emerald-50/70"
+          : "border-slate-200 bg-slate-50/40 hover:border-emerald-200 hover:bg-emerald-50/30",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onPick}
+        disabled={disabled}
+        title={hasImage ? "Change logo" : "Add logo"}
+        className="group relative inline-flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white ring-2 ring-white shadow-md transition hover:shadow-lg disabled:opacity-60"
+      >
+        {hasImage ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={image as string} alt="" className="size-full object-cover" />
+        ) : (
+          <span className="flex size-full items-center justify-center bg-gradient-to-br from-emerald-100 via-sky-100 to-indigo-100 text-[22px] font-bold text-emerald-700">
+            {initials || <Users className="size-8" />}
+          </span>
+        )}
+        <span className="absolute inset-x-0 bottom-0 hidden bg-slate-900/55 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-white group-hover:block">
+          {hasImage ? "Change" : "Upload"}
+        </span>
+      </button>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="text-[13px] font-semibold text-slate-800">
+          {hasImage ? "Team logo" : "Add a team logo"}
+        </p>
+        <p className="text-[11.5px] leading-snug text-slate-500">
+          {dragOver
+            ? "Drop your image to upload"
+            : hasImage
+              ? "Drag a new image here or click to replace."
+              : "Drag an image here, or click the square to choose a file."}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-2.5 text-[12px]"
+            onClick={onPick}
+            disabled={disabled}
+          >
+            <UploadCloud className="size-3.5" aria-hidden />
+            {hasImage ? "Replace" : "Upload"}
+          </Button>
+          {hasImage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[12px] text-slate-500 hover:text-slate-700"
+              onClick={onClear}
+              disabled={disabled}
+            >
+              <X className="size-3" aria-hidden />
+              Remove
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Single-user picker for the team-lead slot. Displays a chip when something
+ * is selected; otherwise an inline search input that filters by name/email
+ * and exposes a small dropdown of matches.
+ */
+function TeamUserSinglePicker({
+  users,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  users: WorkspaceUserRow[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = value ? users.find((u) => u.id === value) ?? null : null;
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return users
+      .filter((u) => (q ? `${u.name} ${u.email}`.toLowerCase().includes(q) : true))
+      .slice(0, 8);
+  }, [users, query]);
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5">
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <UserDirectoryAvatar image={selected.image ?? null} name={selected.name} />
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-semibold text-slate-800">{selected.name}</span>
+            <span className="block truncate text-[11px] text-slate-500">{selected.email}</span>
+          </span>
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-[12px] text-slate-500 hover:text-slate-700"
+          onClick={() => onChange(null)}
+          disabled={disabled}
+        >
+          <X className="size-3" aria-hidden />
+          Clear
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="relative">
+      <input
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        placeholder={placeholder ?? "Search the directory"}
+        disabled={disabled}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/80"
+      />
+      {open && matches.length > 0 ? (
+        <ul className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-black/5">
+          {matches.map((u) => (
+            <li key={u.id}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(u.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-emerald-50/60"
+              >
+                <UserDirectoryAvatar image={u.image ?? null} name={u.name} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold text-slate-800">{u.name}</span>
+                  <span className="block truncate text-[11px] text-slate-500">{u.email}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Multi-pick member list — already-picked users render as removable chips,
+ * the input opens a small search dropdown. `alwaysIncludedId` is the lead's
+ * ID; it renders as a non-removable chip ("Lead" badge) so the UI mirrors
+ * the contract `saveNewTeam` enforces.
+ */
+function TeamMembersPicker({
+  users,
+  selectedIds,
+  onChange,
+  alwaysIncludedId,
+  disabled,
+}: {
+  users: WorkspaceUserRow[];
+  selectedIds: string[];
+  onChange: (next: string[]) => void;
+  alwaysIncludedId?: string | null;
+  disabled?: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const pickedSet = useMemo(() => {
+    const s = new Set(selectedIds);
+    if (alwaysIncludedId) s.add(alwaysIncludedId);
+    return s;
+  }, [selectedIds, alwaysIncludedId]);
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return users
+      .filter((u) => !pickedSet.has(u.id))
+      .filter((u) => (q ? `${u.name} ${u.email}`.toLowerCase().includes(q) : true))
+      .slice(0, 8);
+  }, [users, pickedSet, query]);
+  const pickedUsers = useMemo(
+    () =>
+      [...pickedSet]
+        .map((id) => users.find((u) => u.id === id))
+        .filter((u): u is WorkspaceUserRow => Boolean(u)),
+    [pickedSet, users],
+  );
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          placeholder="Add a member from the directory"
+          disabled={disabled}
+          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/80"
+        />
+        {open && matches.length > 0 ? (
+          <ul className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-black/5">
+            {matches.map((u) => (
+              <li key={u.id}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange([...selectedIds, u.id]);
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-emerald-50/60"
+                >
+                  <UserDirectoryAvatar image={u.image ?? null} name={u.name} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-semibold text-slate-800">{u.name}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{u.email}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      {pickedUsers.length > 0 ? (
+        <ul className="flex flex-wrap gap-2">
+          {pickedUsers.map((u) => {
+            const isLead = u.id === alwaysIncludedId;
+            return (
+              <li
+                key={u.id}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[12px] font-semibold",
+                  isLead
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 bg-white text-slate-700",
+                )}
+              >
+                <UserDirectoryAvatar image={u.image ?? null} name={u.name} />
+                <span className="max-w-[140px] truncate">{u.name}</span>
+                {isLead ? (
+                  <span className="rounded bg-emerald-100 px-1.5 py-px text-[10px] uppercase tracking-wide text-emerald-800">
+                    Lead
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onChange(selectedIds.filter((id) => id !== u.id))}
+                    disabled={disabled}
+                    className="ml-0.5 inline-flex size-4 items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/70 hover:text-slate-800"
+                    aria-label={`Remove ${u.name}`}
+                  >
+                    <X className="size-3" aria-hidden />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-[11.5px] leading-snug text-slate-500">
+          No members yet. Add people from the directory to put them on this team.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * Small row-avatar used in the directory's Name cell. Falls back to a Lucide
  * User icon when the user has no uploaded image so old rows look unchanged
  * until someone gives them a photo.
@@ -814,6 +1155,7 @@ function UsersTableRow({
   onEditField,
   onCancelEdit,
   onRowView,
+  onOpenTeam,
   patchUser,
   directoryTeamIds,
   nameTreeDepth = 0,
@@ -825,6 +1167,8 @@ function UsersTableRow({
   onEditField: (field: UserEditField) => void;
   onCancelEdit: () => void;
   onRowView: (row: WorkspaceUserRow) => void;
+  /** Opens the team editor drawer for the given slug. */
+  onOpenTeam: (slug: string) => void;
   patchUser: (
     id: string,
     body: { name?: string; email?: string; team?: string; permission?: string },
@@ -843,7 +1187,6 @@ function UsersTableRow({
       : undefined;
   const [name, setName] = useState(row.name);
   const [email, setEmail] = useState(row.email);
-  const [teamId, setTeamId] = useState(row.team);
   const [perm, setPerm] = useState(row.permission);
 
   useEffect(() => {
@@ -853,10 +1196,6 @@ function UsersTableRow({
   useEffect(() => {
     if (editField !== "email") setEmail(row.email);
   }, [row.email, row.id, editField]);
-
-  useEffect(() => {
-    if (editField !== "team") setTeamId(row.team);
-  }, [row.team, row.id, editField]);
 
   useEffect(() => {
     if (editField !== "permission") setPerm(row.permission);
@@ -892,23 +1231,6 @@ function UsersTableRow({
     }
     const ok = await patchUser(row.id, { email: t });
     if (ok) onCancelEdit();
-  };
-
-  const saveTeam = async () => {
-    blurActiveField();
-    const normalized = normalizeWorkspaceUserTeam(teamId);
-    if (normalized === row.team) {
-      onCancelEdit();
-      return;
-    }
-    const announceNewTeam = shouldAnnounceNewDirectoryTeam(normalized, directoryTeamIds);
-    const ok = await patchUser(row.id, { team: normalized });
-    if (ok) {
-      if (announceNewTeam) {
-        toast.success(`New team created: ${teamLabelForWorkspaceUser(normalized)}`);
-      }
-      onCancelEdit();
-    }
   };
 
   const savePermission = async () => {
@@ -1002,52 +1324,34 @@ function UsersTableRow({
     ),
     team: (
       <td key="team" className={USER_DIR_TD_BASE}>
-        {editing("team") ? (
-          <div className="flex min-w-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            <div className="min-w-0 flex-1">
-              <TeamIdCombobox
-                teamId={teamId}
-                onTeamIdChange={setTeamId}
-                disabled={saving}
-                placeholder="Pick a team or create new…"
-                className={cellInputCn}
-                allowCustomTeam
-                extraTeamIds={directoryTeamIds}
-              />
-            </div>
-            <EditCommitButtons disabled={saving} onSave={saveTeam} onCancel={onCancelEdit} />
-          </div>
-        ) : (
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 px-1 py-1.5">
-              {row.team ? (
-                <span
-                  className={cn(
-                    "inline-flex rounded-full px-2.5 py-0.5 text-[13px] font-semibold leading-tight ring-1",
-                    row.team === "platform" && "bg-sky-50 text-sky-800 ring-sky-200/80",
-                    row.team === "experience" && "bg-violet-50 text-violet-800 ring-violet-200/80",
-                    row.team === "data" && "bg-amber-50 text-amber-900 ring-amber-200/80",
-                    row.team === "mobile" && "bg-emerald-50 text-emerald-800 ring-emerald-200/80",
-                    row.team === "growth" && "bg-rose-50 text-rose-800 ring-rose-200/80",
-                    !["platform", "experience", "data", "mobile", "growth"].includes(row.team) &&
-                      "bg-slate-50 text-slate-800 ring-slate-200/80",
-                  )}
-                >
-                  {teamLabelForWorkspaceUser(row.team)}
-                </span>
-              ) : (
-                <span className="text-[13px] text-slate-400">Unassigned</span>
-              )}
-            </span>
-            {!saving && editField == null ? (
-              <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                <div onClick={(e) => e.stopPropagation()}>
-                  <EditRowIconButton label="Edit team" onClick={() => onEditField("team")} />
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 px-1 py-1.5">
+            {row.team ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenTeam(row.team);
+                }}
+                title={`Edit ${teamLabelForWorkspaceUser(row.team)}`}
+                className={cn(
+                  "inline-flex rounded-full px-2.5 py-0.5 text-[13px] font-semibold leading-tight ring-1 transition hover:brightness-95 hover:ring-2",
+                  row.team === "platform" && "bg-sky-50 text-sky-800 ring-sky-200/80",
+                  row.team === "experience" && "bg-violet-50 text-violet-800 ring-violet-200/80",
+                  row.team === "data" && "bg-amber-50 text-amber-900 ring-amber-200/80",
+                  row.team === "mobile" && "bg-emerald-50 text-emerald-800 ring-emerald-200/80",
+                  row.team === "growth" && "bg-rose-50 text-rose-800 ring-rose-200/80",
+                  !["platform", "experience", "data", "mobile", "growth"].includes(row.team) &&
+                    "bg-slate-50 text-slate-800 ring-slate-200/80",
+                )}
+              >
+                {teamLabelForWorkspaceUser(row.team)}
+              </button>
+            ) : (
+              <span className="text-[13px] text-slate-400">Unassigned</span>
+            )}
+          </span>
+        </div>
       </td>
     ),
     permission: (
@@ -1116,6 +1420,48 @@ function UsersTableRow({
 
 type UserPanelState = { kind: "add" } | { kind: "view"; user: WorkspaceUserRow };
 
+/** Server-side Team row returned by `/api/teams`. Membership is implicit
+ *  via `WorkspaceUser.team === Team.slug`; the lead is a direct FK. */
+export type TeamRow = {
+  id: string;
+  slug: string;
+  displayName: string;
+  description: string | null;
+  image: string | null;
+  leadId: string | null;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type TeamPanelState = { kind: "add" } | { kind: "edit" };
+
+type TeamFormState = {
+  /** Existing Team row id, or null when the editor is creating a brand-new
+   *  team (Add flow, or editing a slug that has no Team row yet). */
+  id: string | null;
+  /** Slug the editor opened with — used to diff membership on save. Null in
+   *  the pure Add flow. */
+  originalSlug: string | null;
+  displayName: string;
+  description: string;
+  image: string | null;
+  leadId: string | null;
+  /** Workspace-user IDs picked as members in the drawer. On Save we PATCH each
+   *  user's `team` field to the team's slug (and clear removed ones). */
+  memberIds: string[];
+};
+
+const emptyTeamForm: TeamFormState = {
+  id: null,
+  originalSlug: null,
+  displayName: "",
+  description: "",
+  image: null,
+  leadId: null,
+  memberIds: [],
+};
+
 export function UsersWorkspacePanel() {
   const [rows, setRows] = useState<WorkspaceUserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1161,8 +1507,26 @@ export function UsersWorkspacePanel() {
   const userDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextUserDirColumnPersist = useRef(true);
   const [registeredTeamSlugs, setRegisteredTeamSlugs] = useState<string[]>([]);
-  const [addTeamOpen, setAddTeamOpen] = useState(false);
-  const [newTeamNameInput, setNewTeamNameInput] = useState("");
+  /** Server-side teams loaded from `/api/teams`; surfaced for the drawer's
+   *  members/lead derivations and the directory team picker. */
+  const [teams, setTeams] = useState<TeamRow[]>([]);
+  /** Side-drawer (add / view) for first-class teams — mirrors `userPanel`. */
+  const [teamPanel, setTeamPanel] = useState<TeamPanelState | null>(null);
+  const [teamForm, setTeamForm] = useState<TeamFormState>(emptyTeamForm);
+  const [savingTeam, setSavingTeam] = useState(false);
+  const [teamDrawerEntered, setTeamDrawerEntered] = useState(false);
+  /** Crop / upload dialog source for the team logo — independent from the
+   *  user-avatar dialog so both drawers can be open without state collision. */
+  const [teamImageDialogSrc, setTeamImageDialogSrc] = useState<string | null>(null);
+  const handleTeamImageFilePicked = useCallback(async (file: File) => {
+    try {
+      const dataUrl = await readImageFileAsDataUrl(file);
+      setTeamImageDialogSrc(dataUrl);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read image");
+    }
+  }, []);
+  const teamImagePicker = useImageFilePicker(handleTeamImageFilePicked);
   const [userDirGroupLevels, setUserDirGroupLevels] = useState<UserDirectoryGroupLevel[]>([]);
   const [userDirOpenGroups, setUserDirOpenGroups] = useState<Record<string, boolean>>({});
   const [userDirGroupMenuOpen, setUserDirGroupMenuOpen] = useState(false);
@@ -1205,6 +1569,49 @@ export function UsersWorkspacePanel() {
     void load();
   }, [load]);
 
+  /** Fetch first-class teams once and on demand. The drawer's saveNewTeam
+   *  + member edits dispatch refreshes via the returned `loadTeams`. */
+  const loadTeams = useCallback(async () => {
+    try {
+      const res = await fetch("/api/teams");
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as TeamRow[];
+      setTeams(data);
+    } catch (e) {
+      console.error(e);
+      // Teams are optional infra (the directory still works without them);
+      // log but don't blast a toast on every mount.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTeams();
+  }, [loadTeams]);
+
+  /** Open the team editor for a given slug. Looks up the first-class Team row;
+   *  if none exists yet (built-in delivery teams, legacy localStorage teams)
+   *  the editor opens in "create on save" mode pre-filled from the slug, with
+   *  members derived from users already carrying that slug. */
+  const openTeamEditorBySlug = useCallback(
+    (slug: string) => {
+      const normalized = normalizeWorkspaceUserTeam(slug);
+      if (!normalized) return;
+      const existing = teams.find((t) => t.slug === normalized) ?? null;
+      const memberRows = rows.filter((r) => r.team === normalized);
+      setTeamForm({
+        id: existing?.id ?? null,
+        originalSlug: normalized,
+        displayName: existing?.displayName ?? teamLabelForWorkspaceUser(normalized),
+        description: existing?.description ?? "",
+        image: existing?.image ?? null,
+        leadId: existing?.leadId ?? null,
+        memberIds: memberRows.map((r) => r.id),
+      });
+      setTeamPanel({ kind: "edit" });
+    },
+    [teams, rows],
+  );
+
   useEffect(() => {
     const stored = parseStoredUserDirectoryColumnOrder(
       localStorage.getItem(USERS_DIRECTORY_COLUMN_ORDER_STORAGE_KEY),
@@ -1244,34 +1651,6 @@ export function UsersWorkspacePanel() {
     localStorage.setItem(USERS_DIRECTORY_EXTRA_TEAMS_STORAGE_KEY, JSON.stringify(merged));
     setRegisteredTeamSlugs(merged);
   }, []);
-
-  const saveRegisteredTeamFromModal = useCallback(() => {
-    const slug = normalizeWorkspaceUserTeam(newTeamNameInput);
-    if (!slug) {
-      toast.error("Enter a valid team name (use letters or numbers).");
-      return;
-    }
-    if (MONTH_TEAM_IDS.includes(slug)) {
-      toast.message(
-        "That name matches a built-in delivery team. Choose Platform, Experience, or Data & analytics when editing users.",
-      );
-      setAddTeamOpen(false);
-      setNewTeamNameInput("");
-      return;
-    }
-    if (registeredTeamSlugs.includes(slug)) {
-      toast.message(`“${teamLabelForWorkspaceUser(slug)}” is already on your team list.`);
-      setAddTeamOpen(false);
-      setNewTeamNameInput("");
-      return;
-    }
-    persistRegisteredTeamSlugs([...registeredTeamSlugs, slug]);
-    toast.success(
-      `Team “${teamLabelForWorkspaceUser(slug)}” added. It appears in team fields—assign users when you add or edit them.`,
-    );
-    setAddTeamOpen(false);
-    setNewTeamNameInput("");
-  }, [newTeamNameInput, persistRegisteredTeamSlugs, registeredTeamSlugs]);
 
   useEffect(() => {
     if (skipNextUserDirColumnPersist.current) {
@@ -1426,12 +1805,17 @@ export function UsersWorkspacePanel() {
     for (const r of rows) {
       if (r.team) s.add(r.team);
     }
+    // First-class teams loaded from `/api/teams` — their slug shows up in
+    // the picker even when they have no members yet.
+    for (const t of teams) {
+      if (t.slug) s.add(t.slug);
+    }
     for (const slug of registeredTeamSlugs) {
       const n = normalizeWorkspaceUserTeam(slug);
       if (n) s.add(n);
     }
     return [...s];
-  }, [rows, registeredTeamSlugs]);
+  }, [rows, teams, registeredTeamSlugs]);
 
   const userDirectoryTableRows = useMemo(() => {
     const renderLeaf = (list: WorkspaceUserRow[], nameTreeDepth: number) =>
@@ -1456,6 +1840,7 @@ export function UsersWorkspacePanel() {
             });
             setUserPanel({ kind: "view", user: r });
           }}
+          onOpenTeam={openTeamEditorBySlug}
           patchUser={patchUser}
           directoryTeamIds={directoryTeamIds}
           nameTreeDepth={nameTreeDepth}
@@ -1543,6 +1928,7 @@ export function UsersWorkspacePanel() {
     patchUser,
     directoryTeamIds,
     cancelDrawerClose,
+    openTeamEditorBySlug,
   ]);
 
   useLayoutEffect(() => {
@@ -1622,11 +2008,40 @@ export function UsersWorkspacePanel() {
     setUserPanel({ kind: "add" });
   };
 
+  // ──────── Team drawer: helpers + slide-in animation ────────
+  /** Close the team side-drawer with a brief slide-out animation matching
+   *  the user drawer. */
+  const closeTeamPanel = useCallback(() => {
+    setTeamDrawerEntered(false);
+    setTimeout(() => {
+      setTeamPanel(null);
+      setTeamForm(emptyTeamForm);
+    }, 250);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!teamPanel) {
+      setTeamDrawerEntered(false);
+      return;
+    }
+    setTeamDrawerEntered(false);
+    let alive = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (alive) setTeamDrawerEntered(true);
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [teamPanel]);
+
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (addTeamOpen) {
-        setAddTeamOpen(false);
+      if (teamPanel) {
+        if (savingTeam) return;
+        closeTeamPanel();
         return;
       }
       if (editCell) {
@@ -1640,7 +2055,7 @@ export function UsersWorkspacePanel() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [addTeamOpen, editCell, userPanel, saving, closePanel]);
+  }, [teamPanel, savingTeam, closeTeamPanel, editCell, userPanel, saving, closePanel]);
 
   const handleSearchKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
@@ -1750,12 +2165,130 @@ export function UsersWorkspacePanel() {
     }
   };
 
+  // ──────── Team drawer: save / delete ────────
+  /** Create or update a Team row, then reconcile membership: every picked
+   *  member (plus the lead) gets `team = slug`; anyone who was a member of the
+   *  original slug but isn't picked anymore gets cleared. Slug is the single
+   *  source of truth for membership. */
+  const saveTeam = useCallback(async () => {
+    blurActiveField();
+    const displayName = teamForm.displayName.trim();
+    if (!displayName) {
+      toast.message("Enter a team name.");
+      return;
+    }
+    const slug = normalizeWorkspaceUserTeam(displayName);
+    if (!slug) {
+      toast.error("Could not derive a valid team identifier.");
+      return;
+    }
+    setSavingTeam(true);
+    try {
+      const payload = {
+        displayName,
+        description: teamForm.description.trim() || null,
+        image: teamForm.image,
+        leadId: teamForm.leadId,
+      };
+      const res = await fetch(
+        teamForm.id ? `/api/teams/${teamForm.id}` : "/api/teams",
+        {
+          method: teamForm.id ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((body as { error?: string }).error ?? res.statusText);
+      }
+      // Desired final roster (lead always included).
+      const desired = new Set(teamForm.memberIds);
+      if (teamForm.leadId) desired.add(teamForm.leadId);
+      // Members who carried the original slug before this edit. After a
+      // rename PATCH the server already moved them onto the new slug, so we
+      // only need to (a) set newly-added members and (b) clear removed ones.
+      const originalMemberIds = teamForm.originalSlug
+        ? rows.filter((r) => r.team === teamForm.originalSlug).map((r) => r.id)
+        : [];
+      const originalSet = new Set(originalMemberIds);
+      const toAssign = [...desired].filter((id) => !originalSet.has(id));
+      const toClear = originalMemberIds.filter((id) => !desired.has(id));
+      await Promise.all([
+        ...toAssign.map((id) =>
+          fetch(`/api/workspace-users/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: slug }),
+          }),
+        ),
+        ...toClear.map((id) =>
+          fetch(`/api/workspace-users/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ team: "" }),
+          }),
+        ),
+      ]);
+      // Backward compat: existing pickers also read the localStorage registry.
+      persistRegisteredTeamSlugs([...registeredTeamSlugs, slug]);
+      toast.success(teamForm.id ? `Team “${displayName}” updated.` : `Team “${displayName}” created.`);
+      closeTeamPanel();
+      await Promise.all([load(), loadTeams()]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingTeam(false);
+    }
+  }, [teamForm, closeTeamPanel, load, loadTeams, persistRegisteredTeamSlugs, registeredTeamSlugs, rows]);
+
+  /** Delete the team row. Members keep their slug (so a re-add recovers them)
+   *  unless the user explicitly detaches — we keep it simple and just drop the
+   *  Team row, leaving membership intact. */
+  const deleteTeam = useCallback(async () => {
+    if (!teamForm.id) {
+      // Nothing persisted yet — just close.
+      closeTeamPanel();
+      return;
+    }
+    if (!window.confirm(`Delete team “${teamForm.displayName}”? Members keep their assignment unless you change them.`)) {
+      return;
+    }
+    setSavingTeam(true);
+    try {
+      const res = await fetch(`/api/teams/${teamForm.id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? res.statusText);
+      }
+      toast.success(`Team “${teamForm.displayName}” deleted.`);
+      closeTeamPanel();
+      await Promise.all([load(), loadTeams()]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setSavingTeam(false);
+    }
+  }, [teamForm, closeTeamPanel, load, loadTeams]);
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {/* Hidden file picker shared by Add User + Edit User drawers — kept here
        *  so both Avatar fields can trigger the same input regardless of which
        *  drawer is open. */}
       {imagePicker.input}
+      {teamImagePicker.input}
+      <EditImageDialog
+        open={teamImageDialogSrc != null}
+        src={teamImageDialogSrc}
+        uploadUrl="/api/uploads/team-image"
+        onClose={() => setTeamImageDialogSrc(null)}
+        onPickAnother={() => teamImagePicker.trigger()}
+        onSave={(url) => {
+          setTeamForm((f) => ({ ...f, image: url }));
+          setTeamImageDialogSrc(null);
+        }}
+      />
       <EditImageDialog
         open={imageDialogSrc != null}
         src={imageDialogSrc}
@@ -1789,8 +2322,8 @@ export function UsersWorkspacePanel() {
             variant="outline"
             size="sm"
             onClick={() => {
-              setNewTeamNameInput("");
-              setAddTeamOpen(true);
+              setTeamForm(emptyTeamForm);
+              setTeamPanel({ kind: "add" });
             }}
             className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-semibold"
           >
@@ -2371,62 +2904,179 @@ export function UsersWorkspacePanel() {
         </div>
       ) : null}
 
-      {addTeamOpen ? (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" role="presentation">
+      {teamPanel ? (
+        <div className="fixed inset-0 z-[100] flex justify-end">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[0.5px]"
-            aria-label="Close dialog"
-            onClick={() => setAddTeamOpen(false)}
+            className="absolute inset-0 bg-slate-900/30 backdrop-blur-[1px]"
+            aria-label="Close panel"
+            onClick={closeTeamPanel}
           />
           <div
+            className={cn(
+              "relative flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-slate-200/90 bg-white shadow-2xl ring-1 ring-black/[0.06] transition-transform duration-300 ease-out rounded-l-xl",
+              teamDrawerEntered ? "translate-x-0" : "translate-x-full",
+            )}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="add-team-dialog-title"
-            className="relative z-[1] w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-2xl ring-1 ring-black/[0.06]"
+            aria-labelledby="teams-drawer-title"
           >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <h2 id="add-team-dialog-title" className="text-lg font-semibold tracking-tight text-slate-900">
-                Add team
-              </h2>
-              <button
-                type="button"
-                onClick={() => setAddTeamOpen(false)}
-                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                aria-label="Close"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <p className="mb-3 text-[13px] leading-snug text-slate-600">
-              Register a team for this browser. It shows up in team pickers and filters; people get the team when you edit
-              them in the table or in Add User.
-            </p>
-            <label className="block">
-              <span className="mb-1.5 block text-[13px] font-semibold text-slate-800">Team name</span>
-              <input
-                value={newTeamNameInput}
-                onChange={(e) => setNewTeamNameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+            {teamPanel.kind === "add" || teamPanel.kind === "edit" ? (
+              <>
+                <div className="relative flex shrink-0 flex-col border-b border-slate-200/80 bg-gradient-to-br from-emerald-50 via-sky-50 to-indigo-50">
+                  <div className="flex items-start justify-between gap-3 px-6 py-5">
+                    <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                      <span
+                        className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-600 text-white shadow-md shadow-emerald-300/60 ring-1 ring-white"
+                        aria-hidden
+                      >
+                        {teamForm.image ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={teamForm.image} alt="" className="size-full object-cover" />
+                        ) : (
+                          <Users className="size-5" strokeWidth={2.2} />
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <h2 id="teams-drawer-title" className="text-[20px] font-bold tracking-tight text-slate-900">
+                          {teamPanel.kind === "edit" ? "Edit Team" : "Add Team"}
+                        </h2>
+                        <p className="mt-0.5 text-[12.5px] leading-snug text-slate-600">
+                          {teamPanel.kind === "edit"
+                            ? "Update the logo, lead, and members. Renaming the team keeps every member attached."
+                            : "Create a team. Add a logo, pick a lead, and invite members from your directory."}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={closeTeamPanel}
+                      aria-label="Close panel"
+                      disabled={savingTeam}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+                <form
+                  className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                  autoComplete="off"
+                  onSubmit={(e) => {
                     e.preventDefault();
-                    saveRegisteredTeamFromModal();
-                  }
-                }}
-                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-200/80"
-                placeholder="e.g. Design Ops"
-                autoComplete="off"
-                autoFocus
-              />
-            </label>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setAddTeamOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" size="sm" className="font-semibold" onClick={saveRegisteredTeamFromModal}>
-                Save team
-              </Button>
-            </div>
+                    if (!savingTeam) void saveTeam();
+                  }}
+                >
+                  <div className="flex-1 overflow-y-auto px-6 py-5">
+                    <div className="w-full max-w-[460px] space-y-5">
+                      <TeamLogoField
+                        name={teamForm.displayName}
+                        image={teamForm.image}
+                        onPick={teamImagePicker.trigger}
+                        onClear={() => setTeamForm((f) => ({ ...f, image: null }))}
+                        onDropFile={handleTeamImageFilePicked}
+                        disabled={savingTeam}
+                      />
+                      <div className="space-y-1">
+                        <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-500">Team</p>
+                        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                          <label className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>
+                              Name{" "}
+                              <span className="font-semibold text-red-600" title="Required">
+                                *
+                              </span>
+                            </span>
+                            <input
+                              value={teamForm.displayName}
+                              onChange={(e) => setTeamForm((f) => ({ ...f, displayName: e.target.value }))}
+                              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-[13px] outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/80"
+                              placeholder="e.g. Design Ops"
+                              required
+                              aria-required="true"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Description (optional)</span>
+                            <textarea
+                              value={teamForm.description}
+                              onChange={(e) => setTeamForm((f) => ({ ...f, description: e.target.value }))}
+                              className="min-h-[64px] w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/80"
+                              placeholder="What this team is responsible for."
+                              rows={2}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-500">People</p>
+                        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+                          <div className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Team lead (optional)</span>
+                            <TeamUserSinglePicker
+                              users={rows}
+                              value={teamForm.leadId}
+                              onChange={(id) => setTeamForm((f) => ({ ...f, leadId: id }))}
+                              placeholder="Pick a lead from the directory"
+                              disabled={savingTeam}
+                            />
+                            <p className="mt-1 text-[11px] leading-snug text-slate-500">
+                              The lead is automatically added to the team&rsquo;s members.
+                            </p>
+                          </div>
+                          <div className="block">
+                            <span className={USER_DRAWER_FIELD_LABEL_CLASS}>Members (optional)</span>
+                            <TeamMembersPicker
+                              users={rows}
+                              selectedIds={teamForm.memberIds}
+                              onChange={(ids) => setTeamForm((f) => ({ ...f, memberIds: ids }))}
+                              alwaysIncludedId={teamForm.leadId}
+                              disabled={savingTeam}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-white px-6 py-4">
+                    {teamPanel.kind === "edit" && teamForm.id ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mr-auto h-9 gap-1.5 px-3 text-sm font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        onClick={() => void deleteTeam()}
+                        disabled={savingTeam}
+                      >
+                        <X className="size-3.5" aria-hidden />
+                        Delete team
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 min-w-[100px] gap-1.5 px-4 text-sm font-medium"
+                      onClick={closeTeamPanel}
+                      disabled={savingTeam}
+                    >
+                      <X className="size-3.5" aria-hidden />
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="h-9 min-w-[120px] gap-1.5 bg-gradient-to-r from-emerald-600 to-sky-600 px-4 text-sm font-semibold text-white shadow-sm shadow-emerald-500/25 hover:from-emerald-500 hover:to-sky-500 disabled:opacity-50"
+                      disabled={savingTeam}
+                    >
+                      <Users className="size-3.5" aria-hidden />
+                      {savingTeam ? "Saving…" : teamPanel.kind === "edit" ? "Save changes" : "Add Team"}
+                    </Button>
+                  </div>
+                </form>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

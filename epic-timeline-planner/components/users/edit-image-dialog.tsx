@@ -72,9 +72,13 @@ export type EditImageDialogProps = {
   onClose: () => void;
   /** Lets the caller swap to a different image without re-mounting the dialog. */
   onPickAnother?: () => void;
+  /** Endpoint that accepts the cropped Blob and returns `{ url }`. Defaults to
+   *  the avatar upload route; team logos point this at the team-image route so
+   *  the file lands in the right `public/uploads/<prefix>/` bucket. */
+  uploadUrl?: string;
 };
 
-export function EditImageDialog({ open, src, onSave, onClose, onPickAnother }: EditImageDialogProps) {
+export function EditImageDialog({ open, src, onSave, onClose, onPickAnother, uploadUrl = "/api/uploads/avatar" }: EditImageDialogProps) {
   const [tab, setTab] = useState<TabKey>("crop");
 
   // Crop state
@@ -143,8 +147,8 @@ export function EditImageDialog({ open, src, onSave, onClose, onPickAnother }: E
         cssFilter,
       });
       const form = new FormData();
-      form.append("file", blob, "avatar.jpg");
-      const res = await fetch("/api/uploads/avatar", { method: "POST", body: form });
+      form.append("file", blob, "image.jpg");
+      const res = await fetch(uploadUrl, { method: "POST", body: form });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? `Upload failed (${res.status})`);
@@ -156,7 +160,7 @@ export function EditImageDialog({ open, src, onSave, onClose, onPickAnother }: E
     } finally {
       setSaving(false);
     }
-  }, [src, croppedArea, rotation, straighten, flipH, flipV, cssFilter, onSave]);
+  }, [src, croppedArea, rotation, straighten, flipH, flipV, cssFilter, onSave, uploadUrl]);
 
   if (!open) return null;
 

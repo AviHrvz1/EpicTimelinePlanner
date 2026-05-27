@@ -6,8 +6,9 @@ import { PrismaClient } from "@/lib/generated/prisma";
  * (e.g. UserStory.backlogOrder / Epic.backlogOrder — old cached clients reject those fields.)
  *
  * Version 13: added WorkspaceUser.image (avatar URL).
+ * Version 14: added Team model + WorkspaceUser.ledTeams back-relation.
  */
-const PRISMA_CLIENT_CACHE_VERSION = 13;
+const PRISMA_CLIENT_CACHE_VERSION = 14;
 
 type LegacyGlobal = typeof globalThis & { prisma?: PrismaClient };
 

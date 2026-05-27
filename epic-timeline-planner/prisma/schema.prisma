@@ -233,10 +233,45 @@ model WorkspaceUser {
 
   /** Back-link from the auth User; set when a User signs up with this email. */
   user User?
+  /** Teams this user leads. Members of a team are derived by filtering
+   *  WorkspaceUser by `team === Team.slug` — there is no separate members
+   *  table, so the slug is the single source of truth for membership. */
+  ledTeams Team[] @relation("TeamLead")
 
   @@index([team])
   @@index([permission])
   @@index([status])
+}
+
+/**
+ * First-class team entity for the directory.
+ *
+ * `slug` is the identifier referenced elsewhere as a plain string (e.g.
+ * `WorkspaceUser.team`, `Epic.team`, `Initiative.team`). Membership is
+ * therefore implicit: a user is a member of a team when their `team`
+ * equals this team's `slug`. The leader is an explicit FK to
+ * `WorkspaceUser`; clearing that user clears the lead (`SetNull`).
+ *
+ * Image URLs follow the same opaque-URL contract as `WorkspaceUser.image`
+ * — stored as `/uploads/team-images/<uuid>.<ext>` today via the storage
+ * adapter, swappable to S3 / R2 / etc. without schema changes.
+ */
+model Team {
+  id           String         @id @default(uuid())
+  /** Kebab-case identifier referenced by `WorkspaceUser.team` etc. */
+  slug         String         @unique
+  /** Human-readable display name for chips, pickers, headers. */
+  displayName  String
+  description  String?
+  image        String?
+  leadId       String?
+  lead         WorkspaceUser? @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  /** Manual sort order in pickers / sidebars (lower = higher). */
+  displayOrder Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([displayOrder])
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
