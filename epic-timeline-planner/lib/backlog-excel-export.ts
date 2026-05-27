@@ -105,12 +105,36 @@ function renderHtml(args: {
       color: #0f172a;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    .page { max-width: 1400px; margin: 0 auto; padding: 24px 24px 40px; }
+    /* Wider page so the preview hugs the viewport instead of a narrow
+     * fixed column. 96% of the window with a generous cap keeps it from
+     * stretching uncomfortably wide on ultrawide monitors. */
+    .page { width: 96%; max-width: 1800px; margin: 0 auto; padding: 24px 24px 40px; }
+    /* Card panel that wraps title + subtitle + toolbar + table so the
+     * whole export sits inside a single rounded surface. */
+    .panel {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 8px 20px -10px rgba(15, 23, 42, 0.10);
+      overflow: hidden;
+    }
+    /* Header band of the panel: title/subtitle on the left, buttons on
+     * the right — pinned to the top-right of the panel as requested. */
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    }
+    .panel-header .header-text { min-width: 0; }
     .toolbar {
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
       gap: 8px;
-      margin-bottom: 12px;
+      flex: 0 0 auto;
     }
     .toolbar button {
       appearance: none;
@@ -133,8 +157,9 @@ function renderHtml(args: {
     }
     .toolbar button.primary:hover { filter: brightness(1.05); }
 
-    .title { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px 0; }
-    .subtitle { font-size: 12.5px; color: #475569; margin: 0 0 16px 0; }
+    .title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 2px 0; color: #0f172a; }
+    .subtitle { font-size: 12.5px; color: #475569; margin: 0; }
+    .panel-body { padding: 16px 20px 20px; }
 
     .backlog-table {
       width: 100%;
@@ -176,13 +201,21 @@ function renderHtml(args: {
 </head>
 <body>
   <div class="page">
-    <div class="toolbar">
-      <button type="button" onclick="window.close()">Close</button>
-      <button type="button" class="primary" onclick="downloadExcel()">Download Excel</button>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="header-text">
+          <h1 class="title">${escapeHtml(title)}</h1>
+          ${subtitle ? `<p class="subtitle">${escapeHtml(subtitle)}</p>` : ""}
+        </div>
+        <div class="toolbar">
+          <button type="button" onclick="window.close()">Close</button>
+          <button type="button" class="primary" onclick="downloadExcel()">Download Excel</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="excel-content">${tableMarkup}</div>
+      </div>
     </div>
-    <h1 class="title">${escapeHtml(title)}</h1>
-    ${subtitle ? `<p class="subtitle">${escapeHtml(subtitle)}</p>` : ""}
-    <div id="excel-content">${tableMarkup}</div>
   </div>
 
   <script>

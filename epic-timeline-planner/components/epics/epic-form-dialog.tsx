@@ -1324,8 +1324,13 @@ export function EpicFormDialog({
                       </span>
                     </span>
                   </div>
-                  {/* Disabled-looking input box for the rolled-up value. */}
-                  <div className="inline-flex h-7 w-full cursor-not-allowed items-center rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-medium text-slate-600 shadow-sm">
+                  {/* Disabled-looking input box for the rolled-up value.
+                   *  Σ + divider sit INSIDE the field too, so the value
+                   *  reads as "Σ | 39d" — matches the table's rolled-up
+                   *  cells. */}
+                  <div className="inline-flex h-7 w-full cursor-not-allowed items-center gap-1.5 rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-medium text-slate-600 shadow-sm">
+                    <span className="text-slate-400">Σ</span>
+                    <span aria-hidden className="inline-block h-3.5 w-px self-center bg-slate-300" />
                     <span className="tabular-nums">{totalUserStoryEstimate}d</span>
                   </div>
                 </label>

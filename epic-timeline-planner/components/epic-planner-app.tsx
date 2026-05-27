@@ -3129,6 +3129,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       setInsightsScopeInitId(id);
       setInsightsScopeEpicId(null);
     }
+    // Insights renders inside the roadmap surface's quarter-tab area —
+    // jump out of any non-roadmap topMode and clear the active month so
+    // the quarter-level Insights view actually mounts. Without these the
+    // tab state flips but the surface never appears (caller is still on
+    // Backlog / Users / a month view).
+    setTopMode("roadmap");
+    setActiveTimelineMonth(null);
     setActiveQuarterViewTab("insights");
   }
 

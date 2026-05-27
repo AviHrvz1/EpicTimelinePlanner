@@ -5380,6 +5380,16 @@ export function BacklogPlanningPanel({
           return row.quarterLabelValue ?? "";
         case "month":
           return row.monthLabelValue ?? "";
+        case "roadmap": {
+          // Empty when the initiative isn't linked to a roadmap, so the
+          // Excel column reads "" (filterable) instead of "No roadmap".
+          if (!row.initiativeRoadmapId) return "";
+          return row.initiativeRoadmapLabel ?? "";
+        }
+        case "parent":
+          // Parent of a story IS its epic — surface the epic title so the
+          // exported Parent column matches what the on-screen cell shows.
+          return row.epicTitle ?? "";
         default:
           return "";
       }
@@ -5398,7 +5408,11 @@ export function BacklogPlanningPanel({
     const trailingLabels = trailingKeys.map((key) => BACKLOG_COLUMN_LABELS[key]);
     const columnLabels = [...hierarchyLabels, ...trailingLabels];
 
-    const rows = groupedStoryRows.map((r) => ({
+    // Emit rows in the user's current sort order so the Excel matches
+    // what's on screen. `sortedGroupedStoryRows` is `groupedStoryRows` +
+    // column sort; both share the same filter pipeline (`fullyFiltered`),
+    // so filtering is honored either way.
+    const rows = sortedGroupedStoryRows.map((r) => ({
       cells: [
         initIds.get(r.initiativeId) ?? "",
         r.initiativeTitle ?? "",
@@ -5417,7 +5431,7 @@ export function BacklogPlanningPanel({
       subtitle,
       filename: `backlog-${new Date().toISOString().slice(0, 10)}`,
     });
-  }, [groupedStoryRows, visibleColumnKeys]);
+  }, [groupedStoryRows, sortedGroupedStoryRows, visibleColumnKeys]);
 
   const groupSummaryLabel = groupLevels.length === 0 ? "None" : groupLevels.map((level) => GROUP_LEVEL_LABELS[level]).join(" / ");
   // Group-by and column sort coexist: buckets stay in their natural order (alphabetical by label),
@@ -8362,7 +8376,7 @@ export function BacklogPlanningPanel({
       {/* Slim global toolbar — only the controls that don't belong to a
           specific column. Search, Status/Sprint/Team/Assignee/Parent/Labels/
           Year/Quarter filters now live INSIDE each column's header. */}
-      <div className="relative z-20 mt-6 flex flex-wrap items-center gap-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-5 py-5 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="relative z-20 mt-6 flex flex-wrap items-center gap-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-5 py-8 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         {/* Free-text search — always-visible global search input. Same `query`
          *  state as the Work Item column popover (so they stay in sync). */}
         <div className="relative min-w-[16rem] flex-1">
