@@ -1090,7 +1090,7 @@ export function EpicFormDialog({
               </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
               <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-slate-900">
-                <EpicPlanBarIcon icon={icon} className="mr-0 [&_svg]:size-4 [&_svg]:text-slate-600" />
+                <EpicPlanBarIcon icon={icon} className="mr-0 [&_svg]:size-4 [&_svg]:text-sky-500" />
                 <span className="truncate">{title || (epic ? "Epic details" : "Create epic")}</span>
               </span>
             </div>

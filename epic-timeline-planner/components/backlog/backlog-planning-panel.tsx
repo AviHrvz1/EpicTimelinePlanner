@@ -4971,7 +4971,7 @@ export function BacklogPlanningPanel({
     // Use the canonical icons from epic-plan-bar so the composer field matches
     // the row icons used everywhere else (Zap for initiative, Folder for epic).
     if (kind === "initiative") return <InitiativePlanBarIcon className="mr-0 [&_svg]:size-3.5" />;
-    if (kind === "epic") return <EpicPlanBarIcon className="mr-0 text-slate-500 [&_svg]:size-3.5" />;
+    if (kind === "epic") return <EpicPlanBarIcon className="mr-0 text-sky-500 [&_svg]:size-3.5" />;
     return <UserStoryIcon className="size-4" />;
   }
 
@@ -9638,7 +9638,7 @@ export function BacklogPlanningPanel({
                                         renderParentTitleEditor("epic", epic.id, epic.title)
                                       ) : (
                                         <span className="inline-flex w-full min-w-0 items-center gap-1.5 text-[16px] font-medium text-slate-800">
-                                          <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
+                                          <EpicPlanBarIcon icon={epic.icon} className="mr-0 text-sky-500 [&_svg]:size-4" />
                                           <span className="truncate">{epic.title}</span>
                                           <span
                                             className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"

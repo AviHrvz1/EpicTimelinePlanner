@@ -1,36 +1,39 @@
 /**
  * Short confetti burst played when a user story transitions from `done`
- * to `approved`. Kept intentionally brief (~600ms) so it celebrates the
- * approval without becoming intrusive — the call sites fire it once per
- * transition and forget.
+ * to `approved`. Same visual pattern as the now-removed login confetti:
+ * two side-cannons firing inward from the bottom corners over ~500ms,
+ * shooting small clusters each animation frame. Brief enough to feel
+ * like a quick celebration without getting in the way of work.
  */
 
 import confetti from "canvas-confetti";
 
 export function fireApprovalConfetti(): void {
   if (typeof window === "undefined") return;
-  // Two small staggered bursts angled inward from the bottom corners.
-  // Together they take ~600ms; canvas-confetti cleans up its own DOM.
-  const baseDefaults = {
-    spread: 55,
-    startVelocity: 38,
-    ticks: 90,
-    gravity: 1.05,
-    scalar: 0.85,
-    colors: ["#7c3aed", "#a78bfa", "#22c55e", "#f59e0b", "#0ea5e9"],
-    disableForReducedMotion: true,
-  };
 
-  confetti({
-    ...baseDefaults,
-    particleCount: 28,
-    angle: 60,
-    origin: { x: 0.15, y: 0.85 },
-  });
-  confetti({
-    ...baseDefaults,
-    particleCount: 28,
-    angle: 120,
-    origin: { x: 0.85, y: 0.85 },
-  });
+  const duration = 500;
+  const end = Date.now() + duration;
+  const colors = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444"];
+
+  (function frame() {
+    confetti({
+      particleCount: 4,
+      angle: 60,
+      spread: 55,
+      startVelocity: 45,
+      origin: { x: 0, y: 0.7 },
+      colors,
+      disableForReducedMotion: true,
+    });
+    confetti({
+      particleCount: 4,
+      angle: 120,
+      spread: 55,
+      startVelocity: 45,
+      origin: { x: 1, y: 0.7 },
+      colors,
+      disableForReducedMotion: true,
+    });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  })();
 }

@@ -762,7 +762,7 @@ export function StoryDetailsDialog({
               className="inline-flex min-w-0 items-center gap-1 truncate cursor-pointer rounded px-1 py-0.5 text-blue-700 underline decoration-blue-300 underline-offset-2 hover:bg-blue-50"
               title={selectedBreadcrumbMeta?.epic?.title ?? "Open epic"}
             >
-              <EpicPlanBarIcon icon={selectedBreadcrumbMeta?.epic?.icon} className="mr-0 text-[11px] [&_svg]:size-3 [&_svg]:text-slate-600" />
+              <EpicPlanBarIcon icon={selectedBreadcrumbMeta?.epic?.icon} className="mr-0 text-[11px] [&_svg]:size-3 [&_svg]:text-sky-500" />
               {selectedBreadcrumbMeta?.epic
                 ? (displayIds.byEpicId.get(selectedBreadcrumbMeta.epic.id) ?? "Epic")
                 : "Epic"}
@@ -1007,7 +1007,7 @@ export function StoryDetailsDialog({
               <ClipboardList className="size-5 shrink-0 text-slate-500" aria-hidden />
               Details
             </h3>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Status</p>
               <div className="flex h-7 items-center gap-1.5 rounded-md border border-blue-300/80 bg-blue-50/35 px-2 shadow-sm transition-colors hover:border-blue-400">
                 {(() => {
@@ -1028,7 +1028,7 @@ export function StoryDetailsDialog({
               const roadmap = roadmaps.find((r) => r.id === parentInit?.roadmapId);
               if (!roadmap) return null;
               return (
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Roadmap</p>
                   <span className="inline-flex h-7 max-w-[16rem] items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
                     <MapIcon className="size-3.5 shrink-0 text-blue-500" aria-hidden />
@@ -1037,7 +1037,7 @@ export function StoryDetailsDialog({
                 </div>
               );
             })()}
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Assignee</p>
               <div className="group/assignee relative flex min-w-0 w-full items-center">
                 <AssigneeFieldDecoration value={assignee} directoryUsers={workspaceDirectoryUsers} />
@@ -1072,7 +1072,7 @@ export function StoryDetailsDialog({
                 ) : null}
               </div>
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Team</p>
               <div className="group/team relative flex min-w-0 w-full items-center">
                 <TeamIdCombobox
@@ -1094,7 +1094,7 @@ export function StoryDetailsDialog({
                 ) : null}
               </div>
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Sprint</p>
               <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-1.5 text-[14px] font-medium text-slate-800">
                 <option value="">Not set</option>
@@ -1103,7 +1103,7 @@ export function StoryDetailsDialog({
                 ))}
               </select>
             </label>
-            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
               <p className="text-[15px] font-normal text-slate-700">Est. Days</p>
               <input
                 type="number"
@@ -1113,8 +1113,8 @@ export function StoryDetailsDialog({
                 className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
               />
             </div>
-            <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-              <p className="text-[15px] font-normal text-slate-700">Est. Days left</p>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
+              <p className="whitespace-nowrap text-[15px] font-normal text-slate-700">Est. Days left</p>
               <input
                 type="number"
                 min={0}
@@ -1123,7 +1123,7 @@ export function StoryDetailsDialog({
                 className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
               />
             </div>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Priority</p>
               <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm">
                 <option value="">Not set</option>
@@ -1133,7 +1133,7 @@ export function StoryDetailsDialog({
                 <option value="P3">P3</option>
               </select>
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Parent</p>
               <span ref={parentSelectWrapRef} className="group relative min-w-0">
                 <select
@@ -1167,7 +1167,7 @@ export function StoryDetailsDialog({
                 ) : null}
               </span>
             </label>
-            <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Labels</p>
               <div className="relative z-30">
                 <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 py-0.5 shadow-sm">

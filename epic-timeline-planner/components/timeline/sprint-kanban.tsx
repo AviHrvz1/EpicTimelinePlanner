@@ -27,13 +27,16 @@ import { collectStoriesForSprintBoard, collectEpicsForSprintKanban, type BoardSt
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
+import { formatAssigneeShortLabel } from "@/lib/assignee-display";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 
 function storyAssigneeLabel(story: UserStoryItem): string {
-  return story.assignee?.trim() || "Unassigned";
+  const t = story.assignee?.trim();
+  if (!t) return "Unassigned";
+  return formatAssigneeShortLabel(t);
 }
 
 function assigneeFilterIcon(name: string): LucideIcon {
@@ -554,16 +557,20 @@ function SprintEpicCard({
         ) : null}
         <div className="mt-6 flex flex-wrap items-center justify-end gap-1.5">
           {epic.assignee?.trim() ? (() => {
+            const fullName = epic.assignee.trim();
             const resolved = resolveAssigneeAvatar(epic.assignee, workspaceDirectoryUsers);
             return (
-              <span className={cn("inline-flex items-center gap-1 border border-slate-200 bg-slate-50 text-slate-700", chipBase)}>
+              <span
+                className={cn("inline-flex items-center gap-1 border border-slate-200 bg-slate-50 text-slate-700", chipBase)}
+                title={fullName}
+              >
                 {resolved.image ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={resolved.image} alt="" className="size-3.5 shrink-0 rounded-full object-cover" />
                 ) : (
                   <UserRound className="size-2.5 shrink-0 opacity-70" aria-hidden />
                 )}
-                <span className="max-w-[7rem] truncate">{epic.assignee.trim()}</span>
+                <span className="max-w-[7rem] truncate">{formatAssigneeShortLabel(fullName)}</span>
               </span>
             );
           })() : null}
@@ -971,7 +978,9 @@ export function SprintKanbanBoard({
                           <UserAvatar name={resolved.name} image={resolved.image} size={22} className="ring-0" />
                         )}
                         {assigneeFilterExpanded ? (
-                          <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
+                          <span className="max-w-[12rem] truncate text-[12px]">
+                            {isUnassigned ? name : formatAssigneeShortLabel(name)}
+                          </span>
                         ) : null}
                       </button>
                     );

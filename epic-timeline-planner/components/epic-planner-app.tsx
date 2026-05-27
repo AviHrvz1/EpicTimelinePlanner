@@ -3573,7 +3573,24 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       console.info("[gantt-drop] app onDragEnd", { activeId, overId });
 
       const capColDrag = parseSprintCapacityColumnDragId(activeId);
-      const capColDrop = parseSprintCapacityColumnDropId(overId);
+      // A column-drag dropped on a slot inside another column should be
+      // treated as a column drop targeting that slot's owner — dnd-kit's
+      // collision detection often picks the inner sprint-cap-slot zone
+      // over the wider capacity-col-drop wrapper because pointer
+      // position falls inside the slot rect. Without this synthesis,
+      // the swap silently no-ops ("no-handler") and the dragged column
+      // appears to disappear behind the target. Restricted to the same
+      // sprint + team so cross-team grabs still get rejected below.
+      const capColDropFromCol = parseSprintCapacityColumnDropId(overId);
+      const slotForColDrop = capColDrag ? parseSprintCapacitySlotDropId(overId) : null;
+      const capColDrop = capColDropFromCol
+        ?? (slotForColDrop
+          ? {
+              yearSprint: slotForColDrop.yearSprint,
+              teamKey: slotForColDrop.teamKey,
+              member: slotForColDrop.member,
+            }
+          : null);
       if (capColDrag && capColDrop) {
         step("capacity-column-reorder");
         if (isActiveSprintClosed) {
@@ -3612,7 +3629,21 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       }
 
       const mCapColDrag = parseMonthTeamCapacityColumnDragId(activeId);
-      const mCapColDrop = parseMonthTeamCapacityColumnDropId(overId);
+      // Same fall-through pattern as the sprint capacity branch above:
+      // when collision detection picks the inner `month-capacity:`
+      // bucket over the wider `m-cap-col-drop:` wrapper, synthesize a
+      // column drop targeting that bucket's team so the swap still
+      // happens.
+      const mCapColDropFromCol = parseMonthTeamCapacityColumnDropId(overId);
+      const mCapBucketForColDrop = mCapColDrag ? parseMonthTeamCapacityBucketDropId(overId) : null;
+      const mCapColDrop = mCapColDropFromCol
+        ?? (mCapBucketForColDrop
+          ? {
+              year: mCapBucketForColDrop.year,
+              month: mCapBucketForColDrop.month,
+              teamId: mCapBucketForColDrop.teamId,
+            }
+          : null);
       if (mCapColDrag && mCapColDrop) {
         step("month-capacity-column-reorder");
         if (mCapColDrag.year !== selectedYear || mCapColDrop.year !== selectedYear) {
@@ -3636,7 +3667,18 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       }
 
       const qCapColDrag = parseQuarterTeamCapacityColumnDragId(activeId);
-      const qCapColDrop = parseQuarterTeamCapacityColumnDropId(overId);
+      // Same bucket → column-drop synthesis as the sprint / month
+      // capacity branches above.
+      const qCapColDropFromCol = parseQuarterTeamCapacityColumnDropId(overId);
+      const qCapBucketForColDrop = qCapColDrag ? parseQuarterTeamCapacityBucketDropId(overId) : null;
+      const qCapColDrop = qCapColDropFromCol
+        ?? (qCapBucketForColDrop
+          ? {
+              year: qCapBucketForColDrop.year,
+              quarterLabel: qCapBucketForColDrop.quarterLabel,
+              teamId: qCapBucketForColDrop.teamId,
+            }
+          : null);
       if (qCapColDrag && qCapColDrop) {
         step("quarter-capacity-column-reorder");
         if (qCapColDrag.year !== selectedYear || qCapColDrop.year !== selectedYear) {
@@ -3943,6 +3985,18 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               record("story:kanban-reorder-noop", { storyId, overStoryId });
               return;
             }
+            // Detect a done → approved transition in the patch set so the
+            // confetti also fires when the user drops on a card at the
+            // TOP of the Approved column (cross-column reorder path),
+            // not just when they drop on the column's empty space below
+            // existing cards.
+            const movingStoryPrevStatus = boardRows.find((r) => r.story.id === storyId)?.story.status as
+              | StoryStatus
+              | undefined;
+            const movingStoryPatch = patches.find((p) => p.storyId === storyId);
+            const reorderApprovedTransition =
+              movingStoryPrevStatus === "done" &&
+              movingStoryPatch?.status === "approved";
             flushSync(() => {
               setInitiatives((prev) => applyKanbanOrderPatchesToInitiatives(prev, patches));
             });
@@ -3964,6 +4018,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 }
               }
               toast.success("Story updated");
+              if (reorderApprovedTransition) {
+                fireApprovalConfetti();
+              }
               record("story:kanban-reorder", { storyId, overStoryId, patchCount: patches.length });
             } catch (err) {
               console.error("[story-move] kanban reorder failed", {
@@ -5374,8 +5431,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                           : null
                       }
                       onSprintBoardTeamFilterSync={
+                        // useState setters are reference-stable across
+                        // renders. The inline-arrow form previously here
+                        // gave InitiativeListPanel a fresh prop on every
+                        // parent render, which kept its dependent
+                        // useEffect re-firing and contributed to the
+                        // jump-to-current-sprint max-update-depth loop.
                         activeTimelineMonth != null && sprintSurfaceUsesDeliveryTeam
-                          ? (teamId) => setSprintStoryBoardTeamId(teamId)
+                          ? setSprintStoryBoardTeamId
                           : undefined
                       }
                       panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}

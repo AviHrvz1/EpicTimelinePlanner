@@ -3,12 +3,13 @@
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Check, GripVertical, Info, Maximize2, Minimize2, Search, User, UserRound, Users, UserX, X } from "lucide-react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { formatAssigneeShortLabel } from "@/lib/assignee-display";
 import {
   CAPACITY_DAYS_INPUT_NO_SPIN,
   CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
@@ -18,6 +19,7 @@ import {
 } from "@/components/timeline/team-capacity-bucket";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import {
+  parseSprintCapacityColumnDragId,
   sprintCapacityBucketDropId,
   sprintCapacityColumnDragId,
   sprintCapacityColumnDropId,
@@ -1120,7 +1122,9 @@ export function SprintCapacityBoard({
                     <UserAvatar name={resolved.name} image={resolved.image} size={22} className="ring-0" />
                   )}
                   {assigneeFilterExpanded ? (
-                    <span className="max-w-[12rem] truncate text-[12px]">{name}</span>
+                    <span className="max-w-[12rem] truncate text-[12px]">
+                      {isUnassigned ? name : formatAssigneeShortLabel(name)}
+                    </span>
                   ) : null}
                 </button>
               );
@@ -1141,12 +1145,12 @@ export function SprintCapacityBoard({
             expandedMemberKey == null &&
             members.filter((m) => m !== SPRINT_CAPACITY_OTHER_BUCKET).length >= 2;
           return (
-            <div
+            <SprintCapacityColumnCell
               key={member}
-              className={cn(
-                "box-border w-full min-w-0 max-w-full",
-                expandedMemberKey === member && "col-span-full",
-              )}
+              member={member}
+              expandedMemberKey={expandedMemberKey}
+              yearSprint={yearSprint}
+              teamKey={selectedTeamId || "all"}
             >
               <SprintCapacityColumnChrome
                 yearSprint={yearSprint}
@@ -1179,11 +1183,50 @@ export function SprintCapacityBoard({
                   </div>
                 )}
               </SprintCapacityColumnChrome>
-            </div>
+            </SprintCapacityColumnCell>
           );
         })}
       </div>
     </div>
+    </div>
+  );
+}
+
+/**
+ * Grid cell wrapping each capacity column. While the column is being
+ * dragged for reorder, lifts the cell with `position: relative` + a
+ * high z-index so the dragged element stays visually on top of its
+ * siblings (otherwise the static grid item below renders above the
+ * translated source and the dragged column "disappears" behind it).
+ * Tied to dnd-kit's `active.id` so only the actively dragged column
+ * gets elevated.
+ */
+function SprintCapacityColumnCell({
+  member,
+  expandedMemberKey,
+  yearSprint,
+  teamKey,
+  children,
+}: {
+  member: string;
+  expandedMemberKey: string | null;
+  yearSprint: number;
+  teamKey: string;
+  children: ReactNode;
+}) {
+  const { active } = useDndContext();
+  const activeMember = active?.id ? parseSprintCapacityColumnDragId(String(active.id))?.member : null;
+  const isThisColumnDragging = activeMember != null && activeMember === member;
+  return (
+    <div
+      className={cn(
+        "relative box-border w-full min-w-0 max-w-full",
+        expandedMemberKey === member && "col-span-full",
+      )}
+      style={isThisColumnDragging ? { zIndex: 90 } : undefined}
+      data-capacity-col-key={`${yearSprint}:${teamKey}:${member}`}
+    >
+      {children}
     </div>
   );
 }

@@ -59,6 +59,7 @@ import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint } from "@/lib/year-sprint";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
+import { formatAssigneeShortLabel } from "@/lib/assignee-display";
 import { cn } from "@/lib/utils";
 
 function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
@@ -76,6 +77,7 @@ function storyAssigneeDisplayName(story: UserStoryItem): string | null {
   const t = story.assignee?.trim();
   return t || null;
 }
+
 
 /** Same visual language as Gantt bar + insights truncation hovers (indigo gradient). */
 const LEFT_PANEL_TRUNCATION_TOOLTIP_CLASS =
@@ -1014,7 +1016,7 @@ function InitiativeTreeEpicRow({
           </button>
         ) : null}
         <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
+          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-sky-500" />
         </span>
         <button
           type="button"
@@ -1132,7 +1134,7 @@ function InitiativeTreeEpicRow({
                                   ) : (
                                     <User className="size-3 shrink-0 text-slate-500" aria-hidden />
                                   )}
-                                  <span className="min-w-0 truncate">{assigneeName}</span>
+                                  <span className="min-w-0 truncate">{formatAssigneeShortLabel(assigneeName)}</span>
                                 </span>
                               );
                             })() : null}
@@ -1740,7 +1742,7 @@ function SprintEpicCard({
           ) : null}
         </div>
         <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-slate-400" />
+          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-sky-500" />
         </span>
         <div className="min-w-0 flex-1 text-left">
           <button
@@ -1860,7 +1862,7 @@ function SprintEpicCard({
                           ) : (
                             <User className="size-3 shrink-0 text-slate-500" aria-hidden />
                           )}
-                          <span className="min-w-0 truncate">{assigneeName}</span>
+                          <span className="min-w-0 truncate">{formatAssigneeShortLabel(assigneeName)}</span>
                         </span>
                       );
                     })() : null}
@@ -2261,12 +2263,23 @@ export function InitiativeListPanel({
    * single-team chip so epics from every team stay visible in the list.
    */
   useEffect(() => {
+    // Functional setter with identity bail-out: writing `["all"]` (or
+    // `[id]`) directly creates a fresh array every call, which React
+    // treats as a state change even when the logical value is the same
+    // — that combined with a re-firing parent callback was driving a
+    // max-update-depth loop when the user clicked "View current sprint"
+    // on a closed sprint. Returning `prev` when contents already match
+    // lets React bail out and stops the cascade.
     if (monthEpicTeamFilterId) {
-      setPanelTeamFilterIds([monthEpicTeamFilterId]);
+      setPanelTeamFilterIds((prev) =>
+        prev.length === 1 && prev[0] === monthEpicTeamFilterId ? prev : [monthEpicTeamFilterId],
+      );
       return;
     }
     if (onSprintBoardTeamFilterSync != null && monthEpicTeamFilterId == null) {
-      setPanelTeamFilterIds(["all"]);
+      setPanelTeamFilterIds((prev) =>
+        prev.length === 1 && prev[0] === "all" ? prev : ["all"],
+      );
     }
   }, [monthEpicTeamFilterId, onSprintBoardTeamFilterSync]);
 
