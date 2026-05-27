@@ -10,6 +10,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Filter,
   Layers3,
   ListFilter,
   Plus,
@@ -127,6 +128,154 @@ const USER_DIR_TH_CLASS =
   "relative w-full min-w-0 whitespace-nowrap px-3 py-1.5 text-left align-middle";
 
 const USER_DIR_TD_BASE = "min-w-0 px-2 py-2 align-middle";
+
+/**
+ * Per-column filter popover for the user directory — same UX pattern as
+ * the backlog table: small Filter icon trigger in the column header,
+ * polished popover on click with the column-specific filter UI.
+ */
+function UserDirColumnFilterDropdown({
+  title,
+  isActive,
+  onClear,
+  children,
+  align = "right",
+  width = 240,
+}: {
+  title: string;
+  isActive: boolean;
+  onClear?: () => void;
+  children: ReactNode;
+  align?: "left" | "right";
+  width?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey as never);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey as never);
+    };
+  }, [open]);
+  return (
+    <div ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((prev) => !prev);
+        }}
+        aria-label={`${title} — open filter`}
+        aria-expanded={open}
+        title={title}
+        className={cn(
+          "relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60",
+          isActive
+            ? "border-amber-300/70 bg-amber-300/15 text-amber-200 hover:bg-amber-300/25"
+            : "border-white/20 bg-white/10 text-white/80 hover:border-white/40 hover:bg-white/25 hover:text-white",
+          open && "ring-2 ring-amber-300/60",
+        )}
+      >
+        <Filter className="size-3.5" strokeWidth={2.2} aria-hidden />
+        {isActive ? (
+          <span
+            className="pointer-events-none absolute -right-0.5 -top-0.5 inline-flex h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_0_2px_rgba(8,151,213,0.95)]"
+            aria-hidden
+          />
+        ) : null}
+      </button>
+      {open ? (
+        <div
+          className={cn(
+            "absolute z-50 mt-1 top-full overflow-hidden rounded-xl border border-slate-200/90 bg-white text-left text-slate-700 shadow-[0_20px_45px_-15px_rgba(15,23,42,0.35),0_8px_18px_-8px_rgba(15,23,42,0.15)] ring-1 ring-black/[0.04]",
+            align === "right" ? "right-0" : "left-0",
+          )}
+          style={{ width: `${width}px` }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-b from-slate-50/70 to-white px-3 py-2">
+            <span className="truncate text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+              {title}
+            </span>
+            {isActive && onClear ? (
+              <button
+                type="button"
+                onClick={onClear}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50"
+              >
+                <X className="size-3" aria-hidden />
+                Clear
+              </button>
+            ) : null}
+          </div>
+          <div className="max-h-[24rem] overflow-y-auto p-2">{children}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function UserDirCheckList({
+  options,
+  selected,
+  onChange,
+  emptyHint = "All",
+}: {
+  options: { id: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  emptyHint?: string;
+}) {
+  const allSelected = selected.length === 0;
+  function toggle(id: string) {
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  }
+  return (
+    <div className="space-y-0.5">
+      <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition hover:bg-slate-50">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={() => onChange([])}
+          className="size-3.5 accent-indigo-600"
+        />
+        <span className="font-medium text-slate-700">{emptyHint}</span>
+      </label>
+      <div className="h-px bg-slate-100" />
+      {options.map((option) => {
+        const checked = selected.includes(option.id);
+        return (
+          <label
+            key={option.id}
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition hover:bg-slate-50",
+              checked && "bg-indigo-50/60",
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => toggle(option.id)}
+              className="size-3.5 accent-indigo-600"
+            />
+            <span className={cn("flex-1 truncate", checked ? "text-indigo-700" : "text-slate-700")}>
+              {option.label}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Drawer field captions — larger than inputs (`cellInputCn` keeps control heights unchanged). */
 const USER_DRAWER_FIELD_LABEL_CLASS = "mb-1.5 block text-[15px] font-semibold text-slate-800";
@@ -539,10 +688,21 @@ function UserDirectorySortTrigger({
   );
 }
 
-function UserDirectoryNameHeader({ sort, onToggle }: { sort: SortState; onToggle: (k: SortKey) => void }) {
+function UserDirectoryNameHeader({
+  sort,
+  onToggle,
+  filterSlot,
+}: {
+  sort: SortState;
+  onToggle: (k: SortKey) => void;
+  filterSlot?: ReactNode;
+}) {
   return (
-    <th className={USER_DIR_TH_CLASS}>
+    <th className={cn(USER_DIR_TH_CLASS, "relative pr-9")}>
       <UserDirectorySortTrigger label={USER_DIRECTORY_COLUMN_LABELS.name} col="name" sort={sort} onToggle={onToggle} />
+      {filterSlot ? (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2">{filterSlot}</span>
+      ) : null}
     </th>
   );
 }
@@ -551,10 +711,12 @@ function SortableUserDirectoryColumnHeader({
   id,
   sort,
   onToggle,
+  filterSlot,
 }: {
   id: Exclude<SortKey, "name">;
   sort: SortState;
   onToggle: (k: SortKey) => void;
+  filterSlot?: ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: CSSProperties = {
@@ -565,7 +727,7 @@ function SortableUserDirectoryColumnHeader({
   const label = USER_DIRECTORY_COLUMN_LABELS[id];
   const centerHeader = id === "permission" || id === "status";
   return (
-    <th ref={setNodeRef} style={style} className={cn(USER_DIR_TH_CLASS, centerHeader && "text-center")}>
+    <th ref={setNodeRef} style={style} className={cn(USER_DIR_TH_CLASS, centerHeader && "text-center", "relative pr-9")}>
       <div className={cn("flex w-full min-w-0 items-center gap-1", centerHeader && "justify-center")}>
         <button
           type="button"
@@ -578,6 +740,9 @@ function SortableUserDirectoryColumnHeader({
         </button>
         <UserDirectorySortTrigger label={label} col={id} sort={sort} onToggle={onToggle} />
       </div>
+      {filterSlot ? (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2">{filterSlot}</span>
+      ) : null}
     </th>
   );
 }
@@ -781,7 +946,7 @@ function UsersTableRow({
             <EditCommitButtons disabled={saving} onSave={saveName} onCancel={onCancelEdit} />
           </div>
         ) : (
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-center gap-2.5">
             <UserDirectoryAvatar image={row.image ?? null} name={row.name} />
             <span className="min-w-0 flex-1 truncate py-1.5 pr-1 font-normal text-slate-900">{row.name}</span>
             {!saving && editField == null ? (
@@ -961,6 +1126,14 @@ export function UsersWorkspacePanel() {
   const [permissionFilter, setPermissionFilter] = useState<PermissionFilter>("all");
   const [teamFilterInput, setTeamFilterInput] = useState("");
   const [permFilterInput, setPermFilterInput] = useState("");
+  // Per-column filter state — drives the new column-header filter
+  // popovers. `q` (global search) still filters across all columns; these
+  // narrow further per-column.
+  const [nameQuery, setNameQuery] = useState("");
+  const [emailQuery, setEmailQuery] = useState("");
+  const [teamFilterIds, setTeamFilterIds] = useState<string[]>([]);
+  const [permissionFilterIds, setPermissionFilterIds] = useState<string[]>([]);
+  const [statusFilterIds, setStatusFilterIds] = useState<string[]>([]);
   const [userPanel, setUserPanel] = useState<UserPanelState | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -1214,17 +1387,33 @@ export function UsersWorkspacePanel() {
   );
 
   const q = searchText.trim().toLowerCase();
+  const nameQ = nameQuery.trim().toLowerCase();
+  const emailQ = emailQuery.trim().toLowerCase();
   const displayed = useMemo(() => {
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.name.toLowerCase().includes(q) ||
-        r.email.toLowerCase().includes(q) ||
-        r.permission.toLowerCase().includes(q) ||
-        teamLabelForWorkspaceUser(r.team).toLowerCase().includes(q) ||
-        (r.status ?? "active").toLowerCase().includes(q),
-    );
-  }, [rows, q]);
+    return rows.filter((r) => {
+      // Global text search — name, email, team, permission, status.
+      if (q) {
+        const inGlobal =
+          r.name.toLowerCase().includes(q) ||
+          r.email.toLowerCase().includes(q) ||
+          r.permission.toLowerCase().includes(q) ||
+          teamLabelForWorkspaceUser(r.team).toLowerCase().includes(q) ||
+          (r.status ?? "active").toLowerCase().includes(q);
+        if (!inGlobal) return false;
+      }
+      // Per-column text searches.
+      if (nameQ && !r.name.toLowerCase().includes(nameQ)) return false;
+      if (emailQ && !r.email.toLowerCase().includes(emailQ)) return false;
+      // Per-column multi-selects (empty array = no filter).
+      if (teamFilterIds.length > 0) {
+        const teamId = normalizeWorkspaceUserTeam(r.team) ?? "__none__";
+        if (!teamFilterIds.includes(teamId)) return false;
+      }
+      if (permissionFilterIds.length > 0 && !permissionFilterIds.includes(r.permission)) return false;
+      if (statusFilterIds.length > 0 && !statusFilterIds.includes(r.status ?? "active")) return false;
+      return true;
+    });
+  }, [rows, q, nameQ, emailQ, teamFilterIds, permissionFilterIds, statusFilterIds]);
 
   const sortedRows = useMemo(() => {
     const list = [...displayed];
@@ -1669,52 +1858,6 @@ export function UsersWorkspacePanel() {
           </div>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex w-full min-w-[160px] max-w-[220px] shrink-0 flex-col gap-1.5 sm:w-[200px]">
-            <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
-            <AssigneeCombobox
-              value={teamFilterInput}
-              onChange={setTeamFilterInput}
-              suggestions={teamFilterSuggestions}
-              placeholder="All Teams"
-              aria-label="Filter by team"
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
-              onSuggestionPick={(s) => {
-                const next = resolveTeamFilterQuery(s, rows, registeredTeamSlugs);
-                setTeamFilter(next);
-                setTeamFilterInput(teamFilterLabel(next));
-              }}
-              onInputBlur={(v) => {
-                const next = resolveTeamFilterQuery(v, rows, registeredTeamSlugs);
-                setTeamFilter(next);
-                setTeamFilterInput(teamFilterLabel(next));
-              }}
-            />
-            </div>
-          </div>
-          <div className="flex w-full min-w-[160px] max-w-[220px] shrink-0 flex-col gap-1.5 sm:w-[200px]">
-            <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" aria-hidden />
-            <AssigneeCombobox
-              value={permFilterInput}
-              onChange={setPermFilterInput}
-              suggestions={PERMISSION_FILTER_SUGGESTIONS}
-              placeholder="All Permissions"
-              aria-label="Filter by permission"
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[13px] outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
-              onSuggestionPick={(s) => {
-                const next = resolvePermissionFilterQuery(s);
-                setPermissionFilter(next);
-                setPermFilterInput(permissionFilterLabel(next));
-              }}
-              onInputBlur={(v) => {
-                const next = resolvePermissionFilterQuery(v);
-                setPermissionFilter(next);
-                setPermFilterInput(permissionFilterLabel(next));
-              }}
-            />
-            </div>
-          </div>
           <div className="flex shrink-0 flex-col gap-1.5" ref={userDirGroupMenuRef}>
             <div className="relative">
             <button
@@ -1781,13 +1924,105 @@ export function UsersWorkspacePanel() {
               >
                 <thead className="sticky top-0 z-10 border-b border-[#19abeb]/70 bg-[#0897d5] shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   <tr>
-                    {columnOrder.map((key) =>
-                      key === "name" ? (
-                        <UserDirectoryNameHeader key={key} sort={sort} onToggle={toggleSort} />
+                    {columnOrder.map((key) => {
+                      // Build the per-column filter slot. Text columns
+                      // (name, email) get a search input; categorical
+                      // columns (team, permission, status) get a checklist.
+                      let filterSlot: ReactNode = null;
+                      if (key === "name") {
+                        filterSlot = (
+                          <UserDirColumnFilterDropdown
+                            title="Filter User Name"
+                            isActive={Boolean(nameQuery)}
+                            onClear={() => setNameQuery("")}
+                            align="left"
+                          >
+                            <div className="relative">
+                              <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" />
+                              <input
+                                value={nameQuery}
+                                onChange={(e) => setNameQuery(e.target.value)}
+                                placeholder="Search name…"
+                                autoComplete="off"
+                                className="h-8 w-full rounded-md border border-slate-300 bg-white pl-7 pr-2 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 transition focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+                              />
+                            </div>
+                          </UserDirColumnFilterDropdown>
+                        );
+                      } else if (key === "email") {
+                        filterSlot = (
+                          <UserDirColumnFilterDropdown
+                            title="Filter Email"
+                            isActive={Boolean(emailQuery)}
+                            onClear={() => setEmailQuery("")}
+                          >
+                            <div className="relative">
+                              <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" />
+                              <input
+                                value={emailQuery}
+                                onChange={(e) => setEmailQuery(e.target.value)}
+                                placeholder="Search email…"
+                                autoComplete="off"
+                                className="h-8 w-full rounded-md border border-slate-300 bg-white pl-7 pr-2 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 transition focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+                              />
+                            </div>
+                          </UserDirColumnFilterDropdown>
+                        );
+                      } else if (key === "team") {
+                        filterSlot = (
+                          <UserDirColumnFilterDropdown
+                            title="Filter Team"
+                            isActive={teamFilterIds.length > 0}
+                            onClear={() => setTeamFilterIds([])}
+                          >
+                            <UserDirCheckList
+                              options={directoryTeamIds.map((id) => ({ id, label: teamLabelForWorkspaceUser(id) }))}
+                              selected={teamFilterIds}
+                              onChange={setTeamFilterIds}
+                              emptyHint="All teams"
+                            />
+                          </UserDirColumnFilterDropdown>
+                        );
+                      } else if (key === "permission") {
+                        filterSlot = (
+                          <UserDirColumnFilterDropdown
+                            title="Filter Permission"
+                            isActive={permissionFilterIds.length > 0}
+                            onClear={() => setPermissionFilterIds([])}
+                          >
+                            <UserDirCheckList
+                              options={WORKSPACE_USER_PERMISSIONS.map((p) => ({ id: p, label: p }))}
+                              selected={permissionFilterIds}
+                              onChange={setPermissionFilterIds}
+                              emptyHint="All permissions"
+                            />
+                          </UserDirColumnFilterDropdown>
+                        );
+                      } else if (key === "status") {
+                        filterSlot = (
+                          <UserDirColumnFilterDropdown
+                            title="Filter Status"
+                            isActive={statusFilterIds.length > 0}
+                            onClear={() => setStatusFilterIds([])}
+                          >
+                            <UserDirCheckList
+                              options={[
+                                { id: "active", label: "Active" },
+                                { id: "inactive", label: "Inactive" },
+                              ]}
+                              selected={statusFilterIds}
+                              onChange={setStatusFilterIds}
+                              emptyHint="All statuses"
+                            />
+                          </UserDirColumnFilterDropdown>
+                        );
+                      }
+                      return key === "name" ? (
+                        <UserDirectoryNameHeader key={key} sort={sort} onToggle={toggleSort} filterSlot={filterSlot} />
                       ) : (
-                        <SortableUserDirectoryColumnHeader key={key} id={key} sort={sort} onToggle={toggleSort} />
-                      ),
-                    )}
+                        <SortableUserDirectoryColumnHeader key={key} id={key} sort={sort} onToggle={toggleSort} filterSlot={filterSlot} />
+                      );
+                    })}
                   </tr>
                 </thead>
               </SortableContext>

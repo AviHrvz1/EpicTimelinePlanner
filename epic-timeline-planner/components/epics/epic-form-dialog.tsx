@@ -251,7 +251,7 @@ export function EpicFormDialog({
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [dialogWidthVw, setDialogWidthVw] = useState(64);
+  const [dialogWidthVw, setDialogWidthVw] = useState(68);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(380);
@@ -1225,7 +1225,7 @@ export function EpicFormDialog({
                   <ClipboardList className="size-5 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Parent</p>
                   <InitiativeCombobox
                     valueId={initiativeId}
@@ -1252,7 +1252,7 @@ export function EpicFormDialog({
                     className="h-7 w-full min-w-0 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm px-1.5 text-[14px] text-slate-800"
                   />
                 </label>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <div className="inline-flex items-center gap-1">
                     <p className="text-[15px] font-normal text-slate-700">Status</p>
                     <span className="group relative inline-flex items-center">
@@ -1270,7 +1270,7 @@ export function EpicFormDialog({
                     className="h-7 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-medium text-slate-500 shadow-sm"
                   />
                 </div>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Team</p>
                   <div className="group/team relative flex min-w-0 w-full items-center">
                     <TeamIdCombobox
@@ -1293,7 +1293,7 @@ export function EpicFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Days Est</p>
                   <input
                     type="number"
@@ -1306,9 +1306,14 @@ export function EpicFormDialog({
                     onChange={(event) => setOriginalEstimateDaysDraft(event.target.value)}
                   />
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
-                  <div className="inline-flex items-center gap-1">
-                    <p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p>
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    {/* Σ + thin divider sit BEFORE "Child Est." so the
+                     *  label reads "Σ | Child Est." — matches the table's
+                     *  rolled-up cells. */}
+                    <span className="text-slate-400">Σ</span>
+                    <span aria-hidden className="inline-block h-3.5 w-px self-center bg-slate-300" />
+                    <p className="text-[15px] font-normal text-slate-700">Child Est.</p>
                     <span className="group relative inline-flex items-center">
                       <Info
                         className="size-3.5 text-slate-400"
@@ -1319,13 +1324,12 @@ export function EpicFormDialog({
                       </span>
                     </span>
                   </div>
-                  <input
-                    value={totalUserStoryEstimate}
-                    readOnly
-                    className="h-6 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-500 shadow-sm"
-                  />
+                  {/* Disabled-looking input box for the rolled-up value. */}
+                  <div className="inline-flex h-7 w-full cursor-not-allowed items-center rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-medium text-slate-600 shadow-sm">
+                    <span className="tabular-nums">{totalUserStoryEstimate}d</span>
+                  </div>
                 </label>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Timeline</p>
                   <div className="grid grid-cols-2 gap-2">
                     {/* Each pill opens its own calendar popover (see
@@ -1396,7 +1400,7 @@ export function EpicFormDialog({
                   const roadmap = roadmaps.find((r) => r.id === parentInit?.roadmapId);
                   if (!roadmap) return null;
                   return (
-                    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                       <p className="text-[15px] font-normal text-slate-700">Roadmap</p>
                       <span className="inline-flex h-7 max-w-[16rem] items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-[13px] font-medium text-blue-800 select-none">
                         <MapIcon className="size-3.5 shrink-0 text-blue-500" aria-hidden />
@@ -1405,7 +1409,7 @@ export function EpicFormDialog({
                     </div>
                   );
                 })()}
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Assignee</p>
                   <div className="relative flex min-w-0 w-full items-center">
                     <AssigneeFieldDecoration value={assignee} directoryUsers={workspaceDirectoryUsers} />
@@ -1442,7 +1446,7 @@ export function EpicFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
                     <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 py-0.5 shadow-sm">

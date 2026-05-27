@@ -300,7 +300,7 @@ export function InitiativeFormDialog({
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [dialogOffset, setDialogOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
-  const [dialogWidthVw, setDialogWidthVw] = useState(68);
+  const [dialogWidthVw, setDialogWidthVw] = useState(72);
   const [detailsPanelWidthPx, setDetailsPanelWidthPx] = useState(380);
   const [activityPanelHeightPx, setActivityPanelHeightPx] = useState(360);
   const [childEpicDrafts, setChildEpicDrafts] = useState<Record<string, ChildEpicDraft>>({});
@@ -1017,12 +1017,33 @@ export function InitiativeFormDialog({
                   <ClipboardList className="size-5 shrink-0 text-slate-500" aria-hidden />
                   Details
                 </h3>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Color</p>
                   <InitiativeColorPicker value={color} onChange={setColor} />
                 </div>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3"><div className="inline-flex items-center gap-1"><p className="text-[15px] font-normal text-slate-700">Σ Child Est.</p><span className="group relative inline-flex items-center"><Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" /><span role="tooltip" className={infoTooltipClass}>Total estimated days from all user stories across every child epic in this initiative.</span></span></div><input value={totalUserStoryEstimate} readOnly className="h-6 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-1.5 text-[14px] font-medium text-slate-500 shadow-sm" /></label>
-                <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    {/* Σ + thin divider sit BEFORE the "Child Est." label so
+                     *  the field reads as "Σ | Child Est." — matches the
+                     *  separator pattern used on the table cells. */}
+                    <span className="text-slate-400">Σ</span>
+                    <span aria-hidden className="inline-block h-3.5 w-px self-center bg-slate-300" />
+                    <p className="text-[15px] font-normal text-slate-700">Child Est.</p>
+                    <span className="group relative inline-flex items-center">
+                      <Info className="size-3.5 text-slate-400" aria-label="Roll-up of child estimates across all epics and user stories" />
+                      <span role="tooltip" className={infoTooltipClass}>
+                        Total estimated days from all user stories across every child epic in this initiative.
+                      </span>
+                    </span>
+                  </div>
+                  {/* Disabled-looking input box for the rolled-up value —
+                   *  visually matches the other "read-only" fields in the
+                   *  dialog (grey bg + slate text + cursor-not-allowed). */}
+                  <div className="inline-flex h-7 w-full cursor-not-allowed items-center rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-medium text-slate-600 shadow-sm">
+                    <span className="tabular-nums">{totalUserStoryEstimate}d</span>
+                  </div>
+                </label>
+                <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <div className="inline-flex items-center gap-1">
                     <p className="text-[15px] font-normal text-slate-700">Timeline</p>
                     <span className="group relative inline-flex items-center">
@@ -1069,7 +1090,7 @@ export function InitiativeFormDialog({
                   const createLabel = roadmapQuery.trim() ? `Create "${roadmapQuery.trim()}"` : "Create new roadmap";
                   const allOptions = [{ id: "__create__", name: createLabel }, ...filteredRoadmaps];
                   return (
-                    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-3">
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-start gap-3">
                       <p className="mt-1.5 text-[15px] font-normal text-slate-700">Roadmap</p>
                       <div className="relative">
                         <div className="flex h-7 items-center overflow-hidden rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.08)] focus-within:ring-2 focus-within:ring-blue-400/40">
@@ -1186,7 +1207,7 @@ export function InitiativeFormDialog({
                     </div>
                   );
                 })()}
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Assignee</p>
                   <div className="relative flex min-w-0 w-full items-center">
                     <AssigneeFieldDecoration value={assignee} directoryUsers={workspaceDirectoryUsers} />
@@ -1211,7 +1232,7 @@ export function InitiativeFormDialog({
                     ) : null}
                   </div>
                 </label>
-                <label className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-3">
+                <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
                     <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 py-0.5 shadow-sm">

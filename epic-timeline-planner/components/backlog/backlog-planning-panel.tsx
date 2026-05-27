@@ -181,6 +181,7 @@ type CreateKind = "initiative" | "epic" | "story";
 type CreateScope = "initiative" | "epic" | "story";
 type BacklogColumnKey =
   | "workItem"
+  | "roadmap"
   | "team"
   | "year"
   | "quarter"
@@ -419,6 +420,22 @@ const BACKLOG_READONLY_PROGRESS = {
 const backlogReadonlyAutoSumButtonClass =
   "w-full min-w-0 rounded-md px-1 py-0.5 text-center text-[16px] font-medium text-slate-600 transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
 
+/** Sum-chip: lightweight inline group with a muted Σ, a thin vertical
+ *  separator, and the value. No background pill — reads as text inside
+ *  the table cell, just visually grouped. */
+function BacklogSumChip({ value, unit = "d" }: { value: number | string; unit?: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 text-[15px] font-medium text-slate-700">
+      <span className="text-slate-400">Σ</span>
+      <span aria-hidden className="inline-block h-3.5 w-px self-center bg-slate-300" />
+      <span className="tabular-nums">
+        {value}
+        {unit}
+      </span>
+    </span>
+  );
+}
+
 const backlogReadonlyInitiativeDateButtonClass =
   "w-full min-w-0 rounded-md px-1 py-0.5 text-center text-[14px] tabular-nums text-slate-700 transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
 
@@ -469,6 +486,7 @@ function storyEditSnapshotFromGroupedRow(row: BacklogGroupedStoryRowForSnapshot)
 
 const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "workItem",
+  "roadmap",
   "status",
   "team",
   "assignee",
@@ -497,6 +515,7 @@ const HOVER_TOOLTIP_CLASS =
 
 const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   workItem: "Work item",
+  roadmap: "Roadmap",
   team: "Team",
   year: "Year",
   quarter: "Quarter",
@@ -516,6 +535,7 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
 
 const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   workItem: 300,
+  roadmap: 120,
   team: 120,
   year: 88,
   quarter: 104,
@@ -535,12 +555,15 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
 
 const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   workItem: 420,
+  roadmap: 160,
   team: 150,
   year: 104,
-  quarter: 112,
+  // Wider for the column-header filter icon — the title needs to read
+  // comfortably alongside the funnel button at default sizing.
+  quarter: 148,
   month: 120,
-  startDate: 118,
-  endDate: 118,
+  startDate: 150,
+  endDate: 150,
   status: 168,
   sprint: 148,
   assignee: 190,
@@ -556,12 +579,13 @@ const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
 /** Bump when default visibility for columns changes so stored layout can migrate once. */
-const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 11;
+const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 12;
 const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
 const BACKLOG_SAVED_VIEWS_STORAGE_KEY = "epic-planner.backlog.saved-views.v1";
 
 const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   workItem: true,
+  roadmap: true,
   team: true,
   /** Calendar facets duplicate Group by / filters for most views; enable from Table → columns when needed. */
   year: false,
@@ -639,6 +663,11 @@ type SortableBacklogColumnHeaderProps = {
   resizeHandle: ReactNode;
   columnSort: BacklogColumnSort;
   onToggleSort: (key: BacklogColumnKey) => void;
+  /** Optional inline filter widget rendered as a second row below the
+   *  title. Null/undefined keeps the header on its original single-line
+   *  layout — used for columns that have no filter (estimate / progress /
+   *  date columns). */
+  filterSlot?: ReactNode;
 };
 
 function SortableBacklogColumnHeader({
@@ -649,6 +678,7 @@ function SortableBacklogColumnHeader({
   resizeHandle,
   columnSort,
   onToggleSort,
+  filterSlot,
 }: SortableBacklogColumnHeaderProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: CSSProperties = {
@@ -687,22 +717,28 @@ function SortableBacklogColumnHeader({
       {sortIcon}
     </button>
   );
+  // The filter icon sits absolutely at the right edge so it doesn't compete
+  // with the centered title's flex layout. `pr-9` on the title row reserves
+  // ~36px for the icon (28px button + 8px gap) so the title can use full
+  // width with proper truncation.
   return (
-    <div ref={setNodeRef} style={style} className={cn(className, "group/col w-full min-w-0 transition-colors hover:text-amber-200")}>
-      {/* pr-2.5 reserves the resize strip; overflow-hidden keeps label from painting past the column edge */}
+    <div ref={setNodeRef} style={style} className={cn(className, "group/col relative w-full min-w-0 transition-colors hover:text-amber-200")}>
       {centered ? (
-        <span className="flex min-h-[1.25rem] w-full min-w-0 justify-center overflow-hidden pr-2.5">
-          <span className="flex min-w-0 max-w-full items-center justify-center gap-1">
+        <span className="flex min-h-[1.5rem] w-full min-w-0 items-center justify-center overflow-hidden pl-2.5 pr-9">
+          <span className="flex min-w-0 max-w-full items-center justify-center gap-1 overflow-hidden">
             {grip}
             <span className="min-w-0 overflow-hidden">{sortableLabel}</span>
           </span>
         </span>
       ) : (
-        <span className="flex min-h-[1.25rem] w-full min-w-0 items-center gap-1 overflow-hidden pr-2.5">
+        <span className="flex min-h-[1.5rem] w-full min-w-0 items-center gap-1 overflow-hidden pr-9">
           {grip}
           <span className="min-w-0 flex-1 overflow-hidden">{sortableLabel}</span>
         </span>
       )}
+      {filterSlot ? (
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10">{filterSlot}</div>
+      ) : null}
       {resizeHandle}
     </div>
   );
@@ -1971,6 +2007,191 @@ function BacklogLabelsFilterControl({
   );
 }
 
+/**
+ * Column-header filter affordance — a tiny Filter icon button that lives
+ * inside a column title. Clicking it opens a polished popover anchored to
+ * the icon containing the column-specific filter UI (passed as children).
+ *
+ * Visual contract:
+ *  - Icon button (~24×24) styled to read against the dark blue header bar
+ *  - When the column's filter is active, the icon is tinted amber + a
+ *    small dot indicator appears on the top-right
+ *  - Popover is a floating panel with a heading, optional "Clear" link,
+ *    rounded-xl, soft shadow, ring, and a fade/scale-in on open
+ *  - Click-outside (or Esc) closes
+ */
+function ColumnFilterDropdown({
+  title,
+  isActive,
+  onClear,
+  children,
+  align = "right",
+  width = 240,
+}: {
+  /** Column-specific heading shown at the top of the popover. */
+  title: string;
+  isActive: boolean;
+  /** Optional "Clear" link in the popover header. */
+  onClear?: () => void;
+  /** Filter content (checkbox list, autocomplete, etc.). */
+  children: ReactNode;
+  /** Popover horizontal anchor — `right` means the popover's right edge
+   *  aligns with the trigger's right edge (best for end-of-row columns). */
+  align?: "left" | "right";
+  /** Popover width in px — defaults to 240. */
+  width?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((prev) => !prev);
+        }}
+        aria-label={`${title} — open filter`}
+        aria-expanded={open}
+        title={title}
+        className={cn(
+          "relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60",
+          isActive
+            ? "border-amber-300/70 bg-amber-300/15 text-amber-200 hover:bg-amber-300/25"
+            : "border-white/20 bg-white/10 text-white/80 hover:border-white/40 hover:bg-white/25 hover:text-white",
+          open && "ring-2 ring-amber-300/60",
+        )}
+      >
+        <Filter className="size-3.5" strokeWidth={2.2} aria-hidden />
+        {isActive ? (
+          <span
+            className="pointer-events-none absolute -right-0.5 -top-0.5 inline-flex h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_0_2px_rgba(8,151,213,0.95)]"
+            aria-hidden
+          />
+        ) : null}
+      </button>
+      {open ? (
+        <div
+          className={cn(
+            "absolute z-50 mt-1 top-full overflow-hidden rounded-xl border border-slate-200/90 bg-white text-left text-slate-700 shadow-[0_20px_45px_-15px_rgba(15,23,42,0.35),0_8px_18px_-8px_rgba(15,23,42,0.15)] ring-1 ring-black/[0.04]",
+            align === "right" ? "right-0" : "left-0",
+          )}
+          style={{ width: `${width}px` }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header: title + clear link */}
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-b from-slate-50/70 to-white px-3 py-2">
+            <span className="truncate text-[12px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+              {title}
+            </span>
+            {isActive && onClear ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClear();
+                }}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50"
+              >
+                <X className="size-3" aria-hidden />
+                Clear
+              </button>
+            ) : null}
+          </div>
+          {/* Body — caller-supplied filter UI */}
+          <div className="max-h-[24rem] overflow-y-auto p-2">{children}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Compact checkbox list used as the body of `ColumnFilterDropdown` for any
+ * column whose filter is a simple multiselect (status, sprint, year,
+ * quarter, work-item kind, etc.). Reuses the same per-row layout regardless
+ * of the column so all popovers read as the same control.
+ */
+function ColumnFilterCheckList({
+  options,
+  selected,
+  onChange,
+  emptyHint = "All",
+  getIcon,
+}: {
+  options: OptionItem[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  /** Label for the "any of these" master checkbox at the top. */
+  emptyHint?: string;
+  /** Optional leading icon per option (e.g. Zap for "initiative" in the
+   *  Work Item kind filter). When provided, icons render between the
+   *  checkbox and the label. */
+  getIcon?: (id: string) => ReactNode;
+}) {
+  const allSelected = selected.length === 0;
+  function toggle(id: string) {
+    onChange(
+      selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id],
+    );
+  }
+  return (
+    <div className="space-y-0.5">
+      <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition hover:bg-slate-50">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={() => onChange([])}
+          className="size-3.5 accent-indigo-600"
+        />
+        <span className="font-medium text-slate-700">{emptyHint}</span>
+      </label>
+      <div className="h-px bg-slate-100" />
+      {options.map((option) => {
+        const checked = selected.includes(option.id);
+        const icon = getIcon?.(option.id) ?? null;
+        return (
+          <label
+            key={option.id}
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition hover:bg-slate-50",
+              checked && "bg-indigo-50/60",
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => toggle(option.id)}
+              className="size-3.5 accent-indigo-600"
+            />
+            {icon ? <span className="inline-flex size-4 shrink-0 items-center justify-center">{icon}</span> : null}
+            <span className={cn("flex-1 truncate", checked ? "text-indigo-700" : "text-slate-700")}>
+              {option.label}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function MultiCheckboxFilter({
   label,
   options,
@@ -2942,6 +3163,7 @@ type BacklogStoryRowData = {
   storyQuarterLabelValue: string | null;
   storyStartDateLabel: string;
   storyEndDateLabel: string;
+  initiativeId: string;
   initiativeYear: string;
   monthLabelValue: string;
   epicId: string;
@@ -2988,6 +3210,7 @@ type BacklogStoryRowCtx = {
     editTarget?: { kind: "story" | "epic" | "initiative"; id: string; currentParentId: string | null };
   }) => React.ReactNode;
   renderBacklogCells: (cells: any, edits: any) => React.ReactNode;
+  renderRoadmapCell: (initiativeId: string | null | undefined) => React.ReactNode;
   formatStoryLabelsForEditInput: (raw: string | null | undefined) => string;
 };
 
@@ -3210,6 +3433,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
           epicTitle: row.epicTitle,
           editTarget: { kind: "story", id: row.storyId, currentParentId: row.epicId },
         }),
+        roadmap: ctx.renderRoadmapCell(row.initiativeId),
         labels: (
           <div className="w-full min-w-0 overflow-hidden">
             {isEditingCell && editingCellField === "labels" ? (
@@ -4398,6 +4622,29 @@ export function BacklogPlanningPanel({
     return map;
   }, [roadmaps]);
 
+  /** initiativeId → roadmap-name lookup so each row in the Roadmap column
+   *  can render its parent initiative's roadmap without re-walking the
+   *  full tree. */
+  const roadmapNameByInitiativeId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const init of initiatives) {
+      if (init.roadmapId) {
+        const name = roadmapNameById.get(init.roadmapId);
+        if (name) map.set(init.id, name);
+      }
+    }
+    return map;
+  }, [initiatives, roadmapNameById]);
+
+  /** Small helper: render the Roadmap cell text given an initiativeId.
+   *  Falls back to a soft dash when no roadmap is linked. */
+  function renderRoadmapCell(initiativeId: string | null | undefined): ReactNode {
+    if (!initiativeId) return <span className="text-slate-400">-</span>;
+    const name = roadmapNameByInitiativeId.get(initiativeId);
+    if (!name) return <span className="text-slate-400">-</span>;
+    return <span className="truncate text-[14px] text-slate-700">{name}</span>;
+  }
+
   const assigneeNameSuggestions = useMemo(
     () => collectAssigneeNameSuggestions(initiatives, workspaceDirectoryUsers),
     [initiatives, workspaceDirectoryUsers],
@@ -4875,7 +5122,7 @@ export function BacklogPlanningPanel({
   }
 
   function renderBacklogCells(
-    cells: Record<BacklogColumnKey, ReactNode>,
+    cells: Partial<Record<BacklogColumnKey, ReactNode>>,
     iconHints?: Partial<Record<BacklogColumnKey, CellIconHint>>,
   ) {
     return visibleColumnKeys.map((key) => {
@@ -4884,7 +5131,7 @@ export function BacklogPlanningPanel({
       if (!hint) {
         return (
           <div key={key} className={backlogCellClassName(key)}>
-            {cells[key]}
+            {cells[key] ?? null}
           </div>
         );
       }
@@ -5464,6 +5711,7 @@ export function BacklogPlanningPanel({
     renderQuarterChipsCell,
     renderParentCell,
     renderBacklogCells,
+    renderRoadmapCell,
     assignableSprintsForYear,
   });
   storyRowRefs.current = {
@@ -5482,6 +5730,7 @@ export function BacklogPlanningPanel({
     renderQuarterChipsCell,
     renderParentCell,
     renderBacklogCells,
+    renderRoadmapCell,
     assignableSprintsForYear,
   };
   const storyRowCtx = useMemo<BacklogStoryRowCtx>(() => ({
@@ -5505,6 +5754,7 @@ export function BacklogPlanningPanel({
     renderQuarterChipsCell: (quarters) => storyRowRefs.current.renderQuarterChipsCell(quarters),
     renderParentCell: (params) => storyRowRefs.current.renderParentCell(params as any),
     renderBacklogCells: (cells, edits) => storyRowRefs.current.renderBacklogCells(cells, edits),
+    renderRoadmapCell: (initiativeId) => storyRowRefs.current.renderRoadmapCell(initiativeId),
     formatStoryLabelsForEditInput,
   }), [tableGridTemplate, workspaceDirectoryUsers, assigneeNameSuggestions]);
 
@@ -5712,6 +5962,7 @@ export function BacklogPlanningPanel({
           data-backlog-zebra-label={epicTitle}
         >
           {renderBacklogCells({
+            roadmap: renderRoadmapCell(epicRows[0]?.initiativeId ?? null),
             workItem: (
               <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: epicIndentPx }}>
                 <BacklogTreeConnector indentPx={epicIndentPx} />
@@ -5732,7 +5983,7 @@ export function BacklogPlanningPanel({
                   onClick={() => { if (editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId) return; onOpenEpic(epicId); }}
                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
                 >
-                  <EpicPlanBarIcon icon={epicModelForRow?.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
+                  <EpicPlanBarIcon icon={epicModelForRow?.icon} className="mr-0 text-sky-500 [&_svg]:size-4" />
                   {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
                     renderParentTitleEditor("epic", epicId, epicTitle)
                   ) : (
@@ -5909,7 +6160,7 @@ export function BacklogPlanningPanel({
                 onClick={() => {}}
                 className={backlogReadonlyAutoSumButtonClass}
               >
-                Σ {estimated}d
+                <BacklogSumChip value={estimated} />
               </button>
             ),
             epicOriginalEst: isEditingEpicEstimate(epicId) ? (
@@ -5933,7 +6184,7 @@ export function BacklogPlanningPanel({
                 onClick={() => {}}
                 className={backlogReadonlyAutoSumButtonClass}
               >
-                Σ {left}d
+                <BacklogSumChip value={left} />
               </button>
             ),
             progress: renderCompletionCell(epicRows),
@@ -6031,6 +6282,7 @@ export function BacklogPlanningPanel({
           data-backlog-zebra-label={initiativeTitle}
         >
           {renderBacklogCells({
+            roadmap: renderRoadmapCell(initiativeId),
             workItem: (
               <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: initIndentPx }}>
                 <BacklogTreeConnector indentPx={initIndentPx} />
@@ -6203,7 +6455,7 @@ export function BacklogPlanningPanel({
                 onClick={() => {}}
                 className={backlogReadonlyAutoSumButtonClass}
               >
-                Σ {estimated}d
+                <BacklogSumChip value={estimated} />
               </button>
             ),
             epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -6213,7 +6465,7 @@ export function BacklogPlanningPanel({
                 onClick={() => {}}
                 className={backlogReadonlyAutoSumButtonClass}
               >
-                Σ {left}d
+                <BacklogSumChip value={left} />
               </button>
             ),
             progress: renderCompletionCell(initiativeRows),
@@ -7102,6 +7354,7 @@ export function BacklogPlanningPanel({
                   data-backlog-zebra-label={initiative.initiativeTitle}
                 >
               {renderBacklogCells({
+                roadmap: renderRoadmapCell(initiative.initiativeId),
                 workItem: (
                   <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: indentPx }}>
                     <BacklogTreeConnector indentPx={indentPx} />
@@ -7235,7 +7488,7 @@ export function BacklogPlanningPanel({
                     onClick={() => {}}
                     className={backlogReadonlyAutoSumButtonClass}
                   >
-                    Σ 0d
+                    <BacklogSumChip value={0} />
                   </button>
                 ),
                 epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -7245,7 +7498,7 @@ export function BacklogPlanningPanel({
                     onClick={() => {}}
                     className={backlogReadonlyAutoSumButtonClass}
                   >
-                    Σ 0d
+                    <BacklogSumChip value={0} />
                   </button>
                 ),
                 progress: (
@@ -7313,6 +7566,7 @@ export function BacklogPlanningPanel({
                     data-backlog-zebra-label={epic.epicTitle}
                     >
                       {renderBacklogCells({
+                        roadmap: renderRoadmapCell(initiative.initiativeId),
                         workItem: (
                           <div className="relative flex min-w-0 items-center gap-2" style={{ paddingLeft: isEpicOnlyMode ? indentPx : indentPx + 34 }}>
                             <BacklogTreeConnector indentPx={isEpicOnlyMode ? indentPx : indentPx + 34} />
@@ -7330,7 +7584,7 @@ export function BacklogPlanningPanel({
                               }}
                               className="flex min-w-0 flex-1 items-center gap-2 text-left"
                             >
-                              <EpicPlanBarIcon icon={standEpicModel?.icon} className="mr-0 text-slate-400 [&_svg]:size-4" />
+                              <EpicPlanBarIcon icon={standEpicModel?.icon} className="mr-0 text-sky-500 [&_svg]:size-4" />
                               {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
                                 renderParentTitleEditor("epic", epic.epicId, epic.epicTitle)
                               ) : (
@@ -7456,7 +7710,7 @@ export function BacklogPlanningPanel({
                             onClick={() => {}}
                             className={backlogReadonlyAutoSumButtonClass}
                           >
-                            Σ 0d
+                            <BacklogSumChip value={0} />
                           </button>
                         ),
                         epicOriginalEst: isEditingEpicEstimate(epic.epicId) ? (
@@ -7480,7 +7734,7 @@ export function BacklogPlanningPanel({
                             onClick={() => {}}
                             className={backlogReadonlyAutoSumButtonClass}
                           >
-                            Σ 0d
+                            <BacklogSumChip value={0} />
                           </button>
                         ),
                         progress: (
@@ -8003,12 +8257,13 @@ export function BacklogPlanningPanel({
         aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "initiative"}
         title="Show only initiatives in the table (click again for all work items)"
         className={cn(
-          "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
+          "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
           workItemFilter.length === 1 && workItemFilter[0] === "initiative"
             ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-indigo-300/75 shadow-sm"
             : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
         )}
       >
+        <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
         {summaryInitiativeCount} Initiatives
       </button>
       <button
@@ -8017,12 +8272,13 @@ export function BacklogPlanningPanel({
         aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "epic"}
         title="Show only epics in the table (click again for all work items)"
         className={cn(
-          "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
+          "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
           workItemFilter.length === 1 && workItemFilter[0] === "epic"
             ? "bg-gradient-to-br from-yellow-100 via-yellow-200 to-yellow-200 text-yellow-950 ring-yellow-300/75 shadow-sm"
             : "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-100 text-yellow-950 ring-yellow-200/75 hover:from-yellow-100 hover:via-yellow-200 hover:to-yellow-200",
         )}
       >
+        <Folder className="size-3.5 shrink-0 text-violet-500" strokeWidth={1.9} aria-hidden />
         {summaryEpicCount} Epics
       </button>
       <button
@@ -8031,12 +8287,13 @@ export function BacklogPlanningPanel({
         aria-pressed={workItemFilter.length === 1 && workItemFilter[0] === "story"}
         title="Show only user stories in the table (click again for all work items)"
         className={cn(
-          "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
+          "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold leading-none tracking-wide ring-1 transition",
           workItemFilter.length === 1 && workItemFilter[0] === "story"
             ? "bg-gradient-to-br from-blue-100 via-blue-200 to-blue-200 text-blue-950 ring-blue-300/75 shadow-sm"
             : "bg-gradient-to-br from-sky-50 via-blue-100 to-blue-100 text-blue-950 ring-blue-200/75 hover:from-sky-100 hover:via-blue-200 hover:to-blue-200",
         )}
       >
+        <UserStoryIcon className="size-3.5 shrink-0" />
         {summaryStoryCount} Stories
       </button>
     </>
@@ -8102,90 +8359,49 @@ export function BacklogPlanningPanel({
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
       <FilterLatencyDebugger />
 
-      <div className="relative z-20 mt-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-7 pt-7 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
-        <div
-          className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-4"
-          style={{ gridTemplateColumns: "auto repeat(10, minmax(0, 1fr))" }}
-        >
-          <div className="relative col-span-6 col-start-1 row-start-1 min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search work items..."
-              autoComplete="off"
-              onFocus={() => setShowSearchSuggestions(true)}
-              onBlur={() => {
-                window.setTimeout(() => setShowSearchSuggestions(false), 120);
+      {/* Slim global toolbar — only the controls that don't belong to a
+          specific column. Search, Status/Sprint/Team/Assignee/Parent/Labels/
+          Year/Quarter filters now live INSIDE each column's header. */}
+      <div className="relative z-20 mt-6 flex flex-wrap items-center gap-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-5 py-5 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+        {/* Free-text search — always-visible global search input. Same `query`
+         *  state as the Work Item column popover (so they stay in sync). */}
+        <div className="relative min-w-[16rem] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search work items…"
+            autoComplete="off"
+            className={cn(
+              "h-9 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 text-[13.5px] text-slate-900 outline-none placeholder:text-slate-400 shadow-sm transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
+              query ? "pr-9" : "pr-3",
+            )}
+          />
+          {query ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                startTransition(() => setQuery(""));
               }}
-              className={cn(
-                "h-8 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 text-[14px] text-slate-900 outline-none placeholder:text-slate-400 transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
-                query ? "pr-9" : "pr-3",
-              )}
-            />
-            {query ? (
-              /* Clear-X — only shown when there's text. Same pattern as
-               * filter clear buttons (instant + deferred state update). */
-              <button
-                type="button"
-                aria-label="Clear search"
-                title="Clear search"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  startTransition(() => setQuery(""));
-                }}
-                className="absolute right-2 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-              >
-                <X className="size-3.5" />
-              </button>
-            ) : null}
-            {showSearchSuggestions && searchSuggestions.length > 0 ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 rounded-lg bg-white p-1 shadow-lg">
-                {searchSuggestions.map(({ label, kind }) => (
-                  <button
-                    key={`${kind}:${label}`}
-                    type="button"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      setQuery(label);
-                      setShowSearchSuggestions(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
-                  >
-                    {kind === "initiative" ? (
-                      <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
-                    ) : kind === "epic" ? (
-                      <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
-                    ) : kind === "story" ? (
-                      <UserStoryIcon className="size-3.5" />
-                    ) : (
-                      <UserRound className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-                    )}
-                    <span className="min-w-0 flex-1 truncate">{label}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div className="col-start-10 row-start-2 min-w-0">
-            <BacklogParentFilterControl
-              tree={parentFilterTree}
-              selected={parentFilter}
-              onChange={setParentFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div
-            className="relative col-start-7 row-start-1 min-w-0"
-            ref={savedFilterMenuRef}
-          >
+              className="absolute right-2 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X className="size-3" />
+            </button>
+          ) : null}
+        </div>
+        <div
+          className="relative min-w-[10rem]"
+          ref={savedFilterMenuRef}
+        >
             <button
               type="button"
               onClick={() => setPresetMenuOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={presetMenuOpen}
-              className="flex h-7 w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[13px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
+              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[13.5px] text-slate-900 shadow-sm transition hover:border-slate-400 hover:bg-slate-50"
             >
               <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-500">
                 <Bookmark className="size-3 shrink-0 text-indigo-400" strokeWidth={2} aria-hidden />
@@ -8255,11 +8471,11 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div className="relative col-start-8 row-start-1 min-w-0" ref={savedViewMenuRef}>
+          <div className="relative min-w-[10rem]" ref={savedViewMenuRef}>
             <button
               type="button"
               onClick={() => setViewPresetMenuOpen((v) => !v)}
-              className="flex h-7 w-full items-center justify-between gap-1 rounded-lg border border-slate-300 bg-white px-1.5 text-[13px] text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 sm:px-2"
+              className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 text-[13.5px] text-slate-900 shadow-sm transition hover:border-slate-400 hover:bg-slate-50"
               aria-haspopup="listbox"
               aria-expanded={viewPresetMenuOpen}
             >
@@ -8319,12 +8535,12 @@ export function BacklogPlanningPanel({
               </div>
             )}
           </div>
-          <div className="group relative col-start-9 col-span-2 row-start-1 min-w-0" ref={groupMenuRef}>
+          <div className="group relative min-w-[10rem]" ref={groupMenuRef}>
             <button
               type="button"
               onClick={() => setGroupMenuOpen((prev) => !prev)}
               className={cn(
-                "flex h-7 w-full min-w-0 items-center justify-between rounded-lg border bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13px] transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80",
+                "flex h-9 w-full min-w-0 items-center justify-between rounded-lg border bg-gradient-to-b from-indigo-50 to-violet-50 px-2.5 text-[13.5px] shadow-sm transition hover:from-indigo-100 hover:to-violet-100 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200/80",
                 // Active grouping → stronger border + ring so the user
                 // sees the table is grouped at a glance.
                 groupLevels.length > 0
@@ -8378,118 +8594,29 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
-          <div className="col-start-1 row-start-2 flex min-w-0 w-full items-center justify-center gap-1.5">
-            <div className="h-5 w-px shrink-0 bg-slate-300/70" aria-hidden />
-            <span className="inline-flex min-w-0 items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-              <Filter className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
-              <span className="truncate">Filters</span>
+          {/* Clear All — rightmost in the slim toolbar. */}
+          <div className="ml-auto flex shrink-0 items-center">
+            <span className="group relative inline-flex h-9 w-9 shrink-0">
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                disabled={!hasAnyActiveFilter}
+                className="relative z-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Clear all filters"
+              >
+                <Eraser className="size-4" strokeWidth={2} />
+              </button>
+              {!hasAnyActiveFilter ? (
+                <span className="absolute inset-0 z-10 cursor-not-allowed rounded-lg" aria-hidden />
+              ) : null}
+              <span
+                role="tooltip"
+                className="pointer-events-none absolute right-full top-1/2 z-30 mr-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
+              >
+                Erases all filters: search, group-by, and every filter selection.
+              </span>
             </span>
           </div>
-          <div className="col-start-2 row-start-2 min-w-0">
-            <MultiCheckboxFilter
-              label="Work Item"
-              options={workItemOptions}
-              selected={workItemFilter}
-              onChange={(next) =>
-                setWorkItemFilter(
-                  next.filter((value): value is WorkItemKindFilter => value === "initiative" || value === "epic" || value === "story"),
-                )
-              }
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-3 row-start-2 min-w-0">
-            <MultiCheckboxFilter
-              label="Roadmap"
-              options={roadmapOptions}
-              selected={roadmapFilter}
-              onChange={setRoadmapFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-4 row-start-2 min-w-0">
-            <MultiCheckboxFilter
-              label="Year"
-              options={yearOptions}
-              selected={yearFilter}
-              onChange={setYearFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-5 row-start-2 min-w-0">
-            <MultiCheckboxFilter
-              label="Quarter"
-              options={quarterOptions}
-              selected={quarterFilter}
-              onChange={setQuarterFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-6 row-start-2 min-w-0">
-            <MultiCheckboxFilter
-              label="Status"
-              options={statusOptions}
-              selected={statusFilter}
-              onChange={setStatusFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-7 row-start-2 min-w-0">
-            <MultiCheckboxFilter
-              label="Sprint"
-              options={sprintOptions}
-              selected={sprintFilter}
-              onChange={setSprintFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-8 row-start-2 min-w-0">
-            <BacklogTeamFilterControl
-              selectedIds={teamFilter}
-              onChange={setTeamFilter}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-9 row-start-2 min-w-0">
-            <BacklogAssigneeFilterControl
-              selected={assigneeFilter}
-              onChange={setAssigneeFilter}
-              suggestions={assigneeAutocompleteSuggestions}
-              directoryUsers={workspaceDirectoryUsers}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-11 row-start-2 min-w-0">
-            <BacklogLabelsFilterControl
-              selected={labelFilter}
-              onChange={setLabelFilter}
-              suggestions={storyLabelSuggestions}
-              buttonClassName="min-w-0 w-full gap-1 px-1.5 sm:gap-1.5 sm:px-2.5 text-[13px]"
-            />
-          </div>
-          <div className="col-start-11 row-start-1 flex min-w-0 justify-end">
-            <span className="group relative inline-flex h-7 w-7 shrink-0">
-            <button
-              type="button"
-              onClick={resetAllFilters}
-              disabled={!hasAnyActiveFilter}
-              className="relative z-0 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Clear all filters"
-            >
-              <Eraser className="size-3.5" strokeWidth={2} />
-            </button>
-            {!hasAnyActiveFilter ? (
-              <span className="absolute inset-0 z-10 cursor-not-allowed rounded-lg" aria-hidden />
-            ) : null}
-            <span
-              role="tooltip"
-              className="pointer-events-none absolute right-full top-1/2 z-30 mr-2 w-64 max-w-[calc(100vw-2rem)] -translate-y-1/2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug whitespace-normal text-slate-700 opacity-0 shadow-lg shadow-slate-900/10 ring-1 ring-slate-200/80 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100"
-            >
-              Erases all filters: search, group-by, and every filter selection.
-            </span>
-            </span>
-          </div>
-        </div>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
         <div className="mb-3 w-full min-w-0 max-w-full shrink-0 overflow-x-auto">
@@ -8531,7 +8658,7 @@ export function BacklogPlanningPanel({
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className="grid min-w-full w-max items-center gap-2 py-1.5 ps-0 text-[14px] font-semibold tracking-[0.01em] text-white"
+                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[14px] font-semibold tracking-[0.01em] text-white"
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {
@@ -8552,17 +8679,132 @@ export function BacklogPlanningPanel({
                         </button>
                       ) : null;
                     if (key === "workItem") {
+                      // Funnel JSX captured into a const so it can render
+                      // alongside the +/expand/collapse buttons on the RIGHT
+                      // side of the WorkItem header — keeps the title clean
+                      // and aligns the filter affordance with the other
+                      // column headers.
+                      const workItemFunnel = (
+                        <ColumnFilterDropdown
+                          title="Search Work Items"
+                          isActive={Boolean(query) || workItemFilter.length > 0}
+                          onClear={() => {
+                            setQuery("");
+                            setWorkItemFilter([]);
+                          }}
+                          align="right"
+                          width={300}
+                        >
+                                {/* Free-text search input — drives the same
+                                 *  `query` state as the old top filter bar. */}
+                                <div className="relative mb-2">
+                                  <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    value={query}
+                                    onChange={(event) => setQuery(event.target.value)}
+                                    placeholder="Search work items…"
+                                    autoComplete="off"
+                                    onFocus={() => setShowSearchSuggestions(true)}
+                                    onBlur={() => {
+                                      window.setTimeout(() => setShowSearchSuggestions(false), 120);
+                                    }}
+                                    className={cn(
+                                      "h-8 w-full min-w-0 rounded-md border border-slate-300 bg-white pl-7 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
+                                      query ? "pr-7" : "pr-2",
+                                    )}
+                                  />
+                                  {query ? (
+                                    <button
+                                      type="button"
+                                      aria-label="Clear search"
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        startTransition(() => setQuery(""));
+                                      }}
+                                      className="absolute right-1.5 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                    >
+                                      <X className="size-3" />
+                                    </button>
+                                  ) : null}
+                                </div>
+                                {/* Search-suggestion list. */}
+                                {showSearchSuggestions && searchSuggestions.length > 0 ? (
+                                  <div className="mb-2 max-h-44 overflow-y-auto rounded-md border border-slate-200 bg-white p-1">
+                                    {searchSuggestions.map(({ label, kind }) => (
+                                      <button
+                                        key={`${kind}:${label}`}
+                                        type="button"
+                                        onMouseDown={(event) => {
+                                          event.preventDefault();
+                                          setQuery(label);
+                                          setShowSearchSuggestions(false);
+                                        }}
+                                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-slate-700 transition hover:bg-slate-100"
+                                      >
+                                        {kind === "initiative" ? (
+                                          <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+                                        ) : kind === "epic" ? (
+                                          <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+                                        ) : kind === "story" ? (
+                                          <UserStoryIcon className="size-3.5" />
+                                        ) : (
+                                          <UserRound className="size-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+                                        )}
+                                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                {/* Work-item kind checkbox list. */}
+                                <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                  Kind
+                                </p>
+                                <ColumnFilterCheckList
+                                  options={workItemOptions}
+                                  selected={workItemFilter}
+                                  onChange={(next) =>
+                                    setWorkItemFilter(
+                                      next.filter(
+                                        (value): value is WorkItemKindFilter =>
+                                          value === "initiative" ||
+                                          value === "epic" ||
+                                          value === "story",
+                                      ),
+                                    )
+                                  }
+                                  emptyHint="All kinds"
+                                  // Match the icon set used in the roadmap
+                                  // planner top-panel buttons so the kind
+                                  // filter reads as the same affordance.
+                                  getIcon={(id) =>
+                                    id === "initiative" ? (
+                                      <Zap className="size-3.5 text-sky-500" strokeWidth={1.9} aria-hidden />
+                                    ) : id === "epic" ? (
+                                      <Folder className="size-3.5 text-violet-500" strokeWidth={1.9} aria-hidden />
+                                    ) : id === "story" ? (
+                                      <UserStoryIcon className="size-3.5" />
+                                    ) : null
+                                  }
+                                />
+                              </ColumnFilterDropdown>
+                      );
                       return (
                         <div key={key} className={cn(cellClass, "group/col transition-colors hover:text-amber-200")}>
                           <span className="flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-1.5 truncate pl-10">
+                            <span className="flex items-center gap-1.5 pl-10 truncate">
                               <span className="truncate">{BACKLOG_COLUMN_LABELS[key]}</span>
                             </span>
                             <span
-                              className="mr-1.5 inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
+                              className="mr-1.5 inline-flex h-6 shrink-0 items-center gap-1 px-0.5"
                               role="group"
                               aria-label="Row tree expand and collapse"
                             >
+                              {workItemFunnel}
+                              {/* Subtle divider between the filter funnel and
+                                  the create/expand buttons so they don't read
+                                  as one group. */}
+                              <span aria-hidden className="mx-1 h-4 w-px bg-white/30" />
                               {/* Always-visible "+" — primary path to create
                                *  an initiative or a roadmap when the table is
                                *  empty (or just the fastest path generally).
@@ -8655,6 +8897,155 @@ export function BacklogPlanningPanel({
                         </div>
                       );
                     }
+                    // Map each filterable column to its filter trigger. Each
+                    // trigger is a ColumnFilterDropdown — a small Filter icon
+                    // inside the column header that opens a styled popover.
+                    // Columns not in this map render title-only.
+                    let filterSlot: ReactNode = null;
+                    if (key === "status") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Status"
+                          isActive={statusFilter.length > 0}
+                          onClear={() => setStatusFilter([])}
+                        >
+                          <ColumnFilterCheckList
+                            options={statusOptions}
+                            selected={statusFilter}
+                            onChange={setStatusFilter}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "sprint") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Sprint"
+                          isActive={sprintFilter.length > 0}
+                          onClear={() => setSprintFilter([])}
+                        >
+                          <ColumnFilterCheckList
+                            options={sprintOptions}
+                            selected={sprintFilter}
+                            onChange={setSprintFilter}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "team") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Team"
+                          isActive={teamFilter.length > 0}
+                          onClear={() => setTeamFilter([])}
+                          width={240}
+                        >
+                          <ColumnFilterCheckList
+                            options={MONTH_TEAM_COLUMNS.map((t) => ({ id: t.id, label: t.label }))}
+                            selected={teamFilter}
+                            onChange={setTeamFilter}
+                            emptyHint="All teams"
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "assignee") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Assignee"
+                          isActive={assigneeFilter.length > 0}
+                          onClear={() => setAssigneeFilter([])}
+                          width={240}
+                        >
+                          <ColumnFilterCheckList
+                            options={assigneeAutocompleteSuggestions.map((name) => ({ id: name, label: name }))}
+                            selected={assigneeFilter}
+                            onChange={setAssigneeFilter}
+                            emptyHint="All assignees"
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "parent") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Parent"
+                          isActive={parentFilter.length > 0}
+                          onClear={() => setParentFilter([])}
+                          width={260}
+                        >
+                          <ColumnFilterCheckList
+                            options={parentFilterTree.flatMap((init) =>
+                              [{ id: init.initiativeId, label: init.initiativeTitle } as OptionItem].concat(
+                                (init.epics ?? []).map((e) => ({
+                                  id: e.epicId,
+                                  label: `${init.initiativeTitle} · ${e.epicTitle}`,
+                                })),
+                              ),
+                            )}
+                            selected={parentFilter}
+                            onChange={setParentFilter}
+                            emptyHint="All parents"
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "labels") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Labels"
+                          isActive={labelFilter.length > 0}
+                          onClear={() => setLabelFilter([])}
+                          width={240}
+                        >
+                          <ColumnFilterCheckList
+                            options={storyLabelSuggestions.map((label) => ({ id: label, label }))}
+                            selected={labelFilter}
+                            onChange={setLabelFilter}
+                            emptyHint="All labels"
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "roadmap") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Roadmap"
+                          isActive={roadmapFilter.length > 0}
+                          onClear={() => setRoadmapFilter([])}
+                          width={240}
+                        >
+                          <ColumnFilterCheckList
+                            options={roadmapOptions}
+                            selected={roadmapFilter}
+                            onChange={setRoadmapFilter}
+                            emptyHint="All roadmaps"
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "year") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Year"
+                          isActive={yearFilter.length > 0}
+                          onClear={() => setYearFilter([])}
+                        >
+                          <ColumnFilterCheckList
+                            options={yearOptions}
+                            selected={yearFilter}
+                            onChange={setYearFilter}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "quarter") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Quarter"
+                          isActive={quarterFilter.length > 0}
+                          onClear={() => setQuarterFilter([])}
+                        >
+                          <ColumnFilterCheckList
+                            options={quarterOptions}
+                            selected={quarterFilter}
+                            onChange={setQuarterFilter}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    }
                     return (
                       <SortableBacklogColumnHeader
                         key={key}
@@ -8666,6 +9057,7 @@ export function BacklogPlanningPanel({
                         resizeHandle={resizeHandle}
                         columnSort={columnSort}
                         onToggleSort={toggleColumnSort}
+                        filterSlot={filterSlot}
                       />
                     );
                   })}
@@ -9067,7 +9459,7 @@ export function BacklogPlanningPanel({
                           onClick={() => {}}
                           className={backlogReadonlyAutoSumButtonClass}
                         >
-                          Σ {initiativeDays.estimated}d
+                          <BacklogSumChip value={initiativeDays.estimated} />
                         </button>
                       ),
                       epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
@@ -9077,7 +9469,7 @@ export function BacklogPlanningPanel({
                           onClick={() => {}}
                           className={backlogReadonlyAutoSumButtonClass}
                         >
-                          Σ {initiativeDays.left}d
+                          <BacklogSumChip value={initiativeDays.left} />
                         </button>
                       ),
                       progress: (
@@ -9408,7 +9800,7 @@ export function BacklogPlanningPanel({
                                     onClick={() => {}}
                                     className={backlogReadonlyAutoSumButtonClass}
                                   >
-                                    Σ {epicDays.estimated}d
+                                    <BacklogSumChip value={epicDays.estimated} />
                                   </button>
                                 ),
                                 epicOriginalEst: isEditingEpicEstimate(epic.id) ? (
@@ -9432,7 +9824,7 @@ export function BacklogPlanningPanel({
                                     onClick={() => {}}
                                     className={backlogReadonlyAutoSumButtonClass}
                                   >
-                                    Σ {epicDays.left}d
+                                    <BacklogSumChip value={epicDays.left} />
                                   </button>
                                 ),
                                 progress: (
