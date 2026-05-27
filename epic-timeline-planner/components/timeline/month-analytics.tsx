@@ -25,6 +25,7 @@ import {
   Eraser,
   Folder,
   Layers,
+  StickyNote,
   TrendingUp,
   User,
   UserRound,
@@ -61,8 +62,9 @@ import { EpicItem, InitiativeItem, StoryDailySnapshotItem, UserStoryItem } from 
 import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
-import { computeProgress, computeInitiativeProgress, type HealthStatus } from "@/lib/progress";
-import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
+import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
+import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
+import { HealthBadge, HealthBadgeWithDetail, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 
 type BurndownMetric = "daysLeft" | "storyCount";
@@ -111,21 +113,26 @@ function WorkloadXAxisTick({
 }) {
   if (x == null || y == null) return null;
   const label = payload?.value ?? "";
-  const rowY = y + 11;
-  // Bump from 12 → 16 so uploaded photos read as actual avatars rather than
-  // dots (same change applied to sprint-analytics' tick).
-  const iconSize = 16;
+  // Bumped tick row + icon so uploaded photos read as proper avatars (was 16px,
+  // visually too small next to the text label). 22px matches the scope-panel
+  // user chip's avatar so the bar-chart axis reads as a row of "people".
+  const iconSize = 22;
+  const rowY = y + iconSize / 2 + 3;
   const estTextWidth = Math.min(label.length * 5.5, 70);
   const totalWidth = iconSize + 4 + estTextWidth;
   const iconX = x - totalWidth / 2;
   const textStartX = iconX + iconSize + 4;
   const photoUrl = !teamMode ? avatarByFirstName?.get(label) ?? null : null;
+  // Label may contain spaces / dots (e.g. "John S.") which break SVG ID
+  // references — sanitize before embedding into the clipPath id/url.
+  const safeId = label.replace(/\W+/g, "-");
+  const clipId = `workload-month-avatar-clip-${safeId}`;
   return (
     <g>
       {photoUrl ? (
         <>
           <defs>
-            <clipPath id={`workload-month-avatar-clip-${label}`}>
+            <clipPath id={clipId}>
               <circle cx={iconX + iconSize / 2} cy={rowY} r={iconSize / 2} />
             </clipPath>
           </defs>
@@ -136,7 +143,7 @@ function WorkloadXAxisTick({
             width={iconSize}
             height={iconSize}
             preserveAspectRatio="xMidYMid slice"
-            clipPath={`url(#workload-month-avatar-clip-${label})`}
+            clipPath={`url(#${clipId})`}
           />
         </>
       ) : (
@@ -174,6 +181,25 @@ const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#b
 
 function isStoryOpen(status: UserStoryItem["status"] | null | undefined) {
   return status === "todo" || status === "inProgress";
+}
+
+function basisDisplayLabel(basis: ProgressBasis, scope: "epic" | "initiative"): string {
+  if (basis === "stories") return "% Stories Completed";
+  if (basis === "days") return "Σ Story Days Est.";
+  return scope === "epic" ? "Epic Days Est." : "Σ Epic Days Est.";
+}
+
+/** Compact display name: "John S." — first name + last-name initial. Used on
+ *  Workload Balance bars (where horizontal room per bar is tight) and Month
+ *  Load rows so people sharing a first name can be told apart. Single-word
+ *  names render unchanged. */
+function compactAssigneeName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return parts[0] ?? fullName;
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const initial = last?.[0]?.toUpperCase();
+  return initial ? `${first} ${initial}.` : first;
 }
 
 type BurndownTooltipPayload = {
@@ -462,6 +488,19 @@ type MonthAnalyticsProps = {
    *  and Month Load row circles render the user's photo instead of initials.
    *  Same shape the sprint-kanban / capacity already accept. */
   workspaceDirectoryUsers?: readonly { name: string; team?: string; image?: string | null }[];
+  /** Health-basis toggle from the parent (Roadmap Health popover). Drives
+   *  verdict labels / status filters on the Insights scope chips. Chart
+   *  curve math stays days-based regardless — only the verdicts honor
+   *  the toggle so a user flipping to "Σ Epic Est." doesn't lose the
+   *  underlying burndown view. */
+  progressBasis?: "days" | "stories" | "epicEst";
+  /** Callback to flip the basis from within Insights — when provided, a
+   *  3-option segmented control renders in the Insights header (next to
+   *  the scope picker) so the user doesn't have to navigate back to the
+   *  Roadmap Health popover. State is shared via the parent so popover +
+   *  Insights stay in sync via localStorage. Omit on public / static
+   *  views to hide the editor. */
+  onProgressBasisChange?: (basis: "days" | "stories" | "epicEst") => void;
 };
 
 function flowChartDayLabel(dayDate: Date): string {
@@ -633,9 +672,29 @@ export function MonthAnalytics({
   onOpenSprintKanban,
   onScopeChange,
   workspaceDirectoryUsers,
+  progressBasis = "days",
+  onProgressBasisChange,
 }: MonthAnalyticsProps) {
-  const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
+  /**
+   * Per-chart health/progress basis for the Burndown and Burnup chart cards.
+   * Initialized from the popover's global `progressBasis` at mount so that
+   * navigating from "View Insights" carries the user's pick into the chart
+   * automatically. After that, each chart's toggle is independent — flipping
+   * one chart's basis doesn't affect the other or the popover (the popover
+   * stays the canonical default for new chart instances).
+   */
+  const [burndownBasis, setBurndownBasis] = useState<"days" | "stories" | "epicEst">(progressBasis);
+  const [burnupBasis, setBurnupBasis] = useState<"days" | "stories" | "epicEst">(progressBasis);
+  /**
+   * The chart's Y-axis units derive from the basis (no separate metric toggle):
+   *   - `epicEst` or `days` → Y-axis in days
+   *   - `stories` → Y-axis in story count
+   * Keeps the two toggles from drifting into nonsensical combinations
+   * (e.g. epicEst with a stories Y-axis).
+   */
+  const metric: BurndownMetric = burndownBasis === "stories" ? "storyCount" : "daysLeft";
+  const burnUpMetric: BurndownMetric = burnupBasis === "stories" ? "storyCount" : "daysLeft";
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
   /**
    * Recharts' entry animations on a cold mount run *while* `ResponsiveContainer`
@@ -757,6 +816,7 @@ export function MonthAnalytics({
         // making something up.
         let health: HealthStatus | null = null;
         let healthTooltip: string | null = null;
+        let healthResult: ProgressResult | null = null;
         if (epic.planStartMonth != null && epic.planEndMonth != null) {
           const start = sprintStartDate(
             planYear,
@@ -766,10 +826,19 @@ export function MonthAnalytics({
             planYear,
             globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
           );
-          const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis: "days" });
-          if ((epic.userStories ?? []).length > 0) {
+          const h = computeProgress({
+            stories: epic.userStories ?? [],
+            start,
+            end,
+            basis: progressBasis,
+            epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+          });
+          // epicEst mode produces a verdict even without stories — that's
+          // the point. Other modes still need at least one story.
+          if (progressBasis === "epicEst" || (epic.userStories ?? []).length > 0) {
             health = h.status;
             healthTooltip = formatHealthTooltip(h);
+            healthResult = h;
           }
         }
         return {
@@ -782,10 +851,11 @@ export function MonthAnalytics({
           teamLabel,
           teamId: epic.team,
           health,
+          healthResult,
           healthTooltip,
         };
       }),
-    [monthEpics, planYear],
+    [monthEpics, planYear, progressBasis],
   );
   const selectedEpicOption = useMemo(
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
@@ -821,10 +891,17 @@ export function MonthAnalytics({
         globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
       );
       childStatuses.push(
-        computeProgress({ stories: epic.userStories ?? [], start, end, basis: "days" }).status,
+        computeProgress({
+          stories: epic.userStories ?? [],
+          start,
+          end,
+          basis: progressBasis,
+          epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+        }).status,
       );
     }
-    if (aggregateStories.length === 0) return null;
+    // epicEst rollup works even with no child stories.
+    if (progressBasis !== "epicEst" && aggregateStories.length === 0) return null;
     const scheduled = epicsForInit.filter((e) => e.planStartMonth != null && e.planEndMonth != null);
     const startMonth = scheduled.length > 0
       ? Math.min(...scheduled.map((e) => e.planStartMonth as number))
@@ -834,15 +911,20 @@ export function MonthAnalytics({
       : scopeEndMonth;
     const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(startMonth, 1));
     const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(endMonth, 2));
+    const initiativeOriginalEstSum = epicsForInit.reduce(
+      (sum, e) => sum + (e.originalEstimateDays ?? 0),
+      0,
+    );
     const h = computeInitiativeProgress({
       stories: aggregateStories,
       childStatuses,
       start: initStart,
       end: initEnd,
-      basis: "days",
+      basis: progressBasis,
+      epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
     });
-    return { health: h.status, tooltip: formatHealthTooltip(h) };
-  }, [selectedInitiativeId, monthEpics, planYear, scopeStartMonth, scopeEndMonth]);
+    return { health: h.status, tooltip: formatHealthTooltip(h), result: h };
+  }, [selectedInitiativeId, monthEpics, planYear, scopeStartMonth, scopeEndMonth, progressBasis]);
   /** Suffix appended to every chart title so they read e.g. "Status (Epic
    *  Title)" or "Status (Initiative Title)" when a scope is pinned. Empty
    *  when the scope is "all". */
@@ -958,7 +1040,13 @@ export function MonthAnalytics({
           globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
         );
         childStatuses.push(
-          computeProgress({ stories: epic.userStories ?? [], start, end, basis: "days" }).status,
+          computeProgress({
+            stories: epic.userStories ?? [],
+            start,
+            end,
+            basis: progressBasis,
+            epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+          }).status,
         );
       }
       // The initiative's own bar bounds — use the union of its epics, mirroring
@@ -975,20 +1063,25 @@ export function MonthAnalytics({
         : periodEndMonth;
       const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(initStartMonth, 1));
       const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(initEndMonth, 2));
+      const initiativeOriginalEstSum = epicsForInit.reduce(
+        (sum, e) => sum + (e.originalEstimateDays ?? 0),
+        0,
+      );
       const initHealth = computeInitiativeProgress({
         stories: aggregateStories,
         childStatuses,
         start: initStart,
         end: initEnd,
-        basis: "days",
+        basis: progressBasis,
+        epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
       });
-      if (aggregateStories.length > 0) {
+      if (progressBasis === "epicEst" || aggregateStories.length > 0) {
         group.health = initHealth.status;
         group.healthTooltip = `${initiative.title} · ${formatHealthTooltip(initHealth)}`;
       }
     }
     return groups;
-  }, [filteredEpicOptions, monthEpics, planYear, scopeStartMonth, scopeEndMonth]);
+  }, [filteredEpicOptions, monthEpics, planYear, scopeStartMonth, scopeEndMonth, progressBasis]);
   const selectedWorkloadStatuses = useMemo<WorkloadStatusKey[]>(
     () =>
       workloadStatusFilters.includes("all")
@@ -1537,12 +1630,145 @@ export function MonthAnalytics({
     }
     return rows as typeof monthBurndownFilledToToday;
   }, [monthBurndown, monthBurndownFilledToToday, selectedEpicOption, monthEpics, planYear, month, metric, scopeStartMonth]);
-  const monthBurndownResolved = monthBurndownFromSnapshots ?? monthBurndownFilledToToday;
+  const monthBurndownResolvedRaw = monthBurndownFromSnapshots ?? monthBurndownFilledToToday;
+  /**
+   * In `epicEst` basis the chart's ideal line + scope-promise reference are in
+   * epic-estimate units, but the per-epic columns + aggregate `actual` are in
+   * story-day units (typically 2-3× the epic estimate). Without rescaling, the
+   * actual line floats above the chart and the burnup's mirror calculation
+   * underflows to zero. Scale per-epic by `epicEst / startingOpenStoryDays`
+   * so every series sits on the same axis. No-op for `days` / `stories`.
+   */
+  const monthBurndownResolved = useMemo(() => {
+    if (burndownBasis !== "epicEst" || metric === "storyCount") return monthBurndownResolvedRaw;
+    if (monthBurndownResolvedRaw.length === 0) return monthBurndownResolvedRaw;
+    const epicMeta = monthBurndownEpics.map((epic) => {
+      let startTotal = 0;
+      for (const row of monthBurndownResolvedRaw) {
+        const v = row[epic.id];
+        if (typeof v === "number") { startTotal = v; break; }
+      }
+      return { id: epic.id, startTotal, epicEst: epic.originalEstimateDays ?? 0 };
+    });
+    const epicEstSumAll = epicMeta.reduce((acc, m) => acc + m.epicEst, 0);
+    if (epicEstSumAll <= 0) return monthBurndownResolvedRaw;
+    return monthBurndownResolvedRaw.map((row) => {
+      const next: Record<string, number | string | boolean | null | undefined> = { ...row };
+      let aggregate = 0;
+      let anyValue = false;
+      for (const { id, startTotal, epicEst } of epicMeta) {
+        const current = row[id];
+        if (typeof current !== "number") continue;
+        anyValue = true;
+        let scaled = current;
+        if (startTotal > 0 && epicEst > 0) {
+          scaled = (current / startTotal) * epicEst;
+        } else if (epicEst > 0) {
+          scaled = Math.min(current, epicEst);
+        }
+        next[id] = Number(scaled.toFixed(1));
+        aggregate += scaled;
+      }
+      if (anyValue) next.actual = Number(aggregate.toFixed(1));
+      return next;
+    }) as typeof monthBurndownResolvedRaw;
+  }, [monthBurndownResolvedRaw, burndownBasis, metric, monthBurndownEpics]);
   const burndownFocusedEpicOption = useMemo(() => {
     if (selectedEpicOption) return selectedEpicOption;
     if (burndownVisibleKeys.length !== 1) return null;
     return monthEpics.find((row) => row.epic.id === burndownVisibleKeys[0]) ?? null;
   }, [selectedEpicOption, burndownVisibleKeys, monthEpics]);
+  /**
+   * "Scope promise" horizontal reference line value for the burndown.
+   * Only computed when the user has picked the epic-estimate basis;
+   * lets the burndown chart show the epic-level estimate as a target
+   * the curve is being measured against.
+   *
+   *   - Epic pinned: that epic's `originalEstimateDays`.
+   *   - Initiative pinned: sum of `originalEstimateDays` across the
+   *     initiative's child epics that are in this view.
+   *   - "All" / aggregate: sum across every epic in the burndown's scope.
+   *
+   * Returns `null` when the line shouldn't render (wrong basis, no
+   * estimate, or chart on the story-count Y axis where the units don't
+   * match).
+   */
+  const scopePromiseDays = useMemo<number | null>(() => {
+    if (burndownBasis !== "epicEst") return null;
+    if (metric !== "daysLeft") return null;
+    if (burndownFocusedEpicOption) {
+      const v = burndownFocusedEpicOption.epic.originalEstimateDays;
+      return v != null && v > 0 ? v : null;
+    }
+    const sum = monthBurndownEpics.reduce(
+      (acc, epic) => acc + (epic.originalEstimateDays ?? 0),
+      0,
+    );
+    return sum > 0 ? sum : null;
+  }, [burndownBasis, metric, burndownFocusedEpicOption, monthBurndownEpics]);
+
+  /**
+   * Health verdict shown next to the burndown chart title. Uses the
+   * chart's own basis (not the popover's global) so flipping the
+   * chart-level toggle updates the badge alongside the curves. Scope:
+   *   - Epic focused (selectedEpicOption) → that epic's verdict
+   *   - Initiative focused (selectedInitiativeId !== "all") → rolled-up
+   *     verdict across the initiative's child epics
+   *   - "All" → aggregate verdict across the visible burndown epics
+   */
+  const burndownHealth = useMemo(() => {
+    const epicsInScope = selectedEpicOption != null
+      ? [selectedEpicOption.epic]
+      : selectedInitiativeId !== "all"
+        ? monthEpics.filter((row) => row.initiative.id === selectedInitiativeId).map((row) => row.epic)
+        : monthBurndownEpics;
+    if (epicsInScope.length === 0) return null;
+    const aggregateStories = epicsInScope.flatMap((epic) => epic.userStories ?? []);
+    if (burndownBasis !== "epicEst" && aggregateStories.length === 0) return null;
+    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
+    const periodEndDate = new Date(planYear, scopeEndMonth, 0);
+    const epicOriginalEstSum = epicsInScope.reduce(
+      (sum, e) => sum + (e.originalEstimateDays ?? 0),
+      0,
+    );
+    if (epicsInScope.length === 1) {
+      const h = computeProgress({
+        stories: epicsInScope[0].userStories ?? [],
+        start: periodStartDate,
+        end: periodEndDate,
+        basis: burndownBasis,
+        epicOriginalEstimateDays: epicsInScope[0].originalEstimateDays ?? null,
+      });
+      const hasData = burndownBasis === "stories"
+        ? aggregateStories.length > 0
+        : h.totalEffort > 0;
+      if (!hasData) return null;
+      return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
+    }
+    const childStatuses: HealthStatus[] = epicsInScope.map((epic) => {
+      const h = computeProgress({
+        stories: epic.userStories ?? [],
+        start: periodStartDate,
+        end: periodEndDate,
+        basis: burndownBasis,
+        epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+      });
+      return h.status;
+    });
+    const h = computeInitiativeProgress({
+      stories: aggregateStories,
+      childStatuses,
+      start: periodStartDate,
+      end: periodEndDate,
+      basis: burndownBasis,
+      epicOriginalEstimateDays: epicOriginalEstSum > 0 ? epicOriginalEstSum : null,
+    });
+    const hasData = burndownBasis === "stories"
+      ? aggregateStories.length > 0
+      : h.totalEffort > 0;
+    if (!hasData) return null;
+    return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
+  }, [burndownBasis, selectedEpicOption, selectedInitiativeId, monthEpics, monthBurndownEpics, planYear, scopeStartMonth, scopeEndMonth]);
   const selectedEpicDueDate = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
     const dueSprint = burndownFocusedEpicOption.epic.planEndSprint;
@@ -1555,10 +1781,20 @@ export function MonthAnalytics({
     if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownResolved;
     const totalDays = monthBurndownResolved.length;
     if (totalDays === 0) return monthBurndownResolved;
+    // Ideal line's starting value follows the basis so the chart matches
+    // what the user picked in the toggle:
+    //   - epicEst → epic.originalEstimateDays (linear burn against the epic
+    //     promise; falls back to story sum when no epic estimate exists)
+    //   - days → Σ child story estimated days (story burndown ideal)
+    //   - stories → total story count (story-count burndown ideal)
+    const stories = burndownFocusedEpicOption.epic.userStories ?? [];
+    const storyDaysSum = stories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
     const startValue =
-      metric === "daysLeft"
-        ? (burndownFocusedEpicOption.epic.userStories ?? []).reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
-        : (burndownFocusedEpicOption.epic.userStories ?? []).length;
+      metric === "storyCount"
+        ? stories.length
+        : burndownBasis === "epicEst"
+          ? (burndownFocusedEpicOption.epic.originalEstimateDays ?? storyDaysSum)
+          : storyDaysSum;
     const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
@@ -1598,7 +1834,7 @@ export function MonthAnalytics({
       });
     }
     return extended as typeof monthBurndownResolved;
-  }, [monthBurndownResolved, burndownFocusedEpicOption, selectedEpicDueDate, metric, planYear, month, scopeStartMonth]);
+  }, [monthBurndownResolved, burndownFocusedEpicOption, selectedEpicDueDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     if (monthBurndownWithDueTarget.length === 0) return null;
@@ -1771,7 +2007,13 @@ export function MonthAnalytics({
   }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
   const flowResolved = flowFromSnapshots ?? analytics.flowSprintTrendData;
 
-  const [cfdMetric, setCfdMetric] = useState<BurndownMetric>("storyCount");
+  // CFD is fundamentally a story-status-flow chart; the days-based axis
+  // never made much sense (the stack-by-status interpretation is in story
+  // counts). Locked to "storyCount" — no per-chart toggle. Cast retains
+  // the broader `BurndownMetric` shape so other consumers' equality
+  // checks (`cfdMetric === "daysLeft"`) still typecheck and compile to
+  // dead branches at runtime.
+  const cfdMetric = "storyCount" as BurndownMetric;
 
   const flowDaysData = useMemo(() => {
     const sourceStories = selectedEpicOption != null
@@ -1861,8 +2103,65 @@ export function MonthAnalytics({
   const allCfdKeysSelected =
     CFD_FLOW_SEGMENTS.length > 0 && CFD_FLOW_SEGMENTS.every((seg) => cfdVisibleKeys.includes(seg.key));
 
+  /** Same shape as `burndownHealth`, scoped to the burnup chart's basis. */
+  const burnupHealth = useMemo(() => {
+    const epicsInScope = selectedEpicOption != null
+      ? [selectedEpicOption.epic]
+      : selectedInitiativeId !== "all"
+        ? monthEpics.filter((row) => row.initiative.id === selectedInitiativeId).map((row) => row.epic)
+        : monthEpics.map((r) => r.epic).filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
+    if (epicsInScope.length === 0) return null;
+    const aggregateStories = epicsInScope.flatMap((epic) => epic.userStories ?? []);
+    if (burnupBasis !== "epicEst" && aggregateStories.length === 0) return null;
+    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
+    const periodEndDate = new Date(planYear, scopeEndMonth, 0);
+    const epicOriginalEstSum = epicsInScope.reduce(
+      (sum, e) => sum + (e.originalEstimateDays ?? 0),
+      0,
+    );
+    if (epicsInScope.length === 1) {
+      const h = computeProgress({
+        stories: epicsInScope[0].userStories ?? [],
+        start: periodStartDate,
+        end: periodEndDate,
+        basis: burnupBasis,
+        epicOriginalEstimateDays: epicsInScope[0].originalEstimateDays ?? null,
+      });
+      const hasData = burnupBasis === "stories"
+        ? aggregateStories.length > 0
+        : h.totalEffort > 0;
+      if (!hasData) return null;
+      return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
+    }
+    const childStatuses: HealthStatus[] = epicsInScope.map((epic) => {
+      const h = computeProgress({
+        stories: epic.userStories ?? [],
+        start: periodStartDate,
+        end: periodEndDate,
+        basis: burnupBasis,
+        epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+      });
+      return h.status;
+    });
+    const h = computeInitiativeProgress({
+      stories: aggregateStories,
+      childStatuses,
+      start: periodStartDate,
+      end: periodEndDate,
+      basis: burnupBasis,
+      epicOriginalEstimateDays: epicOriginalEstSum > 0 ? epicOriginalEstSum : null,
+    });
+    const hasData = burnupBasis === "stories"
+      ? aggregateStories.length > 0
+      : h.totalEffort > 0;
+    if (!hasData) return null;
+    return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
+  }, [burnupBasis, selectedEpicOption, selectedInitiativeId, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth]);
+
   // --- Burn Up chart (epic scope) ---
-  const [burnUpMetric, setBurnUpMetric] = useState<BurndownMetric>("storyCount");
+  // `burnUpMetric` is derived from `burnupBasis` near the top of the
+  // component (Y-axis follows basis: stories basis → storyCount,
+  // otherwise daysLeft). No separate metric toggle exists anymore.
   const burnUpDueDate = useMemo(() => {
     const epicsToCheck = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
     if (epicsToCheck.length === 0) return null;
@@ -1885,12 +2184,41 @@ export function MonthAnalytics({
       : monthEpics.map((r) => r.epic).filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
     const allStories = epicsInScope.flatMap((e) => (e.userStories ?? []).filter((s) => s.sprint != null));
     const isDays = burnUpMetric === "daysLeft";
+    const useEpicEst = isDays && burnupBasis === "epicEst";
 
     const storyValue = (s: (typeof allStories)[number]) =>
       isDays ? Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0) : 1;
     const storyDone = (status: string) => status === "done" || status === "approved";
 
-    const totalScope = allStories.reduce((sum, s) => sum + storyValue(s), 0);
+    // Per-epic baseline (story-day sum of open stories at start) so we can
+    // scale openRemaining into epic-est units in `epicEst` basis. Without
+    // this, the burnup uses totalScope = epicEst but openRemaining stays in
+    // story-day units — the chart then underflows to zero.
+    const epicMeta = epicsInScope.map((e) => {
+      const stories = (e.userStories ?? []).filter((s) => s.sprint != null);
+      const startOpenStoryDays = stories.reduce((sum, s) => {
+        if (s.status !== "todo" && s.status !== "inProgress") return sum;
+        return sum + Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0);
+      }, 0);
+      return {
+        id: e.id,
+        epicEst: e.originalEstimateDays ?? 0,
+        startOpenStoryDays,
+        stories,
+      };
+    });
+
+    // Total scope follows the basis (same rule as the burndown ideal):
+    //   - epicEst → Σ originalEstimateDays across in-scope epics (falls
+    //     back to the story-day sum when no epic has an estimate set)
+    //   - days → Σ child story estimated days (today's behavior)
+    //   - stories → total story count
+    const storyDaySum = allStories.reduce((sum, s) => sum + storyValue(s), 0);
+    const epicEstSum = epicsInScope.reduce((sum, e) => sum + (e.originalEstimateDays ?? 0), 0);
+    const totalScope =
+      useEpicEst && epicEstSum > 0
+        ? epicEstSum
+        : storyDaySum;
     if (totalScope === 0) return [] as Array<{ labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null }>;
 
     const round = (n: number) => isDays ? Number(n.toFixed(1)) : Math.round(n);
@@ -1926,13 +2254,45 @@ export function MonthAnalytics({
       let completed: number | null = null;
       if (dayIdx <= elapsedDays) {
         if (hasSnapshots) {
-          completed = 0;
-          for (const story of allStories) {
-            const snap = latestSnapshotAtDayCached(story, dayDate);
-            const status = snap?.status ?? story.status;
-            if (storyDone(status)) completed += storyValue(story);
+          // Burnup mirrors burndown: completed = totalScope − open work
+          // remaining. Counts in-progress daysLeft reductions, not just
+          // closed stories, so the two charts always agree.
+          // In `epicEst` basis, scale per-epic so units match: each epic's
+          // open story-days are mapped into its own `epicEst` slice of the
+          // axis via (open / startOpen) × epicEst.
+          let openRemainingScaled = 0;
+          if (useEpicEst && epicEstSum > 0) {
+            for (const m of epicMeta) {
+              let epicOpen = 0;
+              for (const story of m.stories) {
+                const snap = latestSnapshotAtDayCached(story, dayDate);
+                const status = snap?.status ?? story.status;
+                if (status !== "todo" && status !== "inProgress") continue;
+                const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
+                epicOpen += Math.max(0, daysLeft);
+              }
+              if (m.startOpenStoryDays > 0 && m.epicEst > 0) {
+                openRemainingScaled += (epicOpen / m.startOpenStoryDays) * m.epicEst;
+              } else if (m.epicEst > 0) {
+                openRemainingScaled += Math.min(epicOpen, m.epicEst);
+              } else {
+                openRemainingScaled += epicOpen;
+              }
+            }
+          } else {
+            for (const story of allStories) {
+              const snap = latestSnapshotAtDayCached(story, dayDate);
+              const status = snap?.status ?? story.status;
+              if (status !== "todo" && status !== "inProgress") continue;
+              if (isDays) {
+                const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
+                openRemainingScaled += Math.max(0, daysLeft);
+              } else {
+                openRemainingScaled += 1;
+              }
+            }
           }
-          completed = round(completed);
+          completed = round(Math.max(0, totalScope - openRemainingScaled));
         } else {
           const raw = elapsedDays <= 1
             ? currentCompleted
@@ -1949,7 +2309,7 @@ export function MonthAnalytics({
 
       return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: round(totalScope), ideal };
     });
-  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth, burnUpDueDate, burnUpMetric]);
+  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth, burnUpDueDate, burnUpMetric, burnupBasis]);
 
   const burnUpDueDateLabel = useMemo(() => {
     if (!burnUpDueDate) return null;
@@ -2304,35 +2664,32 @@ export function MonthAnalytics({
               Epic Details
             </button>
           ) : null}
-          {/* Selected-scope chips — pinned right. Epic shows team + assignee +
-              health; initiative shows health only (team would be an aggregate). */}
+          {/* Selected-scope chips — pinned right. Epic shows team + assignee.
+              Health verdict moved onto each chart's own header so the badge
+              matches that chart's basis selection (the two charts can carry
+              different bases via their per-chart toggles). */}
           {selectedEpicOption && selectedEpicMeta ? (
-            <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
+            <div className="ml-auto flex shrink-0 flex-wrap items-center gap-3">
               {selectedEpicMeta.teamLabel ? (
-                <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200">
-                  <Users className="size-3 shrink-0 opacity-70" aria-hidden />
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-200 shadow-sm">
+                  <Users className="size-4 shrink-0 opacity-70" aria-hidden />
                   {selectedEpicMeta.teamLabel}
                 </span>
               ) : null}
-              {selectedEpicOption.epic.assignee ? (
-                <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[12px] font-semibold text-slate-700 ring-1 ring-slate-200">
-                  <User className="size-3 shrink-0 opacity-70" aria-hidden />
-                  {selectedEpicOption.epic.assignee}
-                </span>
-              ) : null}
-              {selectedEpicMeta.health ? (
-                <HealthBadge
-                  status={selectedEpicMeta.health}
-                  tooltip={selectedEpicMeta.healthTooltip ?? undefined}
-                />
-              ) : null}
-            </div>
-          ) : selectedInitiativeId !== "all" && selectedInitiativeMeta ? (
-            <div className="ml-auto flex shrink-0 items-center gap-1.5">
-              <HealthBadge
-                status={selectedInitiativeMeta.health}
-                tooltip={selectedInitiativeMeta.tooltip}
-              />
+              {selectedEpicOption.epic.assignee ? (() => {
+                const assignee = selectedEpicOption.epic.assignee!;
+                const resolved = resolveAssigneeAvatar(assignee, workspaceDirectoryUsers);
+                return (
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-white py-1 pl-1 pr-2.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-200 shadow-sm">
+                    {resolved.image ? (
+                      <UserAvatar name={resolved.name} image={resolved.image} size={22} className="ring-0" />
+                    ) : (
+                      <User className="ml-0.5 size-4 shrink-0 opacity-70" aria-hidden />
+                    )}
+                    <span>{assignee}</span>
+                  </span>
+                );
+              })() : null}
             </div>
           ) : null}
         </div>
@@ -2616,7 +2973,7 @@ export function MonthAnalytics({
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
-        <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+        <div className={cn("mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
               "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -2625,27 +2982,46 @@ export function MonthAnalytics({
           >
             <Activity className="size-4 text-slate-600" />
             Epic Scope Burndown{burndownTitleSuffix}
+            {burndownHealth ? (
+              <HealthBadgeWithDetail
+                status={burndownHealth.status}
+                result={burndownHealth.result}
+                basis={burndownBasis}
+                basisLabel={basisDisplayLabel(burndownBasis, selectedEpicOption ? "epic" : "initiative")}
+                scopeLabel={selectedEpicOption
+                  ? `${selectedEpicOption.epic.title} (epic)`
+                  : selectedInitiativeId !== "all"
+                    ? "Selected initiative"
+                    : "All epics in scope"}
+                chartKind="burndown"
+              />
+            ) : null}
           </h3>
-          <div className="flex items-center gap-2">
-            <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
-              <button
-                type="button"
-                onClick={() => setMetric("daysLeft")}
-                className={`rounded-md px-3 py-1 text-[13px] font-medium ${
-                  metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
-                }`}
-              >
-                Σ Total days left
-              </button>
-              <button
-                type="button"
-                onClick={() => setMetric("storyCount")}
-                className={`rounded-md px-3 py-1 text-[13px] font-medium ${
-                  metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"
-                }`}
-              >
-                Σ Total stories
-              </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Per-chart basis toggle. Initialized from the popover's
+             *  global basis at mount; flipping it doesn't affect other
+             *  charts or the popover. Labels adapt to the currently-
+             *  pinned scope so the wording matches the popover (Epic
+             *  Days Est. with no Σ when an epic is pinned). */}
+            <div className="min-w-[18rem]">
+              <ToggleGroup
+                label=""
+                options={
+                  selectedEpicOption != null
+                    ? [
+                        { value: "epicEst", label: "Epic Days Est.", icon: Folder },
+                        { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
+                        { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                      ]
+                    : [
+                        { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
+                        { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
+                        { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                      ]
+                }
+                value={burndownBasis}
+                onChange={(v) => setBurndownBasis(v as "days" | "stories" | "epicEst")}
+              />
             </div>
           </div>
         </div>
@@ -2682,6 +3058,7 @@ export function MonthAnalytics({
                         fill: "#64748b",
                         fontSize: 13,
                       }}
+                      padding={{ bottom: 4 }}
                     />
                     <Tooltip
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.dayLabel ?? ""}
@@ -2699,6 +3076,25 @@ export function MonthAnalytics({
                         />
                       ) : null;
                     })()}
+                    {/* Scope-promise reference line. Renders horizontal
+                     *  at the chosen epic-level estimate so the user can
+                     *  see whether the actual burn-down is on track
+                     *  against the promise they made. Gated on epicEst
+                     *  basis + days-axis (story-count axis is in stories,
+                     *  not days — the line would be meaningless there). */}
+                    {scopePromiseDays != null ? (
+                      <ReferenceLine
+                        y={scopePromiseDays}
+                        stroke="#0ea5e9"
+                        strokeDasharray="2 4"
+                        label={{
+                          value: `Scope promise · ${scopePromiseDays}d`,
+                          position: "insideTopRight",
+                          fontSize: 10,
+                          fill: "#0369a1",
+                        }}
+                      />
+                    ) : null}
                     {burndownFocusedEpicOption && burndownVisibleKeys.includes(burndownFocusedEpicOption.epic.id) ? (
                       <Line
                         type="monotone"
@@ -2995,23 +3391,23 @@ export function MonthAnalytics({
                 "Approved": t.storiesByStatus.approved,
               }))
             : analytics.workloadByAssignee.map((item) => ({
-                name: item.assignee.split(/\s+/)[0],
+                name: compactAssigneeName(item.assignee),
                 fullName: item.assignee,
                 "To do": item.storiesByStatus.todo,
                 "In progress": item.storiesByStatus.inProgress,
                 "Done": item.storiesByStatus.done,
                 "Approved": item.storiesByStatus.approved,
               }));
-          // Pre-resolve avatar URLs keyed by the X-axis label (first name) so
+          // Pre-resolve avatar URLs keyed by the X-axis label ("First L.") so
           // the custom tick can paint a photo per bar without each tick re-
           // walking the directory. Team mode → empty map (no avatars).
           const avatarByFirstName = new Map<string, string | null>();
           if (!teamMode) {
             for (const item of analytics.workloadByAssignee) {
-              const first = item.assignee.split(/\s+/)[0];
-              if (!first || avatarByFirstName.has(first)) continue;
+              const label = compactAssigneeName(item.assignee);
+              if (!label || avatarByFirstName.has(label)) continue;
               avatarByFirstName.set(
-                first,
+                label,
                 resolveAssigneeAvatar(item.assignee, workspaceDirectoryUsers).image,
               );
             }
@@ -3033,14 +3429,14 @@ export function MonthAnalytics({
                         const match = analytics.workloadByTeam.find((t) => t.teamLabel === label);
                         if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); }
                       } else {
-                        const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
+                        const match = analytics.workloadByAssignee.find((r) => compactAssigneeName(r.assignee) === label);
                         if (match) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(match.assignee); }
                       }
                     }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} avatarByFirstName={avatarByFirstName} />} height={26} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} avatarByFirstName={avatarByFirstName} />} height={34} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={44} label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }} />
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
@@ -3099,22 +3495,6 @@ export function MonthAnalytics({
             <Activity className="size-4 text-slate-600" />
             Cumulative Flow{scopeTitleSuffix}
           </h3>
-          <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
-            <button
-              type="button"
-              onClick={() => setCfdMetric("daysLeft")}
-              className={`rounded-md px-3 py-1 text-[13px] font-medium ${cfdMetric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
-            >
-              Σ Total days left
-            </button>
-            <button
-              type="button"
-              onClick={() => setCfdMetric("storyCount")}
-              className={`rounded-md px-3 py-1 text-[13px] font-medium ${cfdMetric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
-            >
-              Σ Total stories
-            </button>
-          </div>
         </div>
         <div
           className={cn(
@@ -3253,7 +3633,7 @@ export function MonthAnalytics({
                 }))
               : analytics.workloadByAssignee.map((row) => ({
                   key: row.assignee,
-                  label: row.assignee,
+                  label: compactAssigneeName(row.assignee),
                   initials: row.assignee.split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join(""),
                   // Resolve avatar URL up-front so the per-row circle can
                   // render the photo instead of initials when available.
@@ -3452,7 +3832,7 @@ export function MonthAnalytics({
 
           {/* Burn Up chart + right-side epic legend */}
           <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
-            <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+            <div className={cn("mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
               <h3
                 className={cn(
                   "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -3461,22 +3841,45 @@ export function MonthAnalytics({
               >
                 <TrendingUp className="size-4 text-slate-600" />
                 Epic Scope Burnup{burnUpTitleSuffix}
+                {burnupHealth ? (
+                  <HealthBadgeWithDetail
+                    status={burnupHealth.status}
+                    result={burnupHealth.result}
+                    basis={burnupBasis}
+                    basisLabel={basisDisplayLabel(burnupBasis, selectedEpicOption ? "epic" : "initiative")}
+                    scopeLabel={selectedEpicOption
+                      ? `${selectedEpicOption.epic.title} (epic)`
+                      : selectedInitiativeId !== "all"
+                        ? "Selected initiative"
+                        : "All epics in scope"}
+                    chartKind="burnup"
+                  />
+                ) : null}
               </h3>
-              <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setBurnUpMetric("daysLeft")}
-                  className={`rounded-md px-3 py-1 text-[13px] font-medium ${burnUpMetric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
-                >
-                  Σ Total days left
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBurnUpMetric("storyCount")}
-                  className={`rounded-md px-3 py-1 text-[13px] font-medium ${burnUpMetric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
-                >
-                  Σ Total stories
-                </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Per-chart basis toggle — same shape as the burndown
+                 *  card. Initialized from the popover's global basis at
+                 *  mount; independent thereafter. */}
+                <div className="min-w-[18rem]">
+                  <ToggleGroup
+                    label=""
+                    options={
+                      selectedEpicOption != null
+                        ? [
+                            { value: "epicEst", label: "Epic Days Est.", icon: Folder },
+                            { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
+                            { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                          ]
+                        : [
+                            { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
+                            { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
+                            { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                          ]
+                    }
+                    value={burnupBasis}
+                    onChange={(v) => setBurnupBasis(v as "days" | "stories" | "epicEst")}
+                  />
+                </div>
               </div>
             </div>
             <div
@@ -3521,6 +3924,7 @@ export function MonthAnalytics({
                         width={44}
                         label={{ value: burnUpMetric === "daysLeft" ? "Days completed" : "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
                         domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, burnUpScopeTotal) * 1.08)]}
+                        padding={{ bottom: 4 }}
                       />
                       <Tooltip
                         content={({ active, payload, label }) => {

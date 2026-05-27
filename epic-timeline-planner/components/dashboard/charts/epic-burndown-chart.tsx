@@ -14,6 +14,8 @@ import {
 } from "recharts";
 
 import type { InitiativeItem, EpicItem, UserStoryItem, StoryDailySnapshotItem } from "@/lib/types";
+import { computeProgress } from "@/lib/progress";
+import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 
 type Props = {
   initiatives: InitiativeItem[];
@@ -25,6 +27,10 @@ type Props = {
   epicId?: string | null;
   /** Metric: "daysLeft" sums remaining estimated days, "storyCount" counts open stories. Default daysLeft (matches insights). */
   metric?: "daysLeft" | "storyCount";
+  /** When set to "epicEst", renders a horizontal "scope promise" reference line at the epic's
+   *  `originalEstimateDays` so the burndown can be read against the epic-level estimate the
+   *  team committed to. Other modes ("days" / "stories" / undefined) skip the line. */
+  progressBasis?: "days" | "stories" | "epicEst";
 };
 
 function findEpic(initiatives: InitiativeItem[], epicId: string | null | undefined):
@@ -85,7 +91,7 @@ function epicStoryOpenValue(
   return Math.max(0, daysLeft);
 }
 
-export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, metric = "daysLeft" }: Props) {
+export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, metric = "daysLeft", progressBasis = "days" }: Props) {
   const meta = findEpic(initiatives, epicId);
   if (epicId && !meta) {
     return (
@@ -131,7 +137,7 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
   // Initial total at the start date — sum of estimated days (or story count) across stories that were open at start.
   // Use latest snapshot ≤ start, fall back to current story state when no snapshots exist.
   const stories = epic.userStories ?? [];
-  const startTotal = stories.reduce((sum, story) => {
+  const storyDayStartTotal = stories.reduce((sum, story) => {
     const snap = latestSnapshotAtDay(story, startDate);
     const status = snap?.status ?? story.status;
     if (!isStoryOpen(status)) return sum;
@@ -139,12 +145,35 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
     const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.estimatedDays ?? story.daysLeft ?? 1;
     return sum + Math.max(0, daysLeft);
   }, 0);
+  // Ideal line follows the basis: `epicEst` mode draws the line from the
+  // epic's `originalEstimateDays` down to 0 (falls back to story-day sum
+  // when no epic estimate is set). Other modes keep story-day or
+  // story-count math. Mirrors the MonthAnalytics burndown.
+  const startTotal: number =
+    metric === "storyCount"
+      ? storyDayStartTotal
+      : progressBasis === "epicEst"
+        ? (epic.originalEstimateDays != null && epic.originalEstimateDays > 0
+            ? epic.originalEstimateDays
+            : storyDayStartTotal)
+        : storyDayStartTotal;
 
   const today = startOfDay(new Date());
   const startMs = startDate.getTime();
   const dueMs = dueDate.getTime();
   const todayMs = today.getTime();
   const totalDays = Math.max(1, Math.round((dueMs - startMs) / 86400000) + 1);
+
+  // In `epicEst` mode the ideal line is in epic-est units (`startTotal` =
+  // epicEst) but the actual loop sums story-day open work. Scale actuals
+  // into the same units so the curve sits on the same axis as the ideal +
+  // scope-promise lines. No-op for `days` / `stories`.
+  const useEpicEstScale =
+    progressBasis === "epicEst"
+    && metric === "daysLeft"
+    && (epic.originalEstimateDays ?? 0) > 0
+    && storyDayStartTotal > 0;
+  const actualScale = useEpicEstScale ? (epic.originalEstimateDays as number) / storyDayStartTotal : 1;
 
   type Row = {
     label: string;
@@ -163,6 +192,7 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
         const snap = latestSnapshotAtDay(story, day);
         value += epicStoryOpenValue(story, metric, snap);
       }
+      value *= actualScale;
       actualForDay = metric === "storyCount" ? Math.round(value) : Number(value.toFixed(1));
     }
     const idealRaw = totalDays <= 1 ? 0 : startTotal * (1 - i / (totalDays - 1));
@@ -173,6 +203,25 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
   const dueLabel = shortLabel(dueDate);
   const todayLabel = todayMs >= startMs && todayMs <= dueMs ? shortLabel(today) : null;
   const dueRow = rows[rows.length - 1];
+
+  // Basis-aware health verdict for the chart's epic scope. Uses the same
+  // start/end window the burndown is plotted against, so the badge agrees
+  // with what's drawn. Shown as a small chip floating in the top-right
+  // corner of the chart plot area.
+  const healthInfo = (() => {
+    const h = computeProgress({
+      stories,
+      start: startDate,
+      end: dueDate,
+      basis: progressBasis,
+      epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+    });
+    const hasData = progressBasis === "stories"
+      ? stories.length > 0
+      : h.totalEffort > 0;
+    if (!hasData) return null;
+    return { status: h.status, tooltip: formatHealthTooltip(h) };
+  })();
 
   // Evenly-spaced ticks so long plan ranges don't show uneven gaps.
   const xAxisTicks: string[] = (() => {
@@ -185,7 +234,13 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
   })();
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <div className="relative h-full w-full">
+      {healthInfo ? (
+        <div className="pointer-events-none absolute right-2 top-1 z-10">
+          <HealthBadge status={healthInfo.status} tooltip={healthInfo.tooltip} />
+        </div>
+      ) : null}
+      <ResponsiveContainer width="100%" height="100%">
       <LineChart data={rows} margin={{ top: 28, right: 56, left: 16, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} ticks={xAxisTicks} />
@@ -204,6 +259,20 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
             stroke="#94a3b8"
             strokeDasharray="4 2"
             label={{ value: "Today", position: "insideTop", fontSize: 10, fill: "#64748b" }}
+          />
+        ) : null}
+        {/* Scope-promise reference line — shown only when the user has
+         *  chosen the epic-estimate basis and the epic has a value to
+         *  read against. Sits at the epic's `originalEstimateDays` so
+         *  the actual burndown can be visually compared to the promise
+         *  the team made. Skipped on the story-count axis (units don't
+         *  match) and when there's no estimate. */}
+        {progressBasis === "epicEst" && metric === "daysLeft" && epic.originalEstimateDays != null && epic.originalEstimateDays > 0 ? (
+          <ReferenceLine
+            y={epic.originalEstimateDays}
+            stroke="#0ea5e9"
+            strokeDasharray="2 4"
+            label={{ value: `Scope promise · ${epic.originalEstimateDays}d`, position: "insideTopRight", fontSize: 10, fill: "#0369a1" }}
           />
         ) : null}
         <Line
@@ -237,6 +306,7 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
           />
         ) : null}
       </LineChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   );
 }

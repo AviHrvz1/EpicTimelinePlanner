@@ -65,7 +65,10 @@ export interface ProgressResult {
   totalEffort: number;
   /** Working days (Mon–Fri) from today (inclusive) to `end` (inclusive). 0 past deadline. */
   daysRemaining: number;
-  /** remainingEffort − daysRemaining. Positive = behind, negative = buffer. */
+  /** `remainingEffort − idealRemaining` where ideal is the linear burn-down
+   *  line at "now". Positive = above the line (behind), negative = below
+   *  the line (ahead / buffer). Drives the on-track / watch / at-risk
+   *  thresholds. */
   deltaDays: number;
   /** Stories without estimatedDays — excluded from the math, surfaced for tooltips. */
   unestimatedCount: number;
@@ -163,7 +166,35 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
     basis === "stories" ? storiesProgressPercent : daysProgressPercent;
 
   const daysRemaining = workingDaysBetween(now, input.end);
-  const deltaDays = remainingEffort - daysRemaining;
+
+  // Health verdict uses an **ideal-line** comparison (not just "do we have
+  // enough time left"). At any point in the window the ideal remaining is
+  // a linear interpolation from `totalEffort` on `start` → 0 on `end`:
+  //
+  //     idealRemaining = totalEffort × (daysRemaining / totalWorkingDays)
+  //
+  // `deltaDays = remainingEffort − idealRemaining` then says "how far above
+  // (positive = behind) or below (negative = ahead) the burndown's ideal
+  // line is the team right now?" That matches what the user sees on the
+  // burndown chart: above the orange line = at risk earlier than the old
+  // "fits in remaining time" cliff check.
+  //
+  // Edge cases:
+  //  - totalWorkingDays = 0 (start == end) → fall back to the deadline-cliff
+  //    delta so we never divide by zero.
+  //  - now < start (epic hasn't started yet) → ratio clamps to 1 and
+  //    `idealRemaining = totalEffort`; if work hasn't started, delta is ~0
+  //    and verdict is OnTrack.
+  //  - now > end (past deadline) → ratio clamps to 0, `idealRemaining = 0`,
+  //    delta = remainingEffort; the Overdue check below short-circuits anyway.
+  const totalWorkingDays = workingDaysBetween(input.start, input.end);
+  const ratio = totalWorkingDays > 0
+    ? Math.min(1, Math.max(0, daysRemaining / totalWorkingDays))
+    : 0;
+  const idealRemaining = totalEffort > 0 && totalWorkingDays > 0
+    ? totalEffort * ratio
+    : daysRemaining; // legacy fallback when there's no measurable window/effort
+  const deltaDays = remainingEffort - idealRemaining;
 
   let status: HealthStatus;
   if (now > input.end && progressPercent < 100) {

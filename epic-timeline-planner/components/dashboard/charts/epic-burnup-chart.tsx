@@ -14,6 +14,8 @@ import {
 } from "recharts";
 
 import type { InitiativeItem, EpicItem, UserStoryItem, StoryDailySnapshotItem } from "@/lib/types";
+import { computeProgress } from "@/lib/progress";
+import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 
 type Props = {
   initiatives: InitiativeItem[];
@@ -25,6 +27,10 @@ type Props = {
   epicId?: string | null;
   /** Metric: "daysLeft" sums completed estimated days, "storyCount" counts completed stories. */
   metric?: "daysLeft" | "storyCount";
+  /** When set to "epicEst", renders a horizontal "scope promise" reference line at the epic's
+   *  `originalEstimateDays` so the burnup can be read against the epic-level estimate the
+   *  team committed to. Other modes ("days" / "stories" / undefined) skip the line. */
+  progressBasis?: "days" | "stories" | "epicEst";
 };
 
 function findEpic(initiatives: InitiativeItem[], epicId: string | null | undefined):
@@ -36,10 +42,6 @@ function findEpic(initiatives: InitiativeItem[], epicId: string | null | undefin
     if (epic) return { epic, initiative };
   }
   return null;
-}
-
-function isStoryDone(status: UserStoryItem["status"] | null | undefined): boolean {
-  return status === "done" || status === "approved";
 }
 
 function latestSnapshotAtDay(story: UserStoryItem, day: Date): StoryDailySnapshotItem | null {
@@ -78,18 +80,19 @@ function storyScopeValue(story: UserStoryItem, metric: "daysLeft" | "storyCount"
   return Math.max(0, story.estimatedDays ?? story.daysLeft ?? 1);
 }
 
-function storyCompletedValueAtDay(
+function storyOpenRemainingAtDay(
   story: UserStoryItem,
   metric: "daysLeft" | "storyCount",
   snapshot: StoryDailySnapshotItem | null,
 ): number {
   const status = snapshot?.status ?? story.status;
-  if (!isStoryDone(status)) return 0;
+  if (status !== "todo" && status !== "inProgress") return 0;
   if (metric === "storyCount") return 1;
-  return Math.max(0, story.estimatedDays ?? story.daysLeft ?? 1);
+  const daysLeft = snapshot?.daysLeft ?? snapshot?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
+  return Math.max(0, daysLeft);
 }
 
-export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metric = "storyCount" }: Props) {
+export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metric = "storyCount", progressBasis = "days" }: Props) {
   const meta = findEpic(initiatives, epicId);
   if (epicId && !meta) {
     return (
@@ -132,13 +135,43 @@ export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metri
   }
 
   const stories = epic.userStories ?? [];
-  const totalScope = stories.reduce((sum, story) => sum + storyScopeValue(story, metric), 0);
+  const storyDayTotalScope = stories.reduce((sum, story) => sum + storyScopeValue(story, metric), 0);
+  // Total scope follows the basis (mirrors EpicBurndownChart):
+  //   - epicEst → epic.originalEstimateDays (falls back to story sum)
+  //   - days / stories → story-sum behavior (today's default)
+  const totalScope: number =
+    metric === "storyCount"
+      ? storyDayTotalScope
+      : progressBasis === "epicEst"
+        ? (epic.originalEstimateDays != null && epic.originalEstimateDays > 0
+            ? epic.originalEstimateDays
+            : storyDayTotalScope)
+        : storyDayTotalScope;
 
   const today = startOfDay(new Date());
   const startMs = startDate.getTime();
   const dueMs = dueDate.getTime();
   const todayMs = today.getTime();
   const totalDays = Math.max(1, Math.round((dueMs - startMs) / 86400000) + 1);
+
+  // In `epicEst` mode totalScope = epicEst but openRemaining is in story-day
+  // units — without scaling the subtraction underflows to zero. Scale by
+  // (epicEst / openStoryDaysAtStart) so completed sits on the epic-est axis
+  // and mirrors the burndown's scaled actual.
+  const storyDayStartTotal = stories.reduce((sum, story) => {
+    const snap = latestSnapshotAtDay(story, startDate);
+    const status = snap?.status ?? story.status;
+    if (status !== "todo" && status !== "inProgress") return sum;
+    if (metric === "storyCount") return sum + 1;
+    const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.estimatedDays ?? story.daysLeft ?? 1;
+    return sum + Math.max(0, daysLeft);
+  }, 0);
+  const useEpicEstScale =
+    progressBasis === "epicEst"
+    && metric === "daysLeft"
+    && (epic.originalEstimateDays ?? 0) > 0
+    && storyDayStartTotal > 0;
+  const openScale = useEpicEstScale ? (epic.originalEstimateDays as number) / storyDayStartTotal : 1;
 
   type Row = {
     label: string;
@@ -153,11 +186,15 @@ export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metri
     const isFuture = dayMs > todayMs;
     let completedForDay: number | null = null;
     if (!isFuture) {
-      let value = 0;
+      // Burnup mirrors burndown: completed = totalScope − open work
+      // remaining at this day. Story-day reductions on in-progress
+      // stories count as completion, so the two charts always agree.
+      let openRemaining = 0;
       for (const story of stories) {
         const snap = latestSnapshotAtDay(story, day);
-        value += storyCompletedValueAtDay(story, metric, snap);
+        openRemaining += storyOpenRemainingAtDay(story, metric, snap);
       }
+      const value = Math.max(0, totalScope - openRemaining * openScale);
       completedForDay = metric === "storyCount" ? Math.round(value) : Number(value.toFixed(1));
     }
     const idealRaw = totalDays <= 1 ? totalScope : (totalScope * i) / (totalDays - 1);
@@ -174,6 +211,22 @@ export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metri
   const todayLabel = todayMs >= startMs && todayMs <= dueMs ? shortLabel(today) : null;
   const dueRow = rows[rows.length - 1];
 
+  // Basis-aware health verdict overlay (mirrors EpicBurndownChart).
+  const healthInfo = (() => {
+    const h = computeProgress({
+      stories,
+      start: startDate,
+      end: dueDate,
+      basis: progressBasis,
+      epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+    });
+    const hasData = progressBasis === "stories"
+      ? stories.length > 0
+      : h.totalEffort > 0;
+    if (!hasData) return null;
+    return { status: h.status, tooltip: formatHealthTooltip(h) };
+  })();
+
   // Evenly-spaced ticks so long plan ranges don't show uneven gaps.
   const xAxisTicks: string[] = (() => {
     const labels = rows.map((r) => r.label);
@@ -185,7 +238,13 @@ export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metri
   })();
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <div className="relative h-full w-full">
+      {healthInfo ? (
+        <div className="pointer-events-none absolute right-2 top-1 z-10">
+          <HealthBadge status={healthInfo.status} tooltip={healthInfo.tooltip} />
+        </div>
+      ) : null}
+      <ResponsiveContainer width="100%" height="100%">
       <LineChart data={rows} margin={{ top: 28, right: 56, left: 16, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} ticks={xAxisTicks} />
@@ -206,6 +265,19 @@ export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metri
             label={{ value: "Today", position: "insideTop", fontSize: 10, fill: "#64748b" }}
           />
         ) : null}
+        {/* Scope-promise reference line — when the user has chosen
+         *  Σ Epic Est. basis, draw the epic's `originalEstimateDays`
+         *  as the cumulative target the burnup should reach. Skipped
+         *  on the story-count axis (units don't match) and when no
+         *  epic estimate exists. */}
+        {progressBasis === "epicEst" && metric === "daysLeft" && epic.originalEstimateDays != null && epic.originalEstimateDays > 0 ? (
+          <ReferenceLine
+            y={epic.originalEstimateDays}
+            stroke="#0ea5e9"
+            strokeDasharray="2 4"
+            label={{ value: `Scope promise · ${epic.originalEstimateDays}d`, position: "insideTopRight", fontSize: 10, fill: "#0369a1" }}
+          />
+        ) : null}
         <Line type="monotone" dataKey="scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} name="Total scope" />
         <Line type="monotone" dataKey="ideal" stroke="#f97316" strokeDasharray="6 4" dot={false} strokeWidth={1.5} name="Epic ideal to due" />
         <Line type="monotone" dataKey="completed" stroke="#10b981" dot={false} strokeWidth={2} name="Completed" connectNulls={false} />
@@ -221,6 +293,7 @@ export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metri
           />
         ) : null}
       </LineChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   );
 }

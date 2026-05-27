@@ -43,6 +43,11 @@ type Props = {
   onUpdateConfig?: (id: string, partialParams: Record<string, unknown>) => void;
   /** Pass-through for charts that render per-user avatars (Sprint Load etc). */
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Global health basis from the planner (Roadmap Health popover). When set
+   *  to "epicEst", the EpicBurndownChart card renders a scope-promise
+   *  reference line at the epic's originalEstimateDays. Other chart types
+   *  ignore it. Defaults to "days" for public/static dashboards. */
+  progressBasis?: "days" | "stories" | "epicEst";
 };
 
 function ResizePad({
@@ -139,7 +144,7 @@ function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
   });
 }
 
-function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; isEditMode: boolean; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void }) {
+function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, progressBasis = "days" }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; isEditMode: boolean; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void; progressBasis?: "days" | "stories" | "epicEst" }) {
   let params: Record<string, unknown> = {};
   try { params = JSON.parse(chart.config); } catch { /* ignore */ }
 
@@ -195,7 +200,19 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: 
           metric={params.metric === "storyCount" ? "storyCount" : "daysLeft"}
         />
       );
-    case "epic-burndown":
+    case "epic-burndown": {
+      // Per-chart basis. Falls back to the popover's current default
+      // ("days" / "stories" / "epicEst") so legacy chart configs
+      // without an explicit basis still render with sensible defaults.
+      // Y-axis (metric) is derived from the basis automatically; legacy
+      // configs that still carry an explicit `metric` continue to work
+      // but newly created charts only carry `basis`.
+      const chartBasis = (typeof params.basis === "string" && (params.basis === "days" || params.basis === "stories" || params.basis === "epicEst"))
+        ? (params.basis as "days" | "stories" | "epicEst")
+        : progressBasis;
+      const derivedMetric: "daysLeft" | "storyCount" = chartBasis === "stories" ? "storyCount" : "daysLeft";
+      const legacyMetric = params.metric === "storyCount" ? "storyCount" : params.metric === "daysLeft" ? "daysLeft" : null;
+      const effectiveMetric = legacyMetric ?? derivedMetric;
       return (
         <EpicBurndownChart
           initiatives={scopedInitiatives}
@@ -204,9 +221,11 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: 
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
           epicId={params.epicId as string | null}
-          metric={params.metric === "storyCount" ? "storyCount" : "daysLeft"}
+          metric={effectiveMetric}
+          progressBasis={chartBasis}
         />
       );
+    }
     case "cfd":
       return (
         <CfdChart
@@ -292,7 +311,16 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: 
           metric={params.metric === "daysLeft" ? "daysLeft" : "storyCount"}
         />
       );
-    case "epic-burnup":
+    case "epic-burnup": {
+      const burnupBasis = (typeof params.basis === "string" && (params.basis === "days" || params.basis === "stories" || params.basis === "epicEst"))
+        ? (params.basis as "days" | "stories" | "epicEst")
+        : progressBasis;
+      // Same basis → metric derivation as Epic Burndown above. Burnup's
+      // legacy default was "storyCount" so we honor that when only the
+      // old `metric` key is present.
+      const derivedBurnupMetric: "daysLeft" | "storyCount" = burnupBasis === "stories" ? "storyCount" : "daysLeft";
+      const legacyBurnupMetric = params.metric === "daysLeft" ? "daysLeft" : params.metric === "storyCount" ? "storyCount" : null;
+      const effectiveBurnupMetric = legacyBurnupMetric ?? derivedBurnupMetric;
       return (
         <EpicBurnupChart
           initiatives={scopedInitiatives}
@@ -301,9 +329,11 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: 
           sprint={(params.sprint as number) ?? 1}
           team={params.team as string | null}
           epicId={params.epicId as string | null}
-          metric={params.metric === "daysLeft" ? "daysLeft" : "storyCount"}
+          metric={effectiveBurnupMetric}
+          progressBasis={burnupBasis}
         />
       );
+    }
     case "sprint-countdown":
       return (
         <SprintCountdownCard
@@ -357,7 +387,7 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig }: { chart: 
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers }: Props) {
+export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers, progressBasis = "days" }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
   const cardHeight = 300 + (rowSpan - 1) * 220;
@@ -458,7 +488,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
 
       {/* Chart body — min-h-0 ensures flex-1 has a definite height so height="100%" works in ResponsiveContainer */}
       <div className="min-h-0 flex-1 overflow-hidden px-2 py-2">
-        <ChartBody chart={chart} initiatives={initiatives} isEditMode={isEditMode} onUpdateConfig={onUpdateConfig} />
+        <ChartBody chart={chart} initiatives={initiatives} isEditMode={isEditMode} onUpdateConfig={onUpdateConfig} progressBasis={progressBasis} />
       </div>
     </div>
   );

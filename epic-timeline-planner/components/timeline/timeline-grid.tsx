@@ -833,7 +833,10 @@ function ganttSearchEpicHealth(
   basis: ProgressBasis,
 ): { status: HealthStatus; tooltip: string } | null {
   if (epic.planStartMonth == null || epic.planEndMonth == null) return null;
-  if ((epic.userStories ?? []).length === 0) return null;
+  // epicEst mode: keep a verdict even when the epic has no stories yet —
+  // that's the whole point of the toggle. Other modes still need at least
+  // one story for the rollup to mean anything.
+  if (basis !== "epicEst" && (epic.userStories ?? []).length === 0) return null;
   const start = sprintStartDate(
     planYear,
     globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
@@ -842,7 +845,13 @@ function ganttSearchEpicHealth(
     planYear,
     globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
   );
-  const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis });
+  const h = computeProgress({
+    stories: epic.userStories ?? [],
+    start,
+    end,
+    basis,
+    epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+  });
   return { status: h.status, tooltip: formatHealthTooltip(h) };
 }
 
@@ -856,7 +865,9 @@ function ganttSearchInitiativeHealth(
   const epics = init.epics ?? [];
   if (epics.length === 0) return null;
   const aggregateStories = epics.flatMap((e) => e.userStories ?? []);
-  if (aggregateStories.length === 0) return null;
+  // epicEst rollup is the sum of child epics' estimates — works without
+  // any stories, so don't bail in that mode.
+  if (basis !== "epicEst" && aggregateStories.length === 0) return null;
   const childStatuses: HealthStatus[] = [];
   for (const epic of epics) {
     if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
@@ -869,7 +880,13 @@ function ganttSearchInitiativeHealth(
       globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
     );
     childStatuses.push(
-      computeProgress({ stories: epic.userStories ?? [], start, end, basis }).status,
+      computeProgress({
+        stories: epic.userStories ?? [],
+        start,
+        end,
+        basis,
+        epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+      }).status,
     );
   }
   // Union bounds for the initiative; fall back to the planning year when no
@@ -883,12 +900,17 @@ function ganttSearchInitiativeHealth(
     : 12;
   const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(startMonth, 1));
   const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(endMonth, 2));
+  const initiativeOriginalEstSum = epics.reduce(
+    (sum, e) => sum + (e.originalEstimateDays ?? 0),
+    0,
+  );
   const h = computeInitiativeProgress({
     stories: aggregateStories,
     childStatuses,
     start: initStart,
     end: initEnd,
     basis,
+    epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
   });
   return { status: h.status, tooltip: formatHealthTooltip(h) };
 }
@@ -4586,19 +4608,30 @@ export function TimelineGrid({
             if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
             const start = sprintStartDate(currentYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1));
             const end = sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2));
-            const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis: progressBasis });
+            const h = computeProgress({
+              stories: epic.userStories ?? [],
+              start,
+              end,
+              basis: progressBasis,
+              epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+            });
             childStatuses.push(h.status);
           }
           const initStart = sprintStartDate(currentYear, globalSprintFromMonthLane(activeMonth, 1));
           const initEnd = sprintEndDate(currentYear, globalSprintFromMonthLane(activeMonth, 2));
+          const initiativeOriginalEstSum = (initiative.epics ?? []).reduce(
+            (sum, e) => sum + (e.originalEstimateDays ?? 0),
+            0,
+          );
           const h = computeInitiativeProgress({
             stories: aggregateStories,
             childStatuses,
             start: initStart,
             end: initEnd,
             basis: progressBasis,
+            epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
           });
-          const hasData = progressBasis === "days" ? h.totalEffort > 0 : aggregateStories.length > 0;
+          const hasData = progressBasis === "stories" ? aggregateStories.length > 0 : h.totalEffort > 0;
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(initiative.id, h.status);
@@ -4613,8 +4646,14 @@ export function TimelineGrid({
           const start = sprintStartDate(currentYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1));
           const end = sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2));
           const epicStories = epic.userStories ?? [];
-          const h = computeProgress({ stories: epicStories, start, end, basis: progressBasis });
-          const hasData = progressBasis === "days" ? h.totalEffort > 0 : epicStories.length > 0;
+          const h = computeProgress({
+            stories: epicStories,
+            start,
+            end,
+            basis: progressBasis,
+            epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+          });
+          const hasData = progressBasis === "stories" ? epicStories.length > 0 : h.totalEffort > 0;
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(epic.id, h.status);
@@ -4647,22 +4686,28 @@ export function TimelineGrid({
               start: initiativeStart,
               end: epicEnd,
               basis: progressBasis,
+              epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
             });
             childStatuses.push(h.status);
           }
           const stories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+          const initiativeOriginalEstSum = (row.initiative.epics ?? []).reduce(
+            (sum, e) => sum + (e.originalEstimateDays ?? 0),
+            0,
+          );
           const h = computeInitiativeProgress({
             stories,
             childStatuses,
             start: initiativeStart,
             end: initiativeEnd,
             basis: progressBasis,
+            epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
           });
           // Status counts only include bars where we could compute health
-          // (i.e. there's estimated work in days mode or any story in
-          // stories mode). totalBars above always increments so the
-          // popover's total matches what's on the Gantt.
-          const hasData = progressBasis === "days" ? h.totalEffort > 0 : stories.length > 0;
+          // (i.e. there's estimated work in days/epicEst mode or any story in
+          // stories mode). totalBars above always increments so the popover's
+          // total matches what's on the Gantt.
+          const hasData = progressBasis === "stories" ? stories.length > 0 : h.totalEffort > 0;
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(row.initiative.id, h.status);
@@ -4681,8 +4726,9 @@ export function TimelineGrid({
             start: sprintStartDate(currentYear, row.startS),
             end: sprintEndDate(currentYear, row.endS),
             basis: progressBasis,
+            epicOriginalEstimateDays: row.epic.originalEstimateDays ?? null,
           });
-          const hasData = progressBasis === "days" ? h.totalEffort > 0 : epicStories.length > 0;
+          const hasData = progressBasis === "stories" ? epicStories.length > 0 : h.totalEffort > 0;
           if (hasData) {
             counts[h.status] += 1;
             statusByBarId.set(row.epic.id, h.status);
@@ -5075,20 +5121,26 @@ export function TimelineGrid({
                           start: initiativeStart,
                           end: epicEnd,
                           basis: progressBasis,
+                          epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
                         });
                         return h.status;
                       });
                       const aggregateStories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+                      const initiativeOriginalEstSum = (row.initiative.epics ?? []).reduce(
+                        (sum, e) => sum + (e.originalEstimateDays ?? 0),
+                        0,
+                      );
                       const initHealth = computeInitiativeProgress({
                         stories: aggregateStories,
                         childStatuses,
                         start: initiativeStart,
                         end: initiativeEnd,
                         basis: progressBasis,
+                        epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
                       });
                       const initiativeTooltip = formatHealthTooltip(initHealth);
                       const initHasData =
-                        progressBasis === "days" ? initHealth.totalEffort > 0 : aggregateStories.length > 0;
+                        progressBasis === "stories" ? aggregateStories.length > 0 : initHealth.totalEffort > 0;
                       return (
                         <div
                           key={`year-init-${row.initiative.id}`}
@@ -5193,10 +5245,11 @@ export function TimelineGrid({
                         start: sprintStartDate(currentYear, previewStart),
                         end: sprintEndDate(currentYear, previewEnd),
                         basis: progressBasis,
+                        epicOriginalEstimateDays: row.epic.originalEstimateDays ?? null,
                       });
                       const epicHealthTooltip = formatHealthTooltip(epicHealth);
                       const epicHasData =
-                        progressBasis === "days" ? epicHealth.totalEffort > 0 : epicStoriesForHealth.length > 0;
+                        progressBasis === "stories" ? epicStoriesForHealth.length > 0 : epicHealth.totalEffort > 0;
                       const isInitiativeEmphasis =
                         ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                       const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
@@ -6767,20 +6820,31 @@ export function TimelineGrid({
                               if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
                               const start = sprintStartDate(currentYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1));
                               const end = sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2));
-                              const h = computeProgress({ stories: epic.userStories ?? [], start, end, basis: progressBasis });
+                              const h = computeProgress({
+                                stories: epic.userStories ?? [],
+                                start,
+                                end,
+                                basis: progressBasis,
+                                epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+                              });
                               childStatuses.push(h.status);
                             }
                             const initStart = sprintStartDate(currentYear, globalSprintFromMonthLane(activeMonth, 1));
                             const initEnd = sprintEndDate(currentYear, globalSprintFromMonthLane(activeMonth, 2));
+                            const initiativeOriginalEstSum = (initiative.epics ?? []).reduce(
+                              (sum, e) => sum + (e.originalEstimateDays ?? 0),
+                              0,
+                            );
                             const initHealth = computeInitiativeProgress({
                               stories: aggregateStories,
                               childStatuses,
                               start: initStart,
                               end: initEnd,
                               basis: progressBasis,
+                              epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
                             });
                             const initTooltip = formatHealthTooltip(initHealth);
-                            const initHasData = progressBasis === "days" ? initHealth.totalEffort > 0 : aggregateStories.length > 0;
+                            const initHasData = progressBasis === "stories" ? aggregateStories.length > 0 : initHealth.totalEffort > 0;
                             return (
                               <div
                                 key={initiative.id}
@@ -6832,9 +6896,15 @@ export function TimelineGrid({
                               ? sprintEndDate(currentYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
                               : sprintEndDate(currentYear, globalSprintFromMonthLane(activeMonth, 2));
                             const epicStoriesM = epic.userStories ?? [];
-                            const epicHealthM = computeProgress({ stories: epicStoriesM, start: epicStart, end: epicEnd, basis: progressBasis });
+                            const epicHealthM = computeProgress({
+                              stories: epicStoriesM,
+                              start: epicStart,
+                              end: epicEnd,
+                              basis: progressBasis,
+                              epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+                            });
                             const epicTooltipM = formatHealthTooltip(epicHealthM);
-                            const epicHasDataM = progressBasis === "days" ? epicHealthM.totalEffort > 0 : epicStoriesM.length > 0;
+                            const epicHasDataM = progressBasis === "stories" ? epicStoriesM.length > 0 : epicHealthM.totalEffort > 0;
                             return (
                               <div
                                 key={epic.id}
@@ -7196,6 +7266,8 @@ export function TimelineGrid({
                     initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
                     onScopeChange={handleInsightsScopeChange}
                     workspaceDirectoryUsers={workspaceDirectoryUsers}
+                    progressBasis={progressBasis}
+                    onProgressBasisChange={onProgressBasisChange}
                   />
                 </div>
               </DeferredMount>
@@ -7399,20 +7471,26 @@ export function TimelineGrid({
                                     start: initiativeStart,
                                     end: epicEnd,
                                     basis: progressBasis,
+                                    epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
                                   });
                                   return h.status;
                                 });
                                 const aggregateStories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
+                                const initiativeOriginalEstSum = (row.initiative.epics ?? []).reduce(
+                                  (sum, e) => sum + (e.originalEstimateDays ?? 0),
+                                  0,
+                                );
                                 const initHealth = computeInitiativeProgress({
                                   stories: aggregateStories,
                                   childStatuses,
                                   start: initiativeStart,
                                   end: initiativeEnd,
                                   basis: progressBasis,
+                                  epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
                                 });
                                 const initiativeTooltip = formatHealthTooltip(initHealth);
                                 const initHasData =
-                                  progressBasis === "days" ? initHealth.totalEffort > 0 : aggregateStories.length > 0;
+                                  progressBasis === "stories" ? aggregateStories.length > 0 : initHealth.totalEffort > 0;
                                 return (
                                   <div
                                     key={`q-init-${row.initiative.id}`}
@@ -7521,10 +7599,11 @@ export function TimelineGrid({
                                 start: sprintStartDate(currentYear, previewStart),
                                 end: sprintEndDate(currentYear, previewEnd),
                                 basis: progressBasis,
+                                epicOriginalEstimateDays: row.epic.originalEstimateDays ?? null,
                               });
                               const epicHealthTooltipQ = formatHealthTooltip(epicHealthQ);
                               const epicHasDataQ =
-                                progressBasis === "days" ? epicHealthQ.totalEffort > 0 : epicStoriesQ.length > 0;
+                                progressBasis === "stories" ? epicStoriesQ.length > 0 : epicHealthQ.totalEffort > 0;
                               const isInitiativeEmphasis =
                                 ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                               const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
@@ -7667,6 +7746,8 @@ export function TimelineGrid({
               initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
               onScopeChange={handleInsightsScopeChange}
               workspaceDirectoryUsers={workspaceDirectoryUsers}
+              progressBasis={progressBasis}
+              onProgressBasisChange={onProgressBasisChange}
             />
           </DeferredMount>
         ) : activeMonth ? null : focusedQuarter && quarterViewTab === "insights" ? (
@@ -7687,6 +7768,8 @@ export function TimelineGrid({
               initialSelectedInitiativeId={initialInsightsScopeInitId ?? undefined}
               onScopeChange={handleInsightsScopeChange}
               workspaceDirectoryUsers={workspaceDirectoryUsers}
+              progressBasis={progressBasis}
+              onProgressBasisChange={onProgressBasisChange}
             />
           </DeferredMount>
         ) : activeMonth ? null : !focusedQuarter && quarterViewTab === "capacity" ? (

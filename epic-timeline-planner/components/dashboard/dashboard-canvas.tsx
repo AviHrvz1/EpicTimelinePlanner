@@ -22,9 +22,14 @@ type Props = {
   onRenameChart: (id: string, title: string) => void;
   onUpdateConfig?: (id: string, partialParams: Record<string, unknown>) => void;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Forwarded to each card so the EpicBurndownChart can render its
+   *  scope-promise reference line when basis === "epicEst". Other chart
+   *  types ignore it. Defaults to "days" so public dashboards stay on
+   *  the existing behavior. */
+  progressBasis?: "days" | "stories" | "epicEst";
 };
 
-export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers }: Props) {
+export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers, progressBasis }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function handleDragEnd(event: DragEndEvent) {
@@ -63,6 +68,7 @@ export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, on
           onRenameChart={onRenameChart}
           onUpdateConfig={onUpdateConfig}
           workspaceDirectoryUsers={workspaceDirectoryUsers}
+          progressBasis={progressBasis}
         />
       ))}
     </div>

@@ -24,9 +24,14 @@ type Props = {
   planYear: number;
   roadmaps?: RoadmapItem[];
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Health basis from the planner (Roadmap Health popover). Threaded
+   *  to the canvas so EpicBurndownChart cards can render their
+   *  scope-promise reference line when basis === "epicEst". Defaults
+   *  to "days". */
+  progressBasis?: "days" | "stories" | "epicEst";
 };
 
-export function DashboardPage({ initiatives: passedInitiatives, planYear, roadmaps = [], workspaceDirectoryUsers = [] }: Props) {
+export function DashboardPage({ initiatives: passedInitiatives, planYear, roadmaps = [], workspaceDirectoryUsers = [], progressBasis }: Props) {
   const [dashboards, setDashboards] = useState<DashboardItem[]>([]);
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(null);
   const [charts, setCharts] = useState<DashboardChartItem[]>([]);
@@ -610,6 +615,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                 onChangeHeight={handleChangeHeight}
                 onRenameChart={renameChart}
                 onUpdateConfig={updateChartConfig}
+                progressBasis={progressBasis}
               />
             </div>
           ) : (

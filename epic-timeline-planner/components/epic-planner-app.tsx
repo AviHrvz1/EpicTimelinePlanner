@@ -1331,12 +1331,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   /** Synced with TimelineGrid “Progress” chip — Gantt bar rows + left-panel story progress. */
   const [showRoadmapProgress, setShowRoadmapProgress] = useState(false);
   /** Shared with TimelineGrid + InitiativeListPanel — chooses whether progress
-   *  is computed from the rolled-up child-story estimates ("days"), the
-   *  per-epic Est. Epic Days field ("epicEst", useful when stories aren't
-   *  written yet), or a flat story-count completion ("stories"). Lives
-   *  here so the middle panel + the Gantt show consistent numbers, and
-   *  persisted to localStorage so the user's pick survives reloads. */
-  const [progressBasis, setProgressBasis] = useState<"days" | "stories" | "epicEst">("days");
+   *  is computed from the per-epic Est. Epic Days field ("epicEst", default;
+   *  useful when stories aren't broken down yet — most planning starts with
+   *  rough epic estimates), the rolled-up child-story estimates ("days"),
+   *  or a flat story-count completion ("stories"). Lives here so the middle
+   *  panel + the Gantt show consistent numbers, and persisted to
+   *  localStorage so the user's pick survives reloads. */
+  const [progressBasis, setProgressBasis] = useState<"days" | "stories" | "epicEst">("epicEst");
   useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem("epicPlanner.progressBasis");
@@ -6209,6 +6210,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 planYear={selectedYear}
                 roadmaps={roadmaps}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
+                progressBasis={progressBasis}
               />
             </div>
           ) : null}

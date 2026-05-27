@@ -639,7 +639,11 @@ function SprintChartForm({
 
   const isEpicChart = chartType === "epic-burndown" || chartType === "epic-burnup" || chartType === "epic-cfd";
   const isVelocityChart = chartType === "velocity";
-  const supportsMetricPicker = chartType === "burndown" || chartType === "epic-burndown" || chartType === "sprint-burnup" || chartType === "epic-burnup" || chartType === "workload" || chartType === "workload-balance";
+  // Epic Burndown / Epic Burnup expose the 3-option basis picker instead
+  // of the simpler 2-option metric picker — basis drives the Y-axis
+  // automatically (epicEst/days → daysLeft, stories → storyCount), so
+  // a separate metric toggle would just enable nonsensical combinations.
+  const supportsMetricPicker = chartType === "burndown" || chartType === "sprint-burnup" || chartType === "workload" || chartType === "workload-balance";
   const defaultMetric: "daysLeft" | "storyCount" = chartType === "sprint-burnup" || chartType === "epic-burnup" || chartType === "workload-balance" ? "storyCount" : "daysLeft";
   const initMetric: "daysLeft" | "storyCount" = useMemo(() => {
     if (!editTarget) return defaultMetric;
@@ -649,6 +653,23 @@ function SprintChartForm({
   }, [editTarget, defaultMetric]);
   const [metric, setMetric] = useState<"daysLeft" | "storyCount">(initMetric);
   useEffect(() => { setMetric(initMetric); }, [initMetric]);
+
+  // ─── Health/progress basis state ──────────────────────────────────────
+  // The Σ Epic Days Est. / Σ Story Days Est. / % Stories Completed toggle
+  // drives the scope-promise reference line on Epic Burndown / Epic Burnup
+  // charts. Stored per-chart in `params.basis` so a chart created with
+  // "epicEst" stays on that basis even if the global popover later flips.
+  // Defaults to the planner-wide global default ("epicEst") for newly
+  // created charts; uses the saved value when editing an existing chart.
+  const supportsBasisPicker = chartType === "epic-burndown" || chartType === "epic-burnup";
+  const initBasis = useMemo((): "days" | "stories" | "epicEst" => {
+    if (!editTarget) return "epicEst";
+    let cfg: Record<string, unknown> = {};
+    try { cfg = JSON.parse(editTarget.config); } catch { /* ignore */ }
+    return cfg.basis === "days" || cfg.basis === "stories" || cfg.basis === "epicEst" ? cfg.basis : "epicEst";
+  }, [editTarget]);
+  const [basis, setBasis] = useState<"days" | "stories" | "epicEst">(initBasis);
+  useEffect(() => { setBasis(initBasis); }, [initBasis]);
 
   // Workload + multi-team toggle: combine teams into ONE chart (default) or fan out to one chart per team.
   const [workloadCombineTeams, setWorkloadCombineTeams] = useState<boolean>(true);
@@ -807,6 +828,7 @@ function SprintChartForm({
             ...(initiative.roadmapId ? { roadmapId: initiative.roadmapId } : {}),
             ...(teamId ? { team: teamId } : {}),
             ...(supportsMetricPicker ? { metric } : {}),
+            ...(supportsBasisPicker ? { basis } : {}),
           },
         };
       });
@@ -863,6 +885,7 @@ function SprintChartForm({
               ...(teamIds.length === 1 ? { team: teamIds[0] } : {}),
               ...(teamIds.length > 1 ? { teams: teamIds } : {}),
               ...(supportsMetricPicker ? { metric } : {}),
+            ...(supportsBasisPicker ? { basis } : {}),
               ...(isTeamFocusMixChart ? { focusScope } : {}),
             },
           });
@@ -885,6 +908,7 @@ function SprintChartForm({
                 ...(roadmap ? { roadmapId: roadmap.id } : {}),
                 team: teamId,
                 ...(supportsMetricPicker ? { metric } : {}),
+            ...(supportsBasisPicker ? { basis } : {}),
               },
             });
           }
@@ -917,6 +941,7 @@ function SprintChartForm({
             ...(roadmap ? { roadmapId: roadmap.id } : {}),
             ...(teamId ? { team: teamId } : {}),
             ...(supportsMetricPicker ? { metric } : {}),
+            ...(supportsBasisPicker ? { basis } : {}),
           },
         });
       }
@@ -1081,6 +1106,52 @@ function SprintChartForm({
                 )}
               >
                 Stories
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Basis — Epic Burndown / Epic Burnup only. Drives the scope-promise
+         *  reference line on the chart. Persisted in chart config so the
+         *  saved chart stays on this basis even if the popover later flips. */}
+        {supportsBasisPicker && (
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <TrendingDown className="size-3.5" />
+              </span>
+              <p className="text-[15px] font-bold text-slate-700">Health basis</p>
+            </div>
+            <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200">
+              <button
+                type="button"
+                onClick={() => setBasis("epicEst")}
+                className={cn(
+                  "flex-1 rounded-lg px-2 py-2 text-[12px] font-semibold transition-all",
+                  basis === "epicEst" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                Σ Epic Days Est.
+              </button>
+              <button
+                type="button"
+                onClick={() => setBasis("days")}
+                className={cn(
+                  "flex-1 rounded-lg px-2 py-2 text-[12px] font-semibold transition-all",
+                  basis === "days" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                Σ Story Days Est.
+              </button>
+              <button
+                type="button"
+                onClick={() => setBasis("stories")}
+                className={cn(
+                  "flex-1 rounded-lg px-2 py-2 text-[12px] font-semibold transition-all",
+                  basis === "stories" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
+                )}
+              >
+                % Stories Completed
               </button>
             </div>
           </div>

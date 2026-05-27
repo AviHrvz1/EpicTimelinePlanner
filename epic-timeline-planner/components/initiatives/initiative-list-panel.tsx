@@ -630,6 +630,36 @@ function epicCompletionMeta(
           : "No user stories",
     };
   }
+  if (basis === "epicEst") {
+    // Use the epic's own Est. Epic Days as the denominator; numerator is
+    // the sum of estimatedDays on done/approved child stories (so a freshly
+    // estimated epic with no delivered stories reads 0%). Lets the middle
+    // panel show "how much of the epic budget has been delivered" rather
+    // than the rolled-up child story burn-down.
+    const epicEstDays = epic.originalEstimateDays ?? 0;
+    let completedEffort = 0;
+    for (const story of stories) {
+      if (story.estimatedDays == null) continue;
+      if (story.status === "done" || story.status === "approved") {
+        completedEffort += story.estimatedDays;
+      }
+    }
+    const percent =
+      epicEstDays > 0 ? Math.min(100, Math.round((completedEffort / epicEstDays) * 100)) : 0;
+    return {
+      total,
+      finished,
+      percent,
+      progressSummary:
+        epicEstDays > 0
+          ? `${completedEffort}d / ${epicEstDays}d epic est. · ${percent}%`
+          : "No epic estimate",
+      progressAria:
+        epicEstDays > 0
+          ? `${completedEffort} of ${epicEstDays} epic-estimated days delivered`
+          : "No epic estimate set",
+    };
+  }
   // days basis — effort burndown across estimated stories
   let totalEffort = 0;
   let remainingEffort = 0;
@@ -1285,6 +1315,37 @@ function InitiativeTreeCard({
           initiativeStoryTotal > 0
             ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories done or approved`
             : "No user stories",
+      };
+    }
+    if (progressBasis === "epicEst") {
+      // Sum Est. Epic Days across child epics; "delivered" = sum of done
+      // child stories' estimatedDays. Same shape as the per-epic version
+      // in `epicCompletionMeta` but rolled up across the initiative.
+      const initiativeEpicEst = epics.reduce(
+        (sum, e) => sum + (e.originalEstimateDays ?? 0),
+        0,
+      );
+      let completedEffort = 0;
+      for (const story of initiativeStories) {
+        if (story.estimatedDays == null) continue;
+        if (story.status === "done" || story.status === "approved") {
+          completedEffort += story.estimatedDays;
+        }
+      }
+      const percent =
+        initiativeEpicEst > 0
+          ? Math.min(100, Math.round((completedEffort / initiativeEpicEst) * 100))
+          : 0;
+      return {
+        percent,
+        summary:
+          initiativeEpicEst > 0
+            ? `${completedEffort}d / ${initiativeEpicEst}d epic est. · ${percent}%`
+            : "No epic estimates",
+        aria:
+          initiativeEpicEst > 0
+            ? `${completedEffort} of ${initiativeEpicEst} epic-estimated days delivered`
+            : "No epic estimates set",
       };
     }
     let totalEffort = 0;

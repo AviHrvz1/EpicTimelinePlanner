@@ -1,6 +1,9 @@
-import { AlertOctagon, AlertTriangle, Check } from "lucide-react";
+"use client";
 
-import type { HealthStatus } from "@/lib/progress";
+import { useEffect, useRef, useState } from "react";
+import { AlertOctagon, AlertTriangle, Check, X } from "lucide-react";
+
+import type { HealthStatus, ProgressBasis, ProgressResult } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,23 +16,30 @@ export function HealthBadge({
   tooltip,
   onClick,
   className,
+  size = "sm",
 }: {
   status: HealthStatus;
   tooltip?: string;
   onClick?: () => void;
   className?: string;
+  /** "sm" (default) matches the inline Gantt chip; "md" matches the
+   *  scope-panel user/team chips (text-[13px] / px-2.5 / py-1.5). */
+  size?: "sm" | "md";
 }) {
   const meta = STATUS_META[status];
   const Icon = meta.icon;
   const sharedClass = cn(
-    "inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[12px] font-medium leading-none ring-1",
+    "inline-flex shrink-0 items-center gap-1 rounded font-medium leading-none ring-1",
+    size === "md"
+      ? "gap-1.5 px-2.5 py-1.5 text-[13px] rounded-md shadow-sm"
+      : "px-2 py-0.5 text-[12px]",
     meta.chip,
     onClick && "cursor-pointer transition-transform duration-150 hover:scale-105 hover:brightness-105",
     className,
   );
   const content = (
     <>
-      <Icon className="size-3 shrink-0" aria-hidden />
+      <Icon className={cn("shrink-0", size === "md" ? "size-4" : "size-3")} aria-hidden />
       <span>{meta.label}</span>
     </>
   );
@@ -111,4 +121,194 @@ export function formatHealthTooltip(args: {
     parts.push(`${unestimatedCount} unestimated ${unestimatedCount === 1 ? "story" : "stories"} excluded`);
   }
   return parts.join(" · ");
+}
+
+/**
+ * Clickable health badge with a designed click-popover explaining the
+ * verdict — surfaces the calculation breakdown (total effort, remaining,
+ * ideal-line target, delta) plus a plain-English "Why this status?"
+ * summary. Used in the Insights scope picker so the user can see WHY
+ * something is "At Risk" without leaving the page.
+ */
+export function HealthBadgeWithDetail({
+  status,
+  result,
+  basis,
+  basisLabel,
+  scopeLabel,
+  className,
+  size = "sm",
+  chartKind,
+}: {
+  status: HealthStatus;
+  result: ProgressResult;
+  basis: ProgressBasis;
+  /** Human-readable label of the basis, e.g. "Σ Epic Days Est." */
+  basisLabel: string;
+  /** What the verdict applies to: e.g. "Mobile platform v2 (initiative)". */
+  scopeLabel?: string;
+  className?: string;
+  size?: "sm" | "md";
+  /** Adjusts the "Why this status?" wording so the popover speaks the
+   *  chart's language. Omit for the generic popover (defaults to neutral
+   *  pacing language). */
+  chartKind?: "burndown" | "burnup";
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const meta = STATUS_META[status];
+  const Icon = meta.icon;
+  const tooltip = formatHealthTooltip(result);
+  const reason = buildHealthReason(result, basis, chartKind);
+
+  return (
+    <div ref={rootRef} className={cn("relative inline-flex shrink-0", className)}>
+      <HealthBadge
+        status={status}
+        tooltip={tooltip}
+        onClick={() => setOpen((v) => !v)}
+        size={size}
+      />
+      {open ? (
+        <div
+          role="dialog"
+          aria-label={`${meta.label} details`}
+          className="absolute right-0 top-[calc(100%+6px)] z-[1000] w-[20rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+        >
+          {/* Header — colored band matching the verdict, with icon + label
+           *  + close button. Same color family as the chip itself. */}
+          <div className={cn("flex items-center justify-between gap-2 px-3 py-2", meta.chip, "rounded-none")}>
+            <div className="inline-flex items-center gap-1.5">
+              <Icon className="size-4 shrink-0" aria-hidden />
+              <span className="text-[13px] font-bold">{meta.label}</span>
+              <span className="text-[12px] font-semibold opacity-80">· {result.progressPercent}% complete</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex size-5 items-center justify-center rounded hover:bg-white/40"
+              aria-label="Close details"
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          </div>
+          {/* Body — plain-English reason + a small table of the math. */}
+          <div className="space-y-3 px-3 py-3 text-[12px] text-slate-700">
+            {scopeLabel ? (
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {scopeLabel}
+              </div>
+            ) : null}
+            <div>
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Why this status?</p>
+              <p className="leading-snug text-slate-700">{reason}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2">
+              <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-500">Calculation</p>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+                <dt className="text-slate-500">Total effort</dt>
+                <dd className="text-right tabular-nums font-medium text-slate-800">{formatDays(result.totalEffort)}</dd>
+                <dt className="text-slate-500">Remaining</dt>
+                <dd className="text-right tabular-nums font-medium text-slate-800">{formatDays(result.remainingEffort)}</dd>
+                <dt className="text-slate-500">Working days left</dt>
+                <dd className="text-right tabular-nums font-medium text-slate-800">{result.daysRemaining}d</dd>
+                <dt className="text-slate-500">Delta from ideal</dt>
+                <dd className={cn(
+                  "text-right tabular-nums font-semibold",
+                  result.deltaDays > 1 ? "text-rose-700" : result.deltaDays < -1 ? "text-emerald-700" : "text-slate-800",
+                )}>
+                  {result.deltaDays > 0 ? `+${formatDays(result.deltaDays)}` : formatDays(result.deltaDays)}
+                </dd>
+                {result.unestimatedCount > 0 ? (
+                  <>
+                    <dt className="text-slate-500">Unestimated stories</dt>
+                    <dd className="text-right tabular-nums font-medium text-amber-700">{result.unestimatedCount}</dd>
+                  </>
+                ) : null}
+              </dl>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+              <span className="font-semibold text-slate-600">Based on:</span>
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700 ring-1 ring-slate-200">
+                {basisLabel}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function formatDays(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  // Whole numbers render without ".0"; fractional values keep one decimal.
+  return `${sign}${Number.isInteger(abs) ? abs : abs.toFixed(1)}d`;
+}
+
+/**
+ * Plain-English explanation of the verdict, derived from the same
+ * `ProgressResult` the badge uses. `chartKind` swaps "burndown" vs
+ * "burnup" wording so the popover matches the chart it sits on.
+ */
+function buildHealthReason(
+  result: ProgressResult,
+  basis: ProgressBasis,
+  chartKind?: "burndown" | "burnup",
+): string {
+  // Direction of the deviation reads opposite on the two charts:
+  //  - burndown: behind pace → ABOVE the ideal line
+  //  - burnup:   behind pace → BELOW the ideal line
+  const lineNoun =
+    chartKind === "burnup" ? "burnup" : chartKind === "burndown" ? "burndown" : "pace";
+  const behindDirection = chartKind === "burnup" ? "Below" : "Above";
+  const aheadDirection = chartKind === "burnup" ? "Above" : "Below";
+  const remainingPhrase =
+    chartKind === "burnup"
+      ? `${formatDays(result.remainingEffort)} still to deliver`
+      : `${formatDays(result.remainingEffort)} of work remaining`;
+
+  if (result.status === "overdue") {
+    return `Past deadline with ${formatDays(result.remainingEffort)} of work still remaining. The window ended before the team could deliver everything in scope.`;
+  }
+  if (result.progressPercent >= 100) {
+    return chartKind === "burnup"
+      ? "All planned work is delivered — the burnup has reached the scope line."
+      : "All planned work is delivered — every estimated effort has been burned down.";
+  }
+  if (result.totalEffort === 0 && basis === "epicEst") {
+    return "Epic has no estimate set yet. Add an Est. Epic Days value to get a meaningful verdict.";
+  }
+  if (result.totalEffort === 0) {
+    return "No estimated work to track. Add estimates to child stories to see this verdict reflect real progress.";
+  }
+  const aheadOrBehind = result.deltaDays;
+  if (aheadOrBehind <= 1 && aheadOrBehind >= -1) {
+    return `Pace matches the ideal ${lineNoun} — within a day of where it should be. ${remainingPhrase} over ${result.daysRemaining} working days.`;
+  }
+  if (aheadOrBehind < 0) {
+    return `${aheadDirection} the ideal ${lineNoun} line by ${formatDays(-aheadOrBehind)} — ahead of pace. ${remainingPhrase} over ${result.daysRemaining} working days — buffer in hand.`;
+  }
+  // aheadOrBehind > 1 → Watch or AtRisk
+  const severity = result.status === "atRisk" ? "significantly" : "slightly";
+  return `${behindDirection} the ideal ${lineNoun} line by ${formatDays(aheadOrBehind)} — ${severity} behind pace. ${remainingPhrase} but only ${result.daysRemaining} working days left.`;
 }

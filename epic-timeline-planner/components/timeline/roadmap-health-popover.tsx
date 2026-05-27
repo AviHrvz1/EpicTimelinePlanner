@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, AlertOctagon, AlertTriangle, Check, ChevronDown, ChevronRight, Folder, GripHorizontal, Hourglass, Info, ListChecks, Search, Sigma, X, Zap } from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Folder, GripHorizontal, Info, ListChecks, Search, StickyNote, X, Zap } from "lucide-react";
 
 import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
+import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
 
 /** Re-export the canonical progress-basis type from `lib/progress` so the
  *  rest of the planner picks up the new `epicEst` variant. */
@@ -299,45 +300,57 @@ export function RoadmapHealthPopover({
         </button>
       </div>
 
-      <div className="px-5 pb-4 pt-4">
-        {/* Toggles row — Group by + Progress basis side by side */}
-        <div className="grid grid-cols-2 gap-3">
-          <ToggleGroup
-            label="Group by"
-            options={[
-              { value: "initiatives", label: "Initiatives", icon: Zap },
-              { value: "epics", label: "Epics", icon: Folder },
-            ]}
-            value={barMode}
-            onChange={(v) => onBarModeChange(v as "initiatives" | "epics")}
-          />
+      <div className="px-5 pb-5 pt-5">
+        {/* Section 1 — Scope toggle. Self-labeling buttons so we don't
+         *  need a header above them; the words "Initiative Health" /
+         *  "Epic Health" carry their own context. */}
+        <ToggleGroup
+          label=""
+          options={[
+            { value: "initiatives", label: "Initiative Health", icon: Zap },
+            { value: "epics", label: "Epic Health", icon: Folder },
+          ]}
+          value={barMode}
+          onChange={(v) => onBarModeChange(v as "initiatives" | "epics")}
+        />
+
+        {/* Section 2 — Basis toggle. Option labels adapt to the
+         *  selected scope so the same button means the right thing
+         *  under Initiative vs Epic health. Order follows the planning
+         *  workflow: early-stage epic estimate first, child story
+         *  rollup second, % completed third. */}
+        <div className="mt-5 border-t border-slate-200/70 pt-4">
           <ToggleGroup
             label="Health & progress basis"
-            options={[
-              { value: "days", label: "Σ | Child Stories", icon: Sigma },
-              { value: "epicEst", label: "Σ | Epic Est.", icon: Sigma },
-            ]}
-            value={progressBasis === "stories" ? "days" : progressBasis}
+            options={
+              barMode === "initiatives"
+                ? [
+                    { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
+                    { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
+                    { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                  ]
+                : [
+                    { value: "epicEst", label: "Epic Days Est.", icon: Folder },
+                    { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
+                    { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                  ]
+            }
+            value={progressBasis}
             onChange={(v) => onProgressBasisChange(v as ProgressBasis)}
           />
+          {/* "How each mode works" — collapsed by default. Carries the
+           *  scope-aware explanation for users who aren't sure which
+           *  mode to pick. */}
+          <div className="mt-2.5">
+            <BasisHelp />
+          </div>
         </div>
 
-        {/* Help block explaining what each basis means — collapsed by
-         *  default, expandable for users who aren't sure which mode to
-         *  pick. Touches the same surface area as the Roadmap Health
-         *  popover so the toggle's reach is explicit. */}
-        <BasisHelp />
-        {progressBasis === "epicEst" ? (
-          <p className="mt-2 text-[11px] leading-snug text-slate-500">
-            <Info className="mr-1 inline size-3 align-[-2px] text-indigo-500" aria-hidden />
-            Using the epic-level <strong className="font-semibold text-slate-700">Est. Epic Days</strong> — epics without
-            an estimate read as Unestimated.
-          </p>
-        ) : null}
-
-        {/* Status filter — horizontal pills */}
-        <div className="mt-3">
-          <div className="mb-1.5 flex items-baseline justify-between">
+        {/* Section 3 — Status filter pills + healthy/risky distribution
+         *  bar. Grouped together because the filter and the bar are two
+         *  views of the same data. */}
+        <div className="mt-5 border-t border-slate-200/70 pt-4">
+          <div className="mb-2 flex items-baseline justify-between">
             <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-700">
               Filter by status
             </div>
@@ -398,8 +411,10 @@ export function RoadmapHealthPopover({
           </div>
         </div>
 
-        {/* Health distribution bar — stacked segments showing % of each status */}
-        <div className="mt-5">
+        {/* Health distribution bar — stacked segments showing % of each
+         *  status. Sits inside the same section as the filter pills above
+         *  since they show the same data. */}
+        <div className="mt-3">
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
             {statusTotal > 0 ? (
               <div className="flex h-full w-full">
@@ -420,14 +435,14 @@ export function RoadmapHealthPopover({
           </div>
         </div>
 
-        {/* Scope picker — pick an initiative or epic to open in Insights.
-            Pool is filtered by the active bar mode + the status filter, so
-            the suggestions match exactly what's still highlighted on the
-            Gantt below. The View Insights button is disabled until the
-            user has actually picked something. */}
+        {/* Section 4 — Scope picker. Pool is filtered by the active bar
+            mode + the status filter, so the suggestions match exactly
+            what's highlighted on the Gantt below. The View Insights
+            button is disabled until the user has actually picked
+            something. */}
         {onOpenInsights ? (
-          <div className="mt-5">
-            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-700">
+          <div className="mt-5 border-t border-slate-200/70 pt-4">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-700">
               Pick {targetKind === "initiative" ? "an initiative" : "an epic"} to inspect
             </div>
             <div ref={pickerRef} className="relative">
@@ -468,6 +483,12 @@ export function RoadmapHealthPopover({
                 <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-[9100] max-h-[220px] overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-xl">
                   {filteredSuggestions.map((item) => {
                     const meta = STATUS_META[item.status];
+                    // Leading icon matches the kind so the user can scan the
+                    // dropdown at a glance: ⚡ for initiative, 📁 for epic.
+                    // Replaces the previous status-color dot — status is still
+                    // shown by the trailing pill on the right.
+                    const KindIcon = item.kind === "initiative" ? Zap : Folder;
+                    const kindIconColor = item.kind === "initiative" ? "text-blue-600" : "text-sky-500";
                     return (
                       <button
                         key={item.id}
@@ -482,7 +503,7 @@ export function RoadmapHealthPopover({
                           item.id === pickedId && "bg-indigo-50",
                         )}
                       >
-                        <span className={cn("inline-flex size-3 shrink-0 items-center justify-center rounded-full ring-1 ring-white", meta.dotBg)} aria-hidden />
+                        <KindIcon className={cn("size-3.5 shrink-0", kindIconColor)} strokeWidth={2} aria-hidden />
                         <span className="min-w-0 flex-1 truncate">{item.title}</span>
                         <span className={cn("shrink-0 text-[10.5px] font-semibold uppercase tracking-wide", meta.countFg)}>{meta.label}</span>
                       </button>
@@ -494,8 +515,9 @@ export function RoadmapHealthPopover({
           </div>
         ) : null}
 
-        {/* Footer — meta + View Insights CTA */}
-        <div className="mt-4 flex items-center justify-between gap-4">
+        {/* Section 5 — Footer. Meta count on the left, View Insights CTA
+         *  on the right. Top divider separates it from the scope picker. */}
+        <div className="mt-5 flex items-center justify-between gap-4 border-t border-slate-200/70 pt-4">
           <div className="text-[12px] text-slate-500">
             <span className="font-semibold text-slate-700">{totalBars}</span>{" "}
             {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
@@ -566,66 +588,33 @@ function BasisHelp() {
       {open ? (
         <div className="space-y-2 border-t border-indigo-100/80 px-3 py-2.5 text-[11.5px] leading-snug text-slate-600">
           <div>
-            <p className="font-semibold text-slate-800">Σ | Child Stories</p>
+            <p className="font-semibold text-slate-800">Σ Epic Days Est. / Epic Days Est.</p>
             <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-              <li><strong>Epic</strong> — sum of <em>Est. Days</em> on every child story.</li>
-              <li><strong>Initiative</strong> — sum across <em>initiative → epics → stories</em>.</li>
+              <li><strong>Epic Health</strong> — uses this epic's <em>Est. Days</em>.</li>
+              <li><strong>Initiative Health</strong> — sums <em>Est. Days</em> across the initiative's child epics.</li>
+            </ul>
+            <p className="mt-0.5 text-slate-500">Useful for early-stage epics that don't have stories yet.</p>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-800">Σ Story Days Est.</p>
+            <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+              <li><strong>Epic Health</strong> — sums <em>Est. Days</em> on every child story.</li>
+              <li><strong>Initiative Health</strong> — sums across <em>initiative → epics → stories</em>.</li>
             </ul>
             <p className="mt-0.5 text-slate-500">Most accurate once user stories are written.</p>
           </div>
           <div>
-            <p className="font-semibold text-slate-800">Σ | Epic Est.</p>
+            <p className="font-semibold text-slate-800">% Stories Completed</p>
             <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-              <li><strong>Epic</strong> — uses <em>Est. Epic Days</em> from the epic dialog.</li>
-              <li><strong>Initiative</strong> — sum of <em>Est. Epic Days</em> across child epics.</li>
+              <li>Counts child stories whose status is <em>Done</em> or <em>Approved</em> against the total.</li>
             </ul>
-            <p className="mt-0.5 text-slate-500">Useful for early-stage epics that don't have stories yet.</p>
+            <p className="mt-0.5 text-slate-500">Ignores effort estimates entirely — pure headcount.</p>
           </div>
           <p className="text-[11px] italic text-slate-500">
             Applies to this popup, the middle-panel progress bars, and the Gantt bar health badges.
           </p>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function ToggleGroup({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { value: string; label: string; icon?: typeof Check }[];
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</div>
-      <div className="inline-flex w-full rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-        {options.map((opt) => {
-          const isOn = opt.value === value;
-          const Icon = opt.icon;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onChange(opt.value)}
-              className={cn(
-                "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-semibold transition-all",
-                isOn
-                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
-                  : "text-slate-500 hover:text-slate-700",
-              )}
-            >
-              {Icon ? <Icon className="size-3 shrink-0" aria-hidden /> : null}
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
