@@ -39,6 +39,7 @@ import {
 import {
   currentCalendarYearSprint,
   globalSprintFromMonthLane,
+  monthLaneFromGlobalSprint,
   sprintEndDate,
   sprintStartDate,
 } from "@/lib/year-sprint";
@@ -341,31 +342,63 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     }
   }
 
-  // Promote ~70% of "done" stories from sprints that finished > 14 days ago
-  // to "approved" so the kanban / pie chart show all four statuses, not just
-  // todo / inProgress / done. Recently-done stories stay "done" since QA
-  // typically lags by a sprint or two.
-  const approvedCutoff = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
-  const doneStories = await db.userStory.findMany({
-    where: { status: StoryStatus.done, sprint: { not: null } },
-    select: { id: true, sprint: true, planYear: true },
+  // Closed-sprint cleanup: leave a realistic 70/30 mix of `approved`/`done`
+  // instead of 100% approved.
+  //
+  // Why this matters for the demo: epic-planner-app has a post-close
+  // auto-rollover effect that scans all stories on mount and PATCHes any
+  // `todo` / `inProgress` story from a closed sprint into the next open
+  // sprint. (The rollover deliberately leaves `done` and `approved`
+  // alone — see [epic-planner-app.tsx].) So:
+  //
+  // 1. Any `todo` / `inProgress` residuals in closed sprints (from
+  //    "behind" curve stories that didn't finish in their sprint window)
+  //    get promoted to `done` here — otherwise the rollover would move
+  //    them forward and empty the retro view.
+  // 2. The remaining `done` stories are split deterministically: ~70%
+  //    become `approved`, ~30% stay `done` (QA hasn't signed off yet).
+  //
+  // Current-sprint stories are unaffected (handled by the diversify
+  // pass below).
+  const closedStories = await db.userStory.findMany({
+    where: {
+      sprint: { not: null },
+      status: { not: StoryStatus.approved },
+    },
+    select: { id: true, sprint: true, planYear: true, status: true },
   });
-  const approveIds: string[] = [];
-  for (const s of doneStories) {
+  const promoteToDoneIds: string[] = [];
+  const promoteToApprovedIds: string[] = [];
+  for (const s of closedStories) {
     if (s.sprint == null) continue;
     const seEnd = sprintEndDate(s.planYear ?? planYear, s.sprint);
-    if (seEnd >= approvedCutoff) continue; // recent — keep as done
-    // Deterministic 70% pick based on id hash.
+    if (seEnd >= today) continue; // open / future sprint — keep its live status
+    if (s.status === StoryStatus.todo || s.status === StoryStatus.inProgress) {
+      // Always rescue these from the rollover by completing them. Then
+      // their `done` state runs through the 70/30 split below.
+      promoteToDoneIds.push(s.id);
+    }
+    // Deterministic 70% pick — same id hash trick as the diversify pass.
     let h = 0;
     for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) | 0;
-    if (Math.abs(h) % 10 < 7) approveIds.push(s.id);
+    if (Math.abs(h) % 10 < 7) promoteToApprovedIds.push(s.id);
   }
-  if (approveIds.length > 0) {
+  if (promoteToDoneIds.length > 0) {
     await db.userStory.updateMany({
-      where: { id: { in: approveIds } },
+      where: { id: { in: promoteToDoneIds } },
+      data: { status: StoryStatus.done },
+    });
+  }
+  if (promoteToApprovedIds.length > 0) {
+    await db.userStory.updateMany({
+      where: { id: { in: promoteToApprovedIds } },
       data: { status: StoryStatus.approved },
     });
   }
+  console.log("[demo-builder] closed-sprint status mix", {
+    promoteToDoneCount: promoteToDoneIds.length,
+    promoteToApprovedCount: promoteToApprovedIds.length,
+  });
 
   // Diversify current-sprint statuses. The snapshot-generated `final` state
   // only produces `inProgress` / `done` for the current sprint (anything
@@ -380,25 +413,28 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     where: { sprint: currentSprint, planYear },
     select: { id: true, status: true, estimatedDays: true },
   });
+  // End-of-sprint distribution: ≥80% already QA-signed, the rest split
+  // across the other columns so all four show entries. Deterministic per-id
+  // hash bucket so the same id always lands in the same bucket across
+  // re-seeds.
+  //   80% approved | 10% done | 5% inProgress | 5% todo
   const toTodoIds: string[] = [];
+  const toInProgressIds: string[] = [];
+  const toDoneIds: string[] = [];
   const toApprovedIds: string[] = [];
   for (const s of currentSprintStories) {
-    // Deterministic per-id bucket so re-seeds with the same scope produce
-    // the same distribution.
     let h = 0;
     for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) | 0;
     const bucket = Math.abs(h) % 100;
-    if (bucket < 25 && s.status !== StoryStatus.approved) {
-      // 25% → todo, regardless of current status (reset daysLeft to full).
-      toTodoIds.push(s.id);
-    } else if (bucket >= 90 && s.status === StoryStatus.done) {
-      // 10% of done → approved (early QA sign-off).
-      toApprovedIds.push(s.id);
-    }
+    if (bucket < 5) toTodoIds.push(s.id);
+    else if (bucket < 10) toInProgressIds.push(s.id);
+    else if (bucket < 20) toDoneIds.push(s.id);
+    else toApprovedIds.push(s.id);
   }
+  // `todo` resets daysLeft to the original estimate so the column reads
+  // as "unstarted at full size"; the other buckets keep whatever
+  // daysLeft the curve generator landed on (mid-sprint snapshot).
   if (toTodoIds.length > 0) {
-    // Reset daysLeft to the original estimate so the "to do" column shows
-    // each story at its full unstarted size.
     for (const id of toTodoIds) {
       const story = currentSprintStories.find((x) => x.id === id);
       const est = story?.estimatedDays ?? null;
@@ -408,11 +444,204 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       });
     }
   }
+  if (toInProgressIds.length > 0) {
+    await db.userStory.updateMany({
+      where: { id: { in: toInProgressIds } },
+      data: { status: StoryStatus.inProgress },
+    });
+  }
+  if (toDoneIds.length > 0) {
+    await db.userStory.updateMany({
+      where: { id: { in: toDoneIds } },
+      data: { status: StoryStatus.done, daysLeft: 0 },
+    });
+  }
   if (toApprovedIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: toApprovedIds } },
+      data: { status: StoryStatus.approved, daysLeft: 0 },
+    });
+  }
+  console.log("[demo-builder] current-sprint mix", {
+    sprint: currentSprint,
+    todo: toTodoIds.length,
+    inProgress: toInProgressIds.length,
+    done: toDoneIds.length,
+    approved: toApprovedIds.length,
+  });
+
+  // ── Backfill: every team should have stories in the last 2 closed sprints
+  //
+  // The month-slicing logic above gives each of the 5 teams a roughly equal
+  // share of each initiative's window, but that means some (team × sprint)
+  // combos end up empty — e.g. platform happens to land in early-year
+  // months of every initiative, so its May/June sprints have zero stories
+  // and the retro charts for those team/sprint pairs show "No stories".
+  //
+  // To make retros usable on every team's accordion for the most recent
+  // closed sprints, add 5 filler stories for any (team × last-2-closed-
+  // sprints) gap. Stories attach to an existing epic of that team (no new
+  // epics created — keeps the Gantt layout untouched).
+  const lastTwoClosedSprints: number[] = [];
+  for (let s = currentSprint - 1; s >= 1 && lastTwoClosedSprints.length < 2; s--) {
+    const seEnd = sprintEndDate(planYear, s);
+    if (seEnd < today) lastTwoClosedSprints.push(s);
+  }
+  console.log("[demo-builder] backfill", {
+    planYear,
+    currentSprint,
+    lastTwoClosedSprints,
+    today: today.toISOString(),
+  });
+  let backfillStoriesAdded = 0;
+  let backfillSnapshotsAdded = 0;
+  for (const teamSlug of DEMO_TEAM_SLUGS) {
+    for (const targetSprint of lastTwoClosedSprints) {
+      const existingCount = await db.userStory.count({
+        where: { sprint: targetSprint, planYear, epic: { team: teamSlug } },
+      });
+      console.log("[demo-builder] backfill check", { teamSlug, targetSprint, existingCount });
+      if (existingCount > 0) continue;
+      // Prefer an epic whose plan window includes the target sprint (so the
+      // story's sprint is consistent with its epic on the Gantt). Fall back
+      // to any epic of this team.
+      const { month: targetMonth } = monthLaneFromGlobalSprint(targetSprint);
+      const teamEpic =
+        (await db.epic.findFirst({
+          where: {
+            team: teamSlug,
+            planYear,
+            planStartMonth: { lte: targetMonth },
+            planEndMonth: { gte: targetMonth },
+          },
+          orderBy: { planStartMonth: "asc" },
+        })) ??
+        (await db.epic.findFirst({
+          where: { team: teamSlug, planYear },
+          orderBy: { planStartMonth: "asc" },
+        }));
+      console.log("[demo-builder] backfill epic pick", {
+        teamSlug,
+        targetSprint,
+        targetMonth,
+        epicId: teamEpic?.id,
+        epicTitle: teamEpic?.title,
+        epicStart: teamEpic?.planStartMonth,
+        epicEnd: teamEpic?.planEndMonth,
+      });
+      if (!teamEpic) continue;
+      const roster = membersByTeam.get(teamSlug) ?? [];
+      const titlePool = DEMO_STORY_TEMPLATES_BY_TEAM[teamSlug];
+      for (let i = 0; i < 5; i++) {
+        const assignee = roster[i % Math.max(1, roster.length)] ?? null;
+        const estimatedDays = 2 + (i % 4);
+        const baseTitle = titlePool[(targetSprint + i) % titlePool.length]!;
+        const created = await db.userStory.create({
+          data: {
+            title: `${baseTitle} (Sprint ${targetSprint})`,
+            icon: "📄",
+            description: null,
+            assignee,
+            sprint: targetSprint,
+            estimatedDays,
+            daysLeft: estimatedDays,
+            status: StoryStatus.todo,
+            epicId: teamEpic.id,
+            roadmapId: DEMO_DEFAULT_ROADMAP_ID,
+            planYear,
+            planQuarter: Math.ceil(targetMonth / 3),
+            labels: null,
+          },
+        });
+        backfillStoriesAdded += 1;
+        const { snapshots, final } = buildDemoSnapshotSeries({
+          storyId: created.id,
+          sprint: targetSprint,
+          estimatedDays,
+          today,
+          planYear,
+          curve: pickDemoStoryCurve(created.id),
+          assignee,
+        });
+        if (snapshots.length > 0) {
+          await db.storyDailySnapshot.createMany({
+            data: snapshots.map((s) => ({
+              storyId: s.storyId,
+              snapshotDate: s.snapshotDate,
+              status: s.status,
+              sprint: s.sprint,
+              estimatedDays: s.estimatedDays,
+              daysLeft: s.daysLeft,
+              assignee: s.assignee,
+            })),
+          });
+          backfillSnapshotsAdded += snapshots.length;
+        }
+        if (final.status !== StoryStatus.todo || final.daysLeft !== estimatedDays) {
+          await db.userStory.update({
+            where: { id: created.id },
+            data: { status: final.status, daysLeft: final.daysLeft },
+          });
+        }
+      }
+    }
+  }
+  totalStories += backfillStoriesAdded;
+  totalSnapshots += backfillSnapshotsAdded;
+  console.log("[demo-builder] backfill done", { backfillStoriesAdded, backfillSnapshotsAdded });
+
+  // Apply the same closed-sprint status cleanup to backfilled stories —
+  // promote any `todo` / `inProgress` residual to `done` (rescue from
+  // rollover), then split the resulting `done` set 70/30 approved/done
+  // so the retro pie chart shows status variety.
+  const backfillClosed = await db.userStory.findMany({
+    where: {
+      sprint: { in: lastTwoClosedSprints },
+      planYear,
+      status: { not: StoryStatus.approved },
+    },
+    select: { id: true, sprint: true, planYear: true, status: true },
+  });
+  const backfillToDoneIds: string[] = [];
+  const backfillToApprovedIds: string[] = [];
+  for (const s of backfillClosed) {
+    if (s.sprint == null) continue;
+    const seEnd = sprintEndDate(s.planYear ?? planYear, s.sprint);
+    if (seEnd >= today) continue;
+    if (s.status === StoryStatus.todo || s.status === StoryStatus.inProgress) {
+      backfillToDoneIds.push(s.id);
+    }
+    let h = 0;
+    for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) | 0;
+    if (Math.abs(h) % 10 < 7) backfillToApprovedIds.push(s.id);
+  }
+  if (backfillToDoneIds.length > 0) {
+    await db.userStory.updateMany({
+      where: { id: { in: backfillToDoneIds } },
+      data: { status: StoryStatus.done },
+    });
+  }
+  if (backfillToApprovedIds.length > 0) {
+    await db.userStory.updateMany({
+      where: { id: { in: backfillToApprovedIds } },
       data: { status: StoryStatus.approved },
     });
+  }
+  console.log("[demo-builder] backfill status mix", {
+    promoteToDoneCount: backfillToDoneIds.length,
+    promoteToApprovedCount: backfillToApprovedIds.length,
+  });
+
+  // Ground-truth audit: for each of the last 2 closed sprints, count stories
+  // per team (via their parent epic's team) so we can verify what charts
+  // should see for each team's retro accordion.
+  for (const targetSprint of lastTwoClosedSprints) {
+    for (const teamSlug of DEMO_TEAM_SLUGS) {
+      const count = await db.userStory.count({
+        where: { sprint: targetSprint, planYear, epic: { team: teamSlug } },
+      });
+      console.log("[demo-builder] audit", { targetSprint, teamSlug, storyCount: count });
+    }
   }
 
   return {

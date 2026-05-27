@@ -8043,7 +8043,7 @@ export function BacklogPlanningPanel({
   );
 
   return (
-    <section className="ml-1 mr-0 flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60">
+    <section className="ml-1 mr-0 flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 pb-2.5 shadow-sm ring-1 ring-slate-200/60">
       <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 pb-4 pt-4">
         <div className="flex items-center gap-2.5">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
@@ -8102,7 +8102,7 @@ export function BacklogPlanningPanel({
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
       <FilterLatencyDebugger />
 
-      <div className="relative z-20 mt-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-5 pt-5 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="relative z-20 mt-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-7 pt-7 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         <div
           className="grid w-full min-w-0 max-w-[140rem] items-center gap-x-5 gap-y-4"
           style={{ gridTemplateColumns: "auto repeat(10, minmax(0, 1fr))" }}
@@ -8531,7 +8531,7 @@ export function BacklogPlanningPanel({
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[14px] font-semibold tracking-[0.01em] text-white"
+                  className="grid min-w-full w-max items-center gap-2 py-1.5 ps-0 text-[14px] font-semibold tracking-[0.01em] text-white"
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {

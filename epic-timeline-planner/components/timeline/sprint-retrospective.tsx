@@ -23,7 +23,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
@@ -92,6 +92,15 @@ function stripTags(html: string): string {
   return unescapeHtml(html.replace(/<[^>]+>/g, "")).replace(/\s+/g, " ").trim();
 }
 
+/** Minimal HTML escaper for inline text we paste into editor `<li>` bodies. */
+function escapeHtmlText(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function htmlToCards(html: string | undefined | null): RetroCard[] {
   const raw = (html ?? "").trim();
   if (!raw) return [];
@@ -126,20 +135,29 @@ function initialsFor(name: string | undefined | null, fallback = "A"): string {
   return (a + b).toUpperCase() || fallback;
 }
 
-// ─── Column composer (input + Add) ───────────────────────────────────────────
+// ─── Column composer (rich-text input only — commit handled by the top Save) ─
 
-function CardComposer({
-  placeholder,
-  accentButton,
-  onAdd,
-  trailing,
-}: {
-  placeholder: string;
-  accentButton: string;
-  /** Receives rich HTML (e.g. "Did <strong>X</strong>") — not plain text. */
-  onAdd: (html: string) => void;
-  trailing?: React.ReactNode;
-}) {
+type CardComposerHandle = {
+  /** Returns the trimmed inline HTML, or empty string when the editor has no
+   *  real text. Mirrors what the old "Add" button used to push into a list. */
+  getHtml: () => string;
+  clear: () => void;
+};
+
+const CardComposer = forwardRef<
+  CardComposerHandle,
+  {
+    placeholder: string;
+    /** Optional initial HTML to seed the editor with — used by retros that
+     *  have persisted notebook content (or by the demo-builder seed) so the
+     *  notebook page reads as "already filled in" on first open. */
+    initialContent?: string;
+    /** Called whenever the editor's emptiness changes — parent uses this to
+     *  decide whether the top-right Save button should be enabled. */
+    onEmptyChange?: (empty: boolean) => void;
+    trailing?: React.ReactNode;
+  }
+>(function CardComposer({ placeholder, initialContent, onEmptyChange, trailing }, ref) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -150,7 +168,7 @@ function CardComposer({
       }),
       Placeholder.configure({ placeholder }),
     ],
-    content: "<p></p>",
+    content: initialContent && initialContent.trim().length > 0 ? initialContent : "<p></p>",
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -160,19 +178,44 @@ function CardComposer({
     },
   });
 
-  function submit() {
-    if (!editor || editor.isEmpty) return;
-    // Strip the outermost <p>…</p> wrapper so each card stores inline-rich content; htmlToCards re-adds blocks.
-    let html = editor.getHTML().trim();
-    if (html.startsWith("<p>") && html.endsWith("</p>") && html.indexOf("<p>", 3) === -1) {
-      html = html.slice(3, -4);
-    }
-    if (!stripTags(html)) return;
-    onAdd(html);
-    editor.commands.setContent("<p></p>", { emitUpdate: false });
-  }
+  // Push empty-state changes up to the parent so the top-right Save button
+  // can light up the moment the user types in any composer.
+  useEffect(() => {
+    if (!editor || !onEmptyChange) return;
+    const fire = () => onEmptyChange(editor.isEmpty);
+    fire();
+    editor.on("update", fire);
+    return () => {
+      editor.off("update", fire);
+    };
+  }, [editor, onEmptyChange]);
 
-  const isEmpty = !editor || editor.isEmpty;
+  // Sync external `initialContent` changes — fires when the parent swaps
+  // sprints / teams (each retro doc has its own notebook content). Only
+  // applies when the editor is currently EMPTY so we don't blow away
+  // mid-edit work just because the parent re-rendered.
+  useEffect(() => {
+    if (!editor) return;
+    if (initialContent == null) return;
+    if (!editor.isEmpty) return;
+    if (initialContent.trim().length === 0) return;
+    editor.commands.setContent(initialContent, { emitUpdate: false });
+    onEmptyChange?.(editor.isEmpty);
+  }, [editor, initialContent, onEmptyChange]);
+
+  useImperativeHandle(ref, () => ({
+    getHtml: () => {
+      if (!editor || editor.isEmpty) return "";
+      // Return the FULL editor HTML — this is now the notebook page's content
+      // (no card splitting), so we preserve all block-level structure.
+      const html = editor.getHTML().trim();
+      return stripTags(html) ? html : "";
+    },
+    clear: () => {
+      editor?.commands.setContent("<p></p>", { emitUpdate: false });
+      onEmptyChange?.(true);
+    },
+  }), [editor, onEmptyChange]);
 
   function tbBtn(active: boolean, onClick: () => void, icon: React.ReactNode) {
     return (
@@ -226,12 +269,6 @@ function CardComposer({
         <span className="pointer-events-none absolute inset-y-0 left-[2.1rem] w-px bg-rose-300/50" aria-hidden />
         <EditorContent
           editor={editor}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              submit();
-            }
-          }}
           className={cn(
             "focus-within:outline-none [&_.ProseMirror]:outline-none",
             // Text starts well clear of the margin line (pl-12 = 48px vs margin line at 33.6px → ~14px gap).
@@ -241,23 +278,12 @@ function CardComposer({
           )}
         />
       </div>
-      <div className="mt-3 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">{trailing}</div>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={isEmpty}
-          className={cn(
-            "inline-flex h-7 items-center justify-center rounded-full px-3 text-[12px] font-semibold transition",
-            !isEmpty ? accentButton : "bg-slate-100 text-slate-400 cursor-not-allowed",
-          )}
-        >
-          Add
-        </button>
-      </div>
+      {trailing ? (
+        <div className="mt-3 flex items-center gap-1.5">{trailing}</div>
+      ) : null}
     </div>
   );
-}
+});
 
 // ─── Sticky-note card ────────────────────────────────────────────────────────
 
@@ -358,18 +384,58 @@ export function SprintRetrospectiveEditor({
   planYear,
   yearSprint,
 }: SprintRetrospectiveEditorProps) {
-  const [wentWell, setWentWell] = useState<RetroCard[]>(() => htmlToCards(initialDoc?.wentWellHtml));
-  const [improve, setImprove] = useState<RetroCard[]>(() => htmlToCards(initialDoc?.improveHtml));
-  const [actionItems, setActionItems] = useState<SprintRetroActionItem[]>(initialDoc?.actionItems ?? []);
-  const [editingAction, setEditingAction] = useState<string | null>(null);
   const [savedAtText, setSavedAtText] = useState<string | null>(null);
+  // Composer refs + per-composer "has pending edits" flags. Each column's
+  // notebook is now the single source of truth for its content — no more
+  // sticky-card list below. On Save we pull each notebook's HTML and persist
+  // it to the corresponding field of the retro doc.
+  const wentWellComposerRef = useRef<CardComposerHandle>(null);
+  const improveComposerRef = useRef<CardComposerHandle>(null);
+  const actionComposerRef = useRef<CardComposerHandle>(null);
+  const [wentWellPending, setWentWellPending] = useState(false);
+  const [improvePending, setImprovePending] = useState(false);
+  const [actionPending, setActionPending] = useState(false);
+  const anyComposerPending = wentWellPending || improvePending || actionPending;
+  /** When the parent swaps sprints/teams, force the composers to remount so
+   *  each picks up its new `initialContent`. The TipTap editor's `content`
+   *  arg is only read on construction — without a key bump, the previous
+   *  sprint's content would stick around. */
+  const composerKey = `${yearSprint ?? "x"}:${teamId ?? "all"}`;
 
-  // Resync when an external initialDoc arrives (e.g. switching sprint/team).
-  useEffect(() => {
-    setWentWell(htmlToCards(initialDoc?.wentWellHtml));
-    setImprove(htmlToCards(initialDoc?.improveHtml));
-    setActionItems(initialDoc?.actionItems ?? []);
-    setEditingAction(null);
+  /** Convert `actionItems[]` into HTML for the Take Action notebook.
+   *
+   *  Two cases the consumer cares about:
+   *  - **Structured rows** (legacy schema, demo seed): every item has plain
+   *    text in `title` and possibly `owner` / `dueDate`. We render them as
+   *    a bulleted "title — owner, due …" list, escaping the plain text.
+   *  - **Notebook placeholder** (post-save shape): a single item with HTML
+   *    in `title` and empty `owner` + `dueDate`. We return that HTML as-is
+   *    so the editor re-opens with the user's prose intact (round-trip).
+   */
+  const initialActionHtml = useMemo(() => {
+    const items = initialDoc?.actionItems ?? [];
+    if (items.length === 0) return "";
+    if (
+      items.length === 1 &&
+      !items[0]!.owner?.trim() &&
+      !items[0]!.dueDate?.trim() &&
+      /<[a-z][^>]*>/i.test(items[0]!.title)
+    ) {
+      return items[0]!.title;
+    }
+    const bullets = items
+      .map((item) => {
+        const titleText = item.title.trim();
+        if (!titleText) return "";
+        const meta: string[] = [];
+        if (item.owner?.trim()) meta.push(item.owner.trim());
+        if (item.dueDate?.trim()) meta.push(`due ${item.dueDate.trim()}`);
+        const tail = meta.length > 0 ? ` — ${meta.join(", ")}` : "";
+        return `<li>${escapeHtmlText(titleText)}${escapeHtmlText(tail)}</li>`;
+      })
+      .filter(Boolean)
+      .join("");
+    return bullets.length > 0 ? `<ul>${bullets}</ul>` : "";
   }, [initialDoc]);
 
   useEffect(() => {
@@ -380,60 +446,28 @@ export function SprintRetrospectiveEditor({
     setSavedAtText(new Date(updatedAt).toLocaleString());
   }, [updatedAt]);
 
-  const ownerSuggestions = useMemo(() => {
-    if (workspaceDirectoryUsers.length === 0) return [];
-    const members = teamId
-      ? workspaceDirectoryUsers.filter((u) => normalizeWorkspaceUserTeam(u.team) === teamId)
-      : workspaceDirectoryUsers;
-    return members
-      .map((u) => u.name.trim())
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [workspaceDirectoryUsers, teamId]);
-
-  const dirty = useMemo(() => {
-    const baseWent = htmlToCards(initialDoc?.wentWellHtml).map((c) => c.text).join("|");
-    const baseImp = htmlToCards(initialDoc?.improveHtml).map((c) => c.text).join("|");
-    const curWent = wentWell.map((c) => c.text).join("|");
-    const curImp = improve.map((c) => c.text).join("|");
-    return (
-      baseWent !== curWent ||
-      baseImp !== curImp ||
-      JSON.stringify(initialDoc?.actionItems ?? []) !== JSON.stringify(actionItems)
-    );
-  }, [initialDoc, wentWell, improve, actionItems]);
-
   function handleSave() {
+    // Notebook-as-source-of-truth: each Save captures the current HTML of
+    // each column's editor and replaces the doc. No more "append pending
+    // text as a new card" mechanic.
+    const wentHtml = wentWellComposerRef.current?.getHtml() ?? "";
+    const impHtml = improveComposerRef.current?.getHtml() ?? "";
+    const actionHtml = actionComposerRef.current?.getHtml() ?? "";
+    // Take Action's notebook HTML lives inside a single placeholder
+    // `actionItems[0]` row so the doc shape stays compatible with consumers
+    // that still read `actionItems[]` (e.g. legacy chart-aside summaries).
+    const actionItems: SprintRetroActionItem[] = actionHtml
+      ? [{ id: cryptoRandomId(), title: actionHtml, owner: "", dueDate: "" }]
+      : [];
     onSave({
-      wentWellHtml: cardsToHtml(wentWell),
-      improveHtml: cardsToHtml(improve),
+      wentWellHtml: wentHtml,
+      improveHtml: impHtml,
       actionItems,
     });
+    setWentWellPending(false);
+    setImprovePending(false);
+    setActionPending(false);
     setSavedAtText(new Date().toLocaleString());
-  }
-
-  function addWentWell(text: string) {
-    setWentWell((prev) => [...prev, { id: cryptoRandomId(), text }]);
-  }
-  function addImprove(text: string) {
-    setImprove((prev) => [...prev, { id: cryptoRandomId(), text }]);
-  }
-  function removeWentWell(id: string) {
-    setWentWell((prev) => prev.filter((c) => c.id !== id));
-  }
-  function removeImprove(id: string) {
-    setImprove((prev) => prev.filter((c) => c.id !== id));
-  }
-
-  function addAction(title: string) {
-    setActionItems((prev) => [...prev, { id: cryptoRandomId(), title, owner: "", dueDate: "" }]);
-  }
-  function updateAction(id: string, patch: Partial<SprintRetroActionItem>) {
-    setActionItems((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-  }
-  function removeAction(id: string) {
-    setActionItems((prev) => prev.filter((a) => a.id !== id));
-    setEditingAction((cur) => (cur === id ? null : cur));
   }
 
   return (
@@ -460,12 +494,22 @@ export function SprintRetrospectiveEditor({
               </h2>
               <p className="mt-1 text-sm text-slate-500">Reflect · Learn · Improve</p>
             </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSave}
+              disabled={!anyComposerPending}
+              className="h-8 min-w-[100px] shrink-0 gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40"
+            >
+              <Save className="size-3.5" />
+              Save
+            </Button>
           </div>
         </div>
 
-        {/* Three-column board */}
+        {/* Three-column board — each column is a single notebook editor;
+            content lives in the editor body, no sticky-card list below. */}
         <div className="grid gap-5 px-5 pb-6 sm:px-7 lg:grid-cols-3">
-          {/* Went Well */}
           <RetroColumn
             title={
               <span className="inline-flex items-center gap-2">
@@ -473,29 +517,17 @@ export function SprintRetrospectiveEditor({
                 Went Well
               </span>
             }
-            count={wentWell.length}
             columnTint="bg-white/55 ring-emerald-100"
           >
             <CardComposer
-              placeholder="Let me know your thought"
-              accentButton="bg-emerald-500 text-white hover:bg-emerald-600"
-              onAdd={addWentWell}
+              key={`${composerKey}:went`}
+              ref={wentWellComposerRef}
+              placeholder="What worked well this sprint?"
+              initialContent={initialDoc?.wentWellHtml ?? ""}
+              onEmptyChange={(empty) => setWentWellPending(!empty)}
             />
-            <div className="mt-4 space-y-3">
-              {wentWell.map((card) => (
-                <StickyCard
-                  key={card.id}
-                  text={card.text}
-                  bgClass="bg-emerald-500"
-                  avatarClass="bg-emerald-200 text-emerald-800"
-                  authorInitials="A"
-                  onRemove={() => removeWentWell(card.id)}
-                />
-              ))}
-            </div>
           </RetroColumn>
 
-          {/* To Improve */}
           <RetroColumn
             title={
               <span className="inline-flex items-center gap-2">
@@ -503,29 +535,17 @@ export function SprintRetrospectiveEditor({
                 To Improve
               </span>
             }
-            count={improve.length}
             columnTint="bg-white/55 ring-violet-100"
           >
             <CardComposer
-              placeholder="Let me know your thought"
-              accentButton="bg-violet-500 text-white hover:bg-violet-600"
-              onAdd={addImprove}
+              key={`${composerKey}:imp`}
+              ref={improveComposerRef}
+              placeholder="What should we change next time?"
+              initialContent={initialDoc?.improveHtml ?? ""}
+              onEmptyChange={(empty) => setImprovePending(!empty)}
             />
-            <div className="mt-4 space-y-3">
-              {improve.map((card) => (
-                <StickyCard
-                  key={card.id}
-                  text={card.text}
-                  bgClass="bg-violet-500"
-                  avatarClass="bg-violet-200 text-violet-800"
-                  authorInitials="T"
-                  onRemove={() => removeImprove(card.id)}
-                />
-              ))}
-            </div>
           </RetroColumn>
 
-          {/* Take Action */}
           <RetroColumn
             title={
               <span className="inline-flex items-center gap-2">
@@ -533,27 +553,15 @@ export function SprintRetrospectiveEditor({
                 Take Action
               </span>
             }
-            count={actionItems.length}
             columnTint="bg-white/55 ring-sky-100"
           >
             <CardComposer
-              placeholder="Describe the next concrete step…"
-              accentButton="bg-sky-500 text-white hover:bg-sky-600"
-              onAdd={addAction}
+              key={`${composerKey}:act`}
+              ref={actionComposerRef}
+              placeholder="What concrete steps will we take?"
+              initialContent={initialActionHtml}
+              onEmptyChange={(empty) => setActionPending(!empty)}
             />
-            <div className="mt-4 space-y-3">
-              {actionItems.map((item) => (
-                <ActionCard
-                  key={item.id}
-                  item={item}
-                  isEditing={editingAction === item.id}
-                  ownerSuggestions={ownerSuggestions}
-                  onToggleEdit={() => setEditingAction((cur) => (cur === item.id ? null : item.id))}
-                  onChange={(patch) => updateAction(item.id, patch)}
-                  onRemove={() => removeAction(item.id)}
-                />
-              ))}
-            </div>
           </RetroColumn>
         </div>
 
@@ -609,29 +617,17 @@ export function SprintRetrospectiveEditor({
         ) : null}
       </div>
 
-      {/* Footer */}
+      {/* Footer — Save lives in the header now; just the last-saved breadcrumb. */}
       <footer className="shrink-0 border-t border-slate-200/80 bg-white/80 backdrop-blur px-5 py-3.5 sm:px-7">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-400">
-            {savedAtText ? (
-              <span>
-                Last saved: <span className="font-medium text-slate-600">{savedAtText}</span>
-              </span>
-            ) : (
-              "Not saved yet for this sprint."
-            )}
-          </p>
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSave}
-            disabled={!dirty}
-            className="h-8 min-w-[100px] shrink-0 gap-1.5 border-0 bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40"
-          >
-            <Save className="size-3.5" />
-            Save
-          </Button>
-        </div>
+        <p className="text-xs text-slate-400">
+          {savedAtText ? (
+            <span>
+              Last saved: <span className="font-medium text-slate-600">{savedAtText}</span>
+            </span>
+          ) : (
+            "Not saved yet for this sprint."
+          )}
+        </p>
       </footer>
     </section>
   );
@@ -641,12 +637,10 @@ export function SprintRetrospectiveEditor({
 
 function RetroColumn({
   title,
-  count,
   columnTint,
   children,
 }: {
   title: React.ReactNode;
-  count: number;
   columnTint: string;
   children: React.ReactNode;
 }) {
@@ -654,11 +648,6 @@ function RetroColumn({
     <div className={cn("flex min-h-[14rem] flex-col rounded-3xl p-4 ring-1 backdrop-blur-sm sm:p-5", columnTint)}>
       <div className="mb-4 flex items-center justify-center gap-2">
         <h3 className="text-center text-[16px] font-semibold text-slate-700">{title}</h3>
-        {count > 0 ? (
-          <span className="inline-flex size-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-            {count}
-          </span>
-        ) : null}
       </div>
       <div className="flex-1">{children}</div>
     </div>

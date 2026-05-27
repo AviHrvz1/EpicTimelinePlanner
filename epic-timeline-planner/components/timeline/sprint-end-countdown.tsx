@@ -314,7 +314,7 @@ export function SprintEndCountdown({ planYear, yearSprint }: { planYear: number;
         type="button"
         onClick={() => setPopupOpen(true)}
         className={cn(
-          "inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-slate-200 px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-slate-300 tabular-nums transition hover:bg-slate-300 hover:ring-slate-400 sm:gap-1.5 sm:px-3 sm:text-[12px]",
+          "inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 tabular-nums transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]",
           parts.ended && "text-slate-600",
         )}
         title="View sprint timeline"

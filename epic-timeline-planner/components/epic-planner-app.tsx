@@ -2941,7 +2941,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       for (const epic of initiative.epics ?? []) {
         for (const story of epic.userStories ?? []) {
           if (story.sprint == null) continue;
-          if (story.status === StoryStatus.approved) continue;
+          // Skip work that's already complete — `done` (finished but
+          // pre-QA) and `approved` (signed off) should stay anchored to
+          // the sprint they completed in so retro charts / kanban
+          // history reflect what actually shipped. Only `todo` and
+          // `inProgress` count as "carried over, needs to move forward".
+          if (story.status === StoryStatus.approved || story.status === StoryStatus.done) continue;
           if (inFlight.has(story.id)) continue;
           const fromSprint = clampYearSprint(story.sprint);
           if (fromSprint >= YEAR_SPRINT_MAX) continue;

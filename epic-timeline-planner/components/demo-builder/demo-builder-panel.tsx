@@ -143,13 +143,19 @@ export function DemoBuilderPanel() {
 /**
  * localStorage key shape mirrors `epic-planner-app.tsx`:
  *   - `epicPlanner.sprintRetrospective.v1` → record keyed by
- *     `"<year>:<yearSprint>"` (all-teams) or `"<year>:<yearSprint>:<teamId>"`.
- *   - Each value: `{ wentWellHtml, improveHtml, actionItems[], updatedAt }`.
+ *     `"<year>:<yearSprint>:<teamId>"` (the retro editor renders one doc
+ *     PER TEAM; the bare `"<year>:<yearSprint>"` key is never read).
+ *   - Each value: `{ wentWellHtml, improveHtml, actionItems[], updatedAt }`
+ *     and each action item is `{ id, title, owner, dueDate }` per the
+ *     `SprintRetroActionItem` shape consumed by SprintRetrospectiveEditor.
  *
- * We populate only the all-teams entry for every sprint that has ended
- * before today. The retro tab will read these on first open; team-scoped
- * variants stay empty so they don't crowd the demo.
+ * For every sprint that has ended before today, we write a doc for each
+ * of the 5 demo teams — that's what the retro accordion expects when
+ * "All Teams" is selected. Content rotates through the curated pool so
+ * each team's retro reads as a distinct conversation.
  */
+const DEMO_RETRO_TEAM_SLUGS = ["platform", "mobile", "experience", "data", "growth"] as const;
+
 function seedDemoRetrospectives() {
   if (typeof window === "undefined") return;
   const STORAGE_KEY = "epicPlanner.sprintRetrospective.v1";
@@ -157,10 +163,11 @@ function seedDemoRetrospectives() {
   const year = now.getFullYear();
   // Walk year-sprints 1..24 and pick the ones whose calendar window has
   // already ended (last day of the 2-sprint-per-month split).
+  type ActionItem = { id: string; title: string; owner: string; dueDate: string };
   type RetroDoc = {
     wentWellHtml: string;
     improveHtml: string;
-    actionItems: Array<{ id: string; text: string; owner?: string; done?: boolean }>;
+    actionItems: ActionItem[];
     updatedAt: string;
   };
   const docs: Record<string, RetroDoc> = {};
@@ -171,16 +178,36 @@ function seedDemoRetrospectives() {
       ? new Date(year, month - 1, 15, 23, 59, 59, 999)
       : new Date(year, month, 0, 23, 59, 59, 999);
     if (lastDay >= now) break; // future sprint or current — skip
-    const idx = s - 1;
-    const went = DEMO_RETRO_WENT_WELL[idx % DEMO_RETRO_WENT_WELL.length]!;
-    const improve = DEMO_RETRO_IMPROVE[idx % DEMO_RETRO_IMPROVE.length]!;
-    const action = DEMO_RETRO_ACTIONS[idx % DEMO_RETRO_ACTIONS.length]!;
-    docs[`${year}:${s}`] = {
-      wentWellHtml: bulletsToHtml(went),
-      improveHtml: bulletsToHtml(improve),
-      actionItems: action.map((t, i) => ({ id: `demo-${s}-${i}`, text: t, done: i === 0 })),
-      updatedAt: lastDay.toISOString(),
-    };
+    // Per-team docs — the retro accordion shows one panel per team and
+    // pulls each panel's doc by `<year>:<sprint>:<team>`. Vary the
+    // content pool by (sprint, team) so two teams in the same sprint
+    // don't render identical retros.
+    for (let teamIdx = 0; teamIdx < DEMO_RETRO_TEAM_SLUGS.length; teamIdx++) {
+      const team = DEMO_RETRO_TEAM_SLUGS[teamIdx]!;
+      const variantSeed = (s - 1) + teamIdx;
+      const went = DEMO_RETRO_WENT_WELL[variantSeed % DEMO_RETRO_WENT_WELL.length]!;
+      const improve = DEMO_RETRO_IMPROVE[variantSeed % DEMO_RETRO_IMPROVE.length]!;
+      const actionPool = DEMO_RETRO_ACTIONS[variantSeed % DEMO_RETRO_ACTIONS.length]!;
+      // Pick a deterministic owner-due-date pair per action item so the
+      // action cards render with an avatar chip + due-date pill (otherwise
+      // the card collapses to just the title).
+      const actionItems: ActionItem[] = actionPool.map((entry, i) => {
+        const owner = entry.owner ?? DEMO_RETRO_OWNERS[(variantSeed + i) % DEMO_RETRO_OWNERS.length]!;
+        // Due date sits 1-3 weeks after the sprint closed so it reads as a
+        // realistic next-sprint commitment. ISO yyyy-mm-dd to match the
+        // <input type="date"> field rendering.
+        const due = new Date(lastDay);
+        due.setDate(due.getDate() + 7 * (i + 1));
+        const dueDate = due.toISOString().slice(0, 10);
+        return { id: `demo-${s}-${team}-${i}`, title: entry.title, owner, dueDate };
+      });
+      docs[`${year}:${s}:${team}`] = {
+        wentWellHtml: bulletsToHtml(went),
+        improveHtml: bulletsToHtml(improve),
+        actionItems,
+        updatedAt: lastDay.toISOString(),
+      };
+    }
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
@@ -215,9 +242,40 @@ const DEMO_RETRO_IMPROVE: readonly (readonly string[])[] = [
   ["Capacity didn't account for the team offsite", "API contract changed midway and forced rework", "Several stories rolled to the next sprint"],
 ];
 
-const DEMO_RETRO_ACTIONS: readonly (readonly string[])[] = [
-  ["Lock acceptance criteria before sprint starts", "Add staging healthcheck alert", "Pair on data-warehouse estimates next time"],
-  ["Set 4-hour PR review SLA", "Hold scope changes for next sprint", "Owner: Carmen — increase unit test coverage to 80%"],
-  ["Add migration-status check to mobile CI", "Move retro to a calendar block", "Owner: Diego — write auth-flow runbook"],
-  ["Reserve offsite weeks in capacity board", "Lock API contracts at sprint kickoff", "Triage rollover stories on Monday morning"],
+/**
+ * Each pool entry is a `{title, owner?}` object so the seeded action card has
+ * a real title AND a named owner (chip + initials avatar). When `owner` is
+ * omitted the seeder picks one round-robin from `DEMO_RETRO_OWNERS` keyed by
+ * sprint+index — deterministic across re-seeds.
+ */
+const DEMO_RETRO_ACTIONS: readonly (readonly { title: string; owner?: string }[])[] = [
+  [
+    { title: "Lock acceptance criteria before sprint starts" },
+    { title: "Add staging healthcheck alert" },
+    { title: "Pair on data-warehouse estimates next time" },
+  ],
+  [
+    { title: "Set 4-hour PR review SLA" },
+    { title: "Hold scope changes for next sprint" },
+    { title: "Increase unit test coverage to 80%", owner: "Carmen Ortega" },
+  ],
+  [
+    { title: "Add migration-status check to mobile CI" },
+    { title: "Move retro to a calendar block" },
+    { title: "Write auth-flow runbook", owner: "Diego Park" },
+  ],
+  [
+    { title: "Reserve offsite weeks in capacity board" },
+    { title: "Lock API contracts at sprint kickoff" },
+    { title: "Triage rollover stories on Monday morning" },
+  ],
+];
+
+const DEMO_RETRO_OWNERS: readonly string[] = [
+  "Aaron Mendel",
+  "Carmen Ortega",
+  "Diego Park",
+  "Priya Shah",
+  "Liam Chen",
+  "Sophia Reyes",
 ];

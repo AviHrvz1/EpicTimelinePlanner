@@ -5506,7 +5506,7 @@ export function TimelineGrid({
           placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
           style={searchInputWidthPx != null ? { width: `${searchInputWidthPx}px` } : undefined}
           className={cn(
-            "h-8 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200",
+            "h-8 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200 shadow-[inset_0_2px_4px_-1px_rgba(15,23,42,0.12),inset_0_-1px_2px_-1px_rgba(15,23,42,0.06)]",
             !searchAlignMetrics && "w-[30rem] focus:w-[36rem]",
           )}
         />
@@ -5978,7 +5978,7 @@ export function TimelineGrid({
                   {!summaryBarPortalElement ? summarySprintChipsJsx : null}
                   <div
                     ref={sprintKanbanSearchRef}
-                    className="relative mr-2 flex items-center"
+                    className="relative -mr-[52px] flex items-center"
                     onMouseEnter={() => {
                       if (sprintKanbanSearchCloseTimer.current) clearTimeout(sprintKanbanSearchCloseTimer.current);
                     }}
@@ -5989,7 +5989,12 @@ export function TimelineGrid({
                       if (!sprintKanbanSearchRef.current?.contains(e.relatedTarget as Node)) setSprintKanbanSearchOpen(false);
                     }}
                   >
-                    <Search className="pointer-events-none absolute left-2 z-10 size-3.5 text-slate-400" aria-hidden />
+                    {/* Inner positioning container — pinned to the input's
+                        visual box so the search icon + clear-X land inside
+                        the input rather than at the outer wrapper's edge
+                        (which is shifted by the wrapper's negative margin). */}
+                    <div className="group relative w-[calc(25%-45px)] min-w-[8rem]">
+                    <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                     <input
                       type="text"
                       value={sprintKanbanSearch}
@@ -5997,7 +6002,7 @@ export function TimelineGrid({
                       onFocus={() => sprintKanbanSearch && setSprintKanbanSearchOpen(true)}
                       onKeyDown={(e) => { if (e.key === "Escape") { setSprintKanbanSearch(""); setSprintKanbanSearchOpen(false); } }}
                       placeholder={sprintKanbanViewMode === "epics" ? "Search epics…" : "Search stories…"}
-                      className="h-7 w-40 rounded-lg border border-slate-200 bg-white pl-7 pr-6 text-[12px] text-slate-800 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                      className="block h-7 w-full rounded-lg border border-slate-200 bg-white pl-7 pr-6 text-[12px] text-slate-800 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400/40 shadow-[inset_0_2px_4px_-1px_rgba(15,23,42,0.12),inset_0_-1px_2px_-1px_rgba(15,23,42,0.06)]"
                       aria-label="Search"
                       autoComplete="off"
                     />
@@ -6006,12 +6011,17 @@ export function TimelineGrid({
                         type="button"
                         tabIndex={-1}
                         onMouseDown={(e) => { e.preventDefault(); setSprintKanbanSearch(""); setSprintKanbanSearchOpen(false); }}
-                        className="absolute right-1.5 z-10 flex h-4 w-4 items-center justify-center rounded text-slate-400 hover:text-slate-600"
+                        // Anchored to the input's own box (group container),
+                        // hidden by default, fades in on hover/focus of just
+                        // that inner container so it can never appear next
+                        // to the adjacent "Left" countdown button.
+                        className="absolute right-1.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition-opacity hover:text-slate-600 group-hover:opacity-100 group-focus-within:opacity-100"
                         aria-label="Clear search"
                       >
                         <X className="size-3" />
                       </button>
                     ) : null}
+                    </div>
                     {sprintKanbanSearchOpen && sprintKanbanSuggestions.length > 0 ? (
                       <div className="absolute left-0 top-full z-50 w-72 pt-1">
                         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">

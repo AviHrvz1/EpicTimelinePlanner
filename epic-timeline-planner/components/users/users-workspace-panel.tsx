@@ -124,7 +124,7 @@ const USER_DIRECTORY_COL_WIDTH_CLASS: Record<SortKey, string> = {
 };
 
 const USER_DIR_TH_CLASS =
-  "relative w-full min-w-0 whitespace-nowrap px-3 py-2.5 text-left align-middle";
+  "relative w-full min-w-0 whitespace-nowrap px-3 py-1.5 text-left align-middle";
 
 const USER_DIR_TD_BASE = "min-w-0 px-2 py-2 align-middle";
 
@@ -1579,7 +1579,7 @@ export function UsersWorkspacePanel() {
       />
       <div className="min-h-0 min-w-0 flex-1 overflow-x-auto [scrollbar-gutter:stable]">
         <div
-          className="box-border flex h-full min-h-0 w-full min-w-full flex-col gap-5 p-6 sm:p-8"
+          className="box-border flex h-full min-h-0 w-full min-w-full flex-col gap-5 p-6 pb-0.5 sm:p-8 sm:pb-1"
           style={{ minWidth: `max(100%, ${USER_DIRECTORY_MIN_LAYOUT_WIDTH_PX}px)` }}
         >
       <header className="flex shrink-0 flex-col gap-4 border-b border-slate-200/90 pb-6 sm:flex-row sm:items-center sm:justify-between">
@@ -1630,7 +1630,7 @@ export function UsersWorkspacePanel() {
             onBlur={handleDirectorySearchBlur}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search name, email, team, or permission…"
-            className="h-8 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
+            className="h-8 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-[14px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80"
             aria-label="Search users"
             aria-controls="users-directory-name-suggestions"
             aria-expanded={searchSuggestOpen && nameSuggestions.length > 0}
