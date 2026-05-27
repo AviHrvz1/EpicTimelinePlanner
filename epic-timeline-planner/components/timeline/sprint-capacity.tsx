@@ -562,7 +562,13 @@ function CapacityBucket({
           </p>
           <div className="relative min-h-8 min-w-0 justify-self-stretch self-center">
             {hasHeaderToolbar ? (
-              <div className="absolute right-0 top-1/2 z-10 flex items-center gap-1 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+              /* Toolbar pinned to the right of each bucket header. The
+               * reorder grip is now subtly visible even when the user
+               * isn't hovering — at ~60% opacity by default, full
+               * opacity on hover / focus. Previously the whole toolbar
+               * was opacity-0 which hid the grip entirely and made the
+               * drag affordance undiscoverable. */
+              <div className="absolute right-0 top-1/2 z-10 flex items-center gap-1 -translate-y-1/2 opacity-60 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 {reorderGrip}
                 {panelExpandable && onExpandPanel && onCollapsePanel ? (
                   isPanelExpanded ? (
