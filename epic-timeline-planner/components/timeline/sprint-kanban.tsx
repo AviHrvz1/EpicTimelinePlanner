@@ -855,10 +855,10 @@ export function SprintKanbanBoard({
     <div className="relative flex w-full min-h-min flex-col gap-2">
       {sprintClosed ? (
         <>
-          <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/5 backdrop-blur-[1px]" />
-          <div className="pointer-events-none absolute inset-x-3 top-2 z-30 flex flex-col items-center gap-3">
+          <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/[0.04] backdrop-blur-[1px]" />
+          <div className="pointer-events-none absolute inset-x-3 -top-2 z-30 flex w-[min(20rem,calc(100%-1.5rem))] flex-col items-stretch gap-3 left-1/2 -translate-x-1/2">
             <div
-              className="px-4 py-2 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
+              className="flex flex-col items-stretch gap-2.5 px-4 py-3 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
               style={{
                 background: "rgba(255, 255, 255, 0.2)",
                 borderRadius: "16px",
@@ -871,38 +871,35 @@ export function SprintKanbanBoard({
               <img
                 src="/closed-sign-transparent.png"
                 alt={`Sprint ${yearSprint} is closed`}
-                className="h-40 w-auto object-contain"
+                className="mx-auto block h-auto max-h-44 w-auto object-contain"
                 draggable={false}
               />
-            </div>
-            {showGoToOpenSprint ? (
-              /* Card-style panel for the jump-to-current-sprint link.
-               * Floats above the closed-sprint frosted overlay with a
-               * soft sky→indigo gradient, gentle ring + shadow, and an
-               * arrow that nudges right on hover. Replaces the previous
-               * underlined inline link with something that feels like a
-               * proper "call to action" panel. */
-              <button
-                type="button"
-                onClick={() => {
-                  const target = currentWorkYearSprintForPlan(planYear);
-                  if (target != null) onGoToOpenSprint!(target);
-                }}
-                className="group/jump pointer-events-auto inline-flex items-center gap-3 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-4 py-2 text-left shadow-sm ring-1 ring-white/60 transition-all duration-150 hover:-translate-y-px hover:from-sky-100 hover:via-indigo-100 hover:to-violet-100 hover:shadow-md hover:ring-sky-200/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-              >
-                <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
-                  <ArrowRight className="size-4 shrink-0 transition-transform duration-150 group-hover/jump:translate-x-0.5" strokeWidth={2.25} aria-hidden />
-                </span>
-                <span className="flex min-w-0 flex-col leading-tight">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-500">Jump to</span>
-                  <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
-                    <span>Current sprint ·</span>
-                    <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
-                    <span>Sprint {workTargetSprint}</span>
+              {showGoToOpenSprint ? (
+                /* Jump-to-current-sprint pill, now nested INSIDE the
+                 * glassy frame next to the closed sign — one unified
+                 * panel instead of two stacked pieces. */
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = currentWorkYearSprintForPlan(planYear);
+                    if (target != null) onGoToOpenSprint!(target);
+                  }}
+                  className="group/jump pointer-events-auto inline-flex w-full items-center gap-3 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-4 py-2 text-left shadow-sm ring-1 ring-white/60 transition-all duration-150 hover:-translate-y-px hover:from-sky-100 hover:via-indigo-100 hover:to-violet-100 hover:shadow-md hover:ring-sky-200/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                >
+                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                    <ArrowRight className="size-4 shrink-0 transition-transform duration-150 group-hover/jump:translate-x-0.5" strokeWidth={2.25} aria-hidden />
                   </span>
-                </span>
-              </button>
-            ) : null}
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-500">Jump to</span>
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+                      <span>Current sprint ·</span>
+                      <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
+                      <span>Sprint {workTargetSprint}</span>
+                    </span>
+                  </span>
+                </button>
+              ) : null}
+            </div>
           </div>
         </>
       ) : null}

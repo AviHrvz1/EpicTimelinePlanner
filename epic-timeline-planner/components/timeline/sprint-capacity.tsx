@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Check, GripVertical, Info, Maximize2, Minimize2, Search, User, UserRound, Users, UserX, X } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, Flag, GripVertical, Info, Maximize2, Minimize2, Search, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
@@ -10,6 +10,7 @@ import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
+import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
 import {
   CAPACITY_DAYS_INPUT_NO_SPIN,
   CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
@@ -180,6 +181,14 @@ type SprintCapacityBoardProps = {
   onOpenStory: (storyId: string) => void;
   teamSelectorSlot?: ReactNode;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Year of the plan — when provided, the board derives `sprintClosed`
+   *  internally and (if also given an `onGoToOpenSprint`) renders the
+   *  same frosted closed-state overlay the sprint kanban uses (light
+   *  slate frost + closed-sign image + jump-to-current-sprint pill).
+   *  Data remains visible underneath. */
+  planYear?: number;
+  /** Fires when the user clicks the jump pill in the closed overlay. */
+  onGoToOpenSprint?: (yearSprint: number) => void;
 };
 
 function CapacityStoryCard({
@@ -190,6 +199,7 @@ function CapacityStoryCard({
   onUnscheduleStory,
   onOpenStory,
   highlight = false,
+  readOnly = false,
 }: {
   card: CapacityStoryCardModel;
   onEstimateChange: (storyId: string, estimatedDays: number) => void;
@@ -201,6 +211,10 @@ function CapacityStoryCard({
   onOpenStory: (storyId: string) => void;
   /** Glow the card to mark it as the search match. */
   highlight?: boolean;
+  /** When true, the card is non-interactive: inline editors, the
+   *  unschedule button, and the drag listeners are all disabled.
+   *  Used by the closed-sprint overlay. */
+  readOnly?: boolean;
 }) {
   const isUnassigned = card.assigneeLabel === "Unassigned";
   const [showAssignHint, setShowAssignHint] = useState(isUnassigned);
@@ -246,6 +260,7 @@ function CapacityStoryCard({
   }
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: storyBoardDraggableId(card.id),
+    disabled: readOnly,
   });
 
   return (
@@ -261,15 +276,17 @@ function CapacityStoryCard({
         zIndex: isDragging ? 30 : undefined,
       }}
     >
-      <button
-        type="button"
-        onClick={() => onUnscheduleStory(card.id)}
-        className="absolute right-1.5 top-1.5 z-50 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition hover:bg-slate-100 hover:text-slate-700 group-hover/storycap:opacity-100 group-focus-within/storycap:opacity-100 focus-visible:opacity-100"
-        aria-label="Clear assignee (story stays on sprint)"
-        title="Unassign"
-      >
-        <X className="size-3.5" aria-hidden />
-      </button>
+      {!readOnly ? (
+        <button
+          type="button"
+          onClick={() => onUnscheduleStory(card.id)}
+          className="absolute right-1.5 top-1.5 z-50 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition hover:bg-slate-100 hover:text-slate-700 group-hover/storycap:opacity-100 group-focus-within/storycap:opacity-100 focus-visible:opacity-100"
+          aria-label="Clear assignee (story stays on sprint)"
+          title="Unassign"
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+      ) : null}
       <div className="flex w-full min-w-0 flex-col gap-2.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <button
@@ -345,8 +362,14 @@ function CapacityStoryCard({
               max={20}
               step={1}
               value={displayDays}
-              onChange={(event) => applyDraftDays(Number(event.target.value || 0))}
+              readOnly={readOnly}
+              tabIndex={readOnly ? -1 : undefined}
+              onChange={(event) => {
+                if (readOnly) return;
+                applyDraftDays(Number(event.target.value || 0));
+              }}
               onKeyDown={(e) => {
+                if (readOnly) return;
                 if (e.key === "Enter") commitDraft();
                 if (e.key === "Escape") cancelDraft();
               }}
@@ -355,6 +378,7 @@ function CapacityStoryCard({
                 isDirty
                   ? "border-blue-300 focus:border-blue-400 focus:ring-blue-100"
                   : "border-slate-200 focus:border-blue-300 focus:ring-blue-100",
+                readOnly && "cursor-not-allowed select-none bg-slate-50/80 text-slate-500",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
               aria-label="Story Est Days"
@@ -434,6 +458,7 @@ function CapacityBucket({
   teamFilterLabel = null,
   highlightStoryIds = null,
   workspaceDirectoryUsers = null,
+  readOnly = false,
 }: {
   yearSprint: number;
   teamKey: string;
@@ -458,9 +483,12 @@ function CapacityBucket({
   /** Directory for avatar lookup — bucket header shows the person's photo
    *  when present, initials otherwise. */
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null;
+  /** Disables interactive controls on every card + the bucket itself.
+   *  Used by the closed-sprint overlay. */
+  readOnly?: boolean;
 }) {
   const dropId = sprintCapacityBucketDropId(yearSprint, teamKey, member);
-  const { setNodeRef, isOver } = useDroppable({ id: dropId });
+  const { setNodeRef, isOver } = useDroppable({ id: dropId, disabled: readOnly });
   const [draftCapacity, setDraftCapacity] = useState<number | null>(null);
   const isCapacityDirty = draftCapacity !== null && draftCapacity !== capacity;
   const displayCapacity = draftCapacity !== null ? draftCapacity : capacity;
@@ -606,8 +634,14 @@ function CapacityBucket({
               max={10}
               step={0.5}
               value={displayCapacity}
-              onChange={(event) => setDraftCapacity(Number(event.target.value || 0))}
+              readOnly={readOnly}
+              tabIndex={readOnly ? -1 : undefined}
+              onChange={(event) => {
+                if (readOnly) return;
+                setDraftCapacity(Number(event.target.value || 0));
+              }}
               onKeyDown={(e) => {
+                if (readOnly) return;
                 if (e.key === "Enter") commitCapacity();
                 if (e.key === "Escape") cancelCapacity();
               }}
@@ -616,6 +650,7 @@ function CapacityBucket({
                 isCapacityDirty
                   ? "border-blue-300 focus:border-blue-400 focus:ring-blue-100"
                   : "border-slate-200/90 focus:border-blue-300 focus:ring-blue-100",
+                readOnly && "cursor-not-allowed bg-slate-50/80 text-slate-500",
                 CAPACITY_DAYS_INPUT_NO_SPIN,
               )}
             />
@@ -757,6 +792,7 @@ function CapacityBucket({
                         onUnscheduleStory={onUnscheduleStory}
                         onOpenStory={onOpenStory}
                         highlight={highlightStoryIds?.has(card.id) ?? false}
+                        readOnly={readOnly}
                       />
                       <StoryDropSlot
                         yearSprint={yearSprint}
@@ -856,7 +892,21 @@ export function SprintCapacityBoard({
   onOpenStory,
   teamSelectorSlot,
   workspaceDirectoryUsers = [],
+  planYear,
+  onGoToOpenSprint,
 }: SprintCapacityBoardProps) {
+  // Closed-state overlay mirrors the sprint kanban: shown when the
+  // active sprint's end date has passed. Only renders if `planYear` is
+  // provided (without it we can't compute the sprint window).
+  const sprintClosed =
+    planYear != null && sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
+  const workTargetSprint =
+    planYear != null ? currentWorkYearSprintForPlan(planYear) : null;
+  const showGoToOpenSprint =
+    sprintClosed &&
+    workTargetSprint != null &&
+    workTargetSprint !== yearSprint &&
+    Boolean(onGoToOpenSprint);
   /** Same story rows as sprint Kanban for the selected delivery team (or all teams). */
   const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, selectedTeamId ? [selectedTeamId] : null);
   const storyById = new Map(
@@ -1016,11 +1066,70 @@ export function SprintCapacityBoard({
 
   return (
     <div
-      className="rounded-2xl border border-slate-300/60 p-4 shadow-sm"
+      className="relative rounded-2xl border border-slate-300/60 p-4 shadow-sm"
       style={{
         backgroundImage: "linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #fdf2f8 100%)",
       }}
     >
+      {sprintClosed ? (
+        <>
+          {/* Mirrors the sprint kanban's closed-state treatment: light
+           *  slate frost over the whole board + a closed-sign image
+           *  pinned near the top and a jump-to-current-sprint pill so
+           *  the user can bounce to the active sprint. Data underneath
+           *  stays legible because the frost is only `bg-slate-900/5`
+           *  with a 1px backdrop blur. */}
+          {/* `pointer-events-auto` makes the frost intercept clicks so
+           *  the inline estimate / days-left editors underneath can't
+           *  be triggered on a closed sprint. The jump pill at z-30
+           *  (also pointer-events-auto) sits above this layer and
+           *  remains clickable. */}
+          <div className="absolute inset-0 z-20 rounded-2xl bg-slate-900/[0.04] backdrop-blur-[1px]" />
+          <div className="pointer-events-none absolute inset-x-3 -top-[28px] z-30 flex w-[min(20rem,calc(100%-1.5rem))] flex-col items-stretch gap-3 left-1/2 -translate-x-1/2">
+            <div
+              className="flex flex-col items-stretch gap-2.5 px-4 py-3 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
+              style={{
+                background: "rgba(255, 255, 255, 0.2)",
+                borderRadius: "16px",
+                boxShadow: "0 2px 16px rgba(15, 23, 42, 0.05)",
+                backdropFilter: "blur(1.2px)",
+                WebkitBackdropFilter: "blur(1.2px)",
+                border: "1px solid rgba(255, 255, 255, 0.44)",
+              }}
+            >
+              <img
+                src="/closed-sign-transparent.png"
+                alt={`Sprint ${yearSprint} is closed`}
+                className="mx-auto block h-auto max-h-44 w-auto object-contain"
+                draggable={false}
+              />
+              {showGoToOpenSprint ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (workTargetSprint != null && onGoToOpenSprint) {
+                      onGoToOpenSprint(workTargetSprint);
+                    }
+                  }}
+                  className="group/jump pointer-events-auto inline-flex w-full items-center gap-3 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-4 py-2 text-left shadow-sm ring-1 ring-white/60 transition-all duration-150 hover:-translate-y-px hover:from-sky-100 hover:via-indigo-100 hover:to-violet-100 hover:shadow-md hover:ring-sky-200/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                >
+                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                    <ArrowRight className="size-4 shrink-0 transition-transform duration-150 group-hover/jump:translate-x-0.5" strokeWidth={2.25} aria-hidden />
+                  </span>
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-500">Jump to</span>
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+                      <span>Current sprint ·</span>
+                      <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
+                      <span>Sprint {workTargetSprint}</span>
+                    </span>
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : null}
     <div className="space-y-6 pb-6">
       <TeamLoadSummary
         teamLabel={teamLabel}
@@ -1185,6 +1294,7 @@ export function SprintCapacityBoard({
                       teamFilterLabel={selectedTeamId ? teamLabel : null}
                       highlightStoryIds={searchMatchIds}
                       workspaceDirectoryUsers={workspaceDirectoryUsers}
+                      readOnly={sprintClosed}
                     />
                   </div>
                 )}

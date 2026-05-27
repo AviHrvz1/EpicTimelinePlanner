@@ -7003,6 +7003,10 @@ export function TimelineGrid({
                   initiatives={initiatives}
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
+                  planYear={currentYear}
+                  onGoToOpenSprint={(ys) =>
+                    onEnterSprintStoryBoard?.(ys, sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId))
+                  }
                   selectedTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}
