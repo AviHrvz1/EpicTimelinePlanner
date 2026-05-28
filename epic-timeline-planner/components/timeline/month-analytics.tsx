@@ -1088,7 +1088,7 @@ export function MonthAnalytics({
               onClick={() => onOpenEpic(epicId)}
               title="Open epic"
               aria-label="Open epic"
-              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
+              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
             >
               <Eye className="size-3" />
             </button>
@@ -1111,7 +1111,7 @@ export function MonthAnalytics({
                 onClick={() => onOpenInitiative(initId)}
                 title="Open initiative"
                 aria-label="Open initiative"
-                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
+                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
               >
                 <Eye className="size-3" />
               </button>
@@ -2715,7 +2715,7 @@ export function MonthAnalytics({
                   onClick={() => onOpenEpic(key)}
                   title="Open epic"
                   aria-label="Open epic"
-                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
+                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
                 >
                   <Eye className="size-3" />
                 </button>
@@ -2746,7 +2746,7 @@ export function MonthAnalytics({
                 onClick={() => onOpenEpic(rowId)}
                 title="Open epic"
                 aria-label="Open epic"
-                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
+                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
               >
                 <Eye className="size-3" />
               </button>
