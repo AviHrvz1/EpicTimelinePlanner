@@ -4457,11 +4457,15 @@ export function MonthAnalytics({
                        *  flat at 0 against the totalScope-scaled Y-axis). */}
                       <Line type="monotone" dataKey="completed" name="Completed" stroke="#0ea5e9" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
                       {/* Per-epic completed lines — one per visible epic,
-                       *  colored with the same palette as the legend marker
-                       *  so each row's icon and its line match. Clicking
-                       *  "All" in the legend turns all of them on at once,
-                       *  matching the burndown's per-epic behavior. */}
-                      {burnUpEpicRows.map((row, rowIdx) =>
+                       *  colored with the same palette as the legend marker.
+                       *  Hidden in the "All" view because each line peaks
+                       *  at its own (small) epicEst against the totalScope-
+                       *  scaled Y-axis, so 50 of them look flat at zero
+                       *  alongside the aggregate Completed line. The user
+                       *  narrows to specific epics via legend clicks; when
+                       *  fewer are selected the per-epic lines reappear and
+                       *  become visually meaningful. */}
+                      {!allBurnUpKeysSelected && burnUpEpicRows.map((row, rowIdx) =>
                         burnUpVisibleKeys.includes(row.id) ? (
                           <Line
                             key={row.id}
