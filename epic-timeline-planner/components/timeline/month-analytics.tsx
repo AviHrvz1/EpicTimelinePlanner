@@ -25,7 +25,7 @@ import {
   Eraser,
   Folder,
   Layers,
-  SquarePen,
+  Eye,
   StickyNote,
   TrendingUp,
   User,
@@ -1090,7 +1090,7 @@ export function MonthAnalytics({
               aria-label="Open epic"
               className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
             >
-              <SquarePen className="size-3.5" />
+              <Eye className="size-3.5" />
             </button>
           ) : null}
           {")"}
@@ -1113,7 +1113,7 @@ export function MonthAnalytics({
                 aria-label="Open initiative"
                 className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
               >
-                <SquarePen className="size-3.5" />
+                <Eye className="size-3.5" />
               </button>
             ) : null}
             {")"}
@@ -2422,17 +2422,34 @@ export function MonthAnalytics({
     // scale openRemaining into epic-est units in `epicEst` basis. Without
     // this, the burnup uses totalScope = epicEst but openRemaining stays in
     // story-day units — the chart then underflows to zero.
+    //
+    // We also pre-compute per-epic snapshot coverage + current totals so the
+    // per-day loop can fall back to a linear ramp for epics that have no
+    // snapshot history (otherwise their lines render flat at 0 when "All"
+    // is selected, because `latestSnapshotAtDayCached` returns null and the
+    // calculation freezes every story at its current `todo`/`inProgress`
+    // status across every historical day).
     const epicMeta = epicsInScope.map((e) => {
       const stories = (e.userStories ?? []).filter((s) => s.sprint != null);
       const startOpenStoryDays = stories.reduce((sum, s) => {
         if (s.status !== "todo" && s.status !== "inProgress") return sum;
         return sum + Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0);
       }, 0);
+      const hasSnap = stories.some((s) => (s.snapshots?.length ?? 0) > 0);
+      const totalStoryValue = stories.reduce((sum, s) => sum + storyValue(s), 0);
+      const currentOpen = stories.reduce((sum, s) => {
+        if (storyDone(s.status)) return sum;
+        if (isDays) return sum + Math.max(0, s.daysLeft ?? s.estimatedDays ?? 0);
+        return sum + 1;
+      }, 0);
       return {
         id: e.id,
         epicEst: e.originalEstimateDays ?? 0,
         startOpenStoryDays,
         stories,
+        hasSnap,
+        totalStoryValue,
+        currentCompleted: Math.max(0, totalStoryValue - currentOpen),
       };
     });
 
@@ -2469,9 +2486,6 @@ export function MonthAnalytics({
       ? Math.max(1, Math.floor((dueDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1)
       : totalDays;
 
-    const hasSnapshots = allStories.some((s) => (s.snapshots?.length ?? 0) > 0);
-    const currentCompleted = allStories.filter((s) => storyDone(s.status)).reduce((sum, s) => sum + storyValue(s), 0);
-
     return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [epicKey: string]: number | string | boolean | null } => {
       const dayIdx = idx + 1;
       const dayDate = new Date(periodStartDate);
@@ -2480,20 +2494,23 @@ export function MonthAnalytics({
       const isToday = dayStart.getTime() === todayStart.getTime();
 
       let completed: number | null = null;
-      // Per-epic completed values — populated when snapshots are available
-      // so each epic in scope can render its own line on the chart (parity
-      // with the burndown view).
+      // Per-epic completed values — one entry per epic in scope so that the
+      // legend's "All" toggle can render every epic's line. Each epic uses
+      // snapshot reconstruction when it has snapshot history, and a linear
+      // ramp (0 → currentCompleted across elapsedDays) when it doesn't.
       const perEpic: Record<string, number | null> = {};
       for (const m of epicMeta) perEpic[m.id] = null;
       if (dayIdx <= elapsedDays) {
-        if (hasSnapshots) {
-          // Burnup mirrors burndown: completed = scope − open work remaining.
-          // Counts in-progress daysLeft reductions, not just closed stories.
-          // We compute per-epic completed inside the same pass (so the
-          // visible "All" toggle can render every epic's line), then sum
-          // for the aggregate `completed`.
-          let openRemainingScaledAgg = 0;
-          for (const m of epicMeta) {
+        // Burnup mirrors burndown: completed = scope − open work remaining.
+        // We compute per-epic completed inside the same pass, then sum for
+        // the aggregate `completed`.
+        let openRemainingScaledAgg = 0;
+        const rampRatio = elapsedDays <= 1 ? 1 : (dayIdx - 1) / Math.max(elapsedDays - 1, 1);
+        const isFinalDay = dayIdx === elapsedDays;
+        for (const m of epicMeta) {
+          let epicScope: number;
+          let epicScaledOpen: number;
+          if (m.hasSnap) {
             let epicOpenStoryDays = 0;
             let epicTotalStoryValue = 0;
             for (const story of m.stories) {
@@ -2508,9 +2525,6 @@ export function MonthAnalytics({
                 epicOpenStoryDays += 1;
               }
             }
-            // Per-epic scope + scaled open in the chart's units.
-            let epicScope: number;
-            let epicScaledOpen: number;
             if (useEpicEst && m.epicEst > 0) {
               epicScope = m.epicEst;
               if (m.startOpenStoryDays > 0) {
@@ -2522,17 +2536,30 @@ export function MonthAnalytics({
               epicScope = epicTotalStoryValue;
               epicScaledOpen = epicOpenStoryDays;
             }
-            const epicCompleted = Math.max(0, epicScope - epicScaledOpen);
-            perEpic[m.id] = round(epicCompleted);
-            openRemainingScaledAgg += epicScaledOpen;
+          } else {
+            // No snapshot history for this epic → linear ramp from 0 →
+            // currentCompleted. Without this fallback the snapshot path
+            // would freeze every story at its CURRENT status across the
+            // whole timeline, leaving epics with no completed stories
+            // showing as flat 0.
+            const mCompletedRamped = isFinalDay ? m.currentCompleted : m.currentCompleted * rampRatio;
+            if (useEpicEst && m.epicEst > 0) {
+              epicScope = m.epicEst;
+              if (m.totalStoryValue > 0) {
+                epicScaledOpen = m.epicEst * (1 - mCompletedRamped / m.totalStoryValue);
+              } else {
+                epicScaledOpen = m.epicEst;
+              }
+            } else {
+              epicScope = m.totalStoryValue;
+              epicScaledOpen = Math.max(0, m.totalStoryValue - mCompletedRamped);
+            }
           }
-          completed = round(Math.max(0, totalScope - openRemainingScaledAgg));
-        } else {
-          const raw = elapsedDays <= 1
-            ? currentCompleted
-            : currentCompleted * (dayIdx - 1) / Math.max(elapsedDays - 1, 1);
-          completed = dayIdx === elapsedDays ? round(currentCompleted) : round(raw);
+          const epicCompleted = Math.max(0, epicScope - epicScaledOpen);
+          perEpic[m.id] = round(epicCompleted);
+          openRemainingScaledAgg += epicScaledOpen;
         }
+        completed = round(Math.max(0, totalScope - openRemainingScaledAgg));
       }
 
       let ideal: number | null = null;
@@ -2669,7 +2696,7 @@ export function MonthAnalytics({
                   aria-label="Open epic"
                   className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
                 >
-                  <SquarePen className="size-3.5" />
+                  <Eye className="size-3.5" />
                 </button>
               ) : null}
               {")"}
@@ -2700,7 +2727,7 @@ export function MonthAnalytics({
                 aria-label="Open epic"
                 className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
               >
-                <SquarePen className="size-3.5" />
+                <Eye className="size-3.5" />
               </button>
             ) : null}
             {")"}

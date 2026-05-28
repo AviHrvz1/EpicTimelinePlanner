@@ -2795,7 +2795,7 @@ export function InitiativeListPanel({
                 window.setTimeout(() => setEpicSearchFocused(false), 80);
               }}
               placeholder="Search epic..."
-              className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-9 text-[15px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
+              className="h-11 w-full rounded-lg border border-slate-400 bg-white pl-10 pr-9 text-[15px] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200/70"
               aria-label="Search epics in selected month"
               aria-autocomplete="list"
               aria-expanded={epicSearchFocused && epicSearchSuggestionsFiltered.length > 0}

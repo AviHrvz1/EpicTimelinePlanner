@@ -6165,7 +6165,7 @@ export function TimelineGrid({
                       onFocus={() => sprintKanbanSearch && setSprintKanbanSearchOpen(true)}
                       onKeyDown={(e) => { if (e.key === "Escape") { setSprintKanbanSearch(""); setSprintKanbanSearchOpen(false); } }}
                       placeholder={sprintKanbanViewMode === "epics" ? "Search epics…" : "Search stories…"}
-                      className="block h-7 w-full rounded-lg border border-slate-200 bg-white pl-7 pr-6 text-[12px] text-slate-800 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400/40 shadow-[inset_0_2px_4px_-1px_rgba(15,23,42,0.12),inset_0_-1px_2px_-1px_rgba(15,23,42,0.06)]"
+                      className="block h-7 w-full rounded-lg border border-slate-300 bg-white pl-7 pr-6 text-[12px] text-slate-800 placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-400/40 shadow-[inset_0_2px_4px_-1px_rgba(15,23,42,0.12),inset_0_-1px_2px_-1px_rgba(15,23,42,0.06)]"
                       aria-label="Search"
                       autoComplete="off"
                     />
