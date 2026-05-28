@@ -2624,12 +2624,19 @@ export function MonthAnalytics({
 
   /** Full tick label (matches `flowChartDayLabel` format) — required for
    *  `ReferenceDot x={...}` to land on the correct X-axis position.
-   *  Without this, Recharts can't match the short label to any tick and
-   *  renders the target marker at x=0 (far left). */
+   *  Returns null when the due date falls OUTSIDE the chart's [scopeStart,
+   *  scopeEnd] window, because Recharts can't position the marker on a
+   *  non-existent tick and falls back to x=0 (renders the bullseye on the
+   *  far-left edge of the chart). When the marker is null, the consumer
+   *  conditionals skip rendering it entirely. */
   const burnUpDueDateTickLabel = useMemo(() => {
     if (!burnUpDueDate) return null;
+    const periodStart = new Date(planYear, scopeStartMonth - 1, 1);
+    const periodEnd = new Date(planYear, scopeEndMonth, 0);
+    const t = burnUpDueDate.getTime();
+    if (t < periodStart.getTime() || t > periodEnd.getTime()) return null;
     return flowChartDayLabel(burnUpDueDate);
-  }, [burnUpDueDate]);
+  }, [burnUpDueDate, planYear, scopeStartMonth, scopeEndMonth]);
 
   const burnUpLegendScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollBurnUpUp, setCanScrollBurnUpUp] = useState(false);
