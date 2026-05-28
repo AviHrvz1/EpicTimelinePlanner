@@ -1083,8 +1083,10 @@ export function MonthAnalytics({
       return (
         <>
           {" ("}
-          <Folder className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
-          <span>{selectedEpicOption.epic.title}</span>
+          <span className="inline-flex items-center gap-1 align-[-2px]">
+            <Folder className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+            <span>{selectedEpicOption.epic.title}</span>
+          </span>
           {onOpenEpic ? (
             <button
               type="button"
@@ -1107,8 +1109,10 @@ export function MonthAnalytics({
         return (
           <>
             {" ("}
-            <Zap className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
-            <span>{init.title}</span>
+            <span className="inline-flex items-center gap-1 align-[-2px]">
+              <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+              <span>{init.title}</span>
+            </span>
             {onOpenInitiative ? (
               <button
                 type="button"
@@ -2775,8 +2779,10 @@ export function MonthAnalytics({
           return (
             <>
               {" ("}
-              <Folder className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
-              <span>{item.label}</span>
+              <span className="inline-flex items-center gap-1 align-[-2px]">
+                <Folder className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+                <span>{item.label}</span>
+              </span>
               {onOpenEpic ? (
                 <button
                   type="button"
@@ -2808,8 +2814,10 @@ export function MonthAnalytics({
         return (
           <>
             {" ("}
-            <Folder className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
-            <span>{row.title}</span>
+            <span className="inline-flex items-center gap-1 align-[-2px]">
+              <Folder className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+              <span>{row.title}</span>
+            </span>
             {onOpenEpic ? (
               <button
                 type="button"
