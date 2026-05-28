@@ -361,6 +361,7 @@ function EpicLegendRowButton({
   isEpic,
   onClick,
   textClass,
+  treeRow,
 }: {
   label: string;
   /** The chart-line color for this series; used to tint the Folder glyph so
@@ -373,6 +374,10 @@ function EpicLegendRowButton({
   onClick: () => void;
   /** Outer button text-color classes (active/inactive variants from caller). */
   textClass: string;
+  /** When true, the button draws a small horizontal stub at its left edge so
+   *  the row reads as a child of the surrounding vertical-line tree (mirrors
+   *  the scope-picker dropdown's tree connector for initiative-scoped lists). */
+  treeRow?: boolean;
 }) {
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const [hover, setHover] = useState(false);
@@ -389,6 +394,7 @@ function EpicLegendRowButton({
         className={cn(
           "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
           on && "bg-indigo-50 font-semibold",
+          treeRow && "relative pl-3 before:absolute before:left-0 before:top-1/2 before:h-px before:w-2.5 before:bg-slate-200",
           textClass,
         )}
       >
@@ -3723,6 +3729,7 @@ export function MonthAnalytics({
                     on={on}
                     isEpic={isEpic}
                     onClick={() => toggleBurndownKey(item.key)}
+                    treeRow={selectedInitiativeId !== "all" && isEpic}
                     textClass={cn(
                       isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                       on
@@ -4662,6 +4669,7 @@ export function MonthAnalytics({
                         on={on}
                         isEpic
                         onClick={() => toggleBurnUpKey(row.id)}
+                        treeRow={selectedInitiativeId !== "all"}
                         textClass={cn(
                           "hover:bg-slate-200/70",
                           isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
